@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE, VERTRAG_STATUS
 from core.models import Adresse
 
 
@@ -23,6 +23,22 @@ class MietObjektAdmin(admin.ModelAdmin):
     list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'verfuegbar')
     search_fields = ('name', 'standort__strasse', 'standort__ort', 'standort')
     list_filter = ('type', 'verfuegbar', 'standort')
+    actions = ['recalculate_availability']
+    
+    def recalculate_availability(self, request, queryset):
+        """Recalculate availability for selected MietObjekt."""
+        updated = 0
+        for mietobjekt in queryset:
+            old_verfuegbar = mietobjekt.verfuegbar
+            mietobjekt.update_availability()
+            if old_verfuegbar != mietobjekt.verfuegbar:
+                updated += 1
+        
+        self.message_user(
+            request, 
+            f'Verfügbarkeit für {queryset.count()} Mietobjekte geprüft. {updated} wurden aktualisiert.'
+        )
+    recalculate_availability.short_description = 'Verfügbarkeit neu berechnen'
 
 
 @admin.register(Vertrag)
