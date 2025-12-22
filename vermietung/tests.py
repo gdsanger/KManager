@@ -395,3 +395,305 @@ class VertragModelTest(TestCase):
         # Should still generate a valid contract number
         self.assertTrue(vertrag2.vertragsnummer.startswith('V-'))
         self.assertEqual(len(vertrag2.vertragsnummer), 7)  # V-XXXXX format
+
+
+class UebergabeprotokollModelTest(TestCase):
+    """Tests for the Uebergabeprotokoll (Handover Protocol) model."""
+    
+    def setUp(self):
+        """Set up test data for all tests."""
+        # Create a customer address
+        self.kunde = Adresse.objects.create(
+            adressen_type='KUNDE',
+            name='Max Mustermann',
+            strasse='Musterstrasse 1',
+            plz='12345',
+            ort='Musterstadt',
+            land='Deutschland',
+            email='max@example.com'
+        )
+        
+        # Create a location address
+        self.standort = Adresse.objects.create(
+            adressen_type='STANDORT',
+            name='Standort',
+            strasse='Standortstrasse 3',
+            plz='11111',
+            ort='Standortstadt',
+            land='Deutschland'
+        )
+        
+        # Create rental objects
+        self.mietobjekt = MietObjekt.objects.create(
+            name='Garage 1',
+            type='GEBAEUDE',
+            beschreibung='Eine schöne Garage',
+            fläche=20.00,
+            standort=self.standort,
+            mietpreis=150.00,
+            verfuegbar=True
+        )
+        
+        self.mietobjekt2 = MietObjekt.objects.create(
+            name='Garage 2',
+            type='GEBAEUDE',
+            beschreibung='Noch eine Garage',
+            fläche=25.00,
+            standort=self.standort,
+            mietpreis=200.00,
+            verfuegbar=True
+        )
+        
+        # Create a contract
+        self.vertrag = Vertrag.objects.create(
+            mietobjekt=self.mietobjekt,
+            mieter=self.kunde,
+            start=date(2024, 1, 1),
+            ende=date(2024, 12, 31),
+            miete=150.00,
+            kaution=450.00
+        )
+    
+    def test_create_uebergabeprotokoll_basic(self):
+        """Test creating a basic handover protocol."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            anzahl_schluessel=2,
+            person_vermieter='Hans Schmidt',
+            person_mieter='Max Mustermann'
+        )
+        
+        self.assertEqual(protokoll.vertrag, self.vertrag)
+        self.assertEqual(protokoll.mietobjekt, self.mietobjekt)
+        self.assertEqual(protokoll.typ, 'EINZUG')
+        self.assertEqual(protokoll.anzahl_schluessel, 2)
+    
+    def test_uebergabeprotokoll_with_meter_readings(self):
+        """Test creating a protocol with meter readings."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            zaehlerstand_strom=1234.50,
+            zaehlerstand_gas=567.00,
+            zaehlerstand_wasser=890.00,
+            anzahl_schluessel=2
+        )
+        
+        self.assertEqual(float(protokoll.zaehlerstand_strom), 1234.50)
+        self.assertEqual(float(protokoll.zaehlerstand_gas), 567.00)
+        self.assertEqual(float(protokoll.zaehlerstand_wasser), 890.00)
+    
+    def test_uebergabeprotokoll_with_remarks_and_defects(self):
+        """Test creating a protocol with remarks and defects."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='AUSZUG',
+            uebergabetag=date(2024, 12, 31),
+            anzahl_schluessel=2,
+            bemerkungen='Übergabe verlief reibungslos',
+            maengel='Kleine Kratzer an der Tür'
+        )
+        
+        self.assertEqual(protokoll.bemerkungen, 'Übergabe verlief reibungslos')
+        self.assertEqual(protokoll.maengel, 'Kleine Kratzer an der Tür')
+    
+    def test_mietobjekt_must_match_vertrag(self):
+        """Test that MietObjekt must match the Vertrag's MietObjekt."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        # Try to create a protocol with mismatched MietObjekt
+        with self.assertRaises(ValidationError) as context:
+            protokoll = Uebergabeprotokoll(
+                vertrag=self.vertrag,  # Contract is for mietobjekt
+                mietobjekt=self.mietobjekt2,  # But we're using mietobjekt2
+                typ='EINZUG',
+                uebergabetag=date(2024, 1, 1),
+                anzahl_schluessel=2
+            )
+            protokoll.save()
+        
+        self.assertIn('mietobjekt', context.exception.error_dict)
+    
+    def test_multiple_protocols_per_contract(self):
+        """Test that multiple protocols can exist for the same contract."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        # Create move-in protocol
+        einzug = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            anzahl_schluessel=2,
+            zaehlerstand_strom=1000.00
+        )
+        
+        # Create move-out protocol
+        auszug = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='AUSZUG',
+            uebergabetag=date(2024, 12, 31),
+            anzahl_schluessel=2,
+            zaehlerstand_strom=1500.00
+        )
+        
+        protocols = self.vertrag.uebergabeprotokolle.all()
+        self.assertEqual(protocols.count(), 2)
+        self.assertIn(einzug, protocols)
+        self.assertIn(auszug, protocols)
+    
+    def test_einzug_before_contract_start_invalid(self):
+        """Test that move-in date before contract start is invalid."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        with self.assertRaises(ValidationError) as context:
+            protokoll = Uebergabeprotokoll(
+                vertrag=self.vertrag,  # Starts 2024-01-01
+                mietobjekt=self.mietobjekt,
+                typ='EINZUG',
+                uebergabetag=date(2023, 12, 31),  # Before contract start
+                anzahl_schluessel=2
+            )
+            protokoll.save()
+        
+        self.assertIn('uebergabetag', context.exception.error_dict)
+    
+    def test_auszug_after_contract_end_invalid(self):
+        """Test that move-out date after contract end is invalid."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        with self.assertRaises(ValidationError) as context:
+            protokoll = Uebergabeprotokoll(
+                vertrag=self.vertrag,  # Ends 2024-12-31
+                mietobjekt=self.mietobjekt,
+                typ='AUSZUG',
+                uebergabetag=date(2025, 1, 1),  # After contract end
+                anzahl_schluessel=2
+            )
+            protokoll.save()
+        
+        self.assertIn('uebergabetag', context.exception.error_dict)
+    
+    def test_str_representation(self):
+        """Test the string representation of Uebergabeprotokoll."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            anzahl_schluessel=2
+        )
+        
+        expected = f"Einzug - {self.vertrag.vertragsnummer} - 2024-01-01"
+        self.assertEqual(str(protokoll), expected)
+    
+    def test_optional_fields(self):
+        """Test that meter readings and text fields are optional."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        # Create protocol with only required fields
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            anzahl_schluessel=2
+        )
+        
+        self.assertIsNone(protokoll.zaehlerstand_strom)
+        self.assertIsNone(protokoll.zaehlerstand_gas)
+        self.assertIsNone(protokoll.zaehlerstand_wasser)
+        self.assertEqual(protokoll.bemerkungen, '')
+        self.assertEqual(protokoll.maengel, '')
+        self.assertEqual(protokoll.person_vermieter, '')
+        self.assertEqual(protokoll.person_mieter, '')
+    
+    def test_default_anzahl_schluessel(self):
+        """Test that anzahl_schluessel has a default value of 0."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1)
+            # anzahl_schluessel not provided
+        )
+        
+        self.assertEqual(protokoll.anzahl_schluessel, 0)
+    
+    def test_relationship_to_vertrag(self):
+        """Test the relationship between Uebergabeprotokoll and Vertrag."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            anzahl_schluessel=2
+        )
+        
+        # Test forward relationship
+        self.assertEqual(protokoll.vertrag, self.vertrag)
+        
+        # Test reverse relationship
+        self.assertIn(protokoll, self.vertrag.uebergabeprotokolle.all())
+    
+    def test_relationship_to_mietobjekt(self):
+        """Test the relationship between Uebergabeprotokoll and MietObjekt."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            anzahl_schluessel=2
+        )
+        
+        # Test forward relationship
+        self.assertEqual(protokoll.mietobjekt, self.mietobjekt)
+        
+        # Test reverse relationship
+        self.assertIn(protokoll, self.mietobjekt.uebergabeprotokolle.all())
+    
+    def test_ordering_by_uebergabetag(self):
+        """Test that protocols are ordered by uebergabetag (descending)."""
+        from vermietung.models import Uebergabeprotokoll
+        
+        protokoll1 = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='EINZUG',
+            uebergabetag=date(2024, 1, 1),
+            anzahl_schluessel=2
+        )
+        
+        protokoll2 = Uebergabeprotokoll.objects.create(
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            typ='AUSZUG',
+            uebergabetag=date(2024, 12, 31),
+            anzahl_schluessel=2
+        )
+        
+        protocols = Uebergabeprotokoll.objects.all()
+        # Should be ordered by uebergabetag descending
+        self.assertEqual(list(protocols), [protokoll2, protokoll1])
+    

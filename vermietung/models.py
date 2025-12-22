@@ -201,4 +201,151 @@ class Vertrag(models.Model):
             
             # Format as V-00000
             return f"V-{next_number:05d}"
+
+
+UEBERGABE_TYP = [
+    ('EINZUG', 'Einzug'),
+    ('AUSZUG', 'Auszug'),
+]
+
+
+class Uebergabeprotokoll(models.Model):
+    """
+    Handover protocol model (Übergabeprotokoll).
+    Documents the handover (move-in/move-out) including meter readings,
+    keys, defects and involved persons.
+    Each protocol is linked to a Vertrag and MietObjekt.
+    """
+    vertrag = models.ForeignKey(
+        Vertrag,
+        on_delete=models.PROTECT,
+        related_name='uebergabeprotokolle',
+        verbose_name="Vertrag"
+    )
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.PROTECT,
+        related_name='uebergabeprotokolle',
+        verbose_name="Mietobjekt"
+    )
+    typ = models.CharField(
+        max_length=10,
+        choices=UEBERGABE_TYP,
+        verbose_name="Typ",
+        help_text="Art der Übergabe (Einzug oder Auszug)"
+    )
+    uebergabetag = models.DateField(
+        verbose_name="Übergabetag",
+        help_text="Datum der Übergabe"
+    )
+    
+    # Zählerstände (Meter readings)
+    zaehlerstand_strom = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Zählerstand Strom",
+        help_text="Stromzählerstand in kWh"
+    )
+    zaehlerstand_gas = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Zählerstand Gas",
+        help_text="Gaszählerstand in m³"
+    )
+    zaehlerstand_wasser = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Zählerstand Wasser",
+        help_text="Wasserzählerstand in m³"
+    )
+    
+    # Schlüssel (Keys)
+    anzahl_schluessel = models.IntegerField(
+        default=0,
+        verbose_name="Anzahl Schlüssel",
+        help_text="Anzahl der übergebenen Schlüssel"
+    )
+    
+    # Bemerkungen und Mängel (Remarks and defects)
+    bemerkungen = models.TextField(
+        blank=True,
+        verbose_name="Bemerkungen",
+        help_text="Allgemeine Bemerkungen zur Übergabe"
+    )
+    maengel = models.TextField(
+        blank=True,
+        verbose_name="Mängel",
+        help_text="Festgestellte Mängel bei der Übergabe"
+    )
+    
+    # Personen (Persons involved)
+    person_vermieter = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Person Vermieter",
+        help_text="Name der Person auf Vermieterseite"
+    )
+    person_mieter = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name="Person Mieter",
+        help_text="Name der Person auf Mieterseite"
+    )
+    
+    class Meta:
+        verbose_name = "Übergabeprotokoll"
+        verbose_name_plural = "Übergabeprotokolle"
+        ordering = ['-uebergabetag']
+    
+    def __str__(self):
+        """String representation of the handover protocol."""
+        typ_display = self.get_typ_display()
+        return f"{typ_display} - {self.vertrag.vertragsnummer} - {self.uebergabetag}"
+    
+    def clean(self):
+        """
+        Validate the handover protocol data:
+        1. MietObjekt must match the Vertrag's MietObjekt
+        2. Uebergabetag should be within or near the contract period
+        """
+        super().clean()
+        
+        # Validate that MietObjekt matches Vertrag's MietObjekt
+        if self.vertrag_id and self.mietobjekt_id:
+            if self.vertrag.mietobjekt_id != self.mietobjekt_id:
+                raise ValidationError({
+                    'mietobjekt': f'Das Mietobjekt muss zum Vertrag passen. '
+                                 f'Der Vertrag ist für "{self.vertrag.mietobjekt.name}".'
+                })
+        
+        # Optional: Validate that uebergabetag is reasonable relative to contract dates
+        # For move-in (EINZUG), date should be close to contract start
+        # For move-out (AUSZUG), date should be close to contract end
+        # This is a soft validation - we just warn but don't block
+        if self.vertrag_id and self.uebergabetag:
+            if self.typ == 'EINZUG':
+                # Move-in should be around contract start
+                if self.uebergabetag < self.vertrag.start:
+                    raise ValidationError({
+                        'uebergabetag': f'Das Einzugsdatum sollte nicht vor dem Vertragsbeginn '
+                                       f'({self.vertrag.start}) liegen.'
+                    })
+            elif self.typ == 'AUSZUG':
+                # Move-out should be around contract end (if set)
+                if self.vertrag.ende and self.uebergabetag > self.vertrag.ende:
+                    raise ValidationError({
+                        'uebergabetag': f'Das Auszugsdatum sollte nicht nach dem Vertragsende '
+                                       f'({self.vertrag.ende}) liegen.'
+                    })
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
     

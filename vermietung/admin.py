@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from .models import MietObjekt, Vertrag, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
 from core.models import Adresse
 
 
@@ -49,3 +49,34 @@ class VertragAdmin(admin.ModelAdmin):
         """Optimize queries by prefetching related objects."""
         queryset = super().get_queryset(request)
         return queryset.select_related('mieter', 'mietobjekt')
+
+
+@admin.register(Uebergabeprotokoll)
+class UebergabeprotokollAdmin(admin.ModelAdmin):
+    list_display = ('vertrag', 'mietobjekt', 'typ', 'uebergabetag', 'anzahl_schluessel', 'person_vermieter', 'person_mieter')
+    search_fields = ('vertrag__vertragsnummer', 'mietobjekt__name', 'person_vermieter', 'person_mieter', 'bemerkungen', 'maengel')
+    list_filter = ('typ', 'uebergabetag', 'mietobjekt', 'vertrag')
+    date_hierarchy = 'uebergabetag'
+    
+    fieldsets = (
+        ('Vertragsdetails', {
+            'fields': ('vertrag', 'mietobjekt', 'typ', 'uebergabetag')
+        }),
+        ('Zählerstände', {
+            'fields': ('zaehlerstand_strom', 'zaehlerstand_gas', 'zaehlerstand_wasser')
+        }),
+        ('Schlüssel', {
+            'fields': ('anzahl_schluessel',)
+        }),
+        ('Bemerkungen und Mängel', {
+            'fields': ('bemerkungen', 'maengel')
+        }),
+        ('Beteiligte Personen', {
+            'fields': ('person_vermieter', 'person_mieter')
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queries by prefetching related objects."""
+        queryset = super().get_queryset(request)
+        return queryset.select_related('vertrag', 'mietobjekt')
