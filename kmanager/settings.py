@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Project apps
     'core',
+    'vermietung',
 ]
 
 MIDDLEWARE = [
@@ -81,29 +82,19 @@ WSGI_APPLICATION = 'kmanager.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 # Use PostgreSQL if configured, otherwise fallback to SQLite for development
-USE_POSTGRESQL = os.getenv('USE_POSTGRESQL', 'False') == 'True'
 
-if USE_POSTGRESQL:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'kmanager'),
-            'USER': os.getenv('DB_USER', 'kmanager_user'),
-            'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
-        }
-    }
-else:
-    # SQLite fallback for development/testing
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'kmanager'),
+        'USER': os.getenv('DB_USER', 'kmanager_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 
-
+}
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
