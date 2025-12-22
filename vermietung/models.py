@@ -2,6 +2,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 from core.models import Adresse
 
 OBJEKT_TYPE = [
@@ -12,6 +13,13 @@ OBJEKT_TYPE = [
         ('KFZ','KFZ'),
         ('SONSTIGES','Sonstiges'),
     ]
+
+VERTRAG_STATUS = [
+    ('draft', 'Entwurf'),
+    ('active', 'Aktiv'),
+    ('ended', 'Beendet'),
+    ('cancelled', 'Storniert'),
+]
 
 class MietObjekt(models.Model):
     name = models.CharField(max_length=100)
@@ -27,6 +35,22 @@ class MietObjekt(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def update_availability(self):
+        """
+        Update the availability based on currently active contracts.
+        MietObjekt is available if there are no currently active contracts.
+        """
+        today = timezone.now().date()
+        has_active_contract = self.vertraege.filter(
+            status='active',
+            start__lte=today
+        ).filter(
+            models.Q(ende__isnull=True) | models.Q(ende__gt=today)
+        ).exists()
+        
+        self.verfuegbar = not has_active_contract
+        self.save(update_fields=['verfuegbar'])
 
 
 class Vertrag(models.Model):
@@ -78,6 +102,13 @@ class Vertrag(models.Model):
         verbose_name="Kaution",
         help_text="Kaution in EUR"
     )
+    status = models.CharField(
+        max_length=20,
+        choices=VERTRAG_STATUS,
+        default='active',
+        verbose_name="Status",
+        help_text="Status des Vertrags"
+    )
     
     class Meta:
         verbose_name = "Vertrag"
@@ -93,6 +124,29 @@ class Vertrag(models.Model):
         mieter_name = self.mieter.full_name() if self.mieter else 'Unbekannt'
         mietobjekt_name = self.mietobjekt.name if self.mietobjekt else 'Unbekannt'
         return f"{self.vertragsnummer} - {mietobjekt_name} ({mieter_name})"
+    
+    def is_currently_active(self):
+        """
+        Check if this contract is currently active (occupying the MietObjekt).
+        A contract is currently active if:
+        - Status is 'active'
+        - start <= today
+        - ende is NULL or ende > today
+        """
+        if self.status != 'active':
+            return False
+        
+        today = timezone.now().date()
+        
+        # Contract must have started
+        if self.start > today:
+            return False
+        
+        # Contract must not have ended
+        if self.ende is not None and self.ende <= today:
+            return False
+        
+        return True
     
     def clean(self):
         """
@@ -114,15 +168,21 @@ class Vertrag(models.Model):
     
     def _check_for_overlaps(self):
         """
-        Check if this contract overlaps with any existing contracts for the same MietObjekt.
+        Check if this contract overlaps with any existing ACTIVE contracts for the same MietObjekt.
+        Only active contracts are considered for overlap checking.
         A contract overlaps if:
         - Contract A starts before Contract B ends AND Contract A ends after Contract B starts
         - Special case: if a contract has no end date (NULL), it blocks all future starts
         """
-        # Get all other contracts for the same MietObjekt
+        # Get all other ACTIVE contracts for the same MietObjekt
         existing_contracts = Vertrag.objects.filter(
-            mietobjekt=self.mietobjekt
+            mietobjekt=self.mietobjekt,
+            status='active'  # Only check active contracts
         ).exclude(pk=self.pk if self.pk else None)
+        
+        # Only check for overlaps if this contract is active
+        if self.status != 'active':
+            return
         
         for contract in existing_contracts:
             # Case 1: Existing contract has no end date (open-ended)
@@ -168,6 +228,7 @@ class Vertrag(models.Model):
         """
         Override save to auto-generate contract number if not set.
         Uses database-level locking to prevent race conditions.
+        Updates the MietObjekt availability after saving.
         """
         if not self.vertragsnummer:
             self.vertragsnummer = self._generate_vertragsnummer()
@@ -176,6 +237,33 @@ class Vertrag(models.Model):
         self.full_clean()
         
         super().save(*args, **kwargs)
+        
+        # Update availability of the MietObjekt after saving
+        self._update_mietobjekt_availability()
+    
+    def _update_mietobjekt_availability(self):
+        """
+        Update the availability of the associated MietObjekt.
+        MietObjekt is available if there are no currently active contracts.
+        """
+        if not self.mietobjekt_id:
+            return
+        
+        # Check if there are any currently active contracts for this MietObjekt
+        today = timezone.now().date()
+        has_active_contract = Vertrag.objects.filter(
+            mietobjekt_id=self.mietobjekt_id,
+            status='active',
+            start__lte=today
+        ).filter(
+            models.Q(ende__isnull=True) | models.Q(ende__gt=today)
+        ).exists()
+        
+        # Update the MietObjekt
+        from django.db.models import F
+        MietObjekt.objects.filter(pk=self.mietobjekt_id).update(
+            verfuegbar=not has_active_contract
+        )
     
     def _generate_vertragsnummer(self):
         """
