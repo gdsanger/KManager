@@ -270,7 +270,7 @@ class VertragModelTest(TestCase):
             vertrag2.save()
     
     def test_non_overlapping_contracts_allowed(self):
-        """Test that non-overlapping contracts are allowed."""
+        """Test that non-overlapping (adjacent) contracts are allowed."""
         vertrag1 = Vertrag.objects.create(
             mietobjekt=self.mietobjekt,
             mieter=self.kunde,
@@ -280,7 +280,7 @@ class VertragModelTest(TestCase):
             kaution=450.00
         )
         
-        # Create non-overlapping contract (starts after first ends)
+        # Create adjacent/non-overlapping contract (starts day after first ends)
         vertrag2 = Vertrag.objects.create(
             mietobjekt=self.mietobjekt,
             mieter=self.kunde,
@@ -340,3 +340,29 @@ class VertragModelTest(TestCase):
         )
         expected = f"V-00001 - Garage 1 (Max Mustermann)"
         self.assertEqual(str(vertrag), expected)
+    
+    def test_open_ended_after_finished_contract(self):
+        """Test that an open-ended contract can be created after a finished contract."""
+        # Create a contract that has ended
+        vertrag1 = Vertrag.objects.create(
+            mietobjekt=self.mietobjekt,
+            mieter=self.kunde,
+            start=date(2023, 1, 1),
+            ende=date(2023, 12, 31),
+            miete=150.00,
+            kaution=450.00
+        )
+        
+        # Create an open-ended contract starting after the first one ends
+        # This should be allowed
+        vertrag2 = Vertrag.objects.create(
+            mietobjekt=self.mietobjekt,
+            mieter=self.kunde,
+            start=date(2024, 1, 1),  # Starts after vertrag1 ends
+            ende=None,  # Open-ended
+            miete=160.00,
+            kaution=480.00
+        )
+        
+        self.assertEqual(Vertrag.objects.filter(mietobjekt=self.mietobjekt).count(), 2)
+        self.assertIsNone(vertrag2.ende)

@@ -162,6 +162,7 @@ vertraege = mietobjekt.vertraege.all().order_by('start')
 
 # Aktuelle Verträge (ohne Ende oder Ende in der Zukunft)
 from datetime import date
+from django.db.models import Q
 aktive_vertraege = mietobjekt.vertraege.filter(
     Q(ende__isnull=True) | Q(ende__gte=date.today())
 )
