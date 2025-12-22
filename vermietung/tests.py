@@ -366,3 +366,32 @@ class VertragModelTest(TestCase):
         
         self.assertEqual(Vertrag.objects.filter(mietobjekt=self.mietobjekt).count(), 2)
         self.assertIsNone(vertrag2.ende)
+    
+    def test_contract_number_generation_with_malformed_data(self):
+        """Test that contract number generation handles malformed data gracefully."""
+        # Create first contract normally
+        vertrag1 = Vertrag.objects.create(
+            mietobjekt=self.mietobjekt,
+            mieter=self.kunde,
+            start=date(2024, 1, 1),
+            ende=date(2024, 12, 31),
+            miete=150.00,
+            kaution=450.00
+        )
+        self.assertEqual(vertrag1.vertragsnummer, 'V-00001')
+        
+        # Manually corrupt the contract number in the database
+        Vertrag.objects.filter(pk=vertrag1.pk).update(vertragsnummer='INVALID')
+        
+        # Create a new contract - should handle the malformed number gracefully
+        vertrag2 = Vertrag.objects.create(
+            mietobjekt=self.mietobjekt2,
+            mieter=self.kunde,
+            start=date(2024, 1, 1),
+            miete=200.00,
+            kaution=600.00
+        )
+        
+        # Should still generate a valid contract number
+        self.assertTrue(vertrag2.vertragsnummer.startswith('V-'))
+        self.assertEqual(len(vertrag2.vertragsnummer), 7)  # V-XXXXX format

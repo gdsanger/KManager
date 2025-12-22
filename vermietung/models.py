@@ -85,7 +85,14 @@ class Vertrag(models.Model):
         ordering = ['-start']
     
     def __str__(self):
-        return f"{self.vertragsnummer} - {self.mietobjekt.name} ({self.mieter.full_name()})"
+        """
+        String representation of the contract.
+        Note: This may cause database queries if mieter is not pre-loaded.
+        Use select_related('mieter', 'mietobjekt') in queries to avoid N+1 problems.
+        """
+        mieter_name = self.mieter.full_name() if self.mieter else 'Unbekannt'
+        mietobjekt_name = self.mietobjekt.name if self.mietobjekt else 'Unbekannt'
+        return f"{self.vertragsnummer} - {mietobjekt_name} ({mieter_name})"
     
     def clean(self):
         """
@@ -177,12 +184,18 @@ class Vertrag(models.Model):
         """
         with transaction.atomic():
             # Get the last contract number using database locking
-            last_contract = Vertrag.objects.select_for_update().order_by('-vertragsnummer').first()
+            # Order by ID to ensure we get the most recently created contract
+            # (since vertragsnummer is a CharField, lexicographic ordering won't work correctly)
+            last_contract = Vertrag.objects.select_for_update().order_by('-id').first()
             
             if last_contract and last_contract.vertragsnummer:
-                # Extract number from V-00000 format
-                last_number = int(last_contract.vertragsnummer.split('-')[1])
-                next_number = last_number + 1
+                try:
+                    # Extract number from V-00000 format
+                    last_number = int(last_contract.vertragsnummer.split('-')[1])
+                    next_number = last_number + 1
+                except (ValueError, IndexError):
+                    # If parsing fails, fall back to counting all contracts + 1
+                    next_number = Vertrag.objects.count() + 1
             else:
                 next_number = 1
             

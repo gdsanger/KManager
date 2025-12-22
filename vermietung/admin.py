@@ -44,3 +44,8 @@ class VertragAdmin(admin.ModelAdmin):
             'fields': ('miete', 'kaution')
         }),
     )
+    
+    def get_queryset(self, request):
+        """Optimize queries by prefetching related objects."""
+        queryset = super().get_queryset(request)
+        return queryset.select_related('mieter', 'mietobjekt')
