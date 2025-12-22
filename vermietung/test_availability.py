@@ -189,6 +189,7 @@ class AvailabilityManagementTest(TestCase):
         self.assertTrue(vertrag1.is_currently_active())
         
         # Active contract starting tomorrow (not yet active)
+        # Note: Creating as draft to avoid overlap validation, then checking in-memory object
         vertrag2 = Vertrag.objects.create(
             mietobjekt=self.mietobjekt,
             mieter=self.kunde,
@@ -198,10 +199,12 @@ class AvailabilityManagementTest(TestCase):
             kaution=450.00,
             status='draft'  # Use draft to avoid overlap validation
         )
+        # Check in-memory object with status changed (not saved)
         vertrag2.status = 'active'
+        vertrag2.start = tomorrow  # Still in the future
         self.assertFalse(vertrag2.is_currently_active())
         
-        # Ended contract
+        # Ended contract (check in-memory)
         vertrag1.status = 'ended'
         self.assertFalse(vertrag1.is_currently_active())
     

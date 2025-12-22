@@ -73,7 +73,7 @@ class VertragAdmin(admin.ModelAdmin):
         updated = queryset.update(status='active')
         # Update availability for affected MietObjekte
         for vertrag in queryset:
-            vertrag._update_mietobjekt_availability()
+            vertrag.update_mietobjekt_availability()
         self.message_user(request, f'{updated} Verträge wurden als aktiv markiert.')
     mark_as_active.short_description = 'Als aktiv markieren'
     
@@ -82,7 +82,7 @@ class VertragAdmin(admin.ModelAdmin):
         updated = queryset.update(status='ended')
         # Update availability for affected MietObjekte
         for vertrag in queryset:
-            vertrag._update_mietobjekt_availability()
+            vertrag.update_mietobjekt_availability()
         self.message_user(request, f'{updated} Verträge wurden als beendet markiert.')
     mark_as_ended.short_description = 'Als beendet markieren'
     
@@ -91,7 +91,7 @@ class VertragAdmin(admin.ModelAdmin):
         updated = queryset.update(status='cancelled')
         # Update availability for affected MietObjekte
         for vertrag in queryset:
-            vertrag._update_mietobjekt_availability()
+            vertrag.update_mietobjekt_availability()
         self.message_user(request, f'{updated} Verträge wurden als storniert markiert.')
     mark_as_cancelled.short_description = 'Als storniert markieren'
 

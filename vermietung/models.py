@@ -21,6 +21,27 @@ VERTRAG_STATUS = [
     ('cancelled', 'Storniert'),
 ]
 
+
+class VertragQuerySet(models.QuerySet):
+    """Custom queryset for Vertrag with helper methods."""
+    
+    def currently_active(self):
+        """
+        Filter to contracts that are currently active (occupying their MietObjekt).
+        A contract is currently active if:
+        - Status is 'active'
+        - start <= today
+        - ende is NULL or ende > today
+        """
+        today = timezone.now().date()
+        return self.filter(
+            status='active',
+            start__lte=today
+        ).filter(
+            models.Q(ende__isnull=True) | models.Q(ende__gt=today)
+        )
+
+
 class MietObjekt(models.Model):
     name = models.CharField(max_length=100)
     type = models.CharField(max_length=20, choices=OBJEKT_TYPE)
@@ -41,14 +62,7 @@ class MietObjekt(models.Model):
         Update the availability based on currently active contracts.
         MietObjekt is available if there are no currently active contracts.
         """
-        today = timezone.now().date()
-        has_active_contract = self.vertraege.filter(
-            status='active',
-            start__lte=today
-        ).filter(
-            models.Q(ende__isnull=True) | models.Q(ende__gt=today)
-        ).exists()
-        
+        has_active_contract = self.vertraege.currently_active().exists()
         self.verfuegbar = not has_active_contract
         self.save(update_fields=['verfuegbar'])
 
@@ -109,6 +123,9 @@ class Vertrag(models.Model):
         verbose_name="Status",
         help_text="Status des Vertrags"
     )
+    
+    # Custom manager
+    objects = VertragQuerySet.as_manager()
     
     class Meta:
         verbose_name = "Vertrag"
@@ -239,28 +256,23 @@ class Vertrag(models.Model):
         super().save(*args, **kwargs)
         
         # Update availability of the MietObjekt after saving
-        self._update_mietobjekt_availability()
+        self.update_mietobjekt_availability()
     
-    def _update_mietobjekt_availability(self):
+    def update_mietobjekt_availability(self):
         """
         Update the availability of the associated MietObjekt.
         MietObjekt is available if there are no currently active contracts.
+        Public method that can be called from admin actions.
         """
         if not self.mietobjekt_id:
             return
         
         # Check if there are any currently active contracts for this MietObjekt
-        today = timezone.now().date()
         has_active_contract = Vertrag.objects.filter(
-            mietobjekt_id=self.mietobjekt_id,
-            status='active',
-            start__lte=today
-        ).filter(
-            models.Q(ende__isnull=True) | models.Q(ende__gt=today)
-        ).exists()
+            mietobjekt_id=self.mietobjekt_id
+        ).currently_active().exists()
         
-        # Update the MietObjekt
-        from django.db.models import F
+        # Update the MietObjekt directly without triggering save
         MietObjekt.objects.filter(pk=self.mietobjekt_id).update(
             verfuegbar=not has_active_contract
         )
