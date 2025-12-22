@@ -317,32 +317,47 @@ class Uebergabeprotokoll(models.Model):
         super().clean()
         
         # Validate that MietObjekt matches Vertrag's MietObjekt
+        # Use _id fields to avoid triggering additional queries
         if self.vertrag_id and self.mietobjekt_id:
-            if self.vertrag.mietobjekt_id != self.mietobjekt_id:
+            # We need to fetch the vertrag's mietobjekt_id
+            # This is only done during validation, not on every access
+            from django.db.models import F
+            vertrag_mietobjekt_id = Vertrag.objects.filter(
+                pk=self.vertrag_id
+            ).values_list('mietobjekt_id', flat=True).first()
+            
+            if vertrag_mietobjekt_id != self.mietobjekt_id:
+                # Get mietobjekt name for better error message
+                mietobjekt_name = MietObjekt.objects.filter(
+                    pk=vertrag_mietobjekt_id
+                ).values_list('name', flat=True).first()
                 raise ValidationError({
                     'mietobjekt': f'Das Mietobjekt muss zum Vertrag passen. '
-                                 f'Der Vertrag ist für "{self.vertrag.mietobjekt.name}".'
+                                 f'Der Vertrag ist für "{mietobjekt_name}".'
                 })
         
-        # Optional: Validate that uebergabetag is reasonable relative to contract dates
-        # For move-in (EINZUG), date should be close to contract start
-        # For move-out (AUSZUG), date should be close to contract end
-        # This is a soft validation - we just warn but don't block
+        # Validate that uebergabetag is reasonable relative to contract dates
         if self.vertrag_id and self.uebergabetag:
-            if self.typ == 'EINZUG':
-                # Move-in should be around contract start
-                if self.uebergabetag < self.vertrag.start:
-                    raise ValidationError({
-                        'uebergabetag': f'Das Einzugsdatum sollte nicht vor dem Vertragsbeginn '
-                                       f'({self.vertrag.start}) liegen.'
-                    })
-            elif self.typ == 'AUSZUG':
-                # Move-out should be around contract end (if set)
-                if self.vertrag.ende and self.uebergabetag > self.vertrag.ende:
-                    raise ValidationError({
-                        'uebergabetag': f'Das Auszugsdatum sollte nicht nach dem Vertragsende '
-                                       f'({self.vertrag.ende}) liegen.'
-                    })
+            # Fetch contract dates efficiently
+            vertrag_data = Vertrag.objects.filter(
+                pk=self.vertrag_id
+            ).values('start', 'ende').first()
+            
+            if vertrag_data:
+                if self.typ == 'EINZUG':
+                    # Move-in should be around contract start
+                    if self.uebergabetag < vertrag_data['start']:
+                        raise ValidationError({
+                            'uebergabetag': f'Das Einzugsdatum sollte nicht vor dem Vertragsbeginn '
+                                           f'({vertrag_data["start"]}) liegen.'
+                        })
+                elif self.typ == 'AUSZUG':
+                    # Move-out should be around contract end (if set)
+                    if vertrag_data['ende'] and self.uebergabetag > vertrag_data['ende']:
+                        raise ValidationError({
+                            'uebergabetag': f'Das Auszugsdatum sollte nicht nach dem Vertragsende '
+                                           f'({vertrag_data["ende"]}) liegen.'
+                        })
     
     def save(self, *args, **kwargs):
         """Override save to run validation."""

@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
 from core.models import Adresse
-from vermietung.models import MietObjekt, Vertrag
+from vermietung.models import MietObjekt, Vertrag, Uebergabeprotokoll
 
 
 class VertragModelTest(TestCase):
@@ -456,8 +456,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_create_uebergabeprotokoll_basic(self):
         """Test creating a basic handover protocol."""
-        from vermietung.models import Uebergabeprotokoll
-        
         protokoll = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
             mietobjekt=self.mietobjekt,
@@ -475,7 +473,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_uebergabeprotokoll_with_meter_readings(self):
         """Test creating a protocol with meter readings."""
-        from vermietung.models import Uebergabeprotokoll
         
         protokoll = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
@@ -494,7 +491,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_uebergabeprotokoll_with_remarks_and_defects(self):
         """Test creating a protocol with remarks and defects."""
-        from vermietung.models import Uebergabeprotokoll
         
         protokoll = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
@@ -511,7 +507,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_mietobjekt_must_match_vertrag(self):
         """Test that MietObjekt must match the Vertrag's MietObjekt."""
-        from vermietung.models import Uebergabeprotokoll
         
         # Try to create a protocol with mismatched MietObjekt
         with self.assertRaises(ValidationError) as context:
@@ -528,7 +523,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_multiple_protocols_per_contract(self):
         """Test that multiple protocols can exist for the same contract."""
-        from vermietung.models import Uebergabeprotokoll
         
         # Create move-in protocol
         einzug = Uebergabeprotokoll.objects.create(
@@ -557,7 +551,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_einzug_before_contract_start_invalid(self):
         """Test that move-in date before contract start is invalid."""
-        from vermietung.models import Uebergabeprotokoll
         
         with self.assertRaises(ValidationError) as context:
             protokoll = Uebergabeprotokoll(
@@ -573,7 +566,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_auszug_after_contract_end_invalid(self):
         """Test that move-out date after contract end is invalid."""
-        from vermietung.models import Uebergabeprotokoll
         
         with self.assertRaises(ValidationError) as context:
             protokoll = Uebergabeprotokoll(
@@ -589,7 +581,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_str_representation(self):
         """Test the string representation of Uebergabeprotokoll."""
-        from vermietung.models import Uebergabeprotokoll
         
         protokoll = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
@@ -604,7 +595,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_optional_fields(self):
         """Test that meter readings and text fields are optional."""
-        from vermietung.models import Uebergabeprotokoll
         
         # Create protocol with only required fields
         protokoll = Uebergabeprotokoll.objects.create(
@@ -625,7 +615,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_default_anzahl_schluessel(self):
         """Test that anzahl_schluessel has a default value of 0."""
-        from vermietung.models import Uebergabeprotokoll
         
         protokoll = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
@@ -639,7 +628,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_relationship_to_vertrag(self):
         """Test the relationship between Uebergabeprotokoll and Vertrag."""
-        from vermietung.models import Uebergabeprotokoll
         
         protokoll = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
@@ -657,7 +645,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_relationship_to_mietobjekt(self):
         """Test the relationship between Uebergabeprotokoll and MietObjekt."""
-        from vermietung.models import Uebergabeprotokoll
         
         protokoll = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
@@ -675,7 +662,6 @@ class UebergabeprotokollModelTest(TestCase):
     
     def test_ordering_by_uebergabetag(self):
         """Test that protocols are ordered by uebergabetag (descending)."""
-        from vermietung.models import Uebergabeprotokoll
         
         protokoll1 = Uebergabeprotokoll.objects.create(
             vertrag=self.vertrag,
