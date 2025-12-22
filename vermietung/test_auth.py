@@ -3,7 +3,7 @@ Tests for authentication and authorization in the Vermietung area.
 """
 
 from django.test import TestCase, Client
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import User, Group, AnonymousUser
 from django.urls import reverse
 
 
@@ -54,10 +54,12 @@ class VermietungAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
     
     def test_regular_user_without_permission_denied(self):
-        """Test that regular users without Vermietung group get 403."""
+        """Test that regular users without Vermietung group are redirected to login."""
         self.client.login(username='regular_user', password='testpass123')
         response = self.client.get(reverse('vermietung:home'))
-        self.assertEqual(response.status_code, 403)
+        # user_passes_test redirects to login when test fails
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login/', response.url)
     
     def test_login_page_accessible_to_anonymous(self):
         """Test that login page is accessible to anonymous users."""
@@ -146,7 +148,6 @@ class VermietungPermissionsTests(TestCase):
     
     def test_unauthenticated_user_no_access(self):
         """Test that anonymous users are denied access."""
-        from django.contrib.auth.models import AnonymousUser
         anonymous = AnonymousUser()
         self.assertFalse(self.check_access(anonymous))
     

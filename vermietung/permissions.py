@@ -6,7 +6,6 @@ Access is granted to:
 - Users in the "Vermietung" group
 """
 
-from functools import wraps
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
@@ -37,7 +36,7 @@ def user_has_vermietung_access(user):
     return user.groups.filter(name='Vermietung').exists()
 
 
-def vermietung_required(function=None, raise_exception=True):
+def vermietung_required(function=None):
     """
     Decorator for views that checks if user has Vermietung access.
     
@@ -48,8 +47,6 @@ def vermietung_required(function=None, raise_exception=True):
     
     Args:
         function: The view function to decorate
-        raise_exception: If True, raises PermissionDenied (403). 
-                        If False, redirects to login.
     
     Returns:
         Decorated function
@@ -61,13 +58,7 @@ def vermietung_required(function=None, raise_exception=True):
     )
     
     if function:
-        @wraps(function)
-        def wrapper(request, *args, **kwargs):
-            if not user_has_vermietung_access(request.user):
-                if request.user.is_authenticated and raise_exception:
-                    raise PermissionDenied("Sie haben keine Berechtigung für den Vermietung-Bereich.")
-            return actual_decorator(function)(request, *args, **kwargs)
-        return wrapper
+        return actual_decorator(function)
     return actual_decorator
 
 
