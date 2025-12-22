@@ -1,8 +1,9 @@
 from django.contrib import admin
-from .models import Stanorte, MietObjekt, OBJEKT_TYPE
+from .models import MietObjekt, OBJEKT_TYPE
 
 
-@admin.register(Stanorte)
-class StanorteAdmin(admin.ModelAdmin):
-    list_display = ('name', 'adresse', 'plz', 'ort', 'land')
-    search_fields = ('name', 'adresse', 'ort', 'land')
+@admin.register(MietObjekt)
+class MietObjektAdmin(admin.ModelAdmin):
+    list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'verfuegbar')
+    search_fields = ('name', 'standort__strasse', 'standort__ort', 'standort')
+    list_filter = ('type', 'verfuegbar', 'standort')

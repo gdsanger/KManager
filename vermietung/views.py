@@ -6,5 +6,3 @@ from django.core.paginator import Paginator
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 
-def vermietung_home(request):
-    return render(request, 'vermietung/vermietung_dashboard.html')
