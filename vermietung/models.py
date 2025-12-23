@@ -986,6 +986,7 @@ class MietObjektBild(models.Model):
             parent = original_path.parent
             doc_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
             # Only clean up directories within document root
+            # Note: is_relative_to() requires Python >= 3.9
             while parent != doc_root and parent.is_relative_to(doc_root):
                 if not any(parent.iterdir()):
                     parent.rmdir()
@@ -1046,7 +1047,8 @@ class MietObjektBild(models.Model):
             img = img.convert('RGB')
         
         # Create thumbnail (maintains aspect ratio)
-        img.thumbnail(size, Image.Resampling.LANCZOS)
+        # Using Image.LANCZOS for compatibility (Image.Resampling.LANCZOS in Pillow >= 10.0.0)
+        img.thumbnail(size, Image.LANCZOS)
         
         # Save thumbnail
         img.save(thumbnail_path, 'JPEG', quality=85, optimize=True)

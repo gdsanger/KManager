@@ -336,7 +336,7 @@
                             {% for bild in bilder_page_obj %}
                             <div class="col-md-3 col-sm-4 col-6">
                                 <div class="card h-100">
-                                    <a href="{% url 'vermietung:mietobjekt_bild_original' bild.pk %}" target="_blank" data-bs-toggle="modal" data-bs-target="#bildPreviewModal" data-bs-img-url="{% url 'vermietung:mietobjekt_bild_original' bild.pk %}" data-bs-img-name="{{ bild.original_filename }}">
+                                    <a href="#" data-bs-toggle="modal" data-bs-target="#bildPreviewModal" data-bs-img-url="{% url 'vermietung:mietobjekt_bild_original' bild.pk %}" data-bs-img-name="{{ bild.original_filename }}" style="cursor: pointer;">
                                         <img src="{% url 'vermietung:mietobjekt_bild_thumbnail' bild.pk %}" class="card-img-top" alt="{{ bild.original_filename }}" style="height: 200px; object-fit: cover;">
                                     </a>
                                     <div class="card-body p-2">

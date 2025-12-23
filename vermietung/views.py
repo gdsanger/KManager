@@ -940,9 +940,6 @@ def dokument_delete(request, dokument_id):
     
     return redirect(redirect_url, pk=entity_id)
 
-
-
-
 # MietObjekt Image Views
 
 @vermietung_required

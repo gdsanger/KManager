@@ -517,10 +517,8 @@ class MietObjektBildUploadForm(forms.Form):
             except ValidationError as e:
                 # Collect errors but continue with other files
                 error_message = str(e)
-                if isinstance(e.message, str):
-                    error_message = e.message
-                elif isinstance(e.messages, list) and e.messages:
-                    error_message = '; '.join(e.messages)
+                if hasattr(e, 'messages') and e.messages:
+                    error_message = '; '.join(e.messages) if isinstance(e.messages, list) else str(e.messages)
                 errors.append(f'{uploaded_file.name}: {error_message}')
         
         # If there were errors, raise them
