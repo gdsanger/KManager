@@ -1,17 +1,5 @@
-# Core Framework
-Django==5.0.1
-
-# Environment Variables
+Django>=5.2,<5.3
 python-dotenv==1.0.0
-
-# File type detection
 python-magic==0.4.27
-
-# Image processing (for thumbnails)
-Pillow==10.2.0
-
-# HTMX (installed via CDN in templates, but listing for reference)
-# Bootstrap 5.3 (installed via CDN in templates, but listing for reference)
-
-# Development
+Pillow>=11.0.0, <12.0.0
 django-extensions==3.2.3
