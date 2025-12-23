@@ -366,7 +366,7 @@ class UebergabeprotokollForm(forms.ModelForm):
         
         # Order vertraege by vertragsnummer
         self.fields['vertrag'].queryset = Vertrag.objects.select_related(
-            'mietobjekt', 'mieter'
+            'mieter'
         ).order_by('-start')
         
         # Order mietobjekte by name
