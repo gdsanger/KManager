@@ -6,7 +6,6 @@ from django.core.paginator import Paginator
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 from .models import Dokument
-import mimetypes
 
 
 @login_required
@@ -37,16 +36,18 @@ def download_dokument(request, dokument_id):
     if not file_path.exists():
         raise Http404("Datei wurde nicht gefunden im Filesystem.")
     
-    # Create response with file path (FileResponse handles opening/closing)
-    response = FileResponse(open(file_path, 'rb'), content_type=dokument.mime_type)
+    # Create response - FileResponse handles file opening/closing automatically
+    response = FileResponse(
+        file_path.open('rb'),
+        content_type=dokument.mime_type,
+        as_attachment=True
+    )
     
-    # Set content disposition to trigger download with properly escaped filename
-    # Use ASCII-safe filename in Content-Disposition header
+    # Set filename with ASCII-safe characters to prevent header injection
     safe_filename = dokument.original_filename.encode('ascii', 'ignore').decode('ascii')
     if not safe_filename:
         safe_filename = 'document'
     response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
-    response['Content-Length'] = dokument.file_size
     
     return response
 
