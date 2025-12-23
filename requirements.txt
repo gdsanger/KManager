@@ -7,6 +7,9 @@ python-dotenv==1.0.0
 # File type detection
 python-magic==0.4.27
 
+# Image processing (for thumbnails)
+Pillow==10.2.0
+
 # HTMX (installed via CDN in templates, but listing for reference)
 # Bootstrap 5.3 (installed via CDN in templates, but listing for reference)
 

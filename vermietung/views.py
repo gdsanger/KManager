@@ -8,9 +8,12 @@ from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
 from datetime import timedelta
-from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
+from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, OBJEKT_TYPE
 from core.models import Adresse
-from .forms import AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm, UebergabeprotokollForm, DokumentUploadForm
+from .forms import (
+    AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm, 
+    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm
+)
 from .permissions import vermietung_required
 
 
@@ -290,7 +293,7 @@ def mietobjekt_list(request):
 def mietobjekt_detail(request, pk):
     """
     Show details of a specific MietObjekt with related data.
-    Shows contracts, handover protocols, and documents in tabs with pagination.
+    Shows contracts, handover protocols, documents, and images in tabs with pagination.
     """
     mietobjekt = get_object_or_404(MietObjekt.objects.select_related('standort'), pk=pk)
     
@@ -312,11 +315,18 @@ def mietobjekt_detail(request, pk):
     dokumente_page = request.GET.get('dokumente_page', 1)
     dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
     
+    # Get related images with pagination
+    bilder = mietobjekt.bilder.select_related('uploaded_by').order_by('-uploaded_at')
+    bilder_paginator = Paginator(bilder, 12)  # Show 12 images per page (3x4 grid)
+    bilder_page = request.GET.get('bilder_page', 1)
+    bilder_page_obj = bilder_paginator.get_page(bilder_page)
+    
     context = {
         'mietobjekt': mietobjekt,
         'vertraege_page_obj': vertraege_page_obj,
         'uebergaben_page_obj': uebergaben_page_obj,
         'dokumente_page_obj': dokumente_page_obj,
+        'bilder_page_obj': bilder_page_obj,
     }
     
     return render(request, 'vermietung/mietobjekte/detail.html', context)
@@ -930,4 +940,136 @@ def dokument_delete(request, dokument_id):
     
     return redirect(redirect_url, pk=entity_id)
 
+# MietObjekt Image Views
 
+@vermietung_required
+def mietobjekt_bild_upload(request, pk):
+    """
+    Upload images for a specific MietObjekt.
+    Supports multiple file upload.
+    
+    Args:
+        request: HTTP request
+        pk: ID of the MietObjekt
+    
+    Returns:
+        Redirects back to mietobjekt detail page with success/error message
+    """
+    mietobjekt = get_object_or_404(MietObjekt, pk=pk)
+    
+    if request.method == 'POST':
+        form = MietObjektBildUploadForm(
+            request.POST,
+            request.FILES,
+            mietobjekt=mietobjekt,
+            user=request.user
+        )
+        
+        # Get multiple files from request
+        files = request.FILES.getlist('bilder')
+        
+        if not files:
+            messages.error(request, 'Bitte wählen Sie mindestens ein Bild aus.')
+            return redirect('vermietung:mietobjekt_detail', pk=pk)
+        
+        if form.is_valid():
+            try:
+                bilder = form.save(files)
+                
+                if len(bilder) == 1:
+                    messages.success(
+                        request,
+                        f'Bild "{bilder[0].original_filename}" wurde erfolgreich hochgeladen.'
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f'{len(bilder)} Bilder wurden erfolgreich hochgeladen.'
+                    )
+                return redirect('vermietung:mietobjekt_detail', pk=pk)
+            except ValidationError as e:
+                # Handle validation errors from file validators
+                if isinstance(e.messages, list):
+                    for error in e.messages:
+                        messages.error(request, error)
+                else:
+                    messages.error(request, str(e))
+            except Exception as e:
+                messages.error(request, f'Fehler beim Hochladen: {str(e)}')
+        else:
+            # Display form errors
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'{error}')
+    
+    # Redirect back to detail page (GET or failed POST)
+    return redirect('vermietung:mietobjekt_detail', pk=pk)
+
+
+@vermietung_required
+def serve_mietobjekt_bild(request, bild_id, mode='thumbnail'):
+    """
+    Auth-protected view to serve MietObjekt images.
+    
+    Args:
+        request: HTTP request
+        bild_id: ID of the MietObjektBild
+        mode: 'thumbnail' or 'original'
+    
+    Returns:
+        FileResponse with the image file
+    
+    Raises:
+        Http404: If image not found or file doesn't exist
+    """
+    # Get image from database
+    bild = get_object_or_404(MietObjektBild, pk=bild_id)
+    
+    # Get file path based on mode
+    if mode == 'thumbnail':
+        file_path = bild.get_thumbnail_absolute_path()
+        content_type = 'image/jpeg'  # Thumbnails are always JPEG
+    else:  # original
+        file_path = bild.get_absolute_path()
+        content_type = bild.mime_type
+    
+    # Check if file exists
+    if not file_path.exists():
+        raise Http404("Bilddatei wurde nicht gefunden im Filesystem.")
+    
+    # Create response - FileResponse handles file opening/closing automatically
+    # For images, we don't want to force download, so as_attachment=False
+    response = FileResponse(
+        file_path.open('rb'),
+        content_type=content_type,
+        as_attachment=False
+    )
+    
+    return response
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def mietobjekt_bild_delete(request, bild_id):
+    """
+    Delete a MietObjekt image.
+    Available to all authenticated users in vermietung area.
+    
+    Args:
+        request: HTTP request
+        bild_id: ID of the MietObjektBild to delete
+    
+    Returns:
+        Redirects back to mietobjekt detail page with success/error message
+    """
+    bild = get_object_or_404(MietObjektBild, pk=bild_id)
+    mietobjekt_id = bild.mietobjekt_id
+    bild_name = bild.original_filename
+    
+    try:
+        bild.delete()
+        messages.success(request, f'Bild "{bild_name}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen des Bildes: {str(e)}')
+    
+    return redirect('vermietung:mietobjekt_detail', pk=mietobjekt_id)

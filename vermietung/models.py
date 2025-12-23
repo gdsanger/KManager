@@ -10,6 +10,8 @@ from core.models import Adresse
 import os
 import magic
 from pathlib import Path
+from PIL import Image
+import uuid
 
 OBJEKT_TYPE = [
        ('GEBAEUDE','Gebäude'),
@@ -521,6 +523,13 @@ ALLOWED_MIME_TYPES = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
 }
 
+# Allowed MIME types for images (used in MietObjektBild)
+ALLOWED_IMAGE_MIME_TYPES = {
+    'image/png': ['.png'],
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/gif': ['.gif'],
+}
+
 # Max file size in bytes (10 MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
@@ -832,4 +841,278 @@ class Dokument(models.Model):
                 destination.write(chunk)
         
         return storage_path, mime_type
+
+
+def validate_image_file_size(file):
+    """Validate that image file size does not exceed maximum allowed size."""
+    if file.size > MAX_FILE_SIZE:
+        raise ValidationError(
+            f'Die Bildgröße ({file.size / (1024*1024):.2f} MB) überschreitet '
+            f'das Maximum von {MAX_FILE_SIZE / (1024*1024):.0f} MB.'
+        )
+
+
+def validate_image_file_type(file):
+    """
+    Validate that file type is one of the allowed image types.
+    
+    Returns:
+        str: The detected MIME type if valid
+    
+    Raises:
+        ValidationError: If file type is not allowed
+    """
+    # Read file content to detect MIME type
+    file.seek(0)
+    mime = magic.from_buffer(file.read(2048), mime=True)
+    file.seek(0)
+    
+    if mime not in ALLOWED_IMAGE_MIME_TYPES:
+        allowed_extensions = []
+        for extensions in ALLOWED_IMAGE_MIME_TYPES.values():
+            allowed_extensions.extend(extensions)
+        raise ValidationError(
+            f'Bildtyp "{mime}" ist nicht erlaubt. '
+            f'Erlaubte Typen: {", ".join(sorted(set(allowed_extensions)))}'
+        )
+    
+    # Also check file extension matches MIME type
+    filename = file.name.lower()
+    expected_extensions = ALLOWED_IMAGE_MIME_TYPES.get(mime, [])
+    if not any(filename.endswith(ext) for ext in expected_extensions):
+        raise ValidationError(
+            f'Dateierweiterung passt nicht zum erkannten Bildtyp "{mime}". '
+            f'Erwartete Erweiterungen: {", ".join(expected_extensions)}'
+        )
+    
+    return mime
+
+
+class MietObjektBild(models.Model):
+    """
+    Image model for MietObjekt gallery.
+    
+    Images are stored in the filesystem under /data/vermietung/mietobjekt/<id>/images/
+    Both original and thumbnail are stored.
+    Metadata is stored in the database.
+    """
+    # Foreign key to MietObjekt
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.CASCADE,
+        related_name='bilder',
+        verbose_name="Mietobjekt"
+    )
+    
+    # Original filename
+    original_filename = models.CharField(
+        max_length=255,
+        verbose_name="Originaler Dateiname",
+        help_text="Der ursprüngliche Dateiname beim Upload"
+    )
+    
+    # Storage paths (relative to VERMIETUNG_DOCUMENTS_ROOT)
+    storage_path = models.CharField(
+        max_length=500,
+        verbose_name="Speicherpfad (Original)",
+        help_text="Relativer Pfad zum Original-Bild"
+    )
+    
+    thumbnail_path = models.CharField(
+        max_length=500,
+        verbose_name="Speicherpfad (Thumbnail)",
+        help_text="Relativer Pfad zum Thumbnail"
+    )
+    
+    # File metadata
+    file_size = models.IntegerField(
+        verbose_name="Dateigröße",
+        help_text="Dateigröße in Bytes"
+    )
+    
+    mime_type = models.CharField(
+        max_length=100,
+        verbose_name="MIME-Type",
+        help_text="MIME-Type der Datei"
+    )
+    
+    # Upload metadata
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Hochgeladen am",
+        help_text="Zeitpunkt des Uploads"
+    )
+    
+    uploaded_by = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Hochgeladen von",
+        help_text="Benutzer, der das Bild hochgeladen hat"
+    )
+    
+    class Meta:
+        verbose_name = "Mietobjekt Bild"
+        verbose_name_plural = "Mietobjekt Bilder"
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        """String representation of the image."""
+        return f"{self.original_filename} ({self.mietobjekt.name})"
+    
+    def get_absolute_path(self):
+        """Get the absolute filesystem path to the original image."""
+        return Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / self.storage_path
+    
+    def get_thumbnail_absolute_path(self):
+        """Get the absolute filesystem path to the thumbnail."""
+        return Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / self.thumbnail_path
+    
+    def delete(self, *args, **kwargs):
+        """Override delete to also remove the files from filesystem."""
+        # Delete original file
+        original_path = self.get_absolute_path()
+        if original_path.exists():
+            original_path.unlink()
+        
+        # Delete thumbnail
+        thumbnail_path = self.get_thumbnail_absolute_path()
+        if thumbnail_path.exists():
+            thumbnail_path.unlink()
+        
+        # Try to remove empty parent directories
+        try:
+            parent = original_path.parent
+            doc_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
+            # Only clean up directories within document root
+            # Note: is_relative_to() requires Python >= 3.9
+            while parent != doc_root and parent.is_relative_to(doc_root):
+                if not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
+                else:
+                    break
+        except (OSError, RuntimeError, ValueError):
+            pass  # Ignore errors when cleaning up directories
+        
+        super().delete(*args, **kwargs)
+    
+    @staticmethod
+    def generate_storage_paths(mietobjekt_id, filename):
+        """
+        Generate storage paths for original and thumbnail images.
+        
+        Path format: mietobjekt/<id>/images/<uuid>_<filename>
+        Thumbnail: mietobjekt/<id>/images/thumb_<uuid>_<filename>
+        
+        Args:
+            mietobjekt_id: ID of the MietObjekt
+            filename: Name of the file
+        
+        Returns:
+            Tuple of (original_path, thumbnail_path)
+        """
+        # Generate unique filename to prevent collisions
+        unique_id = uuid.uuid4().hex[:8]
+        safe_filename = f"{unique_id}_{filename}"
+        
+        original_path = f"mietobjekt/{mietobjekt_id}/images/{safe_filename}"
+        thumbnail_path = f"mietobjekt/{mietobjekt_id}/images/thumb_{safe_filename}"
+        
+        return original_path, thumbnail_path
+    
+    @staticmethod
+    def create_thumbnail(original_path, thumbnail_path, size=(300, 300)):
+        """
+        Create a thumbnail from the original image.
+        
+        Args:
+            original_path: Path to the original image
+            thumbnail_path: Path where thumbnail should be saved
+            size: Tuple of (width, height) for thumbnail size
+        """
+        # Open original image
+        img = Image.open(original_path)
+        
+        # Convert to RGB if necessary (for PNG with transparency, etc.)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            # Create white background
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Create thumbnail (maintains aspect ratio)
+        # Using Image.LANCZOS for compatibility (Image.Resampling.LANCZOS in Pillow >= 10.0.0)
+        img.thumbnail(size, Image.LANCZOS)
+        
+        # Save thumbnail
+        img.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
+    
+    @staticmethod
+    def save_uploaded_image(uploaded_file, mietobjekt_id, user=None):
+        """
+        Save an uploaded image file with thumbnail generation.
+        
+        Args:
+            uploaded_file: Django UploadedFile object
+            mietobjekt_id: ID of the MietObjekt
+            user: User who uploaded the file (optional)
+        
+        Returns:
+            MietObjektBild instance
+        
+        Raises:
+            ValidationError: If file validation fails
+        """
+        # Validate file size
+        validate_image_file_size(uploaded_file)
+        
+        # Validate file type and get MIME type
+        mime_type = validate_image_file_type(uploaded_file)
+        
+        # Generate storage paths
+        storage_path, thumbnail_path = MietObjektBild.generate_storage_paths(
+            mietobjekt_id,
+            uploaded_file.name
+        )
+        
+        # Create absolute paths
+        absolute_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / storage_path
+        absolute_thumbnail_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / thumbnail_path
+        
+        # Create directory if it doesn't exist
+        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save original file
+        with open(absolute_path, 'wb') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+        
+        # Generate thumbnail
+        try:
+            MietObjektBild.create_thumbnail(absolute_path, absolute_thumbnail_path)
+        except Exception as e:
+            # If thumbnail creation fails, delete the original and raise error
+            if absolute_path.exists():
+                absolute_path.unlink()
+            raise ValidationError(f'Fehler beim Erstellen des Thumbnails: {str(e)}')
+        
+        # Create database entry
+        bild = MietObjektBild(
+            mietobjekt_id=mietobjekt_id,
+            original_filename=uploaded_file.name,
+            storage_path=storage_path,
+            thumbnail_path=thumbnail_path,
+            file_size=uploaded_file.size,
+            mime_type=mime_type,
+            uploaded_by=user
+        )
+        bild.save()
+        
+        return bild
 
