@@ -10,6 +10,7 @@ from django.db.models import Q
 from .models import Dokument
 from core.models import Adresse
 from .forms import AdresseKundeForm
+from .permissions import vermietung_required
 
 
 @login_required
@@ -49,7 +50,6 @@ def download_dokument(request, dokument_id):
     )
     
     return response
-from .permissions import vermietung_required
 
 
 @vermietung_required
