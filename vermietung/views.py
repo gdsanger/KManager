@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.db.models import Q
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
 from core.models import Adresse
-from .forms import AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm
+from .forms import AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm, UebergabeprotokollForm
 from .permissions import vermietung_required
 
 
@@ -574,4 +574,202 @@ def vertrag_cancel(request, pk):
         messages.error(request, f'Fehler beim Stornieren des Vertrags: {str(e)}')
     
     return redirect('vermietung:vertrag_detail', pk=pk)
+
+
+# Uebergabeprotokoll (Handover Protocol) CRUD Views
+
+@vermietung_required
+def uebergabeprotokoll_list(request):
+    """
+    List all handover protocols (Übergabeprotokolle) with search and pagination.
+    """
+    # Get search query and filter parameters
+    search_query = request.GET.get('q', '').strip()
+    typ_filter = request.GET.get('typ', '')
+    
+    # Base queryset with related data
+    protokolle = Uebergabeprotokoll.objects.select_related(
+        'vertrag', 'mietobjekt', 'vertrag__mieter'
+    ).all()
+    
+    # Apply search filter
+    if search_query:
+        protokolle = protokolle.filter(
+            Q(vertrag__vertragsnummer__icontains=search_query) |
+            Q(mietobjekt__name__icontains=search_query) |
+            Q(vertrag__mieter__name__icontains=search_query) |
+            Q(person_vermieter__icontains=search_query) |
+            Q(person_mieter__icontains=search_query)
+        )
+    
+    # Apply typ filter
+    if typ_filter:
+        protokolle = protokolle.filter(typ=typ_filter)
+    
+    # Order by uebergabetag (newest first)
+    protokolle = protokolle.order_by('-uebergabetag')
+    
+    # Pagination
+    paginator = Paginator(protokolle, 20)  # Show 20 protocols per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'typ_filter': typ_filter,
+    }
+    
+    return render(request, 'vermietung/uebergabeprotokolle/list.html', context)
+
+
+@vermietung_required
+def uebergabeprotokoll_detail(request, pk):
+    """
+    Show details of a specific handover protocol.
+    """
+    protokoll = get_object_or_404(
+        Uebergabeprotokoll.objects.select_related('vertrag', 'mietobjekt', 'vertrag__mieter'),
+        pk=pk
+    )
+    
+    # Get related documents with pagination
+    dokumente = protokoll.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
+    dokumente_paginator = Paginator(dokumente, 10)
+    dokumente_page = request.GET.get('dokumente_page', 1)
+    dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
+    
+    context = {
+        'protokoll': protokoll,
+        'dokumente_page_obj': dokumente_page_obj,
+    }
+    
+    return render(request, 'vermietung/uebergabeprotokolle/detail.html', context)
+
+
+@vermietung_required
+def uebergabeprotokoll_create(request):
+    """
+    Create a new handover protocol (standalone).
+    """
+    if request.method == 'POST':
+        form = UebergabeprotokollForm(request.POST)
+        if form.is_valid():
+            try:
+                protokoll = form.save()
+                messages.success(
+                    request,
+                    f'Übergabeprotokoll wurde erfolgreich angelegt.'
+                )
+                return redirect('vermietung:uebergabeprotokoll_detail', pk=protokoll.pk)
+            except ValidationError as e:
+                # Handle validation errors from model's clean() method
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = UebergabeprotokollForm()
+    
+    context = {
+        'form': form,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/uebergabeprotokolle/form.html', context)
+
+
+@vermietung_required
+def uebergabeprotokoll_create_from_vertrag(request, vertrag_pk):
+    """
+    Create a new handover protocol from a contract (guided flow).
+    Pre-fills vertrag and mietobjekt fields.
+    """
+    vertrag = get_object_or_404(Vertrag.objects.select_related('mietobjekt'), pk=vertrag_pk)
+    
+    if request.method == 'POST':
+        form = UebergabeprotokollForm(request.POST, vertrag=vertrag)
+        if form.is_valid():
+            try:
+                protokoll = form.save()
+                messages.success(
+                    request,
+                    f'Übergabeprotokoll wurde erfolgreich angelegt.'
+                )
+                return redirect('vermietung:uebergabeprotokoll_detail', pk=protokoll.pk)
+            except ValidationError as e:
+                # Handle validation errors from model's clean() method
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        # Pre-fill form with vertrag data
+        form = UebergabeprotokollForm(
+            vertrag=vertrag,
+            initial={
+                'uebergabetag': timezone.now().date(),
+            }
+        )
+    
+    context = {
+        'form': form,
+        'vertrag': vertrag,
+        'is_create': True,
+        'from_vertrag': True,
+    }
+    
+    return render(request, 'vermietung/uebergabeprotokolle/form.html', context)
+
+
+@vermietung_required
+def uebergabeprotokoll_edit(request, pk):
+    """
+    Edit an existing handover protocol.
+    """
+    protokoll = get_object_or_404(Uebergabeprotokoll, pk=pk)
+    
+    if request.method == 'POST':
+        form = UebergabeprotokollForm(request.POST, instance=protokoll)
+        if form.is_valid():
+            try:
+                protokoll = form.save()
+                messages.success(
+                    request,
+                    f'Übergabeprotokoll wurde erfolgreich aktualisiert.'
+                )
+                return redirect('vermietung:uebergabeprotokoll_detail', pk=protokoll.pk)
+            except ValidationError as e:
+                # Handle validation errors from model's clean() method
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = UebergabeprotokollForm(instance=protokoll)
+    
+    context = {
+        'form': form,
+        'protokoll': protokoll,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/uebergabeprotokolle/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def uebergabeprotokoll_delete(request, pk):
+    """
+    Delete a handover protocol.
+    """
+    protokoll = get_object_or_404(Uebergabeprotokoll, pk=pk)
+    protokoll_info = str(protokoll)
+    
+    try:
+        protokoll.delete()
+        messages.success(request, f'Übergabeprotokoll "{protokoll_info}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen des Übergabeprotokolls: {str(e)}')
+        return redirect('vermietung:uebergabeprotokoll_detail', pk=pk)
+    
+    return redirect('vermietung:uebergabeprotokoll_list')
+
 

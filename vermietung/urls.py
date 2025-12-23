@@ -29,4 +29,12 @@ urlpatterns = [
     path('vertraege/<int:pk>/bearbeiten/', views.vertrag_edit, name='vertrag_edit'),
     path('vertraege/<int:pk>/beenden/', views.vertrag_end, name='vertrag_end'),
     path('vertraege/<int:pk>/stornieren/', views.vertrag_cancel, name='vertrag_cancel'),
+    
+    # Uebergabeprotokoll (Handover Protocol) URLs
+    path('uebergabeprotokolle/', views.uebergabeprotokoll_list, name='uebergabeprotokoll_list'),
+    path('uebergabeprotokolle/neu/', views.uebergabeprotokoll_create, name='uebergabeprotokoll_create'),
+    path('uebergabeprotokolle/<int:pk>/', views.uebergabeprotokoll_detail, name='uebergabeprotokoll_detail'),
+    path('uebergabeprotokolle/<int:pk>/bearbeiten/', views.uebergabeprotokoll_edit, name='uebergabeprotokoll_edit'),
+    path('uebergabeprotokolle/<int:pk>/loeschen/', views.uebergabeprotokoll_delete, name='uebergabeprotokoll_delete'),
+    path('vertraege/<int:vertrag_pk>/uebergabeprotokoll/neu/', views.uebergabeprotokoll_create_from_vertrag, name='uebergabeprotokoll_create_from_vertrag'),
 ]   
