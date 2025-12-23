@@ -280,6 +280,12 @@
 
                     <!-- Dokumente Tab -->
                     <div class="tab-pane fade" id="dokumente" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Dokumente für diesen Vertrag</h6>
+                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                                <i class="bi bi-upload"></i> Dokument hochladen
+                            </button>
+                        </div>
                         {% if dokumente_page_obj %}
                             <div class="table-responsive">
                                 <table class="table table-dark table-sm">
@@ -288,7 +294,7 @@
                                             <th>Dateiname</th>
                                             <th>Größe</th>
                                             <th>Hochgeladen</th>
-                                            <th>Aktion</th>
+                                            <th class="text-end">Aktionen</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -302,10 +308,13 @@
                                             </td>
                                             <td><small>{{ dokument.file_size|filesizeformat }}</small></td>
                                             <td><small>{{ dokument.uploaded_at|date:"d.m.Y H:i" }}</small></td>
-                                            <td>
-                                                <a href="{% url 'vermietung:dokument_download' dokument.pk %}" class="btn btn-sm btn-outline-info">
+                                            <td class="text-end">
+                                                <a href="{% url 'vermietung:dokument_download' dokument.pk %}" class="btn btn-sm btn-outline-info" title="Herunterladen">
                                                     <i class="bi bi-download"></i>
                                                 </a>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDeleteDokument({{ dokument.pk }}, '{{ dokument.original_filename|escapejs }}')" title="Löschen">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
                                             </td>
                                         </tr>
                                         {% empty %}
@@ -398,6 +407,46 @@
 <form id="cancelForm" method="post" action="{% url 'vermietung:vertrag_cancel' vertrag.pk %}" style="display: none;">
     {% csrf_token %}
 </form>
+
+<!-- Document Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadModalLabel">
+                    <i class="bi bi-upload"></i> Dokument hochladen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'vermietung:dokument_upload' 'vertrag' vertrag.pk %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="id_file" class="form-label">Datei *</label>
+                        <input type="file" class="form-control" id="id_file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.gif,.docx">
+                        <div class="form-text">
+                            Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, DOCX. Maximale Größe: 10 MB
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_beschreibung" class="form-label">Beschreibung (optional)</label>
+                        <textarea class="form-control" id="id_beschreibung" name="beschreibung" rows="3" placeholder="Optional: Beschreibung des Dokuments"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Hochladen
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<form id="deleteDokumentForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+</form>
 {% endblock %}
 
 {% block extra_js %}
@@ -405,6 +454,14 @@
 function confirmCancel() {
     if (confirm('Möchten Sie den Vertrag "{{ vertrag.vertragsnummer }}" wirklich stornieren?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
         document.getElementById('cancelForm').submit();
+    }
+}
+
+function confirmDeleteDokument(dokumentId, filename) {
+    if (confirm('Möchten Sie das Dokument "' + filename + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+        var form = document.getElementById('deleteDokumentForm');
+        form.action = '/vermietung/dokument/' + dokumentId + '/loeschen/';
+        form.submit();
     }
 }
 </script>
