@@ -32,7 +32,7 @@
                 </div>
                 <h5 class="card-title">Mietobjekte</h5>
                 <p class="card-text text-muted">Verwalten Sie Ihre Immobilien</p>
-                <a href="#" class="btn btn-primary">
+                <a href="{% url 'vermietung:mietobjekt_list' %}" class="btn btn-primary">
                     <i class="bi bi-arrow-right-circle"></i> Anzeigen
                 </a>
             </div>
@@ -62,7 +62,7 @@
                 </div>
                 <h5 class="card-title">Kunden</h5>
                 <p class="card-text text-muted">Mieter und Kontakte</p>
-                <a href="#" class="btn btn-warning">
+                <a href="{% url 'vermietung:kunde_list' %}" class="btn btn-warning">
                     <i class="bi bi-arrow-right-circle"></i> Anzeigen
                 </a>
             </div>
