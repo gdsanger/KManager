@@ -5,7 +5,7 @@ Forms for the Vermietung (Rental Management) area.
 from django import forms
 from django.core.exceptions import ValidationError
 from core.models import Adresse
-from .models import MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, OBJEKT_TYPE
 
 
 class MietObjektForm(forms.ModelForm):
@@ -372,3 +372,87 @@ class UebergabeprotokollForm(forms.ModelForm):
         # Order mietobjekte by name
         if not vertrag:
             self.fields['mietobjekt'].queryset = MietObjekt.objects.all().order_by('name')
+
+
+class DokumentUploadForm(forms.ModelForm):
+    """
+    Form for uploading documents.
+    Allows uploading a file and optional description.
+    The entity (Vertrag, MietObjekt, Adresse, Uebergabeprotokoll) is set programmatically.
+    """
+    
+    file = forms.FileField(
+        label='Datei',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.pdf,.png,.jpg,.jpeg,.gif,.docx'
+        }),
+        help_text='Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, DOCX. Maximale Größe: 10 MB'
+    )
+    
+    class Meta:
+        model = Dokument
+        fields = ['beschreibung']
+        widgets = {
+            'beschreibung': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Optional: Beschreibung des Dokuments'
+            }),
+        }
+        labels = {
+            'beschreibung': 'Beschreibung (optional)',
+        }
+    
+    def __init__(self, *args, entity_type=None, entity_id=None, user=None, **kwargs):
+        """
+        Initialize form with entity type and ID.
+        
+        Args:
+            entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll)
+            entity_id: ID of the entity
+            user: User who is uploading the file
+        """
+        super().__init__(*args, **kwargs)
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        self.user = user
+    
+    def save(self, commit=True):
+        """
+        Save the document with uploaded file.
+        Handles file storage and metadata.
+        """
+        instance = super().save(commit=False)
+        
+        # Get uploaded file
+        uploaded_file = self.cleaned_data['file']
+        
+        # Save file to filesystem and get storage path and MIME type
+        storage_path, mime_type = Dokument.save_uploaded_file(
+            uploaded_file,
+            self.entity_type,
+            self.entity_id
+        )
+        
+        # Set document metadata
+        instance.original_filename = uploaded_file.name
+        instance.storage_path = storage_path
+        instance.file_size = uploaded_file.size
+        instance.mime_type = mime_type
+        instance.uploaded_by = self.user
+        
+        # Set the appropriate foreign key based on entity type
+        if self.entity_type == 'vertrag':
+            instance.vertrag_id = self.entity_id
+        elif self.entity_type == 'mietobjekt':
+            instance.mietobjekt_id = self.entity_id
+        elif self.entity_type == 'adresse':
+            instance.adresse_id = self.entity_id
+        elif self.entity_type == 'uebergabeprotokoll':
+            instance.uebergabeprotokoll_id = self.entity_id
+        
+        if commit:
+            instance.save()
+        
+        return instance

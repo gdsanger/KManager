@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.db.models import Q
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
 from core.models import Adresse
-from .forms import AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm, UebergabeprotokollForm
+from .forms import AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm, UebergabeprotokollForm, DokumentUploadForm
 from .permissions import vermietung_required
 
 
@@ -111,8 +111,15 @@ def kunde_detail(request, pk):
     """
     kunde = get_object_or_404(Adresse, pk=pk, adressen_type='KUNDE')
     
+    # Get related documents with pagination
+    dokumente = kunde.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
+    dokumente_paginator = Paginator(dokumente, 10)
+    dokumente_page = request.GET.get('dokumente_page', 1)
+    dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
+    
     context = {
         'kunde': kunde,
+        'dokumente_page_obj': dokumente_page_obj,
     }
     
     return render(request, 'vermietung/kunden/detail.html', context)
@@ -771,5 +778,127 @@ def uebergabeprotokoll_delete(request, pk):
         return redirect('vermietung:uebergabeprotokoll_detail', pk=pk)
     
     return redirect('vermietung:uebergabeprotokoll_list')
+
+
+# Document Upload/Delete Views
+
+@vermietung_required
+def dokument_upload(request, entity_type, entity_id):
+    """
+    Upload a document for a specific entity.
+    
+    Args:
+        request: HTTP request
+        entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll)
+        entity_id: ID of the entity
+    
+    Returns:
+        Redirects back to entity detail page with success/error message
+    """
+    # Validate entity type
+    valid_entity_types = ['vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll']
+    if entity_type not in valid_entity_types:
+        messages.error(request, f'Ungültiger Entity-Typ: {entity_type}')
+        return redirect('vermietung:home')
+    
+    # Get the entity to ensure it exists
+    entity = None
+    entity_name = ''
+    redirect_url = ''
+    
+    if entity_type == 'vertrag':
+        entity = get_object_or_404(Vertrag, pk=entity_id)
+        entity_name = f'Vertrag {entity.vertragsnummer}'
+        redirect_url = 'vermietung:vertrag_detail'
+    elif entity_type == 'mietobjekt':
+        entity = get_object_or_404(MietObjekt, pk=entity_id)
+        entity_name = f'Mietobjekt {entity.name}'
+        redirect_url = 'vermietung:mietobjekt_detail'
+    elif entity_type == 'adresse':
+        entity = get_object_or_404(Adresse, pk=entity_id)
+        entity_name = f'Adresse {entity.full_name()}'
+        redirect_url = 'vermietung:kunde_detail'
+    elif entity_type == 'uebergabeprotokoll':
+        entity = get_object_or_404(Uebergabeprotokoll, pk=entity_id)
+        entity_name = f'Übergabeprotokoll {entity}'
+        redirect_url = 'vermietung:uebergabeprotokoll_detail'
+    
+    if request.method == 'POST':
+        form = DokumentUploadForm(
+            request.POST,
+            request.FILES,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            user=request.user
+        )
+        
+        if form.is_valid():
+            try:
+                dokument = form.save()
+                messages.success(
+                    request,
+                    f'Dokument "{dokument.original_filename}" wurde erfolgreich hochgeladen.'
+                )
+                return redirect(redirect_url, pk=entity_id)
+            except ValidationError as e:
+                # Handle validation errors from file validators with user-friendly messages
+                error_message = str(e)
+                if isinstance(e.message, str):
+                    error_message = e.message
+                elif isinstance(e.messages, list) and e.messages:
+                    error_message = '; '.join(e.messages)
+                messages.error(request, f'Fehler beim Hochladen: {error_message}')
+            except Exception as e:
+                messages.error(request, f'Fehler beim Hochladen: {str(e)}')
+        else:
+            # Display form errors with translated field names
+            for field, errors in form.errors.items():
+                field_label = form.fields.get(field).label if field in form.fields else field
+                for error in errors:
+                    messages.error(request, f'{field_label}: {error}')
+    
+    # Redirect back to detail page (GET or failed POST)
+    return redirect(redirect_url, pk=entity_id)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def dokument_delete(request, dokument_id):
+    """
+    Delete a document.
+    Available to all authenticated users in vermietung area.
+    
+    Args:
+        request: HTTP request
+        dokument_id: ID of the document to delete
+    
+    Returns:
+        Redirects back to entity detail page with success/error message
+    """
+    dokument = get_object_or_404(Dokument, pk=dokument_id)
+    
+    # Determine redirect URL based on entity type
+    entity_type = dokument.get_entity_type()
+    entity_id = dokument.get_entity_id()
+    
+    redirect_url = 'vermietung:home'
+    if entity_type == 'vertrag':
+        redirect_url = 'vermietung:vertrag_detail'
+    elif entity_type == 'mietobjekt':
+        redirect_url = 'vermietung:mietobjekt_detail'
+    elif entity_type == 'adresse':
+        redirect_url = 'vermietung:kunde_detail'
+    elif entity_type == 'uebergabeprotokoll':
+        redirect_url = 'vermietung:uebergabeprotokoll_detail'
+    
+    dokument_name = dokument.original_filename
+    
+    try:
+        dokument.delete()
+        messages.success(request, f'Dokument "{dokument_name}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen des Dokuments: {str(e)}')
+    
+    return redirect(redirect_url, pk=entity_id)
 
 

@@ -4,7 +4,11 @@ from . import views
 app_name = 'vermietung'
 
 urlpatterns = [
+    # Document URLs
     path('dokument/<int:dokument_id>/download/', views.download_dokument, name='dokument_download'),
+    path('dokument/<int:dokument_id>/loeschen/', views.dokument_delete, name='dokument_delete'),
+    path('dokument/upload/<str:entity_type>/<int:entity_id>/', views.dokument_upload, name='dokument_upload'),
+    
     path('', views.vermietung_home, name='home'),
     path('components/', views.vermietung_components, name='components'),
     

@@ -210,12 +210,17 @@
 </div>
 
 <!-- Related Documents Tab -->
-{% if dokumente_page_obj.paginator.count > 0 %}
 <div class="row mt-4">
     <div class="col-12">
         <h4 class="mb-3">Dokumente</h4>
         <div class="card">
             <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Dokumente für dieses Übergabeprotokoll</h6>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                        <i class="bi bi-upload"></i> Dokument hochladen
+                    </button>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-dark table-hover mb-0">
                         <thead>
@@ -230,14 +235,28 @@
                         <tbody>
                             {% for dokument in dokumente_page_obj %}
                             <tr>
-                                <td>{{ dokument.original_filename }}</td>
+                                <td>
+                                    {{ dokument.original_filename }}
+                                    {% if dokument.beschreibung %}
+                                    <br><small class="text-muted">{{ dokument.beschreibung|truncatewords:10 }}</small>
+                                    {% endif %}
+                                </td>
                                 <td>{{ dokument.uploaded_at|date:"d.m.Y H:i" }}</td>
-                                <td>{{ dokument.uploaded_by|default:"-" }}</td>
+                                <td>{{ dokument.uploaded_by.username|default:"-" }}</td>
                                 <td>{{ dokument.file_size|filesizeformat }}</td>
                                 <td class="text-end">
-                                    <a href="{% url 'vermietung:dokument_download' dokument.pk %}" class="btn btn-sm btn-outline-info">
-                                        <i class="bi bi-download"></i> Download
+                                    <a href="{% url 'vermietung:dokument_download' dokument.pk %}" class="btn btn-sm btn-outline-info" title="Herunterladen">
+                                        <i class="bi bi-download"></i>
                                     </a>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDeleteDokument({{ dokument.pk }}, '{{ dokument.original_filename|escapejs }}')" title="Löschen">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">
+                                    <i class="bi bi-inbox"></i> Keine Dokumente vorhanden
                                 </td>
                             </tr>
                             {% endfor %}
@@ -270,7 +289,46 @@
         </div>
     </div>
 </div>
-{% endif %}
+
+<!-- Document Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadModalLabel">
+                    <i class="bi bi-upload"></i> Dokument hochladen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'vermietung:dokument_upload' 'uebergabeprotokoll' protokoll.pk %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="id_file" class="form-label">Datei *</label>
+                        <input type="file" class="form-control" id="id_file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.gif,.docx">
+                        <div class="form-text">
+                            Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, DOCX. Maximale Größe: 10 MB
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_beschreibung" class="form-label">Beschreibung (optional)</label>
+                        <textarea class="form-control" id="id_beschreibung" name="beschreibung" rows="3" placeholder="Optional: Beschreibung des Dokuments"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Hochladen
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<form id="deleteDokumentForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+</form>
 {% endblock %}
 
 {% block extra_js %}
@@ -295,6 +353,14 @@ function confirmDelete() {
         }
         
         document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function confirmDeleteDokument(dokumentId, filename) {
+    if (confirm('Möchten Sie das Dokument "' + filename + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+        var form = document.getElementById('deleteDokumentForm');
+        form.action = "{% url 'vermietung:dokument_delete' 0 %}".replace('/0/', '/' + dokumentId + '/');
         form.submit();
     }
 }
