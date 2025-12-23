@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
+from django.utils.encoding import escape_uri_path
 from .models import Dokument
 
 
@@ -40,14 +41,9 @@ def download_dokument(request, dokument_id):
     response = FileResponse(
         file_path.open('rb'),
         content_type=dokument.mime_type,
-        as_attachment=True
+        as_attachment=True,
+        filename=dokument.original_filename  # FileResponse handles proper escaping
     )
-    
-    # Set filename with ASCII-safe characters to prevent header injection
-    safe_filename = dokument.original_filename.encode('ascii', 'ignore').decode('ascii')
-    if not safe_filename:
-        safe_filename = 'document'
-    response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
     
     return response
 

@@ -501,7 +501,15 @@ def validate_file_size(file):
 
 
 def validate_file_type(file):
-    """Validate that file type is one of the allowed types."""
+    """
+    Validate that file type is one of the allowed types.
+    
+    Returns:
+        str: The detected MIME type if valid
+    
+    Raises:
+        ValidationError: If file type is not allowed
+    """
     # Read file content to detect MIME type
     file.seek(0)
     mime = magic.from_buffer(file.read(2048), mime=True)
@@ -524,6 +532,8 @@ def validate_file_type(file):
             f'Dateierweiterung passt nicht zum erkannten Dateityp "{mime}". '
             f'Erwartete Erweiterungen: {", ".join(expected_extensions)}'
         )
+    
+    return mime
 
 
 class Dokument(models.Model):
@@ -716,13 +726,15 @@ class Dokument(models.Model):
             # Try to remove empty parent directories
             try:
                 parent = file_path.parent
-                while parent != Path(settings.VERMIETUNG_DOCUMENTS_ROOT):
+                doc_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
+                # Only clean up directories within document root
+                while parent != doc_root and parent.is_relative_to(doc_root):
                     if not any(parent.iterdir()):
                         parent.rmdir()
                         parent = parent.parent
                     else:
                         break
-            except (OSError, RuntimeError):
+            except (OSError, RuntimeError, ValueError):
                 pass  # Ignore errors when cleaning up directories
         
         super().delete(*args, **kwargs)
@@ -764,13 +776,8 @@ class Dokument(models.Model):
         # Validate file size
         validate_file_size(uploaded_file)
         
-        # Validate file type
-        validate_file_type(uploaded_file)
-        
-        # Detect MIME type
-        uploaded_file.seek(0)
-        mime_type = magic.from_buffer(uploaded_file.read(2048), mime=True)
-        uploaded_file.seek(0)
+        # Validate file type and get MIME type
+        mime_type = validate_file_type(uploaded_file)
         
         # Generate storage path
         storage_path = Dokument.generate_storage_path(
