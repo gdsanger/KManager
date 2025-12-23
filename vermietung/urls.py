@@ -9,6 +9,12 @@ urlpatterns = [
     path('dokument/<int:dokument_id>/loeschen/', views.dokument_delete, name='dokument_delete'),
     path('dokument/upload/<str:entity_type>/<int:entity_id>/', views.dokument_upload, name='dokument_upload'),
     
+    # MietObjekt Image URLs
+    path('mietobjekte/<int:pk>/bilder/hochladen/', views.mietobjekt_bild_upload, name='mietobjekt_bild_upload'),
+    path('mietobjekte/bilder/<int:bild_id>/thumbnail/', views.serve_mietobjekt_bild, {'mode': 'thumbnail'}, name='mietobjekt_bild_thumbnail'),
+    path('mietobjekte/bilder/<int:bild_id>/original/', views.serve_mietobjekt_bild, {'mode': 'original'}, name='mietobjekt_bild_original'),
+    path('mietobjekte/bilder/<int:bild_id>/loeschen/', views.mietobjekt_bild_delete, name='mietobjekt_bild_delete'),
+    
     path('', views.vermietung_home, name='home'),
     path('components/', views.vermietung_components, name='components'),
     

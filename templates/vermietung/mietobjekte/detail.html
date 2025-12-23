@@ -154,6 +154,11 @@
                 </button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="bilder-tab" data-bs-toggle="tab" data-bs-target="#bilder" type="button" role="tab">
+                    <i class="bi bi-images"></i> Bilder ({{ bilder_page_obj.paginator.count }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="dokumente-tab" data-bs-toggle="tab" data-bs-target="#dokumente" type="button" role="tab">
                     <i class="bi bi-file-earmark"></i> Dokumente ({{ dokumente_page_obj.paginator.count }})
                 </button>
@@ -317,6 +322,79 @@
                 {% endif %}
             </div>
             
+            <!-- Images Tab -->
+            <div class="tab-pane fade p-3" id="bilder" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Bildergalerie für dieses Mietobjekt</h6>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#bildUploadModal">
+                        <i class="bi bi-upload"></i> Bilder hochladen
+                    </button>
+                </div>
+                {% if bilder_page_obj %}
+                    {% if bilder_page_obj.object_list %}
+                        <div class="row g-3">
+                            {% for bild in bilder_page_obj %}
+                            <div class="col-md-3 col-sm-4 col-6">
+                                <div class="card h-100">
+                                    <a href="{% url 'vermietung:mietobjekt_bild_original' bild.pk %}" target="_blank" data-bs-toggle="modal" data-bs-target="#bildPreviewModal" data-bs-img-url="{% url 'vermietung:mietobjekt_bild_original' bild.pk %}" data-bs-img-name="{{ bild.original_filename }}">
+                                        <img src="{% url 'vermietung:mietobjekt_bild_thumbnail' bild.pk %}" class="card-img-top" alt="{{ bild.original_filename }}" style="height: 200px; object-fit: cover;">
+                                    </a>
+                                    <div class="card-body p-2">
+                                        <p class="card-text small mb-1 text-truncate" title="{{ bild.original_filename }}">
+                                            <i class="bi bi-image"></i> {{ bild.original_filename }}
+                                        </p>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">{{ bild.file_size|filesizeformat }}</small>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDeleteBild({{ bild.pk }}, '{{ bild.original_filename|escapejs }}')" title="Löschen">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                        <small class="text-muted d-block">{{ bild.uploaded_at|date:"d.m.Y" }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-5">
+                            <i class="bi bi-images" style="font-size: 3rem;"></i>
+                            <p class="mt-2">Keine Bilder vorhanden</p>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Pagination for Images -->
+                    {% if bilder_page_obj.has_other_pages %}
+                    <nav aria-label="Bilder Pagination" class="mt-3">
+                        <ul class="pagination pagination-sm justify-content-center">
+                            {% if bilder_page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?bilder_page={{ bilder_page_obj.previous_page_number }}#bilder">Zurück</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Zurück</span>
+                            </li>
+                            {% endif %}
+                            
+                            <li class="page-item active">
+                                <span class="page-link">Seite {{ bilder_page_obj.number }} von {{ bilder_page_obj.paginator.num_pages }}</span>
+                            </li>
+                            
+                            {% if bilder_page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?bilder_page={{ bilder_page_obj.next_page_number }}#bilder">Weiter</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Weiter</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                {% endif %}
+            </div>
+            
             <!-- Documents Tab -->
             <div class="tab-pane fade p-3" id="dokumente" role="tabpanel">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -447,6 +525,58 @@
     </div>
 </div>
 
+<!-- Image Upload Modal -->
+<div class="modal fade" id="bildUploadModal" tabindex="-1" aria-labelledby="bildUploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bildUploadModalLabel">
+                    <i class="bi bi-images"></i> Bilder hochladen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'vermietung:mietobjekt_bild_upload' mietobjekt.pk %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="id_bilder" class="form-label">Bilder *</label>
+                        <input type="file" class="form-control" id="id_bilder" name="bilder" required multiple accept="image/png,image/jpeg,image/gif,.png,.jpg,.jpeg,.gif">
+                        <div class="form-text">
+                            Erlaubte Bildtypen: PNG, JPG/JPEG, GIF. Maximale Größe: 10 MB pro Bild. Sie können mehrere Bilder gleichzeitig auswählen.
+                        </div>
+                    </div>
+                    <div id="imagePreviewContainer" class="row g-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Hochladen
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Image Preview Modal -->
+<div class="modal fade" id="bildPreviewModal" tabindex="-1" aria-labelledby="bildPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bildPreviewModalLabel">Bildvorschau</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="previewImage" src="" alt="" class="img-fluid" style="max-height: 70vh;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="deleteBildForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+</form>
+
 <form id="deleteDokumentForm" method="post" action="" style="display: none;">
     {% csrf_token %}
 </form>
@@ -467,5 +597,62 @@ function confirmDeleteDokument(dokumentId, filename) {
         form.submit();
     }
 }
+
+function confirmDeleteBild(bildId, filename) {
+    if (confirm('Möchten Sie das Bild "' + filename + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+        var form = document.getElementById('deleteBildForm');
+        form.action = "{% url 'vermietung:mietobjekt_bild_delete' 0 %}".replace('/0/', '/' + bildId + '/');
+        form.submit();
+    }
+}
+
+// Image preview in modal
+document.addEventListener('DOMContentLoaded', function() {
+    var bildPreviewModal = document.getElementById('bildPreviewModal');
+    if (bildPreviewModal) {
+        bildPreviewModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var imgUrl = button.getAttribute('data-bs-img-url');
+            var imgName = button.getAttribute('data-bs-img-name');
+            
+            var modalImage = document.getElementById('previewImage');
+            var modalTitle = document.getElementById('bildPreviewModalLabel');
+            
+            modalImage.src = imgUrl;
+            modalImage.alt = imgName;
+            modalTitle.textContent = imgName;
+        });
+    }
+    
+    // Show image previews when files are selected
+    var fileInput = document.getElementById('id_bilder');
+    if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            var container = document.getElementById('imagePreviewContainer');
+            container.innerHTML = '';
+            
+            var files = Array.from(e.target.files);
+            if (files.length > 0) {
+                files.forEach(function(file, index) {
+                    if (file.type.startsWith('image/')) {
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            var col = document.createElement('div');
+                            col.className = 'col-4';
+                            var img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.className = 'img-thumbnail';
+                            img.style.height = '100px';
+                            img.style.objectFit = 'cover';
+                            col.appendChild(img);
+                            container.appendChild(col);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
