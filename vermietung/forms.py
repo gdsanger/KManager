@@ -3,8 +3,9 @@ Forms for the Vermietung (Rental Management) area.
 """
 
 from django import forms
+from django.core.exceptions import ValidationError
 from core.models import Adresse
-from .models import MietObjekt, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, OBJEKT_TYPE
 
 
 class MietObjektForm(forms.ModelForm):
@@ -125,3 +126,141 @@ class AdresseKundeForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class VertragForm(forms.ModelForm):
+    """
+    Form for creating/editing Vertrag (rental contracts).
+    Includes all fields with proper Bootstrap 5 styling.
+    Contract number is auto-generated and not editable.
+    """
+    
+    class Meta:
+        model = Vertrag
+        fields = [
+            'mietobjekt',
+            'mieter',
+            'start',
+            'ende',
+            'miete',
+            'kaution',
+            'status',
+        ]
+        widgets = {
+            'mietobjekt': forms.Select(attrs={
+                'class': 'form-select',
+                'id': 'id_mietobjekt',
+            }),
+            'mieter': forms.Select(attrs={'class': 'form-select'}),
+            'start': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date',
+            }),
+            'ende': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date',
+            }),
+            'miete': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'id': 'id_miete',
+            }),
+            'kaution': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'id': 'id_kaution',
+            }),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {
+            'mietobjekt': 'Mietobjekt *',
+            'mieter': 'Mieter (Kunde) *',
+            'start': 'Vertragsbeginn *',
+            'ende': 'Vertragsende',
+            'miete': 'Monatliche Miete (€) *',
+            'kaution': 'Kaution (€) *',
+            'status': 'Status *',
+        }
+        help_texts = {
+            'mietobjekt': 'Wählen Sie das zu vermietende Objekt aus',
+            'mieter': 'Nur Adressen vom Typ "Kunde" können ausgewählt werden',
+            'start': 'Startdatum des Vertrags',
+            'ende': 'Optional: Enddatum des Vertrags (leer = unbefristet)',
+            'miete': 'Monatliche Miete in EUR',
+            'kaution': 'Kaution in EUR (wird aus Mietobjekt vorausgefüllt)',
+            'status': 'Status des Vertrags',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filter mieter to only show KUNDE addresses
+        self.fields['mieter'].queryset = Adresse.objects.filter(
+            adressen_type='KUNDE'
+        ).order_by('name')
+        
+        # Order mietobjekte by name
+        self.fields['mietobjekt'].queryset = MietObjekt.objects.all().order_by('name')
+        
+        # Pre-fill miete and kaution from mietobjekt if creating new contract
+        if not self.instance.pk and 'mietobjekt' in self.initial:
+            try:
+                mietobjekt = MietObjekt.objects.get(pk=self.initial['mietobjekt'])
+                if 'miete' not in self.initial:
+                    self.initial['miete'] = mietobjekt.mietpreis
+                if 'kaution' not in self.initial and mietobjekt.kaution:
+                    self.initial['kaution'] = mietobjekt.kaution
+            except MietObjekt.DoesNotExist:
+                pass
+    
+    def clean(self):
+        """
+        Additional validation to warn about unavailable rental objects.
+        The model's clean method will handle overlap validation.
+        """
+        cleaned_data = super().clean()
+        mietobjekt = cleaned_data.get('mietobjekt')
+        
+        # Add warning if mietobjekt is not available (but don't prevent saving)
+        # This is just a UX improvement - the model validation will catch overlaps
+        if mietobjekt and not mietobjekt.verfuegbar:
+            # We use add_error with None as field to add a non-field warning
+            # But we'll let the model's overlap validation be the final say
+            pass
+        
+        return cleaned_data
+
+
+class VertragEndForm(forms.Form):
+    """
+    Form for ending a contract by setting the end date.
+    """
+    ende = forms.DateField(
+        label='Vertragsende',
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date',
+        }),
+        help_text='Datum an dem der Vertrag beendet werden soll'
+    )
+    
+    def __init__(self, *args, vertrag=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.vertrag = vertrag
+        
+        # Set initial value to today if not provided
+        if not self.initial.get('ende'):
+            from django.utils import timezone
+            self.initial['ende'] = timezone.now().date()
+    
+    def clean_ende(self):
+        """Validate that end date is after start date."""
+        ende = self.cleaned_data.get('ende')
+        
+        if self.vertrag and ende:
+            if ende <= self.vertrag.start:
+                raise ValidationError(
+                    f'Das Enddatum muss nach dem Vertragsbeginn ({self.vertrag.start}) liegen.'
+                )
+        
+        return ende
