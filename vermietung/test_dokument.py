@@ -357,7 +357,7 @@ class DokumentDownloadViewTest(TestCase):
         
         # Should redirect to login
         self.assertEqual(response.status_code, 302)
-        self.assertIn('/admin/login/', response.url)
+        self.assertIn('/login/', response.url)
     
     def test_download_with_authentication(self):
         """Test that authenticated users can access download view."""
