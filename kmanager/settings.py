@@ -135,6 +135,11 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Document storage configuration
+# Documents are stored in filesystem under <APP_ROOT>/data/vermietung/
+MEDIA_ROOT = BASE_DIR / 'data'
+VERMIETUNG_DOCUMENTS_ROOT = MEDIA_ROOT / 'vermietung'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
