@@ -1,0 +1,71 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{# 
+    Form Layout Template
+    
+    Usage: Extend this template for create/edit form views
+    
+    Blocks to override:
+    - page_title: Page heading
+    - form_content: The actual form fields
+    - form_actions: Form buttons (Save, Cancel, etc.)
+#}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" {% block form_attrs %}{% endblock %}>
+                    {% csrf_token %}
+                    
+                    {% block form_content %}
+                    <!-- Form fields go here -->
+                    <div class="mb-3">
+                        <label for="field1" class="form-label">Field 1</label>
+                        <input type="text" class="form-control" id="field1" name="field1">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="field2" class="form-label">Field 2</label>
+                        <input type="text" class="form-control" id="field2" name="field2">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="field3" class="form-label">Field 3</label>
+                        <textarea class="form-control" id="field3" name="field3" rows="3"></textarea>
+                    </div>
+                    {% endblock %}
+                    
+                    <div class="d-flex justify-content-between">
+                        {% block form_actions %}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Speichern
+                        </button>
+                        <a href="#" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                        {% endblock %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar with help text or additional info -->
+    <div class="col-lg-4">
+        {% block form_sidebar %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Hinweise
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">
+                    Pflichtfelder sind mit einem Stern (*) gekennzeichnet.
+                </p>
+            </div>
+        </div>
+        {% endblock %}
+    </div>
+</div>
+{% endblock %}

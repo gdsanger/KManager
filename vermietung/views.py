@@ -12,3 +12,9 @@ from .permissions import vermietung_required
 def vermietung_home(request):
     """Vermietung dashboard/home page - requires Vermietung access."""
     return render(request, 'vermietung/home.html')
+
+
+@vermietung_required
+def vermietung_components(request):
+    """UI Components reference page for developers."""
+    return render(request, 'vermietung/components.html')

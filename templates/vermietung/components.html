@@ -1,0 +1,270 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{# 
+    UI Components Reference
+    
+    This page demonstrates all standard UI components available in the Vermietung section.
+    Use this as a reference when building new pages.
+#}
+
+{% block page_title %}UI Komponenten{% endblock %}
+
+{% block content %}
+<!-- Buttons -->
+<section class="mb-5">
+    <h3 class="mb-3">Buttons</h3>
+    <div class="card">
+        <div class="card-body">
+            <h5>Primary Actions</h5>
+            <button type="button" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Neu
+            </button>
+            <button type="button" class="btn btn-success">
+                <i class="bi bi-save"></i> Speichern
+            </button>
+            <button type="button" class="btn btn-warning">
+                <i class="bi bi-pencil"></i> Bearbeiten
+            </button>
+            <button type="button" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Löschen
+            </button>
+            <button type="button" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Abbrechen
+            </button>
+            
+            <h5 class="mt-4">Outline Buttons</h5>
+            <button type="button" class="btn btn-outline-primary">Primary</button>
+            <button type="button" class="btn btn-outline-success">Success</button>
+            <button type="button" class="btn btn-outline-warning">Warning</button>
+            <button type="button" class="btn btn-outline-danger">Danger</button>
+            
+            <h5 class="mt-4">Button Sizes</h5>
+            <button type="button" class="btn btn-primary btn-lg">Large</button>
+            <button type="button" class="btn btn-primary">Default</button>
+            <button type="button" class="btn btn-primary btn-sm">Small</button>
+        </div>
+    </div>
+</section>
+
+<!-- Badges -->
+<section class="mb-5">
+    <h3 class="mb-3">Badges</h3>
+    <div class="card">
+        <div class="card-body">
+            <h5>Status Badges</h5>
+            <span class="badge bg-primary">Primary</span>
+            <span class="badge bg-secondary">Secondary</span>
+            <span class="badge bg-success">Aktiv</span>
+            <span class="badge bg-danger">Beendet</span>
+            <span class="badge bg-warning">Warnung</span>
+            <span class="badge bg-info">Info</span>
+            
+            <h5 class="mt-4">Pill Badges</h5>
+            <span class="badge rounded-pill bg-primary">Primary</span>
+            <span class="badge rounded-pill bg-success">Success</span>
+            <span class="badge rounded-pill bg-danger">Danger</span>
+        </div>
+    </div>
+</section>
+
+<!-- Alerts -->
+<section class="mb-5">
+    <h3 class="mb-3">Alerts</h3>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill"></i>
+        <strong>Erfolg!</strong> Der Vorgang wurde erfolgreich abgeschlossen.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>Fehler!</strong> Es ist ein Fehler aufgetreten.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-circle-fill"></i>
+        <strong>Warnung!</strong> Bitte überprüfen Sie Ihre Eingaben.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle-fill"></i>
+        <strong>Information:</strong> Hier ist eine wichtige Information.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+</section>
+
+<!-- Cards -->
+<section class="mb-5">
+    <h3 class="mb-3">Cards</h3>
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-house-door"></i> Card Header
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Card Title</h5>
+                    <p class="card-text">This is a standard card with header, body, and footer.</p>
+                </div>
+                <div class="card-footer text-muted">
+                    Card Footer
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Simple Card</h5>
+                    <p class="card-text">This is a simple card without header or footer.</p>
+                    <a href="#" class="btn btn-primary">Action</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <span class="badge bg-success">Aktiv</span>
+                    </h5>
+                    <p class="card-text">Card with status badge.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Tables -->
+<section class="mb-5">
+    <h3 class="mb-3">Tables</h3>
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Datum</th>
+                            <th class="text-end">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>Beispiel 1</td>
+                            <td><span class="badge bg-success">Aktiv</span></td>
+                            <td>23.12.2025</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-warning">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>Beispiel 2</td>
+                            <td><span class="badge bg-danger">Beendet</span></td>
+                            <td>22.12.2025</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-warning">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Forms -->
+<section class="mb-5">
+    <h3 class="mb-3">Forms</h3>
+    <div class="card">
+        <div class="card-body">
+            <form>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="textInput" class="form-label">Text Input</label>
+                            <input type="text" class="form-control" id="textInput" placeholder="Enter text">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="selectInput" class="form-label">Select</label>
+                            <select class="form-select" id="selectInput">
+                                <option selected>Choose...</option>
+                                <option value="1">Option 1</option>
+                                <option value="2">Option 2</option>
+                                <option value="3">Option 3</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="textareaInput" class="form-label">Textarea</label>
+                    <textarea class="form-control" id="textareaInput" rows="3"></textarea>
+                </div>
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="checkInput">
+                    <label class="form-check-label" for="checkInput">
+                        Checkbox
+                    </label>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="radioOptions" id="radio1" value="option1">
+                        <label class="form-check-label" for="radio1">
+                            Option 1
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="radioOptions" id="radio2" value="option2">
+                        <label class="form-check-label" for="radio2">
+                            Option 2
+                        </label>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+<!-- Breadcrumbs -->
+<section class="mb-5">
+    <h3 class="mb-3">Breadcrumbs</h3>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="#">Home</a></li>
+            <li class="breadcrumb-item"><a href="#">Vermietung</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Komponenten</li>
+        </ol>
+    </nav>
+</section>
+
+<!-- Loading Spinner -->
+<section class="mb-5">
+    <h3 class="mb-3">Loading Spinner</h3>
+    <div class="card">
+        <div class="card-body">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="spinner-border spinner-border-sm ms-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
