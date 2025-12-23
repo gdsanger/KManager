@@ -3,13 +3,13 @@ from django.http import JsonResponse, Http404, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
 from core.models import Adresse
-from .forms import AdresseKundeForm, MietObjektForm
+from .forms import AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm
 from .permissions import vermietung_required
 
 
@@ -356,4 +356,222 @@ def mietobjekt_delete(request, pk):
         return redirect('vermietung:mietobjekt_detail', pk=pk)
     
     return redirect('vermietung:mietobjekt_list')
+
+
+# Vertrag (Contract) CRUD Views
+
+@vermietung_required
+def vertrag_list(request):
+    """
+    List all contracts (Verträge) with search and pagination.
+    """
+    # Get search query
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '')
+    
+    # Base queryset with related data
+    vertraege = Vertrag.objects.select_related('mietobjekt', 'mieter').all()
+    
+    # Apply search filter
+    if search_query:
+        vertraege = vertraege.filter(
+            Q(vertragsnummer__icontains=search_query) |
+            Q(mieter__name__icontains=search_query) |
+            Q(mieter__firma__icontains=search_query) |
+            Q(mietobjekt__name__icontains=search_query)
+        )
+    
+    # Apply status filter
+    if status_filter:
+        vertraege = vertraege.filter(status=status_filter)
+    
+    # Order by start date (newest first)
+    vertraege = vertraege.order_by('-start')
+    
+    # Pagination
+    paginator = Paginator(vertraege, 20)  # Show 20 contracts per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+    }
+    
+    return render(request, 'vermietung/vertraege/list.html', context)
+
+
+@vermietung_required
+def vertrag_detail(request, pk):
+    """
+    Show details of a specific contract.
+    """
+    vertrag = get_object_or_404(
+        Vertrag.objects.select_related('mietobjekt', 'mieter'),
+        pk=pk
+    )
+    
+    # Get related handover protocols with pagination
+    uebergaben = vertrag.uebergabeprotokolle.select_related('mietobjekt').order_by('-uebergabetag')
+    uebergaben_paginator = Paginator(uebergaben, 10)
+    uebergaben_page = request.GET.get('uebergaben_page', 1)
+    uebergaben_page_obj = uebergaben_paginator.get_page(uebergaben_page)
+    
+    # Get related documents with pagination
+    dokumente = vertrag.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
+    dokumente_paginator = Paginator(dokumente, 10)
+    dokumente_page = request.GET.get('dokumente_page', 1)
+    dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
+    
+    context = {
+        'vertrag': vertrag,
+        'uebergaben_page_obj': uebergaben_page_obj,
+        'dokumente_page_obj': dokumente_page_obj,
+    }
+    
+    return render(request, 'vermietung/vertraege/detail.html', context)
+
+
+@vermietung_required
+def vertrag_create(request):
+    """
+    Create a new contract.
+    """
+    if request.method == 'POST':
+        form = VertragForm(request.POST)
+        if form.is_valid():
+            try:
+                vertrag = form.save()
+                messages.success(
+                    request,
+                    f'Vertrag "{vertrag.vertragsnummer}" wurde erfolgreich angelegt.'
+                )
+                return redirect('vermietung:vertrag_detail', pk=vertrag.pk)
+            except ValidationError as e:
+                # Handle validation errors from model's clean() method
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = VertragForm()
+    
+    context = {
+        'form': form,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/vertraege/form.html', context)
+
+
+@vermietung_required
+def vertrag_edit(request, pk):
+    """
+    Edit an existing contract.
+    Only editable fields can be modified.
+    """
+    vertrag = get_object_or_404(Vertrag, pk=pk)
+    
+    if request.method == 'POST':
+        form = VertragForm(request.POST, instance=vertrag)
+        if form.is_valid():
+            try:
+                vertrag = form.save()
+                messages.success(
+                    request,
+                    f'Vertrag "{vertrag.vertragsnummer}" wurde erfolgreich aktualisiert.'
+                )
+                return redirect('vermietung:vertrag_detail', pk=vertrag.pk)
+            except ValidationError as e:
+                # Handle validation errors from model's clean() method
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = VertragForm(instance=vertrag)
+    
+    context = {
+        'form': form,
+        'vertrag': vertrag,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/vertraege/form.html', context)
+
+
+@vermietung_required
+def vertrag_end(request, pk):
+    """
+    End a contract by setting the end date.
+    This sets the 'ende' field and updates the rental object availability.
+    """
+    vertrag = get_object_or_404(Vertrag, pk=pk)
+    
+    # Check if contract can be ended
+    if vertrag.status == 'cancelled':
+        messages.error(request, 'Ein stornierter Vertrag kann nicht beendet werden.')
+        return redirect('vermietung:vertrag_detail', pk=pk)
+    
+    if vertrag.ende:
+        messages.warning(
+            request,
+            f'Dieser Vertrag hat bereits ein Enddatum: {vertrag.ende}'
+        )
+    
+    if request.method == 'POST':
+        form = VertragEndForm(request.POST, vertrag=vertrag)
+        if form.is_valid():
+            try:
+                vertrag.ende = form.cleaned_data['ende']
+                # If end date is in the past or today, set status to 'ended'
+                if vertrag.ende <= timezone.now().date():
+                    vertrag.status = 'ended'
+                vertrag.save()
+                messages.success(
+                    request,
+                    f'Vertrag "{vertrag.vertragsnummer}" wurde auf den {vertrag.ende} beendet.'
+                )
+                return redirect('vermietung:vertrag_detail', pk=vertrag.pk)
+            except ValidationError as e:
+                messages.error(request, str(e))
+    else:
+        form = VertragEndForm(vertrag=vertrag)
+    
+    context = {
+        'form': form,
+        'vertrag': vertrag,
+    }
+    
+    return render(request, 'vermietung/vertraege/end.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def vertrag_cancel(request, pk):
+    """
+    Cancel a contract by changing status to 'cancelled'.
+    This updates the rental object availability.
+    """
+    vertrag = get_object_or_404(Vertrag, pk=pk)
+    
+    # Check if contract can be cancelled
+    if vertrag.status == 'cancelled':
+        messages.warning(request, 'Dieser Vertrag ist bereits storniert.')
+        return redirect('vermietung:vertrag_detail', pk=pk)
+    
+    if vertrag.status == 'ended':
+        messages.error(request, 'Ein beendeter Vertrag kann nicht storniert werden.')
+        return redirect('vermietung:vertrag_detail', pk=pk)
+    
+    try:
+        vertrag.status = 'cancelled'
+        vertrag.save()
+        messages.success(
+            request,
+            f'Vertrag "{vertrag.vertragsnummer}" wurde storniert.'
+        )
+    except Exception as e:
+        messages.error(request, f'Fehler beim Stornieren des Vertrags: {str(e)}')
+    
+    return redirect('vermietung:vertrag_detail', pk=pk)
 

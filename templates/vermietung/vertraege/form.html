@@ -1,0 +1,243 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}{% if is_create %}Neuer Vertrag{% else %}Vertrag bearbeiten{% endif %} - K-Manager v1.0{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+    <i class="bi bi-plus-circle"></i> Neuer Vertrag
+{% else %}
+    <i class="bi bi-pencil"></i> Vertrag bearbeiten: {{ vertrag.vertragsnummer }}
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% if is_create %}{% url 'vermietung:vertrag_list' %}{% else %}{% url 'vermietung:vertrag_detail' vertrag.pk %}{% endif %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="vertragForm">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    <h5 class="mb-3"><i class="bi bi-file-earmark-text"></i> Vertragsdaten</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">{{ form.mietobjekt.label }}</label>
+                        {{ form.mietobjekt }}
+                        {% if form.mietobjekt.errors %}
+                        <div class="text-danger small">{{ form.mietobjekt.errors }}</div>
+                        {% endif %}
+                        {% if form.mietobjekt.help_text %}
+                        <div class="form-text">{{ form.mietobjekt.help_text }}</div>
+                        {% endif %}
+                        <div id="availabilityWarning" class="alert alert-warning mt-2" style="display: none;">
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            <strong>Warnung:</strong> Dieses Mietobjekt ist aktuell als "nicht verfügbar" markiert. 
+                            Es könnte bereits einen aktiven Vertrag geben.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.mieter.id_for_label }}" class="form-label">{{ form.mieter.label }}</label>
+                        {{ form.mieter }}
+                        {% if form.mieter.errors %}
+                        <div class="text-danger small">{{ form.mieter.errors }}</div>
+                        {% endif %}
+                        {% if form.mieter.help_text %}
+                        <div class="form-text">{{ form.mieter.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-calendar-range"></i> Vertragszeitraum</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.start.id_for_label }}" class="form-label">{{ form.start.label }}</label>
+                            {{ form.start }}
+                            {% if form.start.errors %}
+                            <div class="text-danger small">{{ form.start.errors }}</div>
+                            {% endif %}
+                            {% if form.start.help_text %}
+                            <div class="form-text">{{ form.start.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.ende.id_for_label }}" class="form-label">{{ form.ende.label }}</label>
+                            {{ form.ende }}
+                            {% if form.ende.errors %}
+                            <div class="text-danger small">{{ form.ende.errors }}</div>
+                            {% endif %}
+                            {% if form.ende.help_text %}
+                            <div class="form-text">{{ form.ende.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-currency-euro"></i> Finanzielle Konditionen</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.miete.id_for_label }}" class="form-label">{{ form.miete.label }}</label>
+                            <div class="input-group">
+                                {{ form.miete }}
+                                <span class="input-group-text">€</span>
+                            </div>
+                            {% if form.miete.errors %}
+                            <div class="text-danger small">{{ form.miete.errors }}</div>
+                            {% endif %}
+                            {% if form.miete.help_text %}
+                            <div class="form-text">{{ form.miete.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.kaution.id_for_label }}" class="form-label">{{ form.kaution.label }}</label>
+                            <div class="input-group">
+                                {{ form.kaution }}
+                                <span class="input-group-text">€</span>
+                            </div>
+                            {% if form.kaution.errors %}
+                            <div class="text-danger small">{{ form.kaution.errors }}</div>
+                            {% endif %}
+                            {% if form.kaution.help_text %}
+                            <div class="form-text">{{ form.kaution.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-info-circle"></i> Status</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.status.id_for_label }}" class="form-label">{{ form.status.label }}</label>
+                        {{ form.status }}
+                        {% if form.status.errors %}
+                        <div class="text-danger small">{{ form.status.errors }}</div>
+                        {% endif %}
+                        {% if form.status.help_text %}
+                        <div class="form-text">{{ form.status.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Speichern
+                        </button>
+                        <a href="{% if is_create %}{% url 'vermietung:vertrag_list' %}{% else %}{% url 'vermietung:vertrag_detail' vertrag.pk %}{% endif %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar with help text -->
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Hinweise
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    <strong>Vertragsnummer:</strong> Die Vertragsnummer wird automatisch beim Speichern generiert (Format: V-00000).
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Mietobjekt:</strong> Wählen Sie das zu vermietende Objekt aus. Sie erhalten eine Warnung, wenn das Objekt bereits vermietet ist.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Mieter:</strong> Nur Adressen vom Typ "Kunde" können als Mieter ausgewählt werden.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Zeitraum:</strong> Der Vertragsbeginn ist Pflicht. Das Enddatum ist optional (leer = unbefristet).
+                </p>
+                <p class="text-muted small mb-0">
+                    <strong>Verfügbarkeit:</strong> Die Verfügbarkeit des Mietobjekts wird automatisch basierend auf aktiven Verträgen aktualisiert.
+                </p>
+            </div>
+        </div>
+
+        {% if not is_create %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-gear"></i> Aktionen
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    Zum Beenden oder Stornieren des Vertrags verwenden Sie die entsprechenden Aktionen auf der Detailseite.
+                </p>
+                <a href="{% url 'vermietung:vertrag_detail' vertrag.pk %}" class="btn btn-sm btn-outline-info w-100">
+                    <i class="bi bi-eye"></i> Zur Detailseite
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Get mietobjekt availability data
+const mietobjektData = {
+    {% for obj in form.fields.mietobjekt.queryset %}
+    {{ obj.pk }}: {
+        verfuegbar: {% if obj.verfuegbar %}true{% else %}false{% endif %},
+        mietpreis: {{ obj.mietpreis }},
+        kaution: {% if obj.kaution %}{{ obj.kaution }}{% else %}null{% endif %}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
+
+// Show availability warning and pre-fill prices
+document.getElementById('id_mietobjekt').addEventListener('change', function() {
+    const mietobjektId = this.value;
+    const warningDiv = document.getElementById('availabilityWarning');
+    
+    if (mietobjektId && mietobjektData[mietobjektId]) {
+        const obj = mietobjektData[mietobjektId];
+        
+        // Show warning if not available
+        if (!obj.verfuegbar) {
+            warningDiv.style.display = 'block';
+        } else {
+            warningDiv.style.display = 'none';
+        }
+        
+        // Pre-fill miete if empty
+        const mieteField = document.getElementById('id_miete');
+        if (mieteField && !mieteField.value) {
+            mieteField.value = obj.mietpreis;
+        }
+        
+        // Pre-fill kaution if empty
+        const kautionField = document.getElementById('id_kaution');
+        if (kautionField && !kautionField.value && obj.kaution) {
+            kautionField.value = obj.kaution;
+        }
+    } else {
+        warningDiv.style.display = 'none';
+    }
+});
+
+// Trigger on page load if mietobjekt is already selected
+window.addEventListener('DOMContentLoaded', function() {
+    const mietobjektSelect = document.getElementById('id_mietobjekt');
+    if (mietobjektSelect.value) {
+        mietobjektSelect.dispatchEvent(new Event('change'));
+    }
+});
+</script>
+{% endblock %}

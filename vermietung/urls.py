@@ -21,4 +21,12 @@ urlpatterns = [
     path('mietobjekte/<int:pk>/', views.mietobjekt_detail, name='mietobjekt_detail'),
     path('mietobjekte/<int:pk>/bearbeiten/', views.mietobjekt_edit, name='mietobjekt_edit'),
     path('mietobjekte/<int:pk>/loeschen/', views.mietobjekt_delete, name='mietobjekt_delete'),
+    
+    # Vertrag (Contract) URLs
+    path('vertraege/', views.vertrag_list, name='vertrag_list'),
+    path('vertraege/neu/', views.vertrag_create, name='vertrag_create'),
+    path('vertraege/<int:pk>/', views.vertrag_detail, name='vertrag_detail'),
+    path('vertraege/<int:pk>/bearbeiten/', views.vertrag_edit, name='vertrag_edit'),
+    path('vertraege/<int:pk>/beenden/', views.vertrag_end, name='vertrag_end'),
+    path('vertraege/<int:pk>/stornieren/', views.vertrag_cancel, name='vertrag_cancel'),
 ]   

@@ -1,0 +1,123 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}Vertrag beenden - K-Manager v1.0{% endblock %}
+
+{% block page_title %}
+<i class="bi bi-calendar-x"></i> Vertrag beenden: {{ vertrag.vertragsnummer }}
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:vertrag_detail' vertrag.pk %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-warning" role="alert">
+                    <h5 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Vertrag beenden</h5>
+                    <p class="mb-0">
+                        Sie sind dabei, den Vertrag <strong>{{ vertrag.vertragsnummer }}</strong> zu beenden.
+                        Bitte wählen Sie das Enddatum aus.
+                    </p>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    <h5 class="mb-3"><i class="bi bi-info-circle"></i> Aktueller Vertrag</h5>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Vertragsnummer:</div>
+                        <div class="col-md-8"><strong>{{ vertrag.vertragsnummer }}</strong></div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Mietobjekt:</div>
+                        <div class="col-md-8">{{ vertrag.mietobjekt.name }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Mieter:</div>
+                        <div class="col-md-8">{{ vertrag.mieter.full_name }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Vertragsbeginn:</div>
+                        <div class="col-md-8">{{ vertrag.start|date:"d.m.Y" }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Aktuelles Ende:</div>
+                        <div class="col-md-8">
+                            {% if vertrag.ende %}
+                                {{ vertrag.ende|date:"d.m.Y" }}
+                            {% else %}
+                                <em class="text-muted">Unbefristet</em>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-calendar-x"></i> Neues Enddatum</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.ende.id_for_label }}" class="form-label">{{ form.ende.label }} *</label>
+                        {{ form.ende }}
+                        {% if form.ende.errors %}
+                        <div class="text-danger small">{{ form.ende.errors }}</div>
+                        {% endif %}
+                        {% if form.ende.help_text %}
+                        <div class="form-text">{{ form.ende.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="alert alert-info" role="alert">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Hinweis:</strong> 
+                        Wenn das Enddatum in der Vergangenheit oder heute liegt, wird der Vertragsstatus automatisch auf "Beendet" gesetzt.
+                        Die Verfügbarkeit des Mietobjekts wird entsprechend aktualisiert.
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-calendar-check"></i> Vertrag beenden
+                        </button>
+                        <a href="{% url 'vermietung:vertrag_detail' vertrag.pk %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar with help text -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Hinweise
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    <strong>Vertrag beenden:</strong> Mit dieser Aktion setzen Sie ein Enddatum für den Vertrag.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Automatische Statusänderung:</strong> Wenn das Enddatum heute oder in der Vergangenheit liegt, wird der Status auf "Beendet" gesetzt.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Verfügbarkeit:</strong> Die Verfügbarkeit des Mietobjekts wird automatisch aktualisiert, sobald der Vertrag beendet ist.
+                </p>
+                <p class="text-muted small mb-0">
+                    <strong>Stornieren vs. Beenden:</strong> Verwenden Sie "Stornieren" nur für Verträge, die nie wirksam werden sollen. Für reguläre Vertragsenden verwenden Sie diese Funktion.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
