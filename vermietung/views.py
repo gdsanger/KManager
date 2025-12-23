@@ -233,7 +233,8 @@ def mietobjekt_list(request):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
-    # Get all standorte for filter dropdown
+    # Get all standorte for filter dropdown only if needed
+    # Always fetch for display consistency
     standorte = Adresse.objects.filter(adressen_type='STANDORT').order_by('name')
     
     context = {

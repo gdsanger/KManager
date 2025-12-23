@@ -213,16 +213,14 @@ function confirmDelete(objektName, deleteUrl) {
         form.method = 'POST';
         form.action = deleteUrl;
         
-        // Add CSRF token
+        // Get CSRF token from existing page
         var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-        if (!csrfToken) {
-            csrfToken = document.createElement('input');
-            csrfToken.type = 'hidden';
-            csrfToken.name = 'csrfmiddlewaretoken';
-            csrfToken.value = '{{ csrf_token }}';
-            form.appendChild(csrfToken);
-        } else {
-            form.appendChild(csrfToken.cloneNode());
+        if (csrfToken) {
+            var newCsrfToken = document.createElement('input');
+            newCsrfToken.type = 'hidden';
+            newCsrfToken.name = 'csrfmiddlewaretoken';
+            newCsrfToken.value = csrfToken.value;
+            form.appendChild(newCsrfToken);
         }
         
         document.body.appendChild(form);
