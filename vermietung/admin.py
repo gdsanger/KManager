@@ -20,10 +20,19 @@ class VertragAdminForm(forms.ModelForm):
 
 @admin.register(MietObjekt)
 class MietObjektAdmin(admin.ModelAdmin):
-    list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'verfuegbar')
+    list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'kaution', 'display_qm_mietpreis', 'verfuegbar')
     search_fields = ('name', 'standort__strasse', 'standort__ort', 'standort')
     list_filter = ('type', 'verfuegbar', 'standort')
+    readonly_fields = ('display_qm_mietpreis',)
     actions = ['recalculate_availability']
+    
+    def display_qm_mietpreis(self, obj):
+        """Display qm_mietpreis as read-only field."""
+        qm_preis = obj.qm_mietpreis
+        if qm_preis is not None:
+            return f"{qm_preis} €/m²"
+        return "-"
+    display_qm_mietpreis.short_description = "qm-Mietpreis"
     
     def recalculate_availability(self, request, queryset):
         """Recalculate availability for selected MietObjekt."""
