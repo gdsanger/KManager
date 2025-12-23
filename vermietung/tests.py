@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
+from decimal import Decimal
 from core.models import Adresse
 from vermietung.models import MietObjekt, Vertrag, Uebergabeprotokoll
 
@@ -762,7 +763,6 @@ class MietObjektModelTest(TestCase):
         )
         
         # qm_mietpreis should be 150 / 20 = 7.50
-        from decimal import Decimal
         self.assertEqual(mietobjekt.qm_mietpreis, Decimal('7.50'))
     
     def test_qm_mietpreis_rounding(self):
@@ -777,7 +777,6 @@ class MietObjektModelTest(TestCase):
         )
         
         # qm_mietpreis should be 100 / 30 = 3.333... rounded to 3.33
-        from decimal import Decimal
         self.assertEqual(mietobjekt.qm_mietpreis, Decimal('3.33'))
     
     def test_qm_mietpreis_with_zero_flaeche(self):
@@ -820,6 +819,5 @@ class MietObjektModelTest(TestCase):
         )
         
         # qm_mietpreis should be 50 / 7 = 7.142857... rounded to 7.14
-        from decimal import Decimal
         self.assertEqual(mietobjekt.qm_mietpreis, Decimal('7.14'))
     

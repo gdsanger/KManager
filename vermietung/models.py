@@ -3,6 +3,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from decimal import Decimal, ROUND_HALF_UP
 from core.models import Adresse
 
 OBJEKT_TYPE = [
@@ -74,11 +75,8 @@ class MietObjekt(models.Model):
         """
         if not self.fläche or self.fläche == 0:
             return None
-        from decimal import Decimal, ROUND_HALF_UP
-        # Ensure both values are Decimal for proper division
-        mietpreis_decimal = Decimal(str(self.mietpreis))
-        flaeche_decimal = Decimal(str(self.fläche))
-        result = mietpreis_decimal / flaeche_decimal
+        # Perform division and ensure result is Decimal
+        result = Decimal(self.mietpreis) / Decimal(self.fläche)
         # Runde auf 2 Nachkommastellen
         return result.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
