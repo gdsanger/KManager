@@ -14,4 +14,11 @@ urlpatterns = [
     path('kunden/<int:pk>/', views.kunde_detail, name='kunde_detail'),
     path('kunden/<int:pk>/bearbeiten/', views.kunde_edit, name='kunde_edit'),
     path('kunden/<int:pk>/loeschen/', views.kunde_delete, name='kunde_delete'),
+    
+    # MietObjekt (Rental Object) URLs
+    path('mietobjekte/', views.mietobjekt_list, name='mietobjekt_list'),
+    path('mietobjekte/neu/', views.mietobjekt_create, name='mietobjekt_create'),
+    path('mietobjekte/<int:pk>/', views.mietobjekt_detail, name='mietobjekt_detail'),
+    path('mietobjekte/<int:pk>/bearbeiten/', views.mietobjekt_edit, name='mietobjekt_edit'),
+    path('mietobjekte/<int:pk>/loeschen/', views.mietobjekt_delete, name='mietobjekt_delete'),
 ]   
