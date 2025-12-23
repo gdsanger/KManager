@@ -3,8 +3,13 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from decimal import Decimal, ROUND_HALF_UP
 from core.models import Adresse
+import os
+import magic
+from pathlib import Path
 
 OBJEKT_TYPE = [
        ('GEBAEUDE','Gebäude'),
@@ -496,4 +501,334 @@ class Uebergabeprotokoll(models.Model):
         """Override save to run validation."""
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+# Document entity types for storage path
+DOKUMENT_ENTITY_TYPES = [
+    ('vertrag', 'Vertrag'),
+    ('mietobjekt', 'Mietobjekt'),
+    ('adresse', 'Adresse'),
+    ('uebergabeprotokoll', 'Übergabeprotokoll'),
+]
+
+# Allowed MIME types for documents
+ALLOWED_MIME_TYPES = {
+    'application/pdf': ['.pdf'],
+    'image/png': ['.png'],
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/gif': ['.gif'],
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+}
+
+# Max file size in bytes (10 MB)
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
+
+def validate_file_size(file):
+    """Validate that file size does not exceed maximum allowed size."""
+    if file.size > MAX_FILE_SIZE:
+        raise ValidationError(
+            f'Die Dateigröße ({file.size / (1024*1024):.2f} MB) überschreitet '
+            f'das Maximum von {MAX_FILE_SIZE / (1024*1024):.0f} MB.'
+        )
+
+
+def validate_file_type(file):
+    """
+    Validate that file type is one of the allowed types.
     
+    Returns:
+        str: The detected MIME type if valid
+    
+    Raises:
+        ValidationError: If file type is not allowed
+    """
+    # Read file content to detect MIME type
+    file.seek(0)
+    mime = magic.from_buffer(file.read(2048), mime=True)
+    file.seek(0)
+    
+    if mime not in ALLOWED_MIME_TYPES:
+        allowed_extensions = []
+        for extensions in ALLOWED_MIME_TYPES.values():
+            allowed_extensions.extend(extensions)
+        raise ValidationError(
+            f'Dateityp "{mime}" ist nicht erlaubt. '
+            f'Erlaubte Typen: {", ".join(sorted(set(allowed_extensions)))}'
+        )
+    
+    # Also check file extension matches MIME type
+    filename = file.name.lower()
+    expected_extensions = ALLOWED_MIME_TYPES.get(mime, [])
+    if not any(filename.endswith(ext) for ext in expected_extensions):
+        raise ValidationError(
+            f'Dateierweiterung passt nicht zum erkannten Dateityp "{mime}". '
+            f'Erwartete Erweiterungen: {", ".join(expected_extensions)}'
+        )
+    
+    return mime
+
+
+class Dokument(models.Model):
+    """
+    Document model for managing files in the Vermietung (rental) module.
+    
+    Documents are stored in the filesystem under <APP_ROOT>/data/vermietung/<entity_type>/<entity_id>/
+    Metadata is stored in the database.
+    
+    Each document is linked to exactly one target entity:
+    - Vertrag (contract)
+    - MietObjekt (rental object)
+    - Adresse (address)
+    - Uebergabeprotokoll (handover protocol)
+    """
+    # Original filename
+    original_filename = models.CharField(
+        max_length=255,
+        verbose_name="Originaler Dateiname",
+        help_text="Der ursprüngliche Dateiname beim Upload"
+    )
+    
+    # Storage path (relative to VERMIETUNG_DOCUMENTS_ROOT)
+    storage_path = models.CharField(
+        max_length=500,
+        verbose_name="Speicherpfad",
+        help_text="Relativer Pfad zur Datei im Filesystem"
+    )
+    
+    # File metadata
+    file_size = models.IntegerField(
+        verbose_name="Dateigröße",
+        help_text="Dateigröße in Bytes"
+    )
+    
+    mime_type = models.CharField(
+        max_length=100,
+        verbose_name="MIME-Type",
+        help_text="MIME-Type der Datei"
+    )
+    
+    # Upload metadata
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Hochgeladen am",
+        help_text="Zeitpunkt des Uploads"
+    )
+    
+    uploaded_by = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Hochgeladen von",
+        help_text="Benutzer, der die Datei hochgeladen hat"
+    )
+    
+    # Optional description
+    beschreibung = models.TextField(
+        blank=True,
+        verbose_name="Beschreibung",
+        help_text="Optional: Beschreibung des Dokuments"
+    )
+    
+    # Foreign keys to target entities (exactly one must be set)
+    vertrag = models.ForeignKey(
+        Vertrag,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='dokumente',
+        verbose_name="Vertrag"
+    )
+    
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='dokumente',
+        verbose_name="Mietobjekt"
+    )
+    
+    adresse = models.ForeignKey(
+        Adresse,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='dokumente',
+        verbose_name="Adresse"
+    )
+    
+    uebergabeprotokoll = models.ForeignKey(
+        Uebergabeprotokoll,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='dokumente',
+        verbose_name="Übergabeprotokoll"
+    )
+    
+    class Meta:
+        verbose_name = "Dokument"
+        verbose_name_plural = "Dokumente"
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        """String representation of the document."""
+        entity = self.get_entity_display()
+        return f"{self.original_filename} ({entity})"
+    
+    def clean(self):
+        """
+        Validate that exactly one target entity is set.
+        """
+        super().clean()
+        
+        # Count how many foreign keys are set
+        target_entities = [
+            self.vertrag_id,
+            self.mietobjekt_id,
+            self.adresse_id,
+            self.uebergabeprotokoll_id
+        ]
+        set_entities = [e for e in target_entities if e is not None]
+        
+        if len(set_entities) == 0:
+            raise ValidationError(
+                'Das Dokument muss genau einem Zielobjekt zugeordnet werden '
+                '(Vertrag, Mietobjekt, Adresse oder Übergabeprotokoll).'
+            )
+        
+        if len(set_entities) > 1:
+            raise ValidationError(
+                'Das Dokument kann nur einem einzigen Zielobjekt zugeordnet werden.'
+            )
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def get_entity_type(self):
+        """Get the entity type string for storage path."""
+        if self.vertrag_id:
+            return 'vertrag'
+        elif self.mietobjekt_id:
+            return 'mietobjekt'
+        elif self.adresse_id:
+            return 'adresse'
+        elif self.uebergabeprotokoll_id:
+            return 'uebergabeprotokoll'
+        return None
+    
+    def get_entity_id(self):
+        """Get the entity ID for storage path."""
+        if self.vertrag_id:
+            return self.vertrag_id
+        elif self.mietobjekt_id:
+            return self.mietobjekt_id
+        elif self.adresse_id:
+            return self.adresse_id
+        elif self.uebergabeprotokoll_id:
+            return self.uebergabeprotokoll_id
+        return None
+    
+    def get_entity_display(self):
+        """Get a display string for the linked entity."""
+        if self.vertrag:
+            return f"Vertrag: {self.vertrag}"
+        elif self.mietobjekt:
+            return f"Mietobjekt: {self.mietobjekt}"
+        elif self.adresse:
+            return f"Adresse: {self.adresse}"
+        elif self.uebergabeprotokoll:
+            return f"Übergabeprotokoll: {self.uebergabeprotokoll}"
+        return "Unbekannt"
+    
+    def get_absolute_path(self):
+        """Get the absolute filesystem path to the document."""
+        return Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / self.storage_path
+    
+    def delete(self, *args, **kwargs):
+        """Override delete to also remove the file from filesystem."""
+        # Delete the file from filesystem
+        file_path = self.get_absolute_path()
+        if file_path.exists():
+            file_path.unlink()
+            
+            # Try to remove empty parent directories
+            try:
+                parent = file_path.parent
+                doc_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
+                # Only clean up directories within document root
+                while parent != doc_root and parent.is_relative_to(doc_root):
+                    if not any(parent.iterdir()):
+                        parent.rmdir()
+                        parent = parent.parent
+                    else:
+                        break
+            except (OSError, RuntimeError, ValueError):
+                pass  # Ignore errors when cleaning up directories
+        
+        super().delete(*args, **kwargs)
+    
+    @staticmethod
+    def generate_storage_path(entity_type, entity_id, filename):
+        """
+        Generate storage path for a document.
+        
+        Path format: <entity_type>/<entity_id>/<filename>
+        This prevents ID collisions between different entity types.
+        
+        Args:
+            entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll)
+            entity_id: ID of the entity
+            filename: Name of the file
+        
+        Returns:
+            Relative path string
+        """
+        return f"{entity_type}/{entity_id}/{filename}"
+    
+    @staticmethod
+    def save_uploaded_file(uploaded_file, entity_type, entity_id):
+        """
+        Save an uploaded file to the filesystem.
+        
+        Args:
+            uploaded_file: Django UploadedFile object
+            entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll)
+            entity_id: ID of the entity
+        
+        Returns:
+            Tuple of (storage_path, mime_type)
+        
+        Raises:
+            ValidationError: If file validation fails
+        """
+        # Validate file size
+        validate_file_size(uploaded_file)
+        
+        # Validate file type and get MIME type
+        mime_type = validate_file_type(uploaded_file)
+        
+        # Generate storage path
+        storage_path = Dokument.generate_storage_path(
+            entity_type, 
+            entity_id, 
+            uploaded_file.name
+        )
+        
+        # Create absolute path
+        absolute_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / storage_path
+        
+        # Create directory if it doesn't exist
+        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save file
+        with open(absolute_path, 'wb') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+        
+        return storage_path, mime_type
+

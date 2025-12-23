@@ -62,6 +62,9 @@ db.sqlite3
 db.sqlite3-journal
 staticfiles/
 
+# Document storage (uploaded files)
+data/
+
 # Flask stuff:
 instance/
 .webassets-cache
