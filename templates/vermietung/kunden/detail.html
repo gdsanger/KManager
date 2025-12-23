@@ -1,0 +1,156 @@
+{% extends "vermietung/layouts/detail_layout.html" %}
+
+{% block title %}Kunde: {{ kunde.full_name }} - K-Manager v1.0{% endblock %}
+
+{% block page_title %}Kunde: {{ kunde.full_name }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:kunde_edit' kunde.pk %}" class="btn btn-warning">
+    <i class="bi bi-pencil"></i> Bearbeiten
+</a>
+<button type="button" class="btn btn-danger" onclick="confirmDelete()">
+    <i class="bi bi-trash"></i> Löschen
+</button>
+<a href="{% url 'vermietung:kunde_list' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück zur Liste
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-person-badge"></i> Kundendaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Anrede:</div>
+                    <div class="col-md-8">{{ kunde.get_anrede_display|default:"-" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Name:</div>
+                    <div class="col-md-8"><strong>{{ kunde.name }}</strong></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Firma:</div>
+                    <div class="col-md-8">{{ kunde.firma|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Adresse</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Straße:</div>
+                    <div class="col-md-8">{{ kunde.strasse }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">PLZ:</div>
+                    <div class="col-md-8">{{ kunde.plz }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Ort:</div>
+                    <div class="col-md-8">{{ kunde.ort }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Land:</div>
+                    <div class="col-md-8">{{ kunde.land }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-telephone"></i> Kontaktdaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Telefon:</div>
+                    <div class="col-md-8">{{ kunde.telefon|default:"-" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Mobil:</div>
+                    <div class="col-md-8">{{ kunde.mobil|default:"-" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">E-Mail:</div>
+                    <div class="col-md-8">
+                        {% if kunde.email %}
+                        <a href="mailto:{{ kunde.email }}">{{ kunde.email }}</a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if kunde.bemerkung %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-chat-left-text"></i> Bemerkung</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ kunde.bemerkung }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Information</h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">
+                    <strong>Adress-Typ:</strong> Kunde
+                </p>
+                <p class="small text-muted mb-0">
+                    <strong>ID:</strong> {{ kunde.pk }}
+                </p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Verträge</h5>
+            </div>
+            <div class="card-body">
+                {% if kunde.vertraege.all %}
+                <ul class="list-group list-group-flush">
+                    {% for vertrag in kunde.vertraege.all %}
+                    <li class="list-group-item bg-dark">
+                        <small>
+                            {{ vertrag.vertragsnummer }}<br>
+                            <span class="text-muted">{{ vertrag.mietobjekt.name }}</span>
+                        </small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted small mb-0">Keine Verträge vorhanden</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="deleteForm" method="post" action="{% url 'vermietung:kunde_delete' kunde.pk %}" style="display: none;">
+    {% csrf_token %}
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete() {
+    if (confirm('Möchten Sie den Kunden "{{ kunde.full_name }}" wirklich löschen?')) {
+        document.getElementById('deleteForm').submit();
+    }
+}
+</script>
+{% endblock %}
