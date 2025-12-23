@@ -1,0 +1,169 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}{% if is_create %}Neuer Kunde{% else %}Kunde bearbeiten{% endif %} - K-Manager v1.0{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+    <i class="bi bi-plus-circle"></i> Neuer Kunde
+{% else %}
+    <i class="bi bi-pencil"></i> Kunde bearbeiten: {{ kunde.full_name }}
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% if is_create %}{% url 'vermietung:kunde_list' %}{% else %}{% url 'vermietung:kunde_detail' kunde.pk %}{% endif %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    <h5 class="mb-3"><i class="bi bi-person-badge"></i> Persönliche Daten</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.anrede.id_for_label }}" class="form-label">{{ form.anrede.label }}</label>
+                            {{ form.anrede }}
+                            {% if form.anrede.errors %}
+                            <div class="text-danger small">{{ form.anrede.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.firma.id_for_label }}" class="form-label">{{ form.firma.label }}</label>
+                            {{ form.firma }}
+                            {% if form.firma.errors %}
+                            <div class="text-danger small">{{ form.firma.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small">{{ form.name.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-geo-alt"></i> Adressdaten</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.strasse.id_for_label }}" class="form-label">{{ form.strasse.label }}</label>
+                        {{ form.strasse }}
+                        {% if form.strasse.errors %}
+                        <div class="text-danger small">{{ form.strasse.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.plz.id_for_label }}" class="form-label">{{ form.plz.label }}</label>
+                            {{ form.plz }}
+                            {% if form.plz.errors %}
+                            <div class="text-danger small">{{ form.plz.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label for="{{ form.ort.id_for_label }}" class="form-label">{{ form.ort.label }}</label>
+                            {{ form.ort }}
+                            {% if form.ort.errors %}
+                            <div class="text-danger small">{{ form.ort.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.land.id_for_label }}" class="form-label">{{ form.land.label }}</label>
+                        {{ form.land }}
+                        {% if form.land.errors %}
+                        <div class="text-danger small">{{ form.land.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-telephone"></i> Kontaktdaten</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.telefon.id_for_label }}" class="form-label">{{ form.telefon.label }}</label>
+                            {{ form.telefon }}
+                            {% if form.telefon.errors %}
+                            <div class="text-danger small">{{ form.telefon.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.mobil.id_for_label }}" class="form-label">{{ form.mobil.label }}</label>
+                            {{ form.mobil }}
+                            {% if form.mobil.errors %}
+                            <div class="text-danger small">{{ form.mobil.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.email.id_for_label }}" class="form-label">{{ form.email.label }}</label>
+                        {{ form.email }}
+                        {% if form.email.errors %}
+                        <div class="text-danger small">{{ form.email.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-chat-left-text"></i> Zusatzinformationen</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.bemerkung.id_for_label }}" class="form-label">{{ form.bemerkung.label }}</label>
+                        {{ form.bemerkung }}
+                        {% if form.bemerkung.errors %}
+                        <div class="text-danger small">{{ form.bemerkung.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">Optionale Bemerkungen oder Notizen zum Kunden</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Speichern
+                        </button>
+                        <a href="{% if is_create %}{% url 'vermietung:kunde_list' %}{% else %}{% url 'vermietung:kunde_detail' kunde.pk %}{% endif %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar with help text -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Hinweise
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    <strong>Pflichtfelder:</strong> Felder mit einem Stern (*) sind Pflichtfelder und müssen ausgefüllt werden.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Adress-Typ:</strong> Dieser Kunde wird automatisch mit dem Typ "Kunde" angelegt.
+                </p>
+                <p class="text-muted small mb-0">
+                    <strong>Verträge:</strong> Nur Adressen vom Typ "Kunde" können in Mietverträgen als Mieter ausgewählt werden.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
