@@ -841,15 +841,21 @@ def dokument_upload(request, entity_type, entity_id):
                 )
                 return redirect(redirect_url, pk=entity_id)
             except ValidationError as e:
-                # Handle validation errors from file validators
-                messages.error(request, str(e))
+                # Handle validation errors from file validators with user-friendly messages
+                error_message = str(e)
+                if isinstance(e.message, str):
+                    error_message = e.message
+                elif isinstance(e.messages, list) and e.messages:
+                    error_message = '; '.join(e.messages)
+                messages.error(request, f'Fehler beim Hochladen: {error_message}')
             except Exception as e:
                 messages.error(request, f'Fehler beim Hochladen: {str(e)}')
         else:
-            # Display form errors
+            # Display form errors with translated field names
             for field, errors in form.errors.items():
+                field_label = form.fields.get(field).label if field in form.fields else field
                 for error in errors:
-                    messages.error(request, f'{field}: {error}')
+                    messages.error(request, f'{field_label}: {error}')
     
     # Redirect back to detail page (GET or failed POST)
     return redirect(redirect_url, pk=entity_id)

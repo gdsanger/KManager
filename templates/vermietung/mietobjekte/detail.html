@@ -463,7 +463,7 @@ function confirmDelete() {
 function confirmDeleteDokument(dokumentId, filename) {
     if (confirm('Möchten Sie das Dokument "' + filename + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
         var form = document.getElementById('deleteDokumentForm');
-        form.action = '/vermietung/dokument/' + dokumentId + '/loeschen/';
+        form.action = "{% url 'vermietung:dokument_delete' 0 %}".replace('/0/', '/' + dokumentId + '/');
         form.submit();
     }
 }
