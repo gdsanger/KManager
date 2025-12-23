@@ -53,6 +53,7 @@ class MietObjekt(models.Model):
     tiefe = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     standort = models.ForeignKey(Adresse, on_delete=models.CASCADE)
     mietpreis = models.DecimalField(max_digits=10, decimal_places=2)
+    nebenkosten = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     kaution = models.DecimalField(
         max_digits=10,
         decimal_places=2,
