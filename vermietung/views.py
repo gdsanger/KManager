@@ -37,12 +37,15 @@ def download_dokument(request, dokument_id):
     if not file_path.exists():
         raise Http404("Datei wurde nicht gefunden im Filesystem.")
     
-    # Open file and create response
-    file_handle = open(file_path, 'rb')
-    response = FileResponse(file_handle, content_type=dokument.mime_type)
+    # Create response with file path (FileResponse handles opening/closing)
+    response = FileResponse(open(file_path, 'rb'), content_type=dokument.mime_type)
     
-    # Set content disposition to trigger download
-    response['Content-Disposition'] = f'attachment; filename="{dokument.original_filename}"'
+    # Set content disposition to trigger download with properly escaped filename
+    # Use ASCII-safe filename in Content-Disposition header
+    safe_filename = dokument.original_filename.encode('ascii', 'ignore').decode('ascii')
+    if not safe_filename:
+        safe_filename = 'document'
+    response['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
     response['Content-Length'] = dokument.file_size
     
     return response

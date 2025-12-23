@@ -191,7 +191,13 @@ class DokumentAdminForm(forms.ModelForm):
         # If this is a new upload, process the file
         uploaded_file = self.cleaned_data.get('file')
         if uploaded_file and not instance.pk:
-            # Get entity type and ID
+            # First, set the foreign keys from cleaned_data so we can get entity info
+            instance.vertrag = self.cleaned_data.get('vertrag')
+            instance.mietobjekt = self.cleaned_data.get('mietobjekt')
+            instance.adresse = self.cleaned_data.get('adresse')
+            instance.uebergabeprotokoll = self.cleaned_data.get('uebergabeprotokoll')
+            
+            # Now get entity type and ID
             entity_type = instance.get_entity_type()
             entity_id = instance.get_entity_id()
             
