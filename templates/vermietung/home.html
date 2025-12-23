@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Vermietung - K-Manager v1.0{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>
+            <i class="bi bi-building"></i> Vermietung
+        </h1>
+        <p class="lead">Willkommen im Vermietungsbereich von K-Manager</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-house-door"></i> Mietobjekte
+                </h5>
+                <p class="card-text">Verwaltung von Mietobjekten, Gebäuden und Räumen.</p>
+                <a href="#" class="btn btn-primary">Mietobjekte anzeigen</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-file-earmark-text"></i> Verträge
+                </h5>
+                <p class="card-text">Verwaltung von Mietverträgen und Vereinbarungen.</p>
+                <a href="#" class="btn btn-primary">Verträge anzeigen</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-people"></i> Mieter
+                </h5>
+                <p class="card-text">Verwaltung von Mieter-Informationen und Kontakten.</p>
+                <a href="#" class="btn btn-primary">Mieter anzeigen</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <strong>Hinweis:</strong> Sie sind angemeldet als <strong>{{ request.user.username }}</strong>
+            {% if request.user.is_staff %}
+                (Administrator)
+            {% else %}
+                (Vermietung)
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

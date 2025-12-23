@@ -45,4 +45,10 @@ def download_dokument(request, dokument_id):
     )
     
     return response
+from .permissions import vermietung_required
 
+
+@vermietung_required
+def vermietung_home(request):
+    """Vermietung dashboard/home page - requires Vermietung access."""
+    return render(request, 'vermietung/home.html')
