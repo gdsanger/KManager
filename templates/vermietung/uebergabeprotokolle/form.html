@@ -1,0 +1,236 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}{% if is_create %}Neues Übergabeprotokoll{% else %}Übergabeprotokoll bearbeiten{% endif %} - K-Manager v1.0{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+    <i class="bi bi-plus-circle"></i> Neues Übergabeprotokoll
+    {% if from_vertrag %}
+        <small class="text-muted">für Vertrag {{ vertrag.vertragsnummer }}</small>
+    {% endif %}
+{% else %}
+    <i class="bi bi-pencil"></i> Übergabeprotokoll bearbeiten
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% if is_create and from_vertrag %}{% url 'vermietung:vertrag_detail' vertrag.pk %}{% elif is_create %}{% url 'vermietung:uebergabeprotokoll_list' %}{% else %}{% url 'vermietung:uebergabeprotokoll_detail' protokoll.pk %}{% endif %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="uebergabeprotokollForm">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    <h5 class="mb-3"><i class="bi bi-file-earmark-text"></i> Vertragsinformationen</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.vertrag.id_for_label }}" class="form-label">{{ form.vertrag.label }}</label>
+                        {{ form.vertrag }}
+                        {% if form.vertrag.errors %}
+                        <div class="text-danger small">{{ form.vertrag.errors }}</div>
+                        {% endif %}
+                        {% if form.vertrag.help_text %}
+                        <div class="form-text">{{ form.vertrag.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">{{ form.mietobjekt.label }}</label>
+                        {{ form.mietobjekt }}
+                        {% if form.mietobjekt.errors %}
+                        <div class="text-danger small">{{ form.mietobjekt.errors }}</div>
+                        {% endif %}
+                        {% if form.mietobjekt.help_text %}
+                        <div class="form-text">{{ form.mietobjekt.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-clipboard-check"></i> Übergabedaten</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.typ.id_for_label }}" class="form-label">{{ form.typ.label }}</label>
+                            {{ form.typ }}
+                            {% if form.typ.errors %}
+                            <div class="text-danger small">{{ form.typ.errors }}</div>
+                            {% endif %}
+                            {% if form.typ.help_text %}
+                            <div class="form-text">{{ form.typ.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.uebergabetag.id_for_label }}" class="form-label">{{ form.uebergabetag.label }}</label>
+                            {{ form.uebergabetag }}
+                            {% if form.uebergabetag.errors %}
+                            <div class="text-danger small">{{ form.uebergabetag.errors }}</div>
+                            {% endif %}
+                            {% if form.uebergabetag.help_text %}
+                            <div class="form-text">{{ form.uebergabetag.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.person_vermieter.id_for_label }}" class="form-label">{{ form.person_vermieter.label }}</label>
+                            {{ form.person_vermieter }}
+                            {% if form.person_vermieter.errors %}
+                            <div class="text-danger small">{{ form.person_vermieter.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.person_mieter.id_for_label }}" class="form-label">{{ form.person_mieter.label }}</label>
+                            {{ form.person_mieter }}
+                            {% if form.person_mieter.errors %}
+                            <div class="text-danger small">{{ form.person_mieter.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-speedometer2"></i> Zählerstände</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.zaehlerstand_strom.id_for_label }}" class="form-label">{{ form.zaehlerstand_strom.label }}</label>
+                            <div class="input-group">
+                                {{ form.zaehlerstand_strom }}
+                                <span class="input-group-text">kWh</span>
+                            </div>
+                            {% if form.zaehlerstand_strom.errors %}
+                            <div class="text-danger small">{{ form.zaehlerstand_strom.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.zaehlerstand_gas.id_for_label }}" class="form-label">{{ form.zaehlerstand_gas.label }}</label>
+                            <div class="input-group">
+                                {{ form.zaehlerstand_gas }}
+                                <span class="input-group-text">m³</span>
+                            </div>
+                            {% if form.zaehlerstand_gas.errors %}
+                            <div class="text-danger small">{{ form.zaehlerstand_gas.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.zaehlerstand_wasser.id_for_label }}" class="form-label">{{ form.zaehlerstand_wasser.label }}</label>
+                            <div class="input-group">
+                                {{ form.zaehlerstand_wasser }}
+                                <span class="input-group-text">m³</span>
+                            </div>
+                            {% if form.zaehlerstand_wasser.errors %}
+                            <div class="text-danger small">{{ form.zaehlerstand_wasser.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-key"></i> Schlüssel</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.anzahl_schluessel.id_for_label }}" class="form-label">{{ form.anzahl_schluessel.label }}</label>
+                        {{ form.anzahl_schluessel }}
+                        {% if form.anzahl_schluessel.errors %}
+                        <div class="text-danger small">{{ form.anzahl_schluessel.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-chat-left-text"></i> Bemerkungen & Mängel</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.bemerkungen.id_for_label }}" class="form-label">{{ form.bemerkungen.label }}</label>
+                        {{ form.bemerkungen }}
+                        {% if form.bemerkungen.errors %}
+                        <div class="text-danger small">{{ form.bemerkungen.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.maengel.id_for_label }}" class="form-label">{{ form.maengel.label }}</label>
+                        {{ form.maengel }}
+                        {% if form.maengel.errors %}
+                        <div class="text-danger small">{{ form.maengel.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Speichern
+                        </button>
+                        <a href="{% if is_create and from_vertrag %}{% url 'vermietung:vertrag_detail' vertrag.pk %}{% elif is_create %}{% url 'vermietung:uebergabeprotokoll_list' %}{% else %}{% url 'vermietung:uebergabeprotokoll_detail' protokoll.pk %}{% endif %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar with help text -->
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Hinweise
+            </div>
+            <div class="card-body">
+                {% if from_vertrag %}
+                <p class="text-muted small mb-2">
+                    <strong>Guided Flow:</strong> Dieses Protokoll wird für den Vertrag <strong>{{ vertrag.vertragsnummer }}</strong> erstellt.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Mietobjekt:</strong> Das Mietobjekt ist auf <strong>{{ vertrag.mietobjekt.name }}</strong> fixiert.
+                </p>
+                {% else %}
+                <p class="text-muted small mb-2">
+                    <strong>Vertrag:</strong> Wählen Sie den Vertrag aus, zu dem dieses Protokoll gehört.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Mietobjekt:</strong> Muss zum ausgewählten Vertrag passen.
+                </p>
+                {% endif %}
+                <p class="text-muted small mb-2">
+                    <strong>Typ:</strong> Wählen Sie "Einzug" für die Übergabe bei Vertragsbeginn oder "Auszug" für die Rückgabe bei Vertragsende.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Zählerstände:</strong> Erfassen Sie die aktuellen Zählerstände von Strom, Gas und Wasser.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Schlüssel:</strong> Geben Sie die Anzahl der übergebenen Schlüssel an.
+                </p>
+                <p class="text-muted small mb-0">
+                    <strong>Mängel:</strong> Dokumentieren Sie eventuelle Mängel oder Schäden am Mietobjekt.
+                </p>
+            </div>
+        </div>
+
+        {% if not is_create %}
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-gear"></i> Aktionen
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    Weitere Aktionen finden Sie auf der Detailseite des Protokolls.
+                </p>
+                <a href="{% url 'vermietung:uebergabeprotokoll_detail' protokoll.pk %}" class="btn btn-sm btn-outline-info w-100">
+                    <i class="bi bi-eye"></i> Zur Detailseite
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

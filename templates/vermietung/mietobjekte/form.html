@@ -1,0 +1,180 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}{% if is_create %}Neues Mietobjekt{% else %}Mietobjekt bearbeiten{% endif %} - K-Manager v1.0{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+    <i class="bi bi-plus-circle"></i> Neues Mietobjekt
+{% else %}
+    <i class="bi bi-pencil"></i> Mietobjekt bearbeiten: {{ mietobjekt.name }}
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% if is_create %}{% url 'vermietung:mietobjekt_list' %}{% else %}{% url 'vermietung:mietobjekt_detail' mietobjekt.pk %}{% endif %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    <h5 class="mb-3"><i class="bi bi-building"></i> Grunddaten</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small">{{ form.name.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.type.id_for_label }}" class="form-label">{{ form.type.label }}</label>
+                            {{ form.type }}
+                            {% if form.type.errors %}
+                            <div class="text-danger small">{{ form.type.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.standort.id_for_label }}" class="form-label">{{ form.standort.label }}</label>
+                            {{ form.standort }}
+                            {% if form.standort.errors %}
+                            <div class="text-danger small">{{ form.standort.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.beschreibung.id_for_label }}" class="form-label">{{ form.beschreibung.label }}</label>
+                        {{ form.beschreibung }}
+                        {% if form.beschreibung.errors %}
+                        <div class="text-danger small">{{ form.beschreibung.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-rulers"></i> Abmessungen</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="{{ form.fläche.id_for_label }}" class="form-label">{{ form.fläche.label }}</label>
+                            {{ form.fläche }}
+                            {% if form.fläche.errors %}
+                            <div class="text-danger small">{{ form.fläche.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="{{ form.höhe.id_for_label }}" class="form-label">{{ form.höhe.label }}</label>
+                            {{ form.höhe }}
+                            {% if form.höhe.errors %}
+                            <div class="text-danger small">{{ form.höhe.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="{{ form.breite.id_for_label }}" class="form-label">{{ form.breite.label }}</label>
+                            {{ form.breite }}
+                            {% if form.breite.errors %}
+                            <div class="text-danger small">{{ form.breite.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="{{ form.tiefe.id_for_label }}" class="form-label">{{ form.tiefe.label }}</label>
+                            {{ form.tiefe }}
+                            {% if form.tiefe.errors %}
+                            <div class="text-danger small">{{ form.tiefe.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-currency-euro"></i> Preise & Kosten</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.mietpreis.id_for_label }}" class="form-label">{{ form.mietpreis.label }}</label>
+                            {{ form.mietpreis }}
+                            {% if form.mietpreis.errors %}
+                            <div class="text-danger small">{{ form.mietpreis.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.nebenkosten.id_for_label }}" class="form-label">{{ form.nebenkosten.label }}</label>
+                            {{ form.nebenkosten }}
+                            {% if form.nebenkosten.errors %}
+                            <div class="text-danger small">{{ form.nebenkosten.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.kaution.id_for_label }}" class="form-label">{{ form.kaution.label }}</label>
+                            {{ form.kaution }}
+                            {% if form.kaution.errors %}
+                            <div class="text-danger small">{{ form.kaution.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">{{ form.kaution.help_text }}</div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-check-circle"></i> Status</h5>
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.verfuegbar }}
+                        <label class="form-check-label" for="{{ form.verfuegbar.id_for_label }}">
+                            {{ form.verfuegbar.label }}
+                        </label>
+                        {% if form.verfuegbar.errors %}
+                        <div class="text-danger small">{{ form.verfuegbar.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">{{ form.verfuegbar.help_text }}</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Speichern
+                        </button>
+                        <a href="{% if is_create %}{% url 'vermietung:mietobjekt_list' %}{% else %}{% url 'vermietung:mietobjekt_detail' mietobjekt.pk %}{% endif %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar with help text -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Hinweise
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    <strong>Pflichtfelder:</strong> Felder mit einem Stern (*) sind Pflichtfelder und müssen ausgefüllt werden.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Kaution:</strong> Wird automatisch mit dem 3-fachen Mietpreis vorausgefüllt, kann aber angepasst werden.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Verfügbarkeit:</strong> Der Status wird automatisch basierend auf aktiven Verträgen aktualisiert.
+                </p>
+                <p class="text-muted small mb-0">
+                    <strong>Standort:</strong> Es werden nur Adressen vom Typ "Standort" zur Auswahl angezeigt.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

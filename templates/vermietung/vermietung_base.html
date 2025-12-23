@@ -79,22 +79,22 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'mietobjekt' in request.path %}active{% endif %}" href="#">
+                            <a class="nav-link {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
                                 <i class="bi bi-house-door"></i> Mietobjekte
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'vertrag' in request.path and 'vertraege' not in request.path %}active{% endif %}" href="#">
+                            <a class="nav-link {% if 'vertraege' in request.path or 'vertrag' in request.path %}active{% endif %}" href="{% url 'vermietung:vertrag_list' %}">
                                 <i class="bi bi-file-earmark-text"></i> Verträge
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'kunde' in request.path %}active{% endif %}" href="#">
+                            <a class="nav-link {% if 'kunde' in request.path %}active{% endif %}" href="{% url 'vermietung:kunde_list' %}">
                                 <i class="bi bi-people"></i> Kunden
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'uebergabe' in request.path %}active{% endif %}" href="#">
+                            <a class="nav-link {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
                                 <i class="bi bi-clipboard-check"></i> Übergaben
                             </a>
                         </li>

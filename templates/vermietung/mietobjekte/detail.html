@@ -1,0 +1,471 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{% block title %}Mietobjekt: {{ mietobjekt.name }} - K-Manager v1.0{% endblock %}
+
+{% block page_title %}Mietobjekt: {{ mietobjekt.name }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:mietobjekt_edit' mietobjekt.pk %}" class="btn btn-warning">
+    <i class="bi bi-pencil"></i> Bearbeiten
+</a>
+<button type="button" class="btn btn-danger" onclick="confirmDelete()">
+    <i class="bi bi-trash"></i> Löschen
+</button>
+<a href="{% url 'vermietung:mietobjekt_list' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück zur Liste
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Basic Information -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-building"></i> Objektdaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Name:</div>
+                    <div class="col-md-8"><strong>{{ mietobjekt.name }}</strong></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Typ:</div>
+                    <div class="col-md-8">{{ mietobjekt.get_type_display }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Beschreibung:</div>
+                    <div class="col-md-8">{{ mietobjekt.beschreibung }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Status:</div>
+                    <div class="col-md-8">
+                        {% if mietobjekt.verfuegbar %}
+                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Verfügbar</span>
+                        {% else %}
+                            <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Belegt</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Location -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Standort</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Adresse:</div>
+                    <div class="col-md-8">
+                        {{ mietobjekt.standort.strasse }}<br>
+                        {{ mietobjekt.standort.plz }} {{ mietobjekt.standort.ort }}<br>
+                        {{ mietobjekt.standort.land }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dimensions -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-rulers"></i> Abmessungen</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Fläche:</div>
+                    <div class="col-md-8">{{ mietobjekt.fläche|default:"-" }} {% if mietobjekt.fläche %}m²{% endif %}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Höhe:</div>
+                    <div class="col-md-8">{{ mietobjekt.höhe|default:"-" }} {% if mietobjekt.höhe %}m{% endif %}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Breite:</div>
+                    <div class="col-md-8">{{ mietobjekt.breite|default:"-" }} {% if mietobjekt.breite %}m{% endif %}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Tiefe:</div>
+                    <div class="col-md-8">{{ mietobjekt.tiefe|default:"-" }} {% if mietobjekt.tiefe %}m{% endif %}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prices -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-currency-euro"></i> Preise & Kosten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Mietpreis:</div>
+                    <div class="col-md-8"><strong>{{ mietobjekt.mietpreis }} €</strong></div>
+                </div>
+                {% if mietobjekt.qm_mietpreis %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Preis pro m²:</div>
+                    <div class="col-md-8">{{ mietobjekt.qm_mietpreis }} €/m²</div>
+                </div>
+                {% endif %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Nebenkosten:</div>
+                    <div class="col-md-8">{{ mietobjekt.nebenkosten|default:"-" }} {% if mietobjekt.nebenkosten %}€{% endif %}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Kaution:</div>
+                    <div class="col-md-8">{{ mietobjekt.kaution|default:"-" }} {% if mietobjekt.kaution %}€{% endif %}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Information</h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">
+                    <strong>Objekt-ID:</strong> {{ mietobjekt.pk }}
+                </p>
+                <p class="small text-muted mb-0">
+                    <strong>Typ:</strong> {{ mietobjekt.get_type_display }}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Related Data Tabs -->
+<div class="row mt-4">
+    <div class="col-12">
+        <h4 class="mb-3">Zugehörige Informationen</h4>
+        <ul class="nav nav-tabs" id="relatedTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="vertraege-tab" data-bs-toggle="tab" data-bs-target="#vertraege" type="button" role="tab">
+                    <i class="bi bi-file-earmark-text"></i> Verträge ({{ vertraege_page_obj.paginator.count }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="uebergaben-tab" data-bs-toggle="tab" data-bs-target="#uebergaben" type="button" role="tab">
+                    <i class="bi bi-clipboard-check"></i> Übergaben ({{ uebergaben_page_obj.paginator.count }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="dokumente-tab" data-bs-toggle="tab" data-bs-target="#dokumente" type="button" role="tab">
+                    <i class="bi bi-file-earmark"></i> Dokumente ({{ dokumente_page_obj.paginator.count }})
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content card" id="relatedTabsContent">
+            <!-- Contracts Tab -->
+            <div class="tab-pane fade show active p-3" id="vertraege" role="tabpanel">
+                {% if vertraege_page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Vertragsnr.</th>
+                                    <th>Mieter</th>
+                                    <th>Zeitraum</th>
+                                    <th>Miete</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vertrag in vertraege_page_obj %}
+                                <tr>
+                                    <td>{{ vertrag.vertragsnummer }}</td>
+                                    <td>{{ vertrag.mieter.full_name }}</td>
+                                    <td>
+                                        {{ vertrag.start|date:"d.m.Y" }} - 
+                                        {% if vertrag.ende %}{{ vertrag.ende|date:"d.m.Y" }}{% else %}<em>offen</em>{% endif %}
+                                    </td>
+                                    <td>{{ vertrag.miete }} €</td>
+                                    <td>
+                                        {% if vertrag.status == 'active' %}
+                                            <span class="badge bg-success">{{ vertrag.get_status_display }}</span>
+                                        {% elif vertrag.status == 'draft' %}
+                                            <span class="badge bg-secondary">{{ vertrag.get_status_display }}</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">{{ vertrag.get_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> Keine Verträge vorhanden
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination for Contracts -->
+                    {% if vertraege_page_obj.has_other_pages %}
+                    <nav aria-label="Verträge Pagination">
+                        <ul class="pagination pagination-sm">
+                            {% if vertraege_page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?vertraege_page={{ vertraege_page_obj.previous_page_number }}#vertraege">Zurück</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Zurück</span>
+                            </li>
+                            {% endif %}
+                            
+                            <li class="page-item active">
+                                <span class="page-link">Seite {{ vertraege_page_obj.number }} von {{ vertraege_page_obj.paginator.num_pages }}</span>
+                            </li>
+                            
+                            {% if vertraege_page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?vertraege_page={{ vertraege_page_obj.next_page_number }}#vertraege">Weiter</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Weiter</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                {% endif %}
+            </div>
+            
+            <!-- Handover Protocols Tab -->
+            <div class="tab-pane fade p-3" id="uebergaben" role="tabpanel">
+                {% if uebergaben_page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Datum</th>
+                                    <th>Typ</th>
+                                    <th>Vertrag</th>
+                                    <th>Schlüssel</th>
+                                    <th>Mängel</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for uebergabe in uebergaben_page_obj %}
+                                <tr>
+                                    <td>{{ uebergabe.uebergabetag|date:"d.m.Y" }}</td>
+                                    <td>
+                                        {% if uebergabe.typ == 'EINZUG' %}
+                                            <span class="badge bg-success">{{ uebergabe.get_typ_display }}</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ uebergabe.get_typ_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ uebergabe.vertrag.vertragsnummer }}</td>
+                                    <td>{{ uebergabe.anzahl_schluessel }}</td>
+                                    <td>
+                                        {% if uebergabe.maengel %}
+                                            <i class="bi bi-exclamation-triangle text-warning"></i> Ja
+                                        {% else %}
+                                            <i class="bi bi-check-circle text-success"></i> Nein
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> Keine Übergabeprotokolle vorhanden
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination for Handover Protocols -->
+                    {% if uebergaben_page_obj.has_other_pages %}
+                    <nav aria-label="Übergaben Pagination">
+                        <ul class="pagination pagination-sm">
+                            {% if uebergaben_page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?uebergaben_page={{ uebergaben_page_obj.previous_page_number }}#uebergaben">Zurück</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Zurück</span>
+                            </li>
+                            {% endif %}
+                            
+                            <li class="page-item active">
+                                <span class="page-link">Seite {{ uebergaben_page_obj.number }} von {{ uebergaben_page_obj.paginator.num_pages }}</span>
+                            </li>
+                            
+                            {% if uebergaben_page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?uebergaben_page={{ uebergaben_page_obj.next_page_number }}#uebergaben">Weiter</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Weiter</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                {% endif %}
+            </div>
+            
+            <!-- Documents Tab -->
+            <div class="tab-pane fade p-3" id="dokumente" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Dokumente für dieses Mietobjekt</h6>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                        <i class="bi bi-upload"></i> Dokument hochladen
+                    </button>
+                </div>
+                {% if dokumente_page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Dateiname</th>
+                                    <th>Größe</th>
+                                    <th>Typ</th>
+                                    <th>Hochgeladen</th>
+                                    <th>Von</th>
+                                    <th class="text-end">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for dokument in dokumente_page_obj %}
+                                <tr>
+                                    <td>
+                                        <i class="bi bi-file-earmark"></i> {{ dokument.original_filename }}
+                                        {% if dokument.beschreibung %}
+                                        <br><small class="text-muted">{{ dokument.beschreibung|truncatewords:10 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ dokument.file_size|filesizeformat }}</td>
+                                    <td><small class="text-muted">{{ dokument.mime_type }}</small></td>
+                                    <td>{{ dokument.uploaded_at|date:"d.m.Y H:i" }}</td>
+                                    <td>{{ dokument.uploaded_by.username|default:"-" }}</td>
+                                    <td class="text-end">
+                                        <a href="{% url 'vermietung:dokument_download' dokument.pk %}" class="btn btn-sm btn-outline-info" title="Herunterladen">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDeleteDokument({{ dokument.pk }}, '{{ dokument.original_filename|escapejs }}')" title="Löschen">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> Keine Dokumente vorhanden
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination for Documents -->
+                    {% if dokumente_page_obj.has_other_pages %}
+                    <nav aria-label="Dokumente Pagination">
+                        <ul class="pagination pagination-sm">
+                            {% if dokumente_page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?dokumente_page={{ dokumente_page_obj.previous_page_number }}#dokumente">Zurück</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Zurück</span>
+                            </li>
+                            {% endif %}
+                            
+                            <li class="page-item active">
+                                <span class="page-link">Seite {{ dokumente_page_obj.number }} von {{ dokumente_page_obj.paginator.num_pages }}</span>
+                            </li>
+                            
+                            {% if dokumente_page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?dokumente_page={{ dokumente_page_obj.next_page_number }}#dokumente">Weiter</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Weiter</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="deleteForm" method="post" action="{% url 'vermietung:mietobjekt_delete' mietobjekt.pk %}" style="display: none;">
+    {% csrf_token %}
+</form>
+
+<!-- Document Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadModalLabel">
+                    <i class="bi bi-upload"></i> Dokument hochladen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'vermietung:dokument_upload' 'mietobjekt' mietobjekt.pk %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="id_file" class="form-label">Datei *</label>
+                        <input type="file" class="form-control" id="id_file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.gif,.docx">
+                        <div class="form-text">
+                            Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, DOCX. Maximale Größe: 10 MB
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_beschreibung" class="form-label">Beschreibung (optional)</label>
+                        <textarea class="form-control" id="id_beschreibung" name="beschreibung" rows="3" placeholder="Optional: Beschreibung des Dokuments"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Hochladen
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<form id="deleteDokumentForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete() {
+    if (confirm('Möchten Sie das Mietobjekt "{{ mietobjekt.name }}" wirklich löschen?')) {
+        document.getElementById('deleteForm').submit();
+    }
+}
+
+function confirmDeleteDokument(dokumentId, filename) {
+    if (confirm('Möchten Sie das Dokument "' + filename + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+        var form = document.getElementById('deleteDokumentForm');
+        form.action = "{% url 'vermietung:dokument_delete' 0 %}".replace('/0/', '/' + dokumentId + '/');
+        form.submit();
+    }
+}
+</script>
+{% endblock %}
