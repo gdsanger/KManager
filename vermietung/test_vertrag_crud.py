@@ -201,16 +201,18 @@ class VertragCRUDTestCase(TestCase):
         self.assertContains(response, 'Stornieren')
     
     def test_vertrag_detail_no_delete_button(self):
-        """Test that detail view does NOT show delete button."""
+        """Test that detail view does NOT show delete button for Vertrag itself."""
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get(
             reverse('vermietung:vertrag_detail', args=[self.vertrag1.pk])
         )
         
         self.assertEqual(response.status_code, 200)
-        # Should not contain delete-related text
-        self.assertNotContains(response, 'loeschen')
-        self.assertNotContains(response, 'löschen')
+        # Should not contain a delete button/form for the Vertrag entity itself
+        # Check that there's no vertrag_delete URL in the page actions
+        self.assertNotContains(response, 'vertrag_delete')
+        # Documents can have delete buttons, so we only check for Vertrag-specific delete
+        self.assertNotContains(response, 'Vertrag löschen')
     
     # Create View Tests
     
