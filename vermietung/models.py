@@ -845,7 +845,7 @@ class Dokument(models.Model):
                 exc_info=True
             )
             raise ValidationError(
-                f'Fehler beim Erstellen des Verzeichnisses: {str(e)}'
+                f'Fehler beim Erstellen des Verzeichnisses: {e}'
             )
         
         # Save file
@@ -860,7 +860,7 @@ class Dokument(models.Model):
                 exc_info=True
             )
             raise ValidationError(
-                f'Fehler beim Speichern der Datei: {str(e)}'
+                f'Fehler beim Speichern der Datei: {e}'
             )
         
         return storage_path, mime_type
@@ -1118,7 +1118,7 @@ class MietObjektBild(models.Model):
                 exc_info=True
             )
             raise ValidationError(
-                f'Fehler beim Erstellen des Verzeichnisses: {str(e)}'
+                f'Fehler beim Erstellen des Verzeichnisses: {e}'
             )
         
         # Save original file
@@ -1133,7 +1133,7 @@ class MietObjektBild(models.Model):
                 exc_info=True
             )
             raise ValidationError(
-                f'Fehler beim Speichern der Datei: {str(e)}'
+                f'Fehler beim Speichern der Datei: {e}'
             )
         
         # Generate thumbnail
@@ -1148,7 +1148,7 @@ class MietObjektBild(models.Model):
             )
             if absolute_path.exists():
                 absolute_path.unlink()
-            raise ValidationError(f'Fehler beim Erstellen des Thumbnails: {str(e)}')
+            raise ValidationError(f'Fehler beim Erstellen des Thumbnails: {e}')
         
         # Create database entry
         try:
@@ -1177,7 +1177,7 @@ class MietObjektBild(models.Model):
             if absolute_thumbnail_path.exists():
                 absolute_thumbnail_path.unlink()
             raise ValidationError(
-                f'Fehler beim Speichern der Datenbank-Einträge: {str(e)}'
+                f'Fehler beim Speichern der Datenbank-Einträge: {e}'
             )
         
         return bild
