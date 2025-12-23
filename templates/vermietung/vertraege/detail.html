@@ -200,6 +200,12 @@
                 <div class="tab-content">
                     <!-- Übergabeprotokolle Tab -->
                     <div class="tab-pane fade show active" id="uebergaben" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Übergabeprotokolle für diesen Vertrag</h6>
+                            <a href="{% url 'vermietung:uebergabeprotokoll_create_from_vertrag' vertrag.pk %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-plus-circle"></i> Neues Protokoll
+                            </a>
+                        </div>
                         {% if uebergaben_page_obj %}
                             <div class="table-responsive">
                                 <table class="table table-dark table-sm">
@@ -210,6 +216,7 @@
                                             <th>Mietobjekt</th>
                                             <th>Schlüssel</th>
                                             <th>Mängel</th>
+                                            <th class="text-end">Aktionen</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -232,10 +239,15 @@
                                                     <i class="bi bi-check-circle text-success"></i>
                                                 {% endif %}
                                             </td>
+                                            <td class="text-end">
+                                                <a href="{% url 'vermietung:uebergabeprotokoll_detail' uebergabe.pk %}" class="btn btn-sm btn-outline-info">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                            </td>
                                         </tr>
                                         {% empty %}
                                         <tr>
-                                            <td colspan="5" class="text-center text-muted">
+                                            <td colspan="6" class="text-center text-muted">
                                                 <i class="bi bi-inbox"></i> Keine Übergabeprotokolle vorhanden
                                             </td>
                                         </tr>

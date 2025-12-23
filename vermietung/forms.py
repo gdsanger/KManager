@@ -5,7 +5,7 @@ Forms for the Vermietung (Rental Management) area.
 from django import forms
 from django.core.exceptions import ValidationError
 from core.models import Adresse
-from .models import MietObjekt, Vertrag, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
 
 
 class MietObjektForm(forms.ModelForm):
@@ -264,3 +264,111 @@ class VertragEndForm(forms.Form):
                 )
         
         return ende
+
+
+class UebergabeprotokollForm(forms.ModelForm):
+    """
+    Form for creating/editing Uebergabeprotokoll (handover protocols).
+    Includes all fields with proper Bootstrap 5 styling.
+    """
+    
+    class Meta:
+        model = Uebergabeprotokoll
+        fields = [
+            'vertrag',
+            'mietobjekt',
+            'typ',
+            'uebergabetag',
+            'zaehlerstand_strom',
+            'zaehlerstand_gas',
+            'zaehlerstand_wasser',
+            'anzahl_schluessel',
+            'bemerkungen',
+            'maengel',
+            'person_vermieter',
+            'person_mieter',
+        ]
+        widgets = {
+            'vertrag': forms.Select(attrs={'class': 'form-select'}),
+            'mietobjekt': forms.Select(attrs={'class': 'form-select'}),
+            'typ': forms.Select(attrs={'class': 'form-select'}),
+            'uebergabetag': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date',
+            }),
+            'zaehlerstand_strom': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+            }),
+            'zaehlerstand_gas': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+            }),
+            'zaehlerstand_wasser': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+            }),
+            'anzahl_schluessel': forms.NumberInput(attrs={
+                'class': 'form-control',
+            }),
+            'bemerkungen': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+            }),
+            'maengel': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+            }),
+            'person_vermieter': forms.TextInput(attrs={'class': 'form-control'}),
+            'person_mieter': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'vertrag': 'Vertrag *',
+            'mietobjekt': 'Mietobjekt *',
+            'typ': 'Typ *',
+            'uebergabetag': 'Übergabedatum *',
+            'zaehlerstand_strom': 'Zählerstand Strom (kWh)',
+            'zaehlerstand_gas': 'Zählerstand Gas (m³)',
+            'zaehlerstand_wasser': 'Zählerstand Wasser (m³)',
+            'anzahl_schluessel': 'Anzahl Schlüssel',
+            'bemerkungen': 'Bemerkungen',
+            'maengel': 'Mängel',
+            'person_vermieter': 'Person Vermieter',
+            'person_mieter': 'Person Mieter',
+        }
+        help_texts = {
+            'vertrag': 'Vertrag zu dem dieses Protokoll gehört',
+            'mietobjekt': 'Muss zum ausgewählten Vertrag passen',
+            'typ': 'Einzug oder Auszug',
+            'uebergabetag': 'Datum der Übergabe',
+        }
+    
+    def __init__(self, *args, vertrag=None, **kwargs):
+        """
+        Initialize form with optional pre-selected vertrag.
+        If vertrag is provided, pre-fill mietobjekt and make fields read-only.
+        """
+        super().__init__(*args, **kwargs)
+        
+        # If vertrag is provided (create from vertrag flow), pre-fill and restrict
+        if vertrag:
+            self.fields['vertrag'].initial = vertrag
+            self.fields['vertrag'].widget.attrs['readonly'] = True
+            self.fields['vertrag'].disabled = True
+            
+            # Pre-fill mietobjekt from vertrag
+            self.fields['mietobjekt'].initial = vertrag.mietobjekt
+            self.fields['mietobjekt'].widget.attrs['readonly'] = True
+            self.fields['mietobjekt'].disabled = True
+            
+            # Limit queryset to just this vertrag's mietobjekt
+            self.fields['mietobjekt'].queryset = MietObjekt.objects.filter(pk=vertrag.mietobjekt_id)
+        
+        # Order vertraege by vertragsnummer
+        self.fields['vertrag'].queryset = Vertrag.objects.select_related(
+            'mieter'
+        ).order_by('-start')
+        
+        # Order mietobjekte by name
+        if not vertrag:
+            self.fields['mietobjekt'].queryset = MietObjekt.objects.all().order_by('name')
