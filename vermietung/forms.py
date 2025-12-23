@@ -466,10 +466,9 @@ class MietObjektBildUploadForm(forms.Form):
     
     bilder = forms.FileField(
         label='Bilder',
-        widget=forms.ClearableFileInput(attrs={
+        widget=forms.FileInput(attrs={
             'class': 'form-control',
             'accept': 'image/png,image/jpeg,image/gif,.png,.jpg,.jpeg,.gif',
-            'multiple': True
         }),
         help_text='Erlaubte Bildtypen: PNG, JPG/JPEG, GIF. Maximale Größe: 10 MB pro Bild. Sie können mehrere Bilder gleichzeitig hochladen.',
         required=True
@@ -486,6 +485,8 @@ class MietObjektBildUploadForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.mietobjekt = mietobjekt
         self.user = user
+        # Set multiple attribute on the widget after initialization
+        self.fields['bilder'].widget.attrs['multiple'] = True
     
     def clean_bilder(self):
         """Validate that files are uploaded."""
