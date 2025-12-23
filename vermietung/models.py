@@ -3,6 +3,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from decimal import Decimal, ROUND_HALF_UP
 from core.models import Adresse
 
 OBJEKT_TYPE = [
@@ -52,10 +53,42 @@ class MietObjekt(models.Model):
     tiefe = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     standort = models.ForeignKey(Adresse, on_delete=models.CASCADE)
     mietpreis = models.DecimalField(max_digits=10, decimal_places=2)
+    kaution = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Kaution",
+        help_text="Kautions-Vorgabe (Standard: 3x Miete)"
+    )
     verfuegbar = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
+    
+    @property
+    def qm_mietpreis(self):
+        """
+        Berechnet den qm-Mietpreis (mietpreis / fläche).
+        Rundet auf 2 Nachkommastellen.
+        Gibt None zurück wenn fläche fehlt oder 0 ist.
+        """
+        if not self.fläche or self.fläche == 0:
+            return None
+        # Perform division and ensure result is Decimal
+        result = Decimal(self.mietpreis) / Decimal(self.fläche)
+        # Runde auf 2 Nachkommastellen
+        return result.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to set kaution default value for new objects.
+        For new MietObjekt instances, kaution is pre-filled with 3 × mietpreis.
+        """
+        # Only set default kaution if this is a new object (no pk yet) and kaution is not already set
+        if not self.pk and self.kaution is None:
+            self.kaution = self.mietpreis * 3
+        super().save(*args, **kwargs)
     
     def update_availability(self):
         """

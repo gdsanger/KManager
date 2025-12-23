@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 from datetime import date, timedelta
+from decimal import Decimal
 from core.models import Adresse
 from vermietung.models import MietObjekt, Vertrag, Uebergabeprotokoll
 
@@ -682,4 +683,141 @@ class UebergabeprotokollModelTest(TestCase):
         protocols = Uebergabeprotokoll.objects.all()
         # Should be ordered by uebergabetag descending
         self.assertEqual(list(protocols), [protokoll2, protokoll1])
+
+
+class MietObjektModelTest(TestCase):
+    """Tests for the MietObjekt model extensions (kaution and qm_mietpreis)."""
+    
+    def setUp(self):
+        """Set up test data for all tests."""
+        # Create a location address
+        self.standort = Adresse.objects.create(
+            adressen_type='STANDORT',
+            name='Standort',
+            strasse='Standortstrasse 1',
+            plz='12345',
+            ort='Standortstadt',
+            land='Deutschland'
+        )
+    
+    def test_kaution_default_value_on_creation(self):
+        """Test that kaution is automatically set to 3 × mietpreis for new objects."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=20.00,
+            standort=self.standort,
+            mietpreis=150.00
+        )
+        
+        # kaution should be 3 × mietpreis = 3 × 150 = 450
+        self.assertEqual(mietobjekt.kaution, 450.00)
+    
+    def test_kaution_can_be_set_explicitly(self):
+        """Test that kaution can be set explicitly and won't be overridden."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=20.00,
+            standort=self.standort,
+            mietpreis=150.00,
+            kaution=500.00  # Set explicitly
+        )
+        
+        # kaution should be the explicitly set value, not 3 × mietpreis
+        self.assertEqual(mietobjekt.kaution, 500.00)
+    
+    def test_kaution_not_updated_on_mietpreis_change(self):
+        """Test that kaution is not automatically updated when mietpreis changes."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=20.00,
+            standort=self.standort,
+            mietpreis=150.00
+        )
+        
+        # Initial kaution should be 450
+        self.assertEqual(mietobjekt.kaution, 450.00)
+        
+        # Update mietpreis
+        mietobjekt.mietpreis = 200.00
+        mietobjekt.save()
+        
+        # kaution should remain unchanged
+        mietobjekt.refresh_from_db()
+        self.assertEqual(mietobjekt.kaution, 450.00)
+    
+    def test_qm_mietpreis_calculation(self):
+        """Test that qm_mietpreis is calculated correctly."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=20.00,
+            standort=self.standort,
+            mietpreis=150.00
+        )
+        
+        # qm_mietpreis should be 150 / 20 = 7.50
+        self.assertEqual(mietobjekt.qm_mietpreis, Decimal('7.50'))
+    
+    def test_qm_mietpreis_rounding(self):
+        """Test that qm_mietpreis is rounded to 2 decimal places."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=30.00,
+            standort=self.standort,
+            mietpreis=100.00
+        )
+        
+        # qm_mietpreis should be 100 / 30 = 3.333... rounded to 3.33
+        self.assertEqual(mietobjekt.qm_mietpreis, Decimal('3.33'))
+    
+    def test_qm_mietpreis_with_zero_flaeche(self):
+        """Test that qm_mietpreis returns None when fläche is 0."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=0,
+            standort=self.standort,
+            mietpreis=150.00
+        )
+        
+        # Should return None without raising an error
+        self.assertIsNone(mietobjekt.qm_mietpreis)
+    
+    def test_qm_mietpreis_with_none_flaeche(self):
+        """Test that qm_mietpreis returns None when fläche is None."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=None,
+            standort=self.standort,
+            mietpreis=150.00
+        )
+        
+        # Should return None without raising an error
+        self.assertIsNone(mietobjekt.qm_mietpreis)
+    
+    def test_qm_mietpreis_precision(self):
+        """Test qm_mietpreis calculation with various values for precision."""
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Garage',
+            type='GEBAEUDE',
+            beschreibung='Test',
+            fläche=7.00,
+            standort=self.standort,
+            mietpreis=50.00
+        )
+        
+        # qm_mietpreis should be 50 / 7 = 7.142857... rounded to 7.14
+        self.assertEqual(mietobjekt.qm_mietpreis, Decimal('7.14'))
     
