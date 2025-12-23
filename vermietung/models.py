@@ -12,6 +12,9 @@ import magic
 from pathlib import Path
 from PIL import Image
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 OBJEKT_TYPE = [
        ('GEBAEUDE','Gebäude'),
@@ -833,12 +836,32 @@ class Dokument(models.Model):
         absolute_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / storage_path
         
         # Create directory if it doesn't exist
-        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            absolute_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Created directory: {absolute_path.parent}")
+        except Exception as e:
+            logger.error(
+                f"Failed to create directory {absolute_path.parent}: {e}",
+                exc_info=True
+            )
+            raise ValidationError(
+                f'Fehler beim Erstellen des Verzeichnisses: {str(e)}'
+            )
         
         # Save file
-        with open(absolute_path, 'wb') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
+        try:
+            with open(absolute_path, 'wb') as destination:
+                for chunk in uploaded_file.chunks():
+                    destination.write(chunk)
+            logger.debug(f"Saved document to: {absolute_path}")
+        except Exception as e:
+            logger.error(
+                f"Failed to save file {absolute_path}: {e}",
+                exc_info=True
+            )
+            raise ValidationError(
+                f'Fehler beim Speichern der Datei: {str(e)}'
+            )
         
         return storage_path, mime_type
 
@@ -1086,33 +1109,76 @@ class MietObjektBild(models.Model):
         absolute_thumbnail_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / thumbnail_path
         
         # Create directory if it doesn't exist
-        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            absolute_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Created directory: {absolute_path.parent}")
+        except Exception as e:
+            logger.error(
+                f"Failed to create directory {absolute_path.parent}: {e}",
+                exc_info=True
+            )
+            raise ValidationError(
+                f'Fehler beim Erstellen des Verzeichnisses: {str(e)}'
+            )
         
         # Save original file
-        with open(absolute_path, 'wb') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
+        try:
+            with open(absolute_path, 'wb') as destination:
+                for chunk in uploaded_file.chunks():
+                    destination.write(chunk)
+            logger.debug(f"Saved original image to: {absolute_path}")
+        except Exception as e:
+            logger.error(
+                f"Failed to save file {absolute_path}: {e}",
+                exc_info=True
+            )
+            raise ValidationError(
+                f'Fehler beim Speichern der Datei: {str(e)}'
+            )
         
         # Generate thumbnail
         try:
             MietObjektBild.create_thumbnail(absolute_path, absolute_thumbnail_path)
+            logger.debug(f"Created thumbnail at: {absolute_thumbnail_path}")
         except Exception as e:
             # If thumbnail creation fails, delete the original and raise error
+            logger.error(
+                f"Failed to create thumbnail for {absolute_path}: {e}",
+                exc_info=True
+            )
             if absolute_path.exists():
                 absolute_path.unlink()
             raise ValidationError(f'Fehler beim Erstellen des Thumbnails: {str(e)}')
         
         # Create database entry
-        bild = MietObjektBild(
-            mietobjekt_id=mietobjekt_id,
-            original_filename=uploaded_file.name,
-            storage_path=storage_path,
-            thumbnail_path=thumbnail_path,
-            file_size=uploaded_file.size,
-            mime_type=mime_type,
-            uploaded_by=user
-        )
-        bild.save()
+        try:
+            bild = MietObjektBild(
+                mietobjekt_id=mietobjekt_id,
+                original_filename=uploaded_file.name,
+                storage_path=storage_path,
+                thumbnail_path=thumbnail_path,
+                file_size=uploaded_file.size,
+                mime_type=mime_type,
+                uploaded_by=user
+            )
+            bild.save()
+            logger.info(
+                f"Successfully uploaded image '{uploaded_file.name}' "
+                f"for MietObjekt {mietobjekt_id}"
+            )
+        except Exception as e:
+            # Clean up files if database save fails
+            logger.error(
+                f"Failed to save database record for {uploaded_file.name}: {e}",
+                exc_info=True
+            )
+            if absolute_path.exists():
+                absolute_path.unlink()
+            if absolute_thumbnail_path.exists():
+                absolute_thumbnail_path.unlink()
+            raise ValidationError(
+                f'Fehler beim Speichern der Datenbank-Einträge: {str(e)}'
+            )
         
         return bild
 
