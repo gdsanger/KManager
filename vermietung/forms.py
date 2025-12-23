@@ -5,7 +5,7 @@ Forms for the Vermietung (Rental Management) area.
 from django import forms
 from django.core.exceptions import ValidationError
 from core.models import Adresse
-from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, OBJEKT_TYPE
 
 
 class MietObjektForm(forms.ModelForm):
@@ -456,3 +456,74 @@ class DokumentUploadForm(forms.ModelForm):
             instance.save()
         
         return instance
+
+
+class MietObjektBildUploadForm(forms.Form):
+    """
+    Form for uploading images to MietObjekt gallery.
+    Supports multiple file upload.
+    """
+    
+    bilder = forms.FileField(
+        label='Bilder',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': 'image/png,image/jpeg,image/gif,.png,.jpg,.jpeg,.gif',
+        }),
+        help_text='Erlaubte Bildtypen: PNG, JPG/JPEG, GIF. Maximale Größe: 10 MB pro Bild. Sie können mehrere Bilder gleichzeitig hochladen.',
+        required=True
+    )
+    
+    def __init__(self, *args, mietobjekt=None, user=None, **kwargs):
+        """
+        Initialize form with mietobjekt and user.
+        
+        Args:
+            mietobjekt: MietObjekt instance to upload images for
+            user: User who is uploading the images
+        """
+        super().__init__(*args, **kwargs)
+        self.mietobjekt = mietobjekt
+        self.user = user
+        # Set multiple attribute on the widget after initialization
+        self.fields['bilder'].widget.attrs['multiple'] = True
+    
+    def clean_bilder(self):
+        """Validate that files are uploaded."""
+        # Note: Multiple files are handled in the view
+        return self.cleaned_data.get('bilder')
+    
+    def save(self, files):
+        """
+        Save uploaded images.
+        
+        Args:
+            files: List of uploaded files
+        
+        Returns:
+            List of created MietObjektBild instances
+        """
+        bilder = []
+        errors = []
+        
+        for uploaded_file in files:
+            try:
+                bild = MietObjektBild.save_uploaded_image(
+                    uploaded_file,
+                    self.mietobjekt.pk,
+                    self.user
+                )
+                bilder.append(bild)
+            except ValidationError as e:
+                # Collect errors but continue with other files
+                error_message = str(e)
+                if hasattr(e, 'messages') and e.messages:
+                    error_message = '; '.join(e.messages) if isinstance(e.messages, list) else str(e.messages)
+                errors.append(f'{uploaded_file.name}: {error_message}')
+        
+        # If there were errors, raise them
+        if errors:
+            raise ValidationError(errors)
+        
+        return bilder
+
