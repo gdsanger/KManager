@@ -7,6 +7,7 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
+from datetime import timedelta
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, OBJEKT_TYPE
 from core.models import Adresse
 from .forms import AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm, UebergabeprotokollForm, DokumentUploadForm
@@ -55,7 +56,35 @@ def download_dokument(request, dokument_id):
 @vermietung_required
 def vermietung_home(request):
     """Vermietung dashboard/home page - requires Vermietung access."""
-    return render(request, 'vermietung/home.html')
+    # Calculate KPIs
+    total_mietobjekte = MietObjekt.objects.count()
+    verfuegbare_mietobjekte = MietObjekt.objects.filter(verfuegbar=True).count()
+    active_vertraege = Vertrag.objects.currently_active().count()
+    total_kunden = Adresse.objects.filter(adressen_type='KUNDE').count()
+    
+    # Get recently created contracts (last 10)
+    recent_vertraege = Vertrag.objects.select_related('mietobjekt', 'mieter').order_by('-id')[:10]
+    
+    # Get contracts expiring soon (within next 60 days, excluding those without end date)
+    today = timezone.now().date()
+    expiring_soon_date = today + timedelta(days=60)
+    expiring_vertraege = Vertrag.objects.select_related('mietobjekt', 'mieter').filter(
+        status='active',
+        ende__isnull=False,
+        ende__gte=today,
+        ende__lte=expiring_soon_date
+    ).order_by('ende')[:10]
+    
+    context = {
+        'total_mietobjekte': total_mietobjekte,
+        'verfuegbare_mietobjekte': verfuegbare_mietobjekte,
+        'active_vertraege': active_vertraege,
+        'total_kunden': total_kunden,
+        'recent_vertraege': recent_vertraege,
+        'expiring_vertraege': expiring_vertraege,
+    }
+    
+    return render(request, 'vermietung/home.html', context)
 
 
 @vermietung_required

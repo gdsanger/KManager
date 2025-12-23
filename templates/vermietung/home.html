@@ -22,6 +22,90 @@
     </div>
 </div>
 
+<!-- KPI Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Gesamt Objekte</p>
+                        <h3 class="mb-0">{{ total_mietobjekte }}</h3>
+                    </div>
+                    <div class="display-6 text-primary">
+                        <i class="bi bi-house-door"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'vermietung:mietobjekt_list' %}" class="text-decoration-none">
+                    <small>Alle anzeigen <i class="bi bi-arrow-right"></i></small>
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Verfügbare Objekte</p>
+                        <h3 class="mb-0">{{ verfuegbare_mietobjekte }}</h3>
+                    </div>
+                    <div class="display-6 text-warning">
+                        <i class="bi bi-key"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'vermietung:mietobjekt_list' %}?verfuegbar=true" class="text-decoration-none">
+                    <small>Verfügbare anzeigen <i class="bi bi-arrow-right"></i></small>
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Aktive Verträge</p>
+                        <h3 class="mb-0">{{ active_vertraege }}</h3>
+                    </div>
+                    <div class="display-6 text-success">
+                        <i class="bi bi-file-earmark-check"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'vermietung:vertrag_list' %}?status=active" class="text-decoration-none">
+                    <small>Aktive anzeigen <i class="bi bi-arrow-right"></i></small>
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Kunden</p>
+                        <h3 class="mb-0">{{ total_kunden }}</h3>
+                    </div>
+                    <div class="display-6 text-info">
+                        <i class="bi bi-people"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'vermietung:kunde_list' %}" class="text-decoration-none">
+                    <small>Alle anzeigen <i class="bi bi-arrow-right"></i></small>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Quick Actions -->
 <div class="row mb-4">
     <div class="col-md-3">
@@ -77,7 +161,7 @@
                 </div>
                 <h5 class="card-title">Übergaben</h5>
                 <p class="card-text text-muted">Übergabeprotokolle</p>
-                <a href="#" class="btn btn-info">
+                <a href="{% url 'vermietung:uebergabeprotokoll_list' %}" class="btn btn-info">
                     <i class="bi bi-arrow-right-circle"></i> Anzeigen
                 </a>
             </div>
@@ -85,68 +169,130 @@
     </div>
 </div>
 
-<!-- Statistics Overview -->
+<!-- Recently Created Contracts -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock-history"></i> Zuletzt angelegte Verträge
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_vertraege %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Vertragsnummer</th>
+                                    <th>Mietobjekt</th>
+                                    <th>Mieter</th>
+                                    <th>Start</th>
+                                    <th>Status</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vertrag in recent_vertraege %}
+                                    <tr>
+                                        <td>
+                                            <a href="{% url 'vermietung:vertrag_detail' vertrag.pk %}" class="text-decoration-none">
+                                                {{ vertrag.vertragsnummer }}
+                                            </a>
+                                        </td>
+                                        <td>{{ vertrag.mietobjekt.name }}</td>
+                                        <td>{{ vertrag.mieter.full_name }}</td>
+                                        <td>{{ vertrag.start|date:"d.m.Y" }}</td>
+                                        <td>
+                                            {% if vertrag.status == 'active' %}
+                                                <span class="badge bg-success">{{ vertrag.get_status_display }}</span>
+                                            {% elif vertrag.status == 'draft' %}
+                                                <span class="badge bg-secondary">{{ vertrag.get_status_display }}</span>
+                                            {% elif vertrag.status == 'ended' %}
+                                                <span class="badge bg-dark">{{ vertrag.get_status_display }}</span>
+                                            {% elif vertrag.status == 'cancelled' %}
+                                                <span class="badge bg-danger">{{ vertrag.get_status_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'vermietung:vertrag_detail' vertrag.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-eye"></i> Details
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">Keine Verträge vorhanden.</p>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'vermietung:vertrag_list' %}" class="text-decoration-none">
+                    Alle Verträge anzeigen <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Expiring Contracts -->
 <div class="row">
     <div class="col-12">
-        <h4 class="mb-3">Übersicht</h4>
-    </div>
-    <div class="col-md-3">
         <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Gesamt Objekte</p>
-                        <h3 class="mb-0">--</h3>
-                    </div>
-                    <div class="display-6 text-primary">
-                        <i class="bi bi-house-door"></i>
-                    </div>
-                </div>
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Auslaufende Verträge (nächste 60 Tage)
+                </h5>
             </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Aktive Verträge</p>
-                        <h3 class="mb-0">--</h3>
+                {% if expiring_vertraege %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Vertragsnummer</th>
+                                    <th>Mietobjekt</th>
+                                    <th>Mieter</th>
+                                    <th>Enddatum</th>
+                                    <th>Verbleibende Tage</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vertrag in expiring_vertraege %}
+                                    <tr>
+                                        <td>
+                                            <a href="{% url 'vermietung:vertrag_detail' vertrag.pk %}" class="text-decoration-none">
+                                                {{ vertrag.vertragsnummer }}
+                                            </a>
+                                        </td>
+                                        <td>{{ vertrag.mietobjekt.name }}</td>
+                                        <td>{{ vertrag.mieter.full_name }}</td>
+                                        <td>{{ vertrag.ende|date:"d.m.Y" }}</td>
+                                        <td>
+                                            {% with days_remaining=vertrag.ende|timeuntil %}
+                                                {% if "0 minutes" in days_remaining or "0 Minuten" in days_remaining %}
+                                                    <span class="badge bg-danger">Heute</span>
+                                                {% else %}
+                                                    {{ days_remaining }}
+                                                {% endif %}
+                                            {% endwith %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'vermietung:vertrag_detail' vertrag.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-eye"></i> Details
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="display-6 text-success">
-                        <i class="bi bi-file-earmark-check"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Verfügbare Objekte</p>
-                        <h3 class="mb-0">--</h3>
-                    </div>
-                    <div class="display-6 text-warning">
-                        <i class="bi bi-key"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1">Kunden</p>
-                        <h3 class="mb-0">--</h3>
-                    </div>
-                    <div class="display-6 text-info">
-                        <i class="bi bi-people"></i>
-                    </div>
-                </div>
+                {% else %}
+                    <p class="text-muted mb-0">Keine auslaufenden Verträge in den nächsten 60 Tagen.</p>
+                {% endif %}
             </div>
         </div>
     </div>
