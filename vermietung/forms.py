@@ -387,7 +387,7 @@ class DokumentUploadForm(forms.ModelForm):
             'class': 'form-control',
             'accept': '.pdf,.png,.jpg,.jpeg,.gif,.docx,.webp'
         }),
-        help_text='Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, DOCX. Maximale Größe: 10 MB'
+        help_text='Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, WebP, DOCX. Maximale Größe: 10 MB'
     )
     
     class Meta:
