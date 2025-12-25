@@ -423,16 +423,19 @@ class DokumentUploadForm(forms.ModelForm):
         Override to set foreign key before model validation.
         This ensures the entity foreign key is set before full_clean() is called on the model instance.
         """
+        # Mapping of entity types to foreign key field names
+        entity_to_fk = {
+            'vertrag': 'vertrag_id',
+            'mietobjekt': 'mietobjekt_id',
+            'adresse': 'adresse_id',
+            'uebergabeprotokoll': 'uebergabeprotokoll_id',
+        }
+        
         # Set the foreign key on the instance before validation
         if self.entity_type and self.entity_id:
-            if self.entity_type == 'vertrag':
-                self.instance.vertrag_id = self.entity_id
-            elif self.entity_type == 'mietobjekt':
-                self.instance.mietobjekt_id = self.entity_id
-            elif self.entity_type == 'adresse':
-                self.instance.adresse_id = self.entity_id
-            elif self.entity_type == 'uebergabeprotokoll':
-                self.instance.uebergabeprotokoll_id = self.entity_id
+            fk_field = entity_to_fk.get(self.entity_type)
+            if fk_field:
+                setattr(self.instance, fk_field, self.entity_id)
         
         # Now call parent's _post_clean which will call full_clean() on the instance
         super()._post_clean()
@@ -461,15 +464,7 @@ class DokumentUploadForm(forms.ModelForm):
         instance.mime_type = mime_type
         instance.uploaded_by = self.user
         
-        # Set the appropriate foreign key based on entity type
-        if self.entity_type == 'vertrag':
-            instance.vertrag_id = self.entity_id
-        elif self.entity_type == 'mietobjekt':
-            instance.mietobjekt_id = self.entity_id
-        elif self.entity_type == 'adresse':
-            instance.adresse_id = self.entity_id
-        elif self.entity_type == 'uebergabeprotokoll':
-            instance.uebergabeprotokoll_id = self.entity_id
+        # Note: Foreign key is already set in _post_clean() method
         
         if commit:
             instance.save()
