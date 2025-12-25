@@ -440,7 +440,7 @@ class DokumentUploadForm(forms.ModelForm):
             fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
             if fk_field:
                 setattr(self.instance, fk_field, self.entity_id)
-            elif self.entity_type:
+            else:
                 # This should never happen if the view is using the form correctly
                 raise ValueError(
                     f'Unknown entity_type "{self.entity_type}". '
@@ -454,6 +454,10 @@ class DokumentUploadForm(forms.ModelForm):
         """
         Save the document with uploaded file.
         Handles file storage and metadata.
+        
+        Note: This method assumes is_valid() has been called, which sets the foreign key
+        in _post_clean(). If calling save() directly without is_valid(), the foreign key
+        will be missing and model validation will fail.
         """
         instance = super().save(commit=False)
         
@@ -474,8 +478,16 @@ class DokumentUploadForm(forms.ModelForm):
         instance.mime_type = mime_type
         instance.uploaded_by = self.user
         
-        # Note: Foreign key is set in _post_clean() to ensure validation passes
-        # before model.full_clean() is called during form.is_valid()
+        # Foreign key is already set in _post_clean() which runs during is_valid()
+        # Ensure foreign key is set as a safety check
+        if not any([instance.vertrag_id, instance.mietobjekt_id, 
+                    instance.adresse_id, instance.uebergabeprotokoll_id]):
+            # Fallback: set it here if _post_clean() wasn't called
+            # This ensures save() works even if called without is_valid()
+            if self.entity_type and self.entity_id:
+                fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
+                if fk_field:
+                    setattr(instance, fk_field, self.entity_id)
         
         if commit:
             instance.save()
