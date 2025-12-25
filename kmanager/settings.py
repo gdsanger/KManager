@@ -219,14 +219,22 @@ SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 if SENTRY_DSN:
     import sentry_sdk
     from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+    
+    # Configure logging integration to only send ERROR and above
+    sentry_logging = LoggingIntegration(
+        level=logging.INFO,        # Capture info and above as breadcrumbs
+        event_level=logging.ERROR  # Only send errors and above as events
+    )
     
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        integrations=[DjangoIntegration()],
-        # Only send errors to Sentry
+        integrations=[
+            DjangoIntegration(),
+            sentry_logging,
+        ],
+        # No performance monitoring
         traces_sample_rate=0.0,
         # Set environment
         environment='production' if not DEBUG else 'development',
-        # Only send error events (not warning, info, or debug)
-        before_send=lambda event, hint: event if event.get('level') == 'error' else None,
     )
