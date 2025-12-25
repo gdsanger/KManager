@@ -418,6 +418,25 @@ class DokumentUploadForm(forms.ModelForm):
         self.entity_id = entity_id
         self.user = user
     
+    def _post_clean(self):
+        """
+        Override to set foreign key before model validation.
+        This ensures the entity foreign key is set before full_clean() is called on the model instance.
+        """
+        # Set the foreign key on the instance before validation
+        if self.entity_type and self.entity_id:
+            if self.entity_type == 'vertrag':
+                self.instance.vertrag_id = self.entity_id
+            elif self.entity_type == 'mietobjekt':
+                self.instance.mietobjekt_id = self.entity_id
+            elif self.entity_type == 'adresse':
+                self.instance.adresse_id = self.entity_id
+            elif self.entity_type == 'uebergabeprotokoll':
+                self.instance.uebergabeprotokoll_id = self.entity_id
+        
+        # Now call parent's _post_clean which will call full_clean() on the instance
+        super()._post_clean()
+    
     def save(self, commit=True):
         """
         Save the document with uploaded file.
