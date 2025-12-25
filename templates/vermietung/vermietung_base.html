@@ -79,6 +79,11 @@
                             </a>
                         </li>
                          <li class="nav-item">
+                            <a class="nav-link {% if 'adressen' in request.path %}active{% endif %}" href="{% url 'vermietung:adresse_list' %}">
+                                <i class="bi bi-signpost"></i> Adressen
+                            </a>
+                        </li>
+                         <li class="nav-item">
                             <a class="nav-link {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
                                 <i class="bi bi-geo-alt"></i> Standorte
                             </a>
