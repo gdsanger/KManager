@@ -587,6 +587,31 @@
 // Tab state management using localStorage
 (function() {
     const TAB_STORAGE_KEY = 'mietobjekt_detail_active_tab';
+    // Whitelist of valid tab IDs to prevent XSS
+    const VALID_TABS = ['vertraege', 'uebergaben', 'bilder', 'dokumente'];
+    
+    // Safe localStorage wrapper
+    function safeGetItem(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch (e) {
+            console.warn('localStorage.getItem failed:', e);
+            return null;
+        }
+    }
+    
+    function safeSetItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            console.warn('localStorage.setItem failed:', e);
+        }
+    }
+    
+    // Validate tab ID against whitelist
+    function isValidTab(tabId) {
+        return tabId && VALID_TABS.indexOf(tabId) !== -1;
+    }
     
     // Restore active tab on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -594,23 +619,30 @@
         let tabToActivate = null;
         if (window.location.hash) {
             const hashTab = window.location.hash.substring(1); // Remove '#'
-            // Verify this is a valid tab
-            if (document.querySelector('#' + hashTab + '.tab-pane')) {
-                tabToActivate = hashTab;
-                // Save this to localStorage as well
-                localStorage.setItem(TAB_STORAGE_KEY, tabToActivate);
+            // Validate against whitelist before using
+            if (isValidTab(hashTab)) {
+                // Verify this tab element exists in DOM
+                if (document.getElementById(hashTab)) {
+                    tabToActivate = hashTab;
+                    // Save this to localStorage as well
+                    safeSetItem(TAB_STORAGE_KEY, tabToActivate);
+                }
             }
         }
         
         // If no hash, check localStorage
         if (!tabToActivate) {
-            tabToActivate = localStorage.getItem(TAB_STORAGE_KEY);
+            const savedTab = safeGetItem(TAB_STORAGE_KEY);
+            // Validate saved tab against whitelist
+            if (isValidTab(savedTab)) {
+                tabToActivate = savedTab;
+            }
         }
         
         // Activate the tab if we have one
         if (tabToActivate) {
             const tabButton = document.querySelector('#relatedTabs button[data-bs-target="#' + tabToActivate + '"]');
-            const tabPane = document.querySelector('#' + tabToActivate);
+            const tabPane = document.getElementById(tabToActivate);
             
             if (tabButton && tabPane) {
                 // Remove active class from all tabs
@@ -631,7 +663,10 @@
         document.querySelectorAll('#relatedTabs button[data-bs-toggle="tab"]').forEach(function(tabButton) {
             tabButton.addEventListener('shown.bs.tab', function(event) {
                 const targetTab = event.target.getAttribute('data-bs-target').substring(1); // Remove '#'
-                localStorage.setItem(TAB_STORAGE_KEY, targetTab);
+                // Validate before saving
+                if (isValidTab(targetTab)) {
+                    safeSetItem(TAB_STORAGE_KEY, targetTab);
+                }
             });
         });
     });
