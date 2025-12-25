@@ -207,10 +207,10 @@
                     submitButton.appendChild(spinner);
                     submitButton.appendChild(document.createTextNode(UPLOAD_TEXT));
                     
-                    // Re-enable button if form submission fails (e.g., validation error)
-                    // This will happen automatically on page reload, but we handle it for AJAX scenarios
+                    // Fallback timeout to re-enable button if submission doesn't complete
+                    // This handles edge cases like validation errors or network issues
                     setTimeout(function() {
-                        if (submitButton.disabled) {
+                        if (submitButton && submitButton.disabled && document.body.contains(submitButton)) {
                             submitButton.disabled = false;
                             submitButton.innerHTML = originalContent;
                         }
