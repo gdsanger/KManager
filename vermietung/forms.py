@@ -382,7 +382,7 @@ class DokumentUploadForm(forms.ModelForm):
     """
     
     # Mapping of entity types to foreign key field names
-    # Used in _post_clean() to set the correct foreign key before validation
+    # Used in _post_clean() to set FK before validation and in save() as fallback
     ENTITY_TO_FK_MAPPING = {
         'vertrag': 'vertrag_id',
         'mietobjekt': 'mietobjekt_id',
@@ -455,9 +455,9 @@ class DokumentUploadForm(forms.ModelForm):
         Save the document with uploaded file.
         Handles file storage and metadata.
         
-        Note: This method assumes is_valid() has been called, which sets the foreign key
-        in _post_clean(). If calling save() directly without is_valid(), the foreign key
-        will be missing and model validation will fail.
+        The foreign key is normally set in _post_clean() during is_valid() to ensure
+        validation passes. However, a fallback mechanism sets the FK here if _post_clean()
+        wasn't called, allowing save() to work even without prior is_valid() call.
         """
         instance = super().save(commit=False)
         
@@ -479,11 +479,10 @@ class DokumentUploadForm(forms.ModelForm):
         instance.uploaded_by = self.user
         
         # Foreign key is already set in _post_clean() which runs during is_valid()
-        # Ensure foreign key is set as a safety check
+        # Safety check: Ensure foreign key is set (fallback if is_valid() wasn't called)
         if not any([instance.vertrag_id, instance.mietobjekt_id, 
                     instance.adresse_id, instance.uebergabeprotokoll_id]):
-            # Fallback: set it here if _post_clean() wasn't called
-            # This ensures save() works even if called without is_valid()
+            # Fallback mechanism: set FK here if _post_clean() wasn't called
             if self.entity_type and self.entity_id:
                 fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
                 if fk_field:
