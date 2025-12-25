@@ -25,6 +25,13 @@ urlpatterns = [
     path('kunden/<int:pk>/bearbeiten/', views.kunde_edit, name='kunde_edit'),
     path('kunden/<int:pk>/loeschen/', views.kunde_delete, name='kunde_delete'),
     
+    # Standort (Location) URLs
+    path('standorte/', views.standort_list, name='standort_list'),
+    path('standorte/neu/', views.standort_create, name='standort_create'),
+    path('standorte/<int:pk>/', views.standort_detail, name='standort_detail'),
+    path('standorte/<int:pk>/bearbeiten/', views.standort_edit, name='standort_edit'),
+    path('standorte/<int:pk>/loeschen/', views.standort_delete, name='standort_delete'),
+    
     # MietObjekt (Rental Object) URLs
     path('mietobjekte/', views.mietobjekt_list, name='mietobjekt_list'),
     path('mietobjekte/neu/', views.mietobjekt_create, name='mietobjekt_create'),

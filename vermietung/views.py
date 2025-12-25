@@ -11,7 +11,7 @@ from datetime import timedelta
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, OBJEKT_TYPE
 from core.models import Adresse
 from .forms import (
-    AdresseKundeForm, MietObjektForm, VertragForm, VertragEndForm, 
+    AdresseKundeForm, AdresseStandortForm, MietObjektForm, VertragForm, VertragEndForm, 
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm
 )
 from .permissions import vermietung_required
@@ -221,6 +221,138 @@ def kunde_delete(request, pk):
         messages.error(request, f'Fehler beim Löschen des Kunden: {str(e)}')
     
     return redirect('vermietung:kunde_list')
+
+
+# Standort (Location) CRUD Views
+
+@vermietung_required
+def standort_list(request):
+    """
+    List all locations (Adressen of type STANDORT) with search and pagination.
+    """
+    # Get search query
+    search_query = request.GET.get('q', '').strip()
+    
+    # Base queryset: only STANDORT addresses
+    standorte = Adresse.objects.filter(adressen_type='STANDORT')
+    
+    # Apply search filter if query provided
+    if search_query:
+        standorte = standorte.filter(
+            Q(name__icontains=search_query) |
+            Q(strasse__icontains=search_query) |
+            Q(ort__icontains=search_query) |
+            Q(plz__icontains=search_query) |
+            Q(email__icontains=search_query)
+        )
+    
+    # Order by name
+    standorte = standorte.order_by('name')
+    
+    # Pagination
+    paginator = Paginator(standorte, 20)  # Show 20 locations per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+    }
+    
+    return render(request, 'vermietung/standorte/list.html', context)
+
+
+@vermietung_required
+def standort_detail(request, pk):
+    """
+    Show details of a specific location.
+    """
+    standort = get_object_or_404(Adresse, pk=pk, adressen_type='STANDORT')
+    
+    # Get related mietobjekte (rental objects at this location) with pagination
+    mietobjekte = standort.mietobjekt_set.all().order_by('name')
+    mietobjekte_paginator = Paginator(mietobjekte, 10)
+    mietobjekte_page = request.GET.get('mietobjekte_page', 1)
+    mietobjekte_page_obj = mietobjekte_paginator.get_page(mietobjekte_page)
+    
+    context = {
+        'standort': standort,
+        'mietobjekte_page_obj': mietobjekte_page_obj,
+    }
+    
+    return render(request, 'vermietung/standorte/detail.html', context)
+
+
+@vermietung_required
+def standort_create(request):
+    """
+    Create a new location.
+    """
+    if request.method == 'POST':
+        form = AdresseStandortForm(request.POST)
+        if form.is_valid():
+            standort = form.save()
+            messages.success(request, f'Standort "{standort.name}" wurde erfolgreich angelegt.')
+            return redirect('vermietung:standort_detail', pk=standort.pk)
+    else:
+        form = AdresseStandortForm()
+    
+    context = {
+        'form': form,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/standorte/form.html', context)
+
+
+@vermietung_required
+def standort_edit(request, pk):
+    """
+    Edit an existing location.
+    """
+    standort = get_object_or_404(Adresse, pk=pk, adressen_type='STANDORT')
+    
+    if request.method == 'POST':
+        form = AdresseStandortForm(request.POST, instance=standort)
+        if form.is_valid():
+            standort = form.save()
+            messages.success(request, f'Standort "{standort.name}" wurde erfolgreich aktualisiert.')
+            return redirect('vermietung:standort_detail', pk=standort.pk)
+    else:
+        form = AdresseStandortForm(instance=standort)
+    
+    context = {
+        'form': form,
+        'standort': standort,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/standorte/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def standort_delete(request, pk):
+    """
+    Delete a location.
+    Only available in user area (not admin-only).
+    """
+    standort = get_object_or_404(Adresse, pk=pk, adressen_type='STANDORT')
+    standort_name = standort.name
+    
+    # Check if there are any rental objects at this location
+    if standort.mietobjekt_set.exists():
+        messages.error(request, f'Standort "{standort_name}" kann nicht gelöscht werden, da es noch Mietobjekte an diesem Standort gibt.')
+        return redirect('vermietung:standort_detail', pk=pk)
+    
+    try:
+        standort.delete()
+        messages.success(request, f'Standort "{standort_name}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen des Standorts: {str(e)}')
+        return redirect('vermietung:standort_detail', pk=pk)
+    
+    return redirect('vermietung:standort_list')
 
 
 # MietObjekt (Rental Object) CRUD Views
