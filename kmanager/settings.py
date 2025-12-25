@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
-import logging
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -218,6 +217,7 @@ LOGGING = {
 # Only errors are sent to Sentry
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
 if SENTRY_DSN:
+    import logging
     import sentry_sdk
     from sentry_sdk.integrations.django import DjangoIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
