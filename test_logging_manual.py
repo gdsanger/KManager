@@ -8,8 +8,8 @@ import os
 import sys
 from pathlib import Path
 
-# Set up Django settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_settings')
+# Set up Django settings - use environment variable or default to test_settings
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', os.getenv('DJANGO_SETTINGS_MODULE', 'test_settings'))
 
 # Add the project root to the path
 project_root = Path(__file__).parent
