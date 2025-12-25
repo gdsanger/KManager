@@ -7,3 +7,6 @@ DATABASES = {
         'NAME': ':memory:',
     }
 }
+
+# Allow testserver in ALLOWED_HOSTS for testing
+ALLOWED_HOSTS = ['*']
