@@ -175,6 +175,40 @@
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
     
+    <!-- Upload Form Handler with Loading Indicator -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle all upload forms with loading indicator
+        const uploadForms = document.querySelectorAll('form[enctype="multipart/form-data"]');
+        
+        uploadForms.forEach(function(form) {
+            form.addEventListener('submit', function(e) {
+                const submitButton = form.querySelector('button[type="submit"]');
+                
+                if (submitButton && !submitButton.disabled) {
+                    // Disable the submit button to prevent multiple submissions
+                    submitButton.disabled = true;
+                    
+                    // Store original button content
+                    const originalContent = submitButton.innerHTML;
+                    
+                    // Add spinner to button
+                    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Wird hochgeladen...';
+                    
+                    // Re-enable button if form submission fails (e.g., validation error)
+                    // This will happen automatically on page reload, but we handle it for AJAX scenarios
+                    setTimeout(function() {
+                        if (submitButton.disabled) {
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = originalContent;
+                        }
+                    }, 30000); // 30 second timeout
+                }
+            });
+        });
+    });
+    </script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 </html>
