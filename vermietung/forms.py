@@ -128,6 +128,56 @@ class AdresseKundeForm(forms.ModelForm):
         return instance
 
 
+class AdresseStandortForm(forms.ModelForm):
+    """
+    Form for creating/editing addresses of type STANDORT (Location).
+    The adressen_type field is fixed to STANDORT and not editable by the user.
+    """
+    
+    class Meta:
+        model = Adresse
+        fields = [
+            'name',
+            'strasse',
+            'plz',
+            'ort',
+            'land',
+            'telefon',
+            'email',
+            'bemerkung'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'strasse': forms.TextInput(attrs={'class': 'form-control'}),
+            'plz': forms.TextInput(attrs={'class': 'form-control'}),
+            'ort': forms.TextInput(attrs={'class': 'form-control'}),
+            'land': forms.TextInput(attrs={'class': 'form-control'}),
+            'telefon': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'bemerkung': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+        labels = {
+            'name': 'Standortname *',
+            'strasse': 'Straße *',
+            'plz': 'PLZ *',
+            'ort': 'Ort *',
+            'land': 'Land *',
+            'telefon': 'Telefon (optional)',
+            'email': 'E-Mail (optional)',
+            'bemerkung': 'Bemerkung (optional)',
+        }
+    
+    def save(self, commit=True):
+        """
+        Override save to ensure adressen_type is always set to STANDORT.
+        """
+        instance = super().save(commit=False)
+        instance.adressen_type = 'STANDORT'
+        if commit:
+            instance.save()
+        return instance
+
+
 class VertragForm(forms.ModelForm):
     """
     Form for creating/editing Vertrag (rental contracts).

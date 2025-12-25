@@ -1,0 +1,175 @@
+{% extends "vermietung/layouts/list_layout.html" %}
+
+{% block title %}Standorte - K-Manager v1.0{% endblock %}
+
+{% block page_title %}Standorte{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:standort_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Neuer Standort
+</a>
+{% endblock %}
+
+{% block filters %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <form method="get" action="{% url 'vermietung:standort_list' %}">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" class="form-control" name="q" placeholder="Suche nach Name, Adresse, PLZ..." value="{{ search_query }}">
+                <button type="submit" class="btn btn-outline-secondary">Suchen</button>
+                {% if search_query %}
+                <a href="{% url 'vermietung:standort_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    <div class="col-md-6 text-end">
+        <span class="text-muted">{{ page_obj.paginator.count }} Standort{{ page_obj.paginator.count|pluralize:"e" }}</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block table_content %}
+<div class="table-responsive">
+    <table class="table table-dark table-hover">
+        <thead>
+            <tr>
+                {% block table_headers %}
+                <th>Standortname</th>
+                <th>Adresse</th>
+                <th>Kontakt</th>
+                <th class="text-end">Aktionen</th>
+                {% endblock %}
+            </tr>
+        </thead>
+        <tbody>
+            {% block table_rows %}
+            {% if page_obj %}
+                {% for standort in page_obj %}
+                <tr>
+                    <td>
+                        <a href="{% url 'vermietung:standort_detail' standort.pk %}" class="text-decoration-none">
+                            {{ standort.name }}
+                        </a>
+                    </td>
+                    <td>
+                        {{ standort.strasse }}<br>
+                        <small class="text-muted">{{ standort.plz }} {{ standort.ort }}, {{ standort.land }}</small>
+                    </td>
+                    <td>
+                        {% if standort.telefon %}
+                            <i class="bi bi-telephone"></i> {{ standort.telefon }}<br>
+                        {% endif %}
+                        {% if standort.email %}
+                            <i class="bi bi-envelope"></i> <a href="mailto:{{ standort.email }}" class="text-decoration-none">{{ standort.email }}</a>
+                        {% endif %}
+                        {% if not standort.telefon and not standort.email %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a href="{% url 'vermietung:standort_detail' standort.pk %}" class="btn btn-outline-info" title="Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{% url 'vermietung:standort_edit' standort.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button type="button" class="btn btn-outline-danger" title="Löschen" 
+                                    onclick="confirmDelete('{{ standort.name }}', '{% url 'vermietung:standort_delete' standort.pk %}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">
+                        <i class="bi bi-inbox"></i> 
+                        {% if search_query %}
+                            Keine Standorte gefunden für "{{ search_query }}"
+                        {% else %}
+                            Keine Standorte vorhanden
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endif %}
+            {% endblock %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block pagination %}
+{% if page_obj.has_other_pages %}
+<div class="card-footer">
+    <nav aria-label="Page navigation">
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}">Erste</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Zurück</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Zurück</span>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active">
+                <span class="page-link">Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Weiter</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}">Letzte</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Weiter</span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(standortName, deleteUrl) {
+    if (confirm('Möchten Sie den Standort "' + standortName + '" wirklich löschen?')) {
+        // Create a form and submit it
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = deleteUrl;
+        
+        // Add CSRF token
+        var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfToken) {
+            csrfToken = document.createElement('input');
+            csrfToken.type = 'hidden';
+            csrfToken.name = 'csrfmiddlewaretoken';
+            csrfToken.value = '{{ csrf_token }}';
+            form.appendChild(csrfToken);
+        } else {
+            form.appendChild(csrfToken.cloneNode());
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

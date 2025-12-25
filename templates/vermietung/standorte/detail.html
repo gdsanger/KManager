@@ -1,0 +1,241 @@
+{% extends "vermietung/layouts/detail_layout.html" %}
+
+{% block title %}Standort: {{ standort.name }} - K-Manager v1.0{% endblock %}
+
+{% block page_title %}Standort: {{ standort.name }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:standort_edit' standort.pk %}" class="btn btn-warning">
+    <i class="bi bi-pencil"></i> Bearbeiten
+</a>
+<button type="button" class="btn btn-danger" onclick="confirmDelete()">
+    <i class="bi bi-trash"></i> Löschen
+</button>
+<a href="{% url 'vermietung:standort_list' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück zur Liste
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Standortinformationen</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Standortname:</div>
+                    <div class="col-md-8"><strong>{{ standort.name }}</strong></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Typ:</div>
+                    <div class="col-md-8">
+                        <span class="badge bg-info">{{ standort.get_adressen_type_display }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-house"></i> Adresse</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Straße:</div>
+                    <div class="col-md-8">{{ standort.strasse }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">PLZ:</div>
+                    <div class="col-md-8">{{ standort.plz }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Ort:</div>
+                    <div class="col-md-8">{{ standort.ort }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Land:</div>
+                    <div class="col-md-8">{{ standort.land }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-telephone"></i> Kontaktdaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Telefon:</div>
+                    <div class="col-md-8">{{ standort.telefon|default:"-" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">E-Mail:</div>
+                    <div class="col-md-8">
+                        {% if standort.email %}
+                            <a href="mailto:{{ standort.email }}">{{ standort.email }}</a>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if standort.bemerkung %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-chat-left-text"></i> Bemerkungen</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ standort.bemerkung|linebreaks }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Mietobjekte at this location -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-building"></i> Mietobjekte an diesem Standort</h5>
+                <span class="badge bg-secondary">{{ mietobjekte_page_obj.paginator.count }}</span>
+            </div>
+            <div class="card-body">
+                {% if mietobjekte_page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Typ</th>
+                                    <th>Mietpreis</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for mietobjekt in mietobjekte_page_obj %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'vermietung:mietobjekt_detail' mietobjekt.pk %}" class="text-decoration-none">
+                                            {{ mietobjekt.name }}
+                                        </a>
+                                    </td>
+                                    <td>{{ mietobjekt.get_type_display }}</td>
+                                    <td>{{ mietobjekt.mietpreis }} €</td>
+                                    <td>
+                                        {% if mietobjekt.verfuegbar %}
+                                            <span class="badge bg-success">Verfügbar</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Vermietet</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'vermietung:mietobjekt_detail' mietobjekt.pk %}" class="btn btn-sm btn-outline-info">
+                                            <i class="bi bi-eye"></i> Details
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> Keine Mietobjekte an diesem Standort
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination for mietobjekte -->
+                    {% if mietobjekte_page_obj.has_other_pages %}
+                    <nav aria-label="Mietobjekte pagination">
+                        <ul class="pagination pagination-sm mb-0">
+                            {% if mietobjekte_page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?mietobjekte_page={{ mietobjekte_page_obj.previous_page_number }}">Zurück</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Zurück</span>
+                            </li>
+                            {% endif %}
+
+                            <li class="page-item active">
+                                <span class="page-link">Seite {{ mietobjekte_page_obj.number }} von {{ mietobjekte_page_obj.paginator.num_pages }}</span>
+                            </li>
+
+                            {% if mietobjekte_page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?mietobjekte_page={{ mietobjekte_page_obj.next_page_number }}">Weiter</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Weiter</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted mb-0"><i class="bi bi-inbox"></i> Keine Mietobjekte an diesem Standort</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar with quick actions -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-lightning"></i> Schnellaktionen
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'vermietung:standort_edit' standort.pk %}" class="btn btn-outline-warning">
+                        <i class="bi bi-pencil"></i> Standort bearbeiten
+                    </a>
+                    <a href="{% url 'vermietung:mietobjekt_create' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-circle"></i> Neues Mietobjekt an diesem Standort
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Statistiken
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-6 text-muted">Mietobjekte:</div>
+                    <div class="col-6 text-end"><strong>{{ mietobjekte_page_obj.paginator.count }}</strong></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete() {
+    if (confirm('Möchten Sie den Standort "{{ standort.name }}" wirklich löschen?\n\nHinweis: Der Standort kann nur gelöscht werden, wenn keine Mietobjekte mehr zugeordnet sind.')) {
+        // Create a form and submit it
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "vermietung:standort_delete" standort.pk %}';
+        
+        // Add CSRF token
+        var csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrfmiddlewaretoken';
+        csrfToken.value = '{{ csrf_token }}';
+        form.appendChild(csrfToken);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}
