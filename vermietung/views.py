@@ -470,13 +470,17 @@ def adresse_delete(request, pk):
     Delete a generic address.
     Only available in user area (not admin-only).
     """
+    from django.db.models import ProtectedError
+    
     adresse = get_object_or_404(Adresse, pk=pk, adressen_type='Adresse')
     adresse_name = adresse.full_name()
     
     try:
         adresse.delete()
         messages.success(request, f'Adresse "{adresse_name}" wurde erfolgreich gelöscht.')
-    except Exception as e:
+    except ProtectedError:
+        messages.error(request, f'Adresse "{adresse_name}" kann nicht gelöscht werden, da sie in anderen Datensätzen verwendet wird.')
+    except ValidationError as e:
         messages.error(request, f'Fehler beim Löschen der Adresse: {str(e)}')
     
     return redirect('vermietung:adresse_list')
