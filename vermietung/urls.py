@@ -39,6 +39,13 @@ urlpatterns = [
     path('lieferanten/<int:pk>/bearbeiten/', views.lieferant_edit, name='lieferant_edit'),
     path('lieferanten/<int:pk>/loeschen/', views.lieferant_delete, name='lieferant_delete'),
     
+    # Adresse (Generic Address) URLs
+    path('adressen/', views.adresse_list, name='adresse_list'),
+    path('adressen/neu/', views.adresse_create, name='adresse_create'),
+    path('adressen/<int:pk>/', views.adresse_detail, name='adresse_detail'),
+    path('adressen/<int:pk>/bearbeiten/', views.adresse_edit, name='adresse_edit'),
+    path('adressen/<int:pk>/loeschen/', views.adresse_delete, name='adresse_delete'),
+    
     # MietObjekt (Rental Object) URLs
     path('mietobjekte/', views.mietobjekt_list, name='mietobjekt_list'),
     path('mietobjekte/neu/', views.mietobjekt_create, name='mietobjekt_create'),

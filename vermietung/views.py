@@ -11,7 +11,7 @@ from datetime import timedelta
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, OBJEKT_TYPE
 from core.models import Adresse
 from .forms import (
-    AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, MietObjektForm, VertragForm, VertragEndForm, 
+    AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm
 )
 from .permissions import vermietung_required
@@ -480,6 +480,133 @@ def lieferant_delete(request, pk):
         messages.error(request, f'Fehler beim Löschen des Lieferanten: {str(e)}')
     
     return redirect('vermietung:lieferant_list')
+
+
+# Adresse (Generic Address) CRUD Views
+
+@vermietung_required
+def adresse_list(request):
+    """
+    List all addresses (Adressen of type Adresse) with search and pagination.
+    """
+    # Get search query
+    search_query = request.GET.get('q', '').strip()
+    
+    # Base queryset: only Adresse addresses
+    adressen = Adresse.objects.filter(adressen_type='Adresse')
+    
+    # Apply search filter if query provided
+    if search_query:
+        adressen = adressen.filter(
+            Q(name__icontains=search_query) |
+            Q(firma__icontains=search_query) |
+            Q(email__icontains=search_query) |
+            Q(strasse__icontains=search_query) |
+            Q(ort__icontains=search_query) |
+            Q(plz__icontains=search_query)
+        )
+    
+    # Order by name
+    adressen = adressen.order_by('name')
+    
+    # Pagination
+    paginator = Paginator(adressen, 20)  # Show 20 addresses per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+    }
+    
+    return render(request, 'vermietung/adressen/list.html', context)
+
+
+@vermietung_required
+def adresse_detail(request, pk):
+    """
+    Show details of a specific address.
+    """
+    adresse = get_object_or_404(Adresse, pk=pk, adressen_type='Adresse')
+    
+    # Get related documents with pagination
+    dokumente = adresse.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
+    dokumente_paginator = Paginator(dokumente, 10)
+    dokumente_page = request.GET.get('dokumente_page', 1)
+    dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
+    
+    context = {
+        'adresse': adresse,
+        'dokumente_page_obj': dokumente_page_obj,
+    }
+    
+    return render(request, 'vermietung/adressen/detail.html', context)
+
+
+@vermietung_required
+def adresse_create(request):
+    """
+    Create a new address.
+    """
+    if request.method == 'POST':
+        form = AdresseForm(request.POST)
+        if form.is_valid():
+            adresse = form.save()
+            messages.success(request, f'Adresse "{adresse.full_name()}" wurde erfolgreich angelegt.')
+            return redirect('vermietung:adresse_detail', pk=adresse.pk)
+    else:
+        form = AdresseForm()
+    
+    context = {
+        'form': form,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/adressen/form.html', context)
+
+
+@vermietung_required
+def adresse_edit(request, pk):
+    """
+    Edit an existing address.
+    """
+    adresse = get_object_or_404(Adresse, pk=pk, adressen_type='Adresse')
+    
+    if request.method == 'POST':
+        form = AdresseForm(request.POST, instance=adresse)
+        if form.is_valid():
+            adresse = form.save()
+            messages.success(request, f'Adresse "{adresse.full_name()}" wurde erfolgreich aktualisiert.')
+            return redirect('vermietung:adresse_detail', pk=adresse.pk)
+    else:
+        form = AdresseForm(instance=adresse)
+    
+    context = {
+        'form': form,
+        'adresse': adresse,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/adressen/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def adresse_delete(request, pk):
+    """
+    Delete an address.
+    Only available in user area (not admin-only).
+    """
+    adresse = get_object_or_404(Adresse, pk=pk, adressen_type='Adresse')
+    adresse_name = adresse.full_name()
+    
+    try:
+        adresse.delete()
+        messages.success(request, f'Adresse "{adresse_name}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen der Adresse: {str(e)}')
+    
+    return redirect('vermietung:adresse_list')
 
 
 # MietObjekt (Rental Object) CRUD Views
