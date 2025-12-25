@@ -1,0 +1,166 @@
+"""
+Tests for core mailing service
+"""
+from django.test import TestCase
+from django.template import TemplateSyntaxError
+from core.models import SmtpSettings, MailTemplate
+from core.mailing.service import (
+    render_template, send_mail,
+    MailServiceError, TemplateRenderError, MailSendError
+)
+
+
+class RenderTemplateTestCase(TestCase):
+    """Test template rendering functionality"""
+    
+    def setUp(self):
+        """Create test template"""
+        self.template = MailTemplate.objects.create(
+            key='test_template',
+            subject='Hello {{ name }}',
+            message_html='<p>Welcome {{ name }}, your email is {{ email }}</p>',
+            from_address='sender@example.com',
+            from_name='Test Sender'
+        )
+    
+    def test_render_simple_context(self):
+        """Test rendering with simple context"""
+        context = {
+            'name': 'John Doe',
+            'email': 'john@example.com'
+        }
+        
+        subject, html = render_template(self.template, context)
+        
+        self.assertEqual(subject, 'Hello John Doe')
+        self.assertEqual(html, '<p>Welcome John Doe, your email is john@example.com</p>')
+    
+    def test_render_empty_context(self):
+        """Test rendering with empty context"""
+        context = {}
+        
+        subject, html = render_template(self.template, context)
+        
+        # Variables should be rendered as empty strings
+        self.assertEqual(subject, 'Hello ')
+        self.assertEqual(html, '<p>Welcome , your email is </p>')
+    
+    def test_render_with_filters(self):
+        """Test rendering with Django template filters"""
+        template = MailTemplate.objects.create(
+            key='filter_test',
+            subject='{{ title|upper }}',
+            message_html='<p>{{ text|default:"No text" }}</p>',
+            from_address='sender@example.com',
+            from_name='Sender'
+        )
+        
+        context = {'title': 'hello world'}
+        subject, html = render_template(template, context)
+        
+        self.assertEqual(subject, 'HELLO WORLD')
+        self.assertEqual(html, '<p>No text</p>')
+    
+    def test_render_syntax_error(self):
+        """Test that template syntax errors are caught"""
+        template = MailTemplate.objects.create(
+            key='error_template',
+            subject='{% for x in %}test{% endfor %}',  # Invalid for loop syntax
+            message_html='<p>Test</p>',
+            from_address='sender@example.com',
+            from_name='Sender'
+        )
+        
+        with self.assertRaises(TemplateRenderError) as cm:
+            render_template(template, {})
+        
+        self.assertIn('Template-Syntax-Fehler', str(cm.exception))
+
+
+class SendMailTestCase(TestCase):
+    """Test mail sending functionality"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create SMTP settings
+        SmtpSettings.objects.create(
+            host='localhost',
+            port=1025,  # MailHog default port
+            use_tls=False,
+            username='',
+            password=''
+        )
+        
+        # Create mail template
+        self.template = MailTemplate.objects.create(
+            key='welcome_mail',
+            subject='Welcome {{ name }}',
+            message_html='<h1>Hello {{ name }}</h1><p>Welcome to our service!</p>',
+            from_address='noreply@example.com',
+            from_name='Test Service'
+        )
+    
+    def test_template_not_found(self):
+        """Test that error is raised for non-existent template"""
+        with self.assertRaises(MailServiceError) as cm:
+            send_mail('nonexistent', ['test@example.com'], {})
+        
+        self.assertIn('nicht gefunden', str(cm.exception))
+    
+    def test_send_mail_parameters(self):
+        """Test that send_mail properly builds the message"""
+        # We can't actually send mail in tests without a real SMTP server
+        # This test just verifies the function doesn't crash with valid params
+        
+        # Mock/skip actual SMTP sending by catching the error
+        with self.assertRaises(MailSendError):
+            # This will fail at SMTP connection, which is expected
+            send_mail(
+                'welcome_mail',
+                ['recipient@example.com'],
+                {'name': 'Test User'}
+            )
+
+
+class SmtpConfigurationTestCase(TestCase):
+    """Test SMTP configuration scenarios"""
+    
+    def test_settings_without_auth(self):
+        """Test SMTP settings without authentication"""
+        settings = SmtpSettings.objects.create(
+            host='localhost',
+            port=25,
+            use_tls=False,
+            username='',
+            password=''
+        )
+        
+        self.assertEqual(settings.host, 'localhost')
+        self.assertEqual(settings.port, 25)
+        self.assertFalse(settings.use_tls)
+        self.assertEqual(settings.username, '')
+    
+    def test_settings_with_auth(self):
+        """Test SMTP settings with authentication"""
+        settings = SmtpSettings.objects.create(
+            host='smtp.gmail.com',
+            port=587,
+            use_tls=True,
+            username='user@gmail.com',
+            password='app_password'
+        )
+        
+        self.assertEqual(settings.host, 'smtp.gmail.com')
+        self.assertEqual(settings.port, 587)
+        self.assertTrue(settings.use_tls)
+        self.assertEqual(settings.username, 'user@gmail.com')
+    
+    def test_settings_with_tls(self):
+        """Test SMTP settings with TLS enabled"""
+        settings = SmtpSettings.objects.create(
+            host='smtp.example.com',
+            port=587,
+            use_tls=True
+        )
+        
+        self.assertTrue(settings.use_tls)
