@@ -440,6 +440,12 @@ class DokumentUploadForm(forms.ModelForm):
             fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
             if fk_field:
                 setattr(self.instance, fk_field, self.entity_id)
+            elif self.entity_type:
+                # This should never happen if the view is using the form correctly
+                raise ValueError(
+                    f'Unknown entity_type "{self.entity_type}". '
+                    f'Must be one of: {", ".join(self.ENTITY_TO_FK_MAPPING.keys())}'
+                )
         
         # Now call parent's _post_clean which will call full_clean() on the instance
         super()._post_clean()
