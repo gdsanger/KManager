@@ -178,6 +178,10 @@
     <!-- Upload Form Handler with Loading Indicator -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Configuration
+        const UPLOAD_TIMEOUT_MS = 30000; // 30 seconds
+        const UPLOAD_TEXT = 'Wird hochgeladen...';
+        
         // Handle all upload forms with loading indicator
         const uploadForms = document.querySelectorAll('form[enctype="multipart/form-data"]');
         
@@ -192,8 +196,16 @@
                     // Store original button content
                     const originalContent = submitButton.innerHTML;
                     
-                    // Add spinner to button
-                    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Wird hochgeladen...';
+                    // Create spinner element using DOM methods
+                    const spinner = document.createElement('span');
+                    spinner.className = 'spinner-border spinner-border-sm me-2';
+                    spinner.setAttribute('role', 'status');
+                    spinner.setAttribute('aria-hidden', 'true');
+                    
+                    // Clear button and add spinner with text
+                    submitButton.textContent = '';
+                    submitButton.appendChild(spinner);
+                    submitButton.appendChild(document.createTextNode(UPLOAD_TEXT));
                     
                     // Re-enable button if form submission fails (e.g., validation error)
                     // This will happen automatically on page reload, but we handle it for AJAX scenarios
@@ -202,7 +214,7 @@
                             submitButton.disabled = false;
                             submitButton.innerHTML = originalContent;
                         }
-                    }, 30000); // 30 second timeout
+                    }, UPLOAD_TIMEOUT_MS);
                 }
             });
         });
