@@ -381,6 +381,15 @@ class DokumentUploadForm(forms.ModelForm):
     The entity (Vertrag, MietObjekt, Adresse, Uebergabeprotokoll) is set programmatically.
     """
     
+    # Mapping of entity types to foreign key field names
+    # Used in _post_clean() to set the correct foreign key before validation
+    ENTITY_TO_FK_MAPPING = {
+        'vertrag': 'vertrag_id',
+        'mietobjekt': 'mietobjekt_id',
+        'adresse': 'adresse_id',
+        'uebergabeprotokoll': 'uebergabeprotokoll_id',
+    }
+    
     file = forms.FileField(
         label='Datei',
         widget=forms.FileInput(attrs={
@@ -421,19 +430,14 @@ class DokumentUploadForm(forms.ModelForm):
     def _post_clean(self):
         """
         Override to set foreign key before model validation.
-        This ensures the entity foreign key is set before full_clean() is called on the model instance.
-        """
-        # Mapping of entity types to foreign key field names
-        entity_to_fk = {
-            'vertrag': 'vertrag_id',
-            'mietobjekt': 'mietobjekt_id',
-            'adresse': 'adresse_id',
-            'uebergabeprotokoll': 'uebergabeprotokoll_id',
-        }
         
+        This is necessary because Django's ModelForm validation calls full_clean() on the model instance
+        during is_valid(), but the foreign key is not part of the form fields (only set programmatically).
+        Setting the foreign key here ensures validation passes before model.full_clean() is called.
+        """
         # Set the foreign key on the instance before validation
         if self.entity_type and self.entity_id:
-            fk_field = entity_to_fk.get(self.entity_type)
+            fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
             if fk_field:
                 setattr(self.instance, fk_field, self.entity_id)
         
@@ -464,7 +468,8 @@ class DokumentUploadForm(forms.ModelForm):
         instance.mime_type = mime_type
         instance.uploaded_by = self.user
         
-        # Note: Foreign key is already set in _post_clean() method
+        # Note: Foreign key is set in _post_clean() to ensure validation passes
+        # before model.full_clean() is called during form.is_valid()
         
         if commit:
             instance.save()
