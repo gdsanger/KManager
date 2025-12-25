@@ -385,7 +385,7 @@ class DokumentUploadForm(forms.ModelForm):
         label='Datei',
         widget=forms.FileInput(attrs={
             'class': 'form-control',
-            'accept': '.pdf,.png,.jpg,.jpeg,.gif,.docx'
+            'accept': '.pdf,.png,.jpg,.jpeg,.gif,.docx,.webp'
         }),
         help_text='Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, DOCX. Maximale Größe: 10 MB'
     )
@@ -468,9 +468,9 @@ class MietObjektBildUploadForm(forms.Form):
         label='Bilder',
         widget=forms.FileInput(attrs={
             'class': 'form-control',
-            'accept': 'image/png,image/jpeg,image/gif,.png,.jpg,.jpeg,.gif',
+            'accept': 'image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp',
         }),
-        help_text='Erlaubte Bildtypen: PNG, JPG/JPEG, GIF. Maximale Größe: 10 MB pro Bild. Sie können mehrere Bilder gleichzeitig hochladen.',
+        help_text='Erlaubte Bildtypen: PNG, JPG/JPEG, GIF, WEBP. Maximale Größe: 10 MB pro Bild. Sie können mehrere Bilder gleichzeitig hochladen.',
         required=True
     )
     
