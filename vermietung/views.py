@@ -270,7 +270,7 @@ def standort_detail(request, pk):
     standort = get_object_or_404(Adresse, pk=pk, adressen_type='STANDORT')
     
     # Get related mietobjekte (rental objects at this location) with pagination
-    mietobjekte = standort.mietobjekte.all().order_by('name')
+    mietobjekte = standort.mietobjekt_set.all().order_by('name')
     mietobjekte_paginator = Paginator(mietobjekte, 10)
     mietobjekte_page = request.GET.get('mietobjekte_page', 1)
     mietobjekte_page_obj = mietobjekte_paginator.get_page(mietobjekte_page)
@@ -341,7 +341,7 @@ def standort_delete(request, pk):
     standort_name = standort.name
     
     # Check if there are any rental objects at this location
-    if standort.mietobjekte.exists():
+    if standort.mietobjekt_set.exists():
         messages.error(request, f'Standort "{standort_name}" kann nicht gelöscht werden, da es noch Mietobjekte an diesem Standort gibt.')
         return redirect('vermietung:standort_detail', pk=pk)
     
