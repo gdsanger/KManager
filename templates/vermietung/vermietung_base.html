@@ -175,6 +175,52 @@
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
     
+    <!-- Upload Form Handler with Loading Indicator -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Configuration
+        const UPLOAD_TIMEOUT_MS = 30000; // 30 seconds
+        const UPLOAD_TEXT = 'Wird hochgeladen...';
+        
+        // Handle all upload forms with loading indicator
+        const uploadForms = document.querySelectorAll('form[enctype="multipart/form-data"]');
+        
+        uploadForms.forEach(function(form) {
+            form.addEventListener('submit', function(e) {
+                const submitButton = form.querySelector('button[type="submit"]');
+                
+                if (submitButton && !submitButton.disabled) {
+                    // Disable the submit button to prevent multiple submissions
+                    submitButton.disabled = true;
+                    
+                    // Store original button content
+                    const originalContent = submitButton.innerHTML;
+                    
+                    // Create spinner element using DOM methods
+                    const spinner = document.createElement('span');
+                    spinner.className = 'spinner-border spinner-border-sm me-2';
+                    spinner.setAttribute('role', 'status');
+                    spinner.setAttribute('aria-hidden', 'true');
+                    
+                    // Clear button and add spinner with text
+                    submitButton.textContent = '';
+                    submitButton.appendChild(spinner);
+                    submitButton.appendChild(document.createTextNode(UPLOAD_TEXT));
+                    
+                    // Fallback timeout to re-enable button if submission doesn't complete
+                    // This handles edge cases like validation errors or network issues
+                    setTimeout(function() {
+                        if (submitButton && submitButton.disabled && document.body.contains(submitButton)) {
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = originalContent;
+                        }
+                    }, UPLOAD_TIMEOUT_MS);
+                }
+            });
+        });
+    });
+    </script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 </html>
