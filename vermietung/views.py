@@ -11,7 +11,7 @@ from datetime import timedelta
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, OBJEKT_TYPE
 from core.models import Adresse
 from .forms import (
-    AdresseKundeForm, AdresseStandortForm, MietObjektForm, VertragForm, VertragEndForm, 
+    AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, MietObjektForm, VertragForm, VertragEndForm, 
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm
 )
 from .permissions import vermietung_required
@@ -353,6 +353,133 @@ def standort_delete(request, pk):
         return redirect('vermietung:standort_detail', pk=pk)
     
     return redirect('vermietung:standort_list')
+
+
+# Lieferant (Supplier) CRUD Views
+
+@vermietung_required
+def lieferant_list(request):
+    """
+    List all suppliers (Adressen of type LIEFERANT) with search and pagination.
+    """
+    # Get search query
+    search_query = request.GET.get('q', '').strip()
+    
+    # Base queryset: only LIEFERANT addresses
+    lieferanten = Adresse.objects.filter(adressen_type='LIEFERANT')
+    
+    # Apply search filter if query provided
+    if search_query:
+        lieferanten = lieferanten.filter(
+            Q(name__icontains=search_query) |
+            Q(firma__icontains=search_query) |
+            Q(email__icontains=search_query) |
+            Q(strasse__icontains=search_query) |
+            Q(ort__icontains=search_query) |
+            Q(plz__icontains=search_query)
+        )
+    
+    # Order by name
+    lieferanten = lieferanten.order_by('name')
+    
+    # Pagination
+    paginator = Paginator(lieferanten, 20)  # Show 20 suppliers per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+    }
+    
+    return render(request, 'vermietung/lieferanten/list.html', context)
+
+
+@vermietung_required
+def lieferant_detail(request, pk):
+    """
+    Show details of a specific supplier.
+    """
+    lieferant = get_object_or_404(Adresse, pk=pk, adressen_type='LIEFERANT')
+    
+    # Get related documents with pagination
+    dokumente = lieferant.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
+    dokumente_paginator = Paginator(dokumente, 10)
+    dokumente_page = request.GET.get('dokumente_page', 1)
+    dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
+    
+    context = {
+        'lieferant': lieferant,
+        'dokumente_page_obj': dokumente_page_obj,
+    }
+    
+    return render(request, 'vermietung/lieferanten/detail.html', context)
+
+
+@vermietung_required
+def lieferant_create(request):
+    """
+    Create a new supplier.
+    """
+    if request.method == 'POST':
+        form = AdresseLieferantForm(request.POST)
+        if form.is_valid():
+            lieferant = form.save()
+            messages.success(request, f'Lieferant "{lieferant.full_name()}" wurde erfolgreich angelegt.')
+            return redirect('vermietung:lieferant_detail', pk=lieferant.pk)
+    else:
+        form = AdresseLieferantForm()
+    
+    context = {
+        'form': form,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/lieferanten/form.html', context)
+
+
+@vermietung_required
+def lieferant_edit(request, pk):
+    """
+    Edit an existing supplier.
+    """
+    lieferant = get_object_or_404(Adresse, pk=pk, adressen_type='LIEFERANT')
+    
+    if request.method == 'POST':
+        form = AdresseLieferantForm(request.POST, instance=lieferant)
+        if form.is_valid():
+            lieferant = form.save()
+            messages.success(request, f'Lieferant "{lieferant.full_name()}" wurde erfolgreich aktualisiert.')
+            return redirect('vermietung:lieferant_detail', pk=lieferant.pk)
+    else:
+        form = AdresseLieferantForm(instance=lieferant)
+    
+    context = {
+        'form': form,
+        'lieferant': lieferant,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/lieferanten/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def lieferant_delete(request, pk):
+    """
+    Delete a supplier.
+    Only available in user area (not admin-only).
+    """
+    lieferant = get_object_or_404(Adresse, pk=pk, adressen_type='LIEFERANT')
+    lieferant_name = lieferant.full_name()
+    
+    try:
+        lieferant.delete()
+        messages.success(request, f'Lieferant "{lieferant_name}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen des Lieferanten: {str(e)}')
+    
+    return redirect('vermietung:lieferant_list')
 
 
 # MietObjekt (Rental Object) CRUD Views
