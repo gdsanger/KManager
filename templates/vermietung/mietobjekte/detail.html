@@ -584,6 +584,59 @@
 
 {% block extra_js %}
 <script>
+// Tab state management using localStorage
+(function() {
+    const TAB_STORAGE_KEY = 'mietobjekt_detail_active_tab';
+    
+    // Restore active tab on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check if there's a hash in the URL (from pagination links)
+        let tabToActivate = null;
+        if (window.location.hash) {
+            const hashTab = window.location.hash.substring(1); // Remove '#'
+            // Verify this is a valid tab
+            if (document.querySelector('#' + hashTab + '.tab-pane')) {
+                tabToActivate = hashTab;
+                // Save this to localStorage as well
+                localStorage.setItem(TAB_STORAGE_KEY, tabToActivate);
+            }
+        }
+        
+        // If no hash, check localStorage
+        if (!tabToActivate) {
+            tabToActivate = localStorage.getItem(TAB_STORAGE_KEY);
+        }
+        
+        // Activate the tab if we have one
+        if (tabToActivate) {
+            const tabButton = document.querySelector('#relatedTabs button[data-bs-target="#' + tabToActivate + '"]');
+            const tabPane = document.querySelector('#' + tabToActivate);
+            
+            if (tabButton && tabPane) {
+                // Remove active class from all tabs
+                document.querySelectorAll('#relatedTabs .nav-link').forEach(function(tab) {
+                    tab.classList.remove('active');
+                });
+                document.querySelectorAll('#relatedTabsContent .tab-pane').forEach(function(pane) {
+                    pane.classList.remove('show', 'active');
+                });
+                
+                // Activate the saved tab
+                tabButton.classList.add('active');
+                tabPane.classList.add('show', 'active');
+            }
+        }
+        
+        // Save tab state when user clicks on a tab
+        document.querySelectorAll('#relatedTabs button[data-bs-toggle="tab"]').forEach(function(tabButton) {
+            tabButton.addEventListener('shown.bs.tab', function(event) {
+                const targetTab = event.target.getAttribute('data-bs-target').substring(1); // Remove '#'
+                localStorage.setItem(TAB_STORAGE_KEY, targetTab);
+            });
+        });
+    });
+})();
+
 function confirmDelete() {
     if (confirm('Möchten Sie das Mietobjekt "{{ mietobjekt.name }}" wirklich löschen?')) {
         document.getElementById('deleteForm').submit();
