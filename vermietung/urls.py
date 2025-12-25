@@ -32,6 +32,13 @@ urlpatterns = [
     path('standorte/<int:pk>/bearbeiten/', views.standort_edit, name='standort_edit'),
     path('standorte/<int:pk>/loeschen/', views.standort_delete, name='standort_delete'),
     
+    # Lieferant (Supplier) URLs
+    path('lieferanten/', views.lieferant_list, name='lieferant_list'),
+    path('lieferanten/neu/', views.lieferant_create, name='lieferant_create'),
+    path('lieferanten/<int:pk>/', views.lieferant_detail, name='lieferant_detail'),
+    path('lieferanten/<int:pk>/bearbeiten/', views.lieferant_edit, name='lieferant_edit'),
+    path('lieferanten/<int:pk>/loeschen/', views.lieferant_delete, name='lieferant_delete'),
+    
     # MietObjekt (Rental Object) URLs
     path('mietobjekte/', views.mietobjekt_list, name='mietobjekt_list'),
     path('mietobjekte/neu/', views.mietobjekt_create, name='mietobjekt_create'),
