@@ -381,13 +381,22 @@ class DokumentUploadForm(forms.ModelForm):
     The entity (Vertrag, MietObjekt, Adresse, Uebergabeprotokoll) is set programmatically.
     """
     
+    # Mapping of entity types to foreign key field names
+    # Used in _post_clean() to set FK before validation and in save() as fallback
+    ENTITY_TO_FK_MAPPING = {
+        'vertrag': 'vertrag_id',
+        'mietobjekt': 'mietobjekt_id',
+        'adresse': 'adresse_id',
+        'uebergabeprotokoll': 'uebergabeprotokoll_id',
+    }
+    
     file = forms.FileField(
         label='Datei',
         widget=forms.FileInput(attrs={
             'class': 'form-control',
             'accept': '.pdf,.png,.jpg,.jpeg,.gif,.docx,.webp'
         }),
-        help_text='Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, DOCX. Maximale Größe: 10 MB'
+        help_text='Erlaubte Dateitypen: PDF, PNG, JPG/JPEG, GIF, WebP, DOCX. Maximale Größe: 10 MB'
     )
     
     class Meta:
@@ -418,10 +427,37 @@ class DokumentUploadForm(forms.ModelForm):
         self.entity_id = entity_id
         self.user = user
     
+    def _post_clean(self):
+        """
+        Override to set foreign key before model validation.
+        
+        This is necessary because Django's ModelForm validation calls full_clean() on the model instance
+        during is_valid(), but the foreign key is not part of the form fields (only set programmatically).
+        Setting the foreign key here ensures validation passes before model.full_clean() is called.
+        """
+        # Set the foreign key on the instance before validation
+        if self.entity_type and self.entity_id:
+            fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
+            if fk_field:
+                setattr(self.instance, fk_field, self.entity_id)
+            else:
+                # This should never happen if the view is using the form correctly
+                raise ValueError(
+                    f'Unknown entity_type "{self.entity_type}". '
+                    f'Must be one of: {", ".join(self.ENTITY_TO_FK_MAPPING.keys())}'
+                )
+        
+        # Now call parent's _post_clean which will call full_clean() on the instance
+        super()._post_clean()
+    
     def save(self, commit=True):
         """
         Save the document with uploaded file.
         Handles file storage and metadata.
+        
+        The foreign key is normally set in _post_clean() during is_valid() to ensure
+        validation passes. However, a fallback mechanism sets the FK here if _post_clean()
+        wasn't called, allowing save() to work even without prior is_valid() call.
         """
         instance = super().save(commit=False)
         
@@ -442,15 +478,15 @@ class DokumentUploadForm(forms.ModelForm):
         instance.mime_type = mime_type
         instance.uploaded_by = self.user
         
-        # Set the appropriate foreign key based on entity type
-        if self.entity_type == 'vertrag':
-            instance.vertrag_id = self.entity_id
-        elif self.entity_type == 'mietobjekt':
-            instance.mietobjekt_id = self.entity_id
-        elif self.entity_type == 'adresse':
-            instance.adresse_id = self.entity_id
-        elif self.entity_type == 'uebergabeprotokoll':
-            instance.uebergabeprotokoll_id = self.entity_id
+        # Foreign key is already set in _post_clean() which runs during is_valid()
+        # Safety check: Ensure foreign key is set (fallback if is_valid() wasn't called)
+        if not any([instance.vertrag_id, instance.mietobjekt_id, 
+                    instance.adresse_id, instance.uebergabeprotokoll_id]):
+            # Fallback mechanism: set FK here if _post_clean() wasn't called
+            if self.entity_type and self.entity_id:
+                fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
+                if fk_field:
+                    setattr(instance, fk_field, self.entity_id)
         
         if commit:
             instance.save()

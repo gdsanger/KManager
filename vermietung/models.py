@@ -523,6 +523,7 @@ ALLOWED_MIME_TYPES = {
     'image/png': ['.png'],
     'image/jpeg': ['.jpg', '.jpeg'],
     'image/gif': ['.gif'],
+    'image/webp': ['.webp'],
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
 }
 
@@ -531,6 +532,7 @@ ALLOWED_IMAGE_MIME_TYPES = {
     'image/png': ['.png'],
     'image/jpeg': ['.jpg', '.jpeg'],
     'image/gif': ['.gif'],
+    'image/webp': ['.webp'],
 }
 
 # Max file size in bytes (10 MB)
