@@ -641,8 +641,8 @@
         
         // Activate the tab if we have one
         if (tabToActivate) {
-            const tabButton = document.querySelector('#relatedTabs button[data-bs-target="#' + tabToActivate + '"]');
             const tabPane = document.getElementById(tabToActivate);
+            const tabButton = document.querySelector('#relatedTabs button[data-bs-target="#' + tabToActivate + '"]');
             
             if (tabButton && tabPane) {
                 // Remove active class from all tabs
