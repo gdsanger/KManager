@@ -692,7 +692,8 @@ def mietobjekt_detail(request, pk):
     mietobjekt = get_object_or_404(MietObjekt.objects.select_related('standort'), pk=pk)
     
     # Get related contracts with pagination
-    vertraege = mietobjekt.vertraege.select_related('mieter').order_by('-start')
+    # Query contracts through both new VertragsObjekt relationship and legacy relationship
+    vertraege = mietobjekt.get_all_vertraege().select_related('mieter').order_by('-start')
     vertraege_paginator = Paginator(vertraege, 10)
     vertraege_page = request.GET.get('vertraege_page', 1)
     vertraege_page_obj = vertraege_paginator.get_page(vertraege_page)
@@ -791,7 +792,7 @@ def mietobjekt_delete(request, pk):
     mietobjekt_name = mietobjekt.name
     
     # Check if there are any active contracts
-    if mietobjekt.vertraege.currently_active().exists():
+    if mietobjekt.has_active_contracts():
         messages.error(request, f'Mietobjekt "{mietobjekt_name}" kann nicht gelöscht werden, da es aktive Verträge hat.')
         return redirect('vermietung:mietobjekt_detail', pk=pk)
     

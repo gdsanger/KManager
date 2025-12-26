@@ -92,6 +92,68 @@ class MietObjekt(models.Model):
         # Runde auf 2 Nachkommastellen
         return result.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
+    def get_all_vertraege(self):
+        """
+        Get all contracts (Vertrag) associated with this MietObjekt.
+        Works with both new VertragsObjekt relationship and legacy mietobjekt field.
+        
+        Returns:
+            QuerySet of Vertrag objects
+        """
+        # Collect contract IDs from both relationships
+        contract_ids = set()
+        
+        # Get contract IDs from new VertragsObjekt relationship
+        contract_ids.update(
+            self.vertragsobjekte.values_list('vertrag_id', flat=True)
+        )
+        
+        # Also get from legacy relationship (during migration period)
+        contract_ids.update(
+            self.vertraege_legacy.values_list('id', flat=True)
+        )
+        
+        # Return queryset of all contracts with these IDs
+        # Vertrag is defined later in this same file
+        if contract_ids:
+            return Vertrag.objects.filter(id__in=contract_ids)
+        return Vertrag.objects.none()
+    
+    def has_active_contracts(self):
+        """
+        Check if this MietObjekt has any currently active contracts.
+        A contract is currently active if:
+        - Status is 'active'
+        - start <= today
+        - ende is NULL or ende > today
+        
+        Works with both new VertragsObjekt relationship and legacy mietobjekt field.
+        
+        Returns:
+            bool: True if there are active contracts, False otherwise
+        """
+        today = timezone.now().date()
+        
+        # Check via VertragsObjekt (new n:m relationship)
+        has_active = VertragsObjekt.objects.filter(
+            mietobjekt=self,
+            vertrag__status='active',
+            vertrag__start__lte=today
+        ).filter(
+            Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
+        ).exists()
+        
+        # Also check legacy relationship during migration period
+        if not has_active:
+            has_active = self.vertraege_legacy.filter(
+                status='active',
+                start__lte=today
+            ).filter(
+                Q(ende__isnull=True) | Q(ende__gt=today)
+            ).exists()
+        
+        return has_active
+    
     def save(self, *args, **kwargs):
         """
         Override save to set kaution default value for new objects.
@@ -108,28 +170,7 @@ class MietObjekt(models.Model):
         MietObjekt is available if there are no currently active contracts containing it.
         Works with both legacy vertraege and new vertragsobjekte relationships.
         """
-        today = timezone.now().date()
-        
-        # Check for currently active contracts containing this MietObjekt
-        # via VertragsObjekt (new n:m relationship)
-        has_active_contract = VertragsObjekt.objects.filter(
-            mietobjekt=self,
-            vertrag__status='active',
-            vertrag__start__lte=today
-        ).filter(
-            Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
-        ).exists()
-        
-        # Also check legacy relationship during migration period
-        if not has_active_contract:
-            has_active_contract = self.vertraege_legacy.filter(
-                status='active',
-                start__lte=today
-            ).filter(
-                Q(ende__isnull=True) | Q(ende__gt=today)
-            ).exists()
-        
-        self.verfuegbar = not has_active_contract
+        self.verfuegbar = not self.has_active_contracts()
         self.save(update_fields=['verfuegbar'])
 
 

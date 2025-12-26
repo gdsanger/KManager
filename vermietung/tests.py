@@ -196,8 +196,8 @@ class VertragModelTest(TestCase):
             kaution=450.00
         )
         self.assertEqual(vertrag.mietobjekt, self.mietobjekt)
-        # Test reverse relationship
-        self.assertIn(vertrag, self.mietobjekt.vertraege.all())
+        # Test reverse relationship (legacy)
+        self.assertIn(vertrag, self.mietobjekt.vertraege_legacy.all())
     
     def test_multiple_contracts_for_same_mietobjekt(self):
         """Test that a MietObjekt can have multiple contracts (history)."""
@@ -217,7 +217,7 @@ class VertragModelTest(TestCase):
             miete=160.00,
             kaution=480.00
         )
-        contracts = self.mietobjekt.vertraege.all()
+        contracts = self.mietobjekt.vertraege_legacy.all()
         self.assertEqual(contracts.count(), 2)
         self.assertIn(vertrag1, contracts)
         self.assertIn(vertrag2, contracts)
