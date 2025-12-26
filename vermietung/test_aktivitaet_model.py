@@ -56,9 +56,9 @@ class AktivitaetModelTest(TestCase):
         self.other_adresse = Adresse.objects.create(
             adressen_type='SONSTIGES',
             name='Sonstige Adresse',
-            strasse='Sonstiges Strasse 3',
+            strasse='Sonstige Straße 3',
             plz='11111',
-            ort='Sonstiges Stadt',
+            ort='Sonstige Stadt',
             land='Deutschland'
         )
         
