@@ -25,5 +25,5 @@ class CustomLogoutView(auth_views.LogoutView):
     def get(self, request, *args, **kwargs):
         """Handle GET request by logging out and redirecting."""
         logout(request)
-        next_page = self.next_page or settings.LOGOUT_REDIRECT_URL or '/'
+        next_page = getattr(self, 'next_page', None) or settings.LOGOUT_REDIRECT_URL or '/'
         return redirect(next_page)
