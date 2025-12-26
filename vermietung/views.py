@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
 from datetime import timedelta
-from .models import Dokument, MietObjekt, Vertrag, VertragsObjekt, Uebergabeprotokoll, MietObjektBild, Aktivitaet, OBJEKT_TYPE
+from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, OBJEKT_TYPE
 from core.models import Adresse
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
@@ -693,20 +693,7 @@ def mietobjekt_detail(request, pk):
     
     # Get related contracts with pagination
     # Query contracts through both new VertragsObjekt relationship and legacy relationship
-    vertrag_ids = set()
-    
-    # Get contract IDs from new VertragsObjekt relationship
-    vertrag_ids.update(
-        mietobjekt.vertragsobjekte.values_list('vertrag_id', flat=True)
-    )
-    
-    # Also get from legacy relationship (during migration period)
-    vertrag_ids.update(
-        mietobjekt.vertraege_legacy.values_list('id', flat=True)
-    )
-    
-    # Query all contracts with these IDs
-    vertraege = Vertrag.objects.filter(id__in=vertrag_ids).select_related('mieter').order_by('-start')
+    vertraege = mietobjekt.get_all_vertraege().select_related('mieter').order_by('-start')
     vertraege_paginator = Paginator(vertraege, 10)
     vertraege_page = request.GET.get('vertraege_page', 1)
     vertraege_page_obj = vertraege_paginator.get_page(vertraege_page)
@@ -805,28 +792,7 @@ def mietobjekt_delete(request, pk):
     mietobjekt_name = mietobjekt.name
     
     # Check if there are any active contracts
-    # Check both new VertragsObjekt relationship and legacy relationship
-    today = timezone.now().date()
-    
-    # Check via VertragsObjekt (new n:m relationship)
-    has_active_contract = VertragsObjekt.objects.filter(
-        mietobjekt=mietobjekt,
-        vertrag__status='active',
-        vertrag__start__lte=today
-    ).filter(
-        Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
-    ).exists()
-    
-    # Also check legacy relationship during migration period
-    if not has_active_contract:
-        has_active_contract = mietobjekt.vertraege_legacy.filter(
-            status='active',
-            start__lte=today
-        ).filter(
-            Q(ende__isnull=True) | Q(ende__gt=today)
-        ).exists()
-    
-    if has_active_contract:
+    if mietobjekt.has_active_contracts():
         messages.error(request, f'Mietobjekt "{mietobjekt_name}" kann nicht gelöscht werden, da es aktive Verträge hat.')
         return redirect('vermietung:mietobjekt_detail', pk=pk)
     
