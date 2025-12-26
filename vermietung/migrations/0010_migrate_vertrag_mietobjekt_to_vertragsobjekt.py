@@ -27,7 +27,6 @@ def migrate_vertrag_mietobjekt_to_vertragsobjekt(apps, schema_editor):
     # Bulk create for efficiency
     if vertragsobjekte_to_create:
         VertragsObjekt.objects.bulk_create(vertragsobjekte_to_create)
-        print(f"Migrated {len(vertragsobjekte_to_create)} Vertrag-Mietobjekt relationships to VertragsObjekt.")
 
 
 def reverse_migration(apps, schema_editor):
