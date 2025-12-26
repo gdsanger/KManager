@@ -68,4 +68,17 @@ urlpatterns = [
     path('uebergabeprotokolle/<int:pk>/bearbeiten/', views.uebergabeprotokoll_edit, name='uebergabeprotokoll_edit'),
     path('uebergabeprotokolle/<int:pk>/loeschen/', views.uebergabeprotokoll_delete, name='uebergabeprotokoll_delete'),
     path('vertraege/<int:vertrag_pk>/uebergabeprotokoll/neu/', views.uebergabeprotokoll_create_from_vertrag, name='uebergabeprotokoll_create_from_vertrag'),
+    
+    # Aktivitaet (Activity/Task) URLs
+    path('aktivitaeten/', views.aktivitaet_kanban, name='aktivitaet_kanban'),
+    path('aktivitaeten/liste/', views.aktivitaet_list, name='aktivitaet_list'),
+    path('aktivitaeten/neu/', views.aktivitaet_create, name='aktivitaet_create'),
+    path('aktivitaeten/<int:pk>/bearbeiten/', views.aktivitaet_edit, name='aktivitaet_edit'),
+    path('aktivitaeten/<int:pk>/loeschen/', views.aktivitaet_delete, name='aktivitaet_delete'),
+    path('aktivitaeten/<int:pk>/status/', views.aktivitaet_update_status, name='aktivitaet_update_status'),
+    
+    # Contextual Aktivitaet creation URLs
+    path('vertraege/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'vertrag'}, name='aktivitaet_create_from_vertrag'),
+    path('mietobjekte/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'mietobjekt'}, name='aktivitaet_create_from_mietobjekt'),
+    path('kunden/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'kunde'}, name='aktivitaet_create_from_kunde'),
 ]   

@@ -4,8 +4,11 @@ Forms for the Vermietung (Rental Management) area.
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
 from core.models import Adresse
-from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, Aktivitaet, OBJEKT_TYPE
+
+User = get_user_model()
 
 
 class MietObjektForm(forms.ModelForm):
@@ -730,4 +733,121 @@ class MietObjektBildUploadForm(forms.Form):
             raise ValidationError(errors)
         
         return bilder
+
+
+class AktivitaetForm(forms.ModelForm):
+    """
+    Form for creating/editing Aktivitaet (activities/tasks).
+    Supports context-based creation where context fields are pre-filled and locked.
+    """
+    
+    class Meta:
+        model = Aktivitaet
+        fields = [
+            'titel',
+            'beschreibung',
+            'status',
+            'prioritaet',
+            'faellig_am',
+            'assigned_user',
+            'assigned_supplier',
+            'mietobjekt',
+            'vertrag',
+            'kunde',
+        ]
+        widgets = {
+            'titel': forms.TextInput(attrs={'class': 'form-control'}),
+            'beschreibung': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'prioritaet': forms.Select(attrs={'class': 'form-select'}),
+            'faellig_am': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'assigned_user': forms.Select(attrs={'class': 'form-select'}),
+            'assigned_supplier': forms.Select(attrs={'class': 'form-select'}),
+            'mietobjekt': forms.Select(attrs={'class': 'form-select'}),
+            'vertrag': forms.Select(attrs={'class': 'form-select'}),
+            'kunde': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {
+            'titel': 'Titel *',
+            'beschreibung': 'Beschreibung',
+            'status': 'Status *',
+            'prioritaet': 'Priorität *',
+            'faellig_am': 'Fällig am',
+            'assigned_user': 'Interner Verantwortlicher',
+            'assigned_supplier': 'Lieferant',
+            'mietobjekt': 'Mietobjekt',
+            'vertrag': 'Vertrag',
+            'kunde': 'Kunde',
+        }
+        help_texts = {
+            'assigned_user': 'Optional: Interner Benutzer, der für diese Aktivität verantwortlich ist',
+            'assigned_supplier': 'Optional: Externer Lieferant, dem die Aktivität zugewiesen ist',
+            'faellig_am': 'Optional: Fälligkeitsdatum für diese Aktivität',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        # Extract context parameters if provided
+        self.context_type = kwargs.pop('context_type', None)
+        self.context_id = kwargs.pop('context_id', None)
+        
+        super().__init__(*args, **kwargs)
+        
+        # Filter assigned_user to show all users
+        self.fields['assigned_user'].queryset = User.objects.all().order_by('username')
+        self.fields['assigned_user'].required = False
+        
+        # Filter assigned_supplier to only show LIEFERANT addresses
+        self.fields['assigned_supplier'].queryset = Adresse.objects.filter(
+            adressen_type='LIEFERANT'
+        ).order_by('name')
+        self.fields['assigned_supplier'].required = False
+        
+        # Filter kunde to only show KUNDE addresses
+        self.fields['kunde'].queryset = Adresse.objects.filter(
+            adressen_type='KUNDE'
+        ).order_by('name')
+        self.fields['kunde'].required = False
+        
+        # If context is provided, pre-fill and lock the context field
+        if self.context_type and self.context_id:
+            # Hide all context fields initially
+            self.fields['mietobjekt'].widget = forms.HiddenInput()
+            self.fields['vertrag'].widget = forms.HiddenInput()
+            self.fields['kunde'].widget = forms.HiddenInput()
+            
+            # Set the appropriate context field based on context_type
+            if self.context_type == 'mietobjekt':
+                self.fields['mietobjekt'].initial = self.context_id
+                self.fields['mietobjekt'].disabled = True
+            elif self.context_type == 'vertrag':
+                self.fields['vertrag'].initial = self.context_id
+                self.fields['vertrag'].disabled = True
+            elif self.context_type == 'kunde':
+                self.fields['kunde'].initial = self.context_id
+                self.fields['kunde'].disabled = True
+        else:
+            # If no context, make context fields visible but only allow one to be selected
+            # This is a fallback mode - normally activities should be created from context
+            pass
+    
+    def clean(self):
+        """Ensure exactly one context is set."""
+        cleaned_data = super().clean()
+        
+        # If context was provided in __init__, ensure it's set
+        if self.context_type and self.context_id:
+            if self.context_type == 'mietobjekt':
+                cleaned_data['mietobjekt'] = MietObjekt.objects.get(pk=self.context_id)
+                cleaned_data['vertrag'] = None
+                cleaned_data['kunde'] = None
+            elif self.context_type == 'vertrag':
+                cleaned_data['vertrag'] = Vertrag.objects.get(pk=self.context_id)
+                cleaned_data['mietobjekt'] = None
+                cleaned_data['kunde'] = None
+            elif self.context_type == 'kunde':
+                cleaned_data['kunde'] = Adresse.objects.get(pk=self.context_id)
+                cleaned_data['mietobjekt'] = None
+                cleaned_data['vertrag'] = None
+        
+        return cleaned_data
 

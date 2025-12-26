@@ -107,11 +107,11 @@
 
                         <!-- Vermietung Section -->
                         <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}true{% else %}false{% endif %}">
+                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'aktivitaet' in request.path %}true{% else %}false{% endif %}">
                                 <i class="bi bi-building"></i> Vermietung
                                 <i class="bi bi-chevron-down ms-auto"></i>
                             </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}show{% endif %}" id="vermietungMenu">
+                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'aktivitaet' in request.path %}show{% endif %}" id="vermietungMenu">
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
                                         <i class="bi bi-geo-alt"></i> Standorte
@@ -130,6 +130,11 @@
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
                                         <i class="bi bi-clipboard-check"></i> Übergabeprotokolle
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'aktivitaet' in request.path %}active{% endif %}" href="{% url 'vermietung:aktivitaet_kanban' %}">
+                                        <i class="bi bi-list-check"></i> Aktivitäten
                                     </a>
                                 </li>
                             </ul>
