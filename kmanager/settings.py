@@ -30,8 +30,16 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-#3(%zir)qp%&2n)ilv)7ct=7s!
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,app.ebner-vermietung.de').split(',')
 
+# Wichtig: ab Django 4.x MIT Schema!
+CSRF_TRUSTED_ORIGINS = [
+    "https://app.ebner-vermietung.de",
+    "http://localhost",
+    "https://116.202.48.216"
+    # optional Wildcard, falls mehrere Subdomains:
+    # "https://*.angermeier.net",
+]
 
 # Application definition
 
