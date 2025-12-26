@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Vermietung - K-Manager v1.0{% endblock %}</title>
+    <title>{% block title %}Vermietung - Domus{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/webp" href="{% static 'images/logo.webp' %}">
     
     <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
@@ -21,8 +24,10 @@
     <!-- Top Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'home' %}">
-                <i class="bi bi-building"></i> K-Manager v1.0
+            <a class="navbar-brand" href="{% url 'home' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Domus ist die lateinische Übersetzung für Haus, Besitz, Heim, Anwesen">
+                <img src="{% static 'images/logo.webp' %}" alt="Domus Logo" width="30" height="30" class="d-inline-block align-text-top me-2">
+                <span class="fw-bold">Domus</span>
+                <small class="text-muted d-none d-lg-inline"> - Immobilien, Besitz, Finanzen</small>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -73,51 +78,86 @@
                         <span>VERMIETUNG MENÜ</span>
                     </h6>
                     <ul class="nav flex-column">
+                        <!-- Dashboard -->
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'vermietung:home' %}">
                                 <i class="bi bi-speedometer2"></i> Dashboard
                             </a>
                         </li>
-                         <li class="nav-item">
-                            <a class="nav-link {% if 'adressen' in request.path %}active{% endif %}" href="{% url 'vermietung:adresse_list' %}">
-                                <i class="bi bi-signpost"></i> Adressen
+                        
+                        <!-- Adressen Section -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#adressenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-person-vcard"></i> Adressen
+                                <i class="bi bi-chevron-down ms-auto"></i>
                             </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}show{% endif %}" id="adressenMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'adressen' in request.path %}active{% endif %}" href="{% url 'vermietung:adresse_list' %}">
+                                        <i class="bi bi-signpost"></i> Adressen
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'kunde' in request.path %}active{% endif %}" href="{% url 'vermietung:kunde_list' %}">
+                                        <i class="bi bi-people"></i> Kunden
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'lieferant' in request.path %}active{% endif %}" href="{% url 'vermietung:lieferant_list' %}">
+                                        <i class="bi bi-truck"></i> Lieferanten
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
-                         <li class="nav-item">
-                            <a class="nav-link {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
-                                <i class="bi bi-geo-alt"></i> Standorte
+
+                        <!-- Vermietung Section -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'aktivitaet' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-building"></i> Vermietung
+                                <i class="bi bi-chevron-down ms-auto"></i>
                             </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'aktivitaet' in request.path %}show{% endif %}" id="vermietungMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
+                                        <i class="bi bi-geo-alt"></i> Standorte
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
+                                        <i class="bi bi-house-door"></i> Mietobjekte
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'vertraege' in request.path or 'vertrag' in request.path %}active{% endif %}" href="{% url 'vermietung:vertrag_list' %}">
+                                        <i class="bi bi-file-earmark-text"></i> Verträge
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
+                                        <i class="bi bi-clipboard-check"></i> Übergabeprotokolle
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'aktivitaet' in request.path %}active{% endif %}" href="{% url 'vermietung:aktivitaet_kanban' %}">
+                                        <i class="bi bi-list-check"></i> Aktivitäten
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
-                                <i class="bi bi-house-door"></i> Mietobjekte
+
+                        <!-- Einstellungen Section -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#einstellungenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'mail-template' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-gear"></i> Einstellungen
+                                <i class="bi bi-chevron-down ms-auto"></i>
                             </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'vertraege' in request.path or 'vertrag' in request.path %}active{% endif %}" href="{% url 'vermietung:vertrag_list' %}">
-                                <i class="bi bi-file-earmark-text"></i> Verträge
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'kunde' in request.path %}active{% endif %}" href="{% url 'vermietung:kunde_list' %}">
-                                <i class="bi bi-people"></i> Kunden
-                            </a>
-                        </li>
-                          <li class="nav-item">
-                            <a class="nav-link {% if 'lieferant' in request.path %}active{% endif %}" href="{% url 'vermietung:lieferant_list' %}">
-                                <i class="bi bi-truck"></i> Lieferanten
-                            </a>
-                        </li>
-                       
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
-                                <i class="bi bi-clipboard-check"></i> Übergaben
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'dokument' in request.path %}active{% endif %}" href="#">
-                                <i class="bi bi-file-earmark"></i> Dokumente
-                            </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'mail-template' in request.path %}show{% endif %}" id="einstellungenMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'mail-template' in request.path %}active{% endif %}" href="{% url 'mailtemplate_list' %}">
+                                        <i class="bi bi-envelope"></i> Mail-Templates
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                     </ul>
                 </div>
@@ -173,12 +213,12 @@
             <div class="row">
                 <div class="col-md-6">
                     <p class="mb-0">
-                        <strong>K-Manager v1.0</strong> - Vermietung
+                        <strong>Domus</strong> - Immobilien, Besitz, Finanzen
                     </p>
                 </div>
                 <div class="col-md-6 text-md-end">
                     <p class="mb-0">
-                        &copy; {% now "Y" %} K-Manager v1.0
+                        &copy; {% now "Y" %} Domus
                     </p>
                 </div>
             </div>
@@ -194,6 +234,10 @@
     <!-- Upload Form Handler with Loading Indicator -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Bootstrap tooltips
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+        
         // Configuration
         const UPLOAD_TIMEOUT_MS = 30000; // 30 seconds
         const UPLOAD_TEXT = 'Wird hochgeladen...';

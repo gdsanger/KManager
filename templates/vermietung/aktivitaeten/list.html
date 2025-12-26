@@ -1,0 +1,217 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{% block title %}Aktivitäten - Liste - K-Manager v1.0{% endblock %}
+
+{% block page_title %}Aktivitäten{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-kanban"></i> Kanban-Ansicht
+</a>
+<a href="{% url 'vermietung:aktivitaet_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Neue Aktivität
+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Search and Filter -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="search" class="form-label">Suche</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="search" 
+                       name="q" 
+                       value="{{ search_query }}"
+                       placeholder="Titel oder Beschreibung...">
+            </div>
+            <div class="col-md-2">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">Alle</option>
+                    <option value="OFFEN" {% if status_filter == 'OFFEN' %}selected{% endif %}>Offen</option>
+                    <option value="IN_BEARBEITUNG" {% if status_filter == 'IN_BEARBEITUNG' %}selected{% endif %}>In Bearbeitung</option>
+                    <option value="ERLEDIGT" {% if status_filter == 'ERLEDIGT' %}selected{% endif %}>Erledigt</option>
+                    <option value="ABGEBROCHEN" {% if status_filter == 'ABGEBROCHEN' %}selected{% endif %}>Abgebrochen</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="prioritaet" class="form-label">Priorität</label>
+                <select class="form-select" id="prioritaet" name="prioritaet">
+                    <option value="">Alle</option>
+                    <option value="HOCH" {% if prioritaet_filter == 'HOCH' %}selected{% endif %}>Hoch</option>
+                    <option value="NORMAL" {% if prioritaet_filter == 'NORMAL' %}selected{% endif %}>Normal</option>
+                    <option value="NIEDRIG" {% if prioritaet_filter == 'NIEDRIG' %}selected{% endif %}>Niedrig</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> Suchen
+                </button>
+                <a href="{% url 'vermietung:aktivitaet_list' %}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Zurücksetzen
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Results -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-list-check"></i> Aktivitäten
+            <span class="badge bg-secondary ms-2">{{ page_obj.paginator.count }}</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if page_obj %}
+        <div class="table-responsive">
+            <table class="table table-dark table-hover">
+                <thead>
+                    <tr>
+                        <th>Titel</th>
+                        <th>Status</th>
+                        <th>Priorität</th>
+                        <th>Fällig am</th>
+                        <th>Kontext</th>
+                        <th>Verantwortlich</th>
+                        <th class="text-end">Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for aktivitaet in page_obj %}
+                    <tr>
+                        <td>
+                            <strong>{{ aktivitaet.titel }}</strong>
+                            {% if aktivitaet.beschreibung %}
+                            <br><small class="text-muted">{{ aktivitaet.beschreibung|truncatewords:10 }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if aktivitaet.status == 'OFFEN' %}
+                            <span class="badge bg-info">Offen</span>
+                            {% elif aktivitaet.status == 'IN_BEARBEITUNG' %}
+                            <span class="badge bg-warning text-dark">In Bearbeitung</span>
+                            {% elif aktivitaet.status == 'ERLEDIGT' %}
+                            <span class="badge bg-success">Erledigt</span>
+                            {% else %}
+                            <span class="badge bg-danger">Abgebrochen</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if aktivitaet.prioritaet == 'HOCH' %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-exclamation-triangle-fill"></i> Hoch
+                            </span>
+                            {% elif aktivitaet.prioritaet == 'NORMAL' %}
+                            <span class="badge bg-warning text-dark">Normal</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Niedrig</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if aktivitaet.faellig_am %}
+                            {{ aktivitaet.faellig_am|date:"d.m.Y" }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>
+                            {% if aktivitaet.vertrag %}
+                                <i class="bi bi-file-earmark-text"></i>
+                                <a href="{% url 'vermietung:vertrag_detail' aktivitaet.vertrag.pk %}">
+                                    {{ aktivitaet.vertrag.vertragsnummer }}
+                                </a>
+                            {% elif aktivitaet.mietobjekt %}
+                                <i class="bi bi-building"></i>
+                                <a href="{% url 'vermietung:mietobjekt_detail' aktivitaet.mietobjekt.pk %}">
+                                    {{ aktivitaet.mietobjekt.name }}
+                                </a>
+                            {% elif aktivitaet.kunde %}
+                                <i class="bi bi-person"></i>
+                                <a href="{% url 'vermietung:kunde_detail' aktivitaet.kunde.pk %}">
+                                    {{ aktivitaet.kunde.full_name }}
+                                </a>
+                            {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <small>
+                            {% if aktivitaet.assigned_user %}
+                                <i class="bi bi-person-badge"></i> {{ aktivitaet.assigned_user.username }}
+                            {% endif %}
+                            {% if aktivitaet.assigned_supplier %}
+                                <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.name }}
+                            {% endif %}
+                            {% if not aktivitaet.assigned_user and not aktivitaet.assigned_supplier %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                            </small>
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'vermietung:aktivitaet_edit' aktivitaet.pk %}" 
+                               class="btn btn-sm btn-warning" 
+                               title="Bearbeiten">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            Keine Aktivitäten gefunden
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <nav aria-label="Page navigation" class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if prioritaet_filter %}&prioritaet={{ prioritaet_filter }}{% endif %}">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if prioritaet_filter %}&prioritaet={{ prioritaet_filter }}{% endif %}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link">
+                        Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}
+                    </span>
+                </li>
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if prioritaet_filter %}&prioritaet={{ prioritaet_filter }}{% endif %}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if prioritaet_filter %}&prioritaet={{ prioritaet_filter }}{% endif %}">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <p class="text-muted text-center my-4">Keine Aktivitäten vorhanden.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

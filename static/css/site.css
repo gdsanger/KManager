@@ -1,5 +1,5 @@
 /* 
- * KManager v1.0 - Custom Styles
+ * Domus - Custom Styles
  * Dark Mode Theme with Modern Color Palette
  */
 
@@ -329,6 +329,7 @@ a:hover {
     padding: 0;
     box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
     background-color: var(--bg-darker) !important;
+    overflow-y: auto;
 }
 
 .sidebar-heading {
@@ -360,6 +361,58 @@ a:hover {
     margin-right: 0.5rem;
     width: 20px;
     text-align: center;
+}
+
+/* Categorized Navigation Styles (AdminLTE-like) */
+.sidebar .nav-section {
+    margin-top: 0.5rem;
+}
+
+.sidebar .nav-category {
+    font-weight: 600;
+    color: var(--text-primary) !important;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+}
+
+.sidebar .nav-category:hover {
+    background-color: var(--bg-card);
+    color: var(--primary-color) !important;
+}
+
+.sidebar .nav-category i.bi-chevron-down {
+    font-size: 0.75rem;
+    transition: transform 0.3s ease;
+}
+
+.sidebar .nav-category[aria-expanded="true"] i.bi-chevron-down {
+    transform: rotate(180deg);
+}
+
+.sidebar .nav-sub-item {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 400;
+    border-left: 3px solid transparent;
+}
+
+.sidebar .nav-sub-item:hover {
+    color: var(--primary-color) !important;
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    border-left-color: var(--primary-color);
+}
+
+.sidebar .nav-sub-item.active {
+    color: var(--primary-color) !important;
+    background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+    border-left-color: var(--primary-color);
+}
+
+.sidebar .nav-sub-item i {
+    font-size: 0.85rem;
 }
 
 /* Main content offset for sidebar */

@@ -26,16 +26,16 @@ class SmtpSettingsViewTestCase(TestCase):
             is_staff=False
         )
     
-    def test_requires_staff(self):
-        """Test that SMTP settings requires staff user"""
+    def test_requires_login(self):
+        """Test that SMTP settings requires authenticated user"""
         # Not logged in
         response = self.client.get(reverse('smtp_settings'))
         self.assertEqual(response.status_code, 302)  # Redirect to login
         
-        # Regular user
+        # Regular user - should now have access
         self.client.login(username='regular', password='testpass123')
         response = self.client.get(reverse('smtp_settings'))
-        self.assertEqual(response.status_code, 302)  # Redirect
+        self.assertEqual(response.status_code, 200)  # Regular users can access
         
         # Staff user
         self.client.login(username='staff', password='testpass123')
@@ -101,10 +101,20 @@ class MailTemplateListViewTestCase(TestCase):
             from_name='Sender 2'
         )
     
-    def test_requires_staff(self):
-        """Test that list view requires staff user"""
+    def test_requires_login(self):
+        """Test that list view requires authenticated user"""
         response = self.client.get(reverse('mailtemplate_list'))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 302)  # Redirect to login
+        
+        # Regular user should have access now
+        regular_user = User.objects.create_user(
+            username='regular',
+            password='testpass123',
+            is_staff=False
+        )
+        self.client.login(username='regular', password='testpass123')
+        response = self.client.get(reverse('mailtemplate_list'))
+        self.assertEqual(response.status_code, 200)
     
     def test_list_templates(self):
         """Test listing mail templates"""
@@ -262,3 +272,60 @@ class MailTemplateDeleteViewTestCase(TestCase):
         
         # Check that template was deleted
         self.assertFalse(MailTemplate.objects.filter(pk=self.template.pk).exists())
+
+
+class MailTemplateDetailViewTestCase(TestCase):
+    """Test mail template detail view"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.client = Client()
+        self.staff_user = User.objects.create_user(
+            username='staff',
+            password='testpass123',
+            is_staff=True
+        )
+        self.regular_user = User.objects.create_user(
+            username='regular',
+            password='testpass123',
+            is_staff=False
+        )
+        
+        self.template = MailTemplate.objects.create(
+            key='detail_template',
+            subject='Detail Subject',
+            message_html='<p>Detail message</p>',
+            from_address='detail@example.com',
+            from_name='Detail Sender'
+        )
+    
+    def test_requires_login(self):
+        """Test that detail view requires authenticated user"""
+        response = self.client.get(reverse('mailtemplate_detail', args=[self.template.pk]))
+        self.assertEqual(response.status_code, 302)  # Redirect to login
+    
+    def test_detail_template_regular_user(self):
+        """Test GET request to detail template as regular user"""
+        self.client.login(username='regular', password='testpass123')
+        response = self.client.get(reverse('mailtemplate_detail', args=[self.template.pk]))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'detail_template')
+        self.assertContains(response, 'Detail Subject')
+        self.assertContains(response, 'Detail message')
+    
+    def test_detail_template_staff_user(self):
+        """Test GET request to detail template as staff user"""
+        self.client.login(username='staff', password='testpass123')
+        response = self.client.get(reverse('mailtemplate_detail', args=[self.template.pk]))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'detail_template')
+        self.assertContains(response, 'Detail Subject')
+    
+    def test_detail_template_not_found(self):
+        """Test detail view with non-existent template"""
+        self.client.login(username='staff', password='testpass123')
+        response = self.client.get(reverse('mailtemplate_detail', args=[99999]))
+        
+        self.assertEqual(response.status_code, 404)

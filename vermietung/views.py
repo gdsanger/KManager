@@ -8,12 +8,13 @@ from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
 from datetime import timedelta
-from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, OBJEKT_TYPE
+from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, OBJEKT_TYPE
 from core.models import Adresse
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
-    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm
+    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm
 )
+from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
 
 
@@ -149,9 +150,16 @@ def kunde_detail(request, pk):
     dokumente_page = request.GET.get('dokumente_page', 1)
     dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
     
+    # Get related aktivitaeten with pagination
+    aktivitaeten = kunde.aktivitaeten.select_related('assigned_user', 'assigned_supplier').order_by('-created_at')
+    aktivitaeten_paginator = Paginator(aktivitaeten, 10)
+    aktivitaeten_page = request.GET.get('aktivitaeten_page', 1)
+    aktivitaeten_page_obj = aktivitaeten_paginator.get_page(aktivitaeten_page)
+    
     context = {
         'kunde': kunde,
         'dokumente_page_obj': dokumente_page_obj,
+        'aktivitaeten_page_obj': aktivitaeten_page_obj,
     }
     
     return render(request, 'vermietung/kunden/detail.html', context)
@@ -707,12 +715,19 @@ def mietobjekt_detail(request, pk):
     bilder_page = request.GET.get('bilder_page', 1)
     bilder_page_obj = bilder_paginator.get_page(bilder_page)
     
+    # Get related aktivitaeten with pagination
+    aktivitaeten = mietobjekt.aktivitaeten.select_related('assigned_user', 'assigned_supplier').order_by('-created_at')
+    aktivitaeten_paginator = Paginator(aktivitaeten, 10)
+    aktivitaeten_page = request.GET.get('aktivitaeten_page', 1)
+    aktivitaeten_page_obj = aktivitaeten_paginator.get_page(aktivitaeten_page)
+    
     context = {
         'mietobjekt': mietobjekt,
         'vertraege_page_obj': vertraege_page_obj,
         'uebergaben_page_obj': uebergaben_page_obj,
         'dokumente_page_obj': dokumente_page_obj,
         'bilder_page_obj': bilder_page_obj,
+        'aktivitaeten_page_obj': aktivitaeten_page_obj,
     }
     
     return render(request, 'vermietung/mietobjekte/detail.html', context)
@@ -856,10 +871,17 @@ def vertrag_detail(request, pk):
     dokumente_page = request.GET.get('dokumente_page', 1)
     dokumente_page_obj = dokumente_paginator.get_page(dokumente_page)
     
+    # Get related aktivitaeten with pagination
+    aktivitaeten = vertrag.aktivitaeten.select_related('assigned_user', 'assigned_supplier').order_by('-created_at')
+    aktivitaeten_paginator = Paginator(aktivitaeten, 10)
+    aktivitaeten_page = request.GET.get('aktivitaeten_page', 1)
+    aktivitaeten_page_obj = aktivitaeten_paginator.get_page(aktivitaeten_page)
+    
     context = {
         'vertrag': vertrag,
         'uebergaben_page_obj': uebergaben_page_obj,
         'dokumente_page_obj': dokumente_page_obj,
+        'aktivitaeten_page_obj': aktivitaeten_page_obj,
     }
     
     return render(request, 'vermietung/vertraege/detail.html', context)
@@ -1459,3 +1481,265 @@ def mietobjekt_bild_delete(request, bild_id):
         messages.error(request, f'Fehler beim Löschen des Bildes: {str(e)}')
     
     return redirect('vermietung:mietobjekt_detail', pk=mietobjekt_id)
+
+
+# Aktivitaet (Activity/Task) Views
+
+@vermietung_required
+def aktivitaet_kanban(request):
+    """
+    Kanban view for all activities grouped by status.
+    This is the default view for activities accessible from main navigation.
+    """
+    # Get all activities with related data
+    aktivitaeten = Aktivitaet.objects.select_related(
+        'assigned_user', 'assigned_supplier', 
+        'mietobjekt', 'vertrag', 'kunde'
+    ).all()
+    
+    # Group by status
+    aktivitaeten_offen = aktivitaeten.filter(status='OFFEN').order_by('-prioritaet', 'faellig_am')
+    aktivitaeten_in_bearbeitung = aktivitaeten.filter(status='IN_BEARBEITUNG').order_by('-prioritaet', 'faellig_am')
+    aktivitaeten_erledigt = aktivitaeten.filter(status='ERLEDIGT').order_by('-updated_at')[:20]  # Limit completed
+    aktivitaeten_abgebrochen = aktivitaeten.filter(status='ABGEBROCHEN').order_by('-updated_at')[:20]  # Limit cancelled
+    
+    context = {
+        'aktivitaeten_offen': aktivitaeten_offen,
+        'aktivitaeten_in_bearbeitung': aktivitaeten_in_bearbeitung,
+        'aktivitaeten_erledigt': aktivitaeten_erledigt,
+        'aktivitaeten_abgebrochen': aktivitaeten_abgebrochen,
+    }
+    
+    return render(request, 'vermietung/aktivitaeten/kanban.html', context)
+
+
+@vermietung_required
+def aktivitaet_list(request):
+    """
+    List view for all activities with search and filtering.
+    """
+    # Get filter parameters
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '')
+    prioritaet_filter = request.GET.get('prioritaet', '')
+    assigned_user_filter = request.GET.get('assigned_user', '')
+    
+    # Base queryset with related data
+    aktivitaeten = Aktivitaet.objects.select_related(
+        'assigned_user', 'assigned_supplier',
+        'mietobjekt', 'vertrag', 'kunde'
+    ).all()
+    
+    # Apply search filter
+    if search_query:
+        aktivitaeten = aktivitaeten.filter(
+            Q(titel__icontains=search_query) |
+            Q(beschreibung__icontains=search_query)
+        )
+    
+    # Apply status filter
+    if status_filter:
+        aktivitaeten = aktivitaeten.filter(status=status_filter)
+    
+    # Apply priority filter
+    if prioritaet_filter:
+        aktivitaeten = aktivitaeten.filter(prioritaet=prioritaet_filter)
+    
+    # Apply assigned user filter
+    if assigned_user_filter:
+        aktivitaeten = aktivitaeten.filter(assigned_user_id=assigned_user_filter)
+    
+    # Order by priority and due date
+    aktivitaeten = aktivitaeten.order_by('-prioritaet', 'faellig_am', '-created_at')
+    
+    # Pagination
+    paginator = Paginator(aktivitaeten, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'prioritaet_filter': prioritaet_filter,
+        'assigned_user_filter': assigned_user_filter,
+    }
+    
+    return render(request, 'vermietung/aktivitaeten/list.html', context)
+
+
+@vermietung_required
+def aktivitaet_create(request, context_type=None, context_id=None):
+    """
+    Create a new activity.
+    Can be called with context (from Vertrag, MietObjekt, or Kunde) or standalone.
+    
+    Args:
+        context_type: Type of context ('vertrag', 'mietobjekt', or 'kunde')
+        context_id: ID of the context object
+    """
+    # Validate context if provided
+    context_obj = None
+    redirect_url = 'vermietung:aktivitaet_kanban'
+    
+    if context_type and context_id:
+        if context_type == 'vertrag':
+            context_obj = get_object_or_404(Vertrag, pk=context_id)
+            redirect_url = 'vermietung:vertrag_detail'
+        elif context_type == 'mietobjekt':
+            context_obj = get_object_or_404(MietObjekt, pk=context_id)
+            redirect_url = 'vermietung:mietobjekt_detail'
+        elif context_type == 'kunde':
+            context_obj = get_object_or_404(Adresse, pk=context_id, adressen_type='KUNDE')
+            redirect_url = 'vermietung:kunde_detail'
+        else:
+            messages.error(request, f'Ungültiger Kontext-Typ: {context_type}')
+            return redirect('vermietung:aktivitaet_kanban')
+    
+    if request.method == 'POST':
+        form = AktivitaetForm(
+            request.POST,
+            context_type=context_type,
+            context_id=context_id
+        )
+        if form.is_valid():
+            try:
+                aktivitaet = form.save()
+                messages.success(
+                    request,
+                    f'Aktivität "{aktivitaet.titel}" wurde erfolgreich angelegt.'
+                )
+                
+                # If redirecting to context detail, pass the context_id
+                if context_id:
+                    return redirect(redirect_url, pk=context_id)
+                else:
+                    return redirect('vermietung:aktivitaet_kanban')
+            except ValidationError as e:
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = AktivitaetForm(
+            context_type=context_type,
+            context_id=context_id
+        )
+    
+    context = {
+        'form': form,
+        'context_obj': context_obj,
+        'context_type': context_type,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/aktivitaeten/form.html', context)
+
+
+@vermietung_required
+def aktivitaet_edit(request, pk):
+    """
+    Edit an existing activity.
+    """
+    aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    
+    # Store original assigned_user to detect changes
+    original_assigned_user = aktivitaet.assigned_user
+    
+    if request.method == 'POST':
+        form = AktivitaetForm(request.POST, instance=aktivitaet)
+        if form.is_valid():
+            try:
+                aktivitaet = form.save()
+                
+                # Check if assigned_user changed
+                new_assigned_user = aktivitaet.assigned_user
+                if new_assigned_user and new_assigned_user != original_assigned_user:
+                    # Send email notification
+                    try:
+                        context_display = aktivitaet.get_context_display()
+                        send_mail(
+                            template_key='aktivitaet_assigned',
+                            to=[new_assigned_user.email],
+                            context={
+                                'user': new_assigned_user,
+                                'aktivitaet': aktivitaet,
+                                'context': context_display,
+                                'prioritaet': aktivitaet.get_prioritaet_display(),
+                                'faellig_am': aktivitaet.faellig_am,
+                            }
+                        )
+                        messages.info(
+                            request,
+                            f'Benachrichtigung wurde an {new_assigned_user.username} gesendet.'
+                        )
+                    except MailServiceError as e:
+                        messages.warning(
+                            request,
+                            f'Aktivität wurde gespeichert, aber E-Mail-Benachrichtigung konnte nicht gesendet werden: {str(e)}'
+                        )
+                
+                messages.success(
+                    request,
+                    f'Aktivität "{aktivitaet.titel}" wurde erfolgreich aktualisiert.'
+                )
+                return redirect('vermietung:aktivitaet_kanban')
+            except ValidationError as e:
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = AktivitaetForm(instance=aktivitaet)
+    
+    context = {
+        'form': form,
+        'aktivitaet': aktivitaet,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/aktivitaeten/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def aktivitaet_delete(request, pk):
+    """
+    Delete an activity.
+    """
+    aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    aktivitaet_titel = aktivitaet.titel
+    
+    try:
+        aktivitaet.delete()
+        messages.success(request, f'Aktivität "{aktivitaet_titel}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen der Aktivität: {str(e)}')
+    
+    return redirect('vermietung:aktivitaet_kanban')
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def aktivitaet_update_status(request, pk):
+    """
+    Quick update of activity status (for Kanban drag & drop).
+    Expects 'status' in POST data.
+    """
+    from .models import AKTIVITAET_STATUS
+    
+    aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    new_status = request.POST.get('status')
+    
+    # Validate status using model choices
+    valid_statuses = [choice[0] for choice in AKTIVITAET_STATUS]
+    if new_status not in valid_statuses:
+        return JsonResponse({'error': 'Ungültiger Status'}, status=400)
+    
+    try:
+        aktivitaet.status = new_status
+        aktivitaet.save()
+        return JsonResponse({
+            'success': True,
+            'message': f'Status wurde auf "{aktivitaet.get_status_display()}" geändert.'
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

@@ -1,0 +1,60 @@
+<div class="kanban-card" data-aktivitaet-id="{{ aktivitaet.id }}">
+    <div class="kanban-card-title">
+        {{ aktivitaet.titel }}
+    </div>
+    
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <!-- Priority Badge -->
+        {% if aktivitaet.prioritaet == 'HOCH' %}
+        <span class="badge bg-danger priority-badge">
+            <i class="bi bi-exclamation-triangle-fill"></i> Hoch
+        </span>
+        {% elif aktivitaet.prioritaet == 'NORMAL' %}
+        <span class="badge bg-warning text-dark priority-badge">
+            <i class="bi bi-dash-circle"></i> Normal
+        </span>
+        {% else %}
+        <span class="badge bg-secondary priority-badge">
+            <i class="bi bi-arrow-down-circle"></i> Niedrig
+        </span>
+        {% endif %}
+        
+        <!-- Context Icon -->
+        {% if aktivitaet.vertrag %}
+        <span class="badge bg-info context-icon" title="Vertrag: {{ aktivitaet.vertrag }}">
+            <i class="bi bi-file-earmark-text"></i>
+        </span>
+        {% elif aktivitaet.mietobjekt %}
+        <span class="badge bg-success context-icon" title="Mietobjekt: {{ aktivitaet.mietobjekt }}">
+            <i class="bi bi-building"></i>
+        </span>
+        {% elif aktivitaet.kunde %}
+        <span class="badge bg-primary context-icon" title="Kunde: {{ aktivitaet.kunde }}">
+            <i class="bi bi-person"></i>
+        </span>
+        {% endif %}
+    </div>
+    
+    <div class="kanban-card-meta">
+        {% if aktivitaet.faellig_am %}
+        <div class="mb-1">
+            <i class="bi bi-calendar-event"></i>
+            <small>{{ aktivitaet.faellig_am|date:"d.m.Y" }}</small>
+        </div>
+        {% endif %}
+        
+        {% if aktivitaet.assigned_user %}
+        <div class="mb-1">
+            <i class="bi bi-person-badge"></i>
+            <small>{{ aktivitaet.assigned_user.username }}</small>
+        </div>
+        {% endif %}
+        
+        {% if aktivitaet.assigned_supplier %}
+        <div>
+            <i class="bi bi-truck"></i>
+            <small>{{ aktivitaet.assigned_supplier.name }}</small>
+        </div>
+        {% endif %}
+    </div>
+</div>

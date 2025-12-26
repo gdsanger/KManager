@@ -17,7 +17,7 @@ def htmx_demo(request):
 
 
 # SMTP Settings Views
-@staff_member_required
+@login_required
 def smtp_settings(request):
     """View and edit SMTP settings (singleton)"""
     settings = SmtpSettings.get_settings()
@@ -35,14 +35,14 @@ def smtp_settings(request):
 
 
 # MailTemplate CRUD Views
-@staff_member_required
+@login_required
 def mailtemplate_list(request):
     """List all mail templates"""
     templates = MailTemplate.objects.all()
     return render(request, 'core/mailtemplate_list.html', {'templates': templates})
 
 
-@staff_member_required
+@login_required
 def mailtemplate_create(request):
     """Create a new mail template"""
     if request.method == 'POST':
@@ -61,7 +61,7 @@ def mailtemplate_create(request):
     })
 
 
-@staff_member_required
+@login_required
 def mailtemplate_edit(request, pk):
     """Edit an existing mail template"""
     template = get_object_or_404(MailTemplate, pk=pk)
@@ -83,7 +83,14 @@ def mailtemplate_edit(request, pk):
     })
 
 
-@staff_member_required
+@login_required
+def mailtemplate_detail(request, pk):
+    """View details of a mail template"""
+    template = get_object_or_404(MailTemplate, pk=pk)
+    return render(request, 'core/mailtemplate_detail.html', {'template': template})
+
+
+@login_required
 def mailtemplate_delete(request, pk):
     """Delete a mail template"""
     template = get_object_or_404(MailTemplate, pk=pk)

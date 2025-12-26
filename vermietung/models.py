@@ -1,5 +1,6 @@
 
 from django.db import models
+from django.db.models import Q
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -104,9 +105,30 @@ class MietObjekt(models.Model):
     def update_availability(self):
         """
         Update the availability based on currently active contracts.
-        MietObjekt is available if there are no currently active contracts.
+        MietObjekt is available if there are no currently active contracts containing it.
+        Works with both legacy vertraege and new vertragsobjekte relationships.
         """
-        has_active_contract = self.vertraege.currently_active().exists()
+        today = timezone.now().date()
+        
+        # Check for currently active contracts containing this MietObjekt
+        # via VertragsObjekt (new n:m relationship)
+        has_active_contract = VertragsObjekt.objects.filter(
+            mietobjekt=self,
+            vertrag__status='active',
+            vertrag__start__lte=today
+        ).filter(
+            Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
+        ).exists()
+        
+        # Also check legacy relationship during migration period
+        if not has_active_contract:
+            has_active_contract = self.vertraege_legacy.filter(
+                status='active',
+                start__lte=today
+            ).filter(
+                Q(ende__isnull=True) | Q(ende__gt=today)
+            ).exists()
+        
         self.verfuegbar = not has_active_contract
         self.save(update_fields=['verfuegbar'])
 
@@ -114,7 +136,7 @@ class MietObjekt(models.Model):
 class Vertrag(models.Model):
     """
     Rental contract model (Mietvertrag).
-    Each contract is for exactly one MietObjekt.
+    A contract can contain multiple MietObjekte (n:m relationship via VertragsObjekt).
     A MietObjekt can have multiple contracts over time (history).
     """
     vertragsnummer = models.CharField(
@@ -124,11 +146,15 @@ class Vertrag(models.Model):
         verbose_name="Vertragsnummer",
         help_text="Automatisch generierte Vertragsnummer im Format V-00000"
     )
+    # Legacy field - will be removed after migration
+    # Kept temporarily for backwards compatibility during migration
     mietobjekt = models.ForeignKey(
         MietObjekt,
         on_delete=models.PROTECT,
-        related_name='vertraege',
-        verbose_name="Mietobjekt"
+        related_name='vertraege_legacy',
+        verbose_name="Mietobjekt (Legacy)",
+        null=True,
+        blank=True
     )
     mieter = models.ForeignKey(
         Adresse,
@@ -180,11 +206,48 @@ class Vertrag(models.Model):
         """
         String representation of the contract.
         Note: This may cause database queries if mieter is not pre-loaded.
-        Use select_related('mieter', 'mietobjekt') in queries to avoid N+1 problems.
+        Use select_related('mieter') and prefetch_related('vertragsobjekte__mietobjekt') in queries to avoid N+1 problems.
         """
         mieter_name = self.mieter.full_name() if self.mieter else 'Unbekannt'
-        mietobjekt_name = self.mietobjekt.name if self.mietobjekt else 'Unbekannt'
+        
+        # For backwards compatibility during migration, check legacy field first
+        if self.mietobjekt:
+            mietobjekt_name = self.mietobjekt.name
+        else:
+            # Try to get from VertragsObjekt (new model)
+            first_obj = self.vertragsobjekte.first()
+            if first_obj:
+                mietobjekt_name = first_obj.mietobjekt.name
+                # If there are more objects, indicate that
+                count = self.vertragsobjekte.count()
+                if count > 1:
+                    mietobjekt_name += f" (+{count-1} weitere)"
+            else:
+                mietobjekt_name = 'Kein Objekt'
+        
         return f"{self.vertragsnummer} - {mietobjekt_name} ({mieter_name})"
+    
+    def get_mietobjekte(self):
+        """
+        Get all MietObjekt instances associated with this contract.
+        Returns a queryset of MietObjekt objects.
+        Works during migration by checking both legacy field and new VertragsObjekt.
+        """
+        mietobjekt_ids = set()
+        
+        # Legacy field (during migration)
+        if self.mietobjekt_id:
+            mietobjekt_ids.add(self.mietobjekt_id)
+        
+        # New VertragsObjekt relationship
+        mietobjekt_ids.update(
+            self.vertragsobjekte.values_list('mietobjekt_id', flat=True)
+        )
+        
+        # Return queryset of all MietObjekt instances
+        if mietobjekt_ids:
+            return MietObjekt.objects.filter(id__in=mietobjekt_ids)
+        return MietObjekt.objects.none()
     
     def is_currently_active(self):
         """
@@ -213,7 +276,9 @@ class Vertrag(models.Model):
         """
         Validate the contract data:
         1. If ende is set, it must be greater than start
-        2. Check for overlapping contracts for the same MietObjekt
+        2. For backwards compatibility, check overlaps on legacy mietobjekt field
+        
+        Note: Overlap checking for new n:m relationship is handled in VertragsObjekt.clean()
         """
         super().clean()
         
@@ -223,73 +288,62 @@ class Vertrag(models.Model):
                 'ende': 'Das Vertragsende muss nach dem Vertragsbeginn liegen.'
             })
         
-        # Check for overlapping contracts
-        if self.mietobjekt_id:
-            self._check_for_overlaps()
+        # Backwards compatibility: Check for overlaps on legacy mietobjekt field
+        # This is needed during migration period when tests/code still use the legacy field
+        if self.mietobjekt_id and self.status == 'active':
+            # Find other active contracts for this mietobjekt
+            other_contracts = Vertrag.objects.filter(
+                mietobjekt_id=self.mietobjekt_id,
+                status='active'
+            ).exclude(pk=self.pk if self.pk else None)
+            
+            # Check for date overlaps
+            for contract in other_contracts:
+                # Case 1: Existing contract has no end date (open-ended)
+                if contract.ende is None:
+                    if self.start >= contract.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Es existiert bereits ein laufender Vertrag ohne Enddatum '
+                                         f'({contract.vertragsnummer}) für dieses Mietobjekt ab {contract.start}.'
+                        })
+                    # New contract starts before existing open-ended contract
+                    if self.ende is None or self.ende > contract.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Dieser Vertrag würde mit einem bestehenden Vertrag '
+                                         f'({contract.vertragsnummer}) überlappen, der am {contract.start} beginnt.'
+                        })
+                
+                # Case 2: This contract has no end date
+                elif self.ende is None:
+                    # It blocks any existing contract that ends after this contract's start
+                    if contract.start < self.start and (contract.ende is None or contract.ende > self.start):
+                        raise ValidationError({
+                            'mietobjekt': f'Ein Vertrag ohne Enddatum würde mit bestehendem Vertrag '
+                                         f'({contract.vertragsnummer}) überlappen.'
+                        })
+                    # It blocks any existing contract that starts after this contract's start
+                    if contract.start >= self.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Ein Vertrag ohne Enddatum würde mit bestehendem Vertrag '
+                                         f'({contract.vertragsnummer}) überlappen.'
+                        })
+                
+                # Case 3: Both contracts have end dates
+                else:
+                    # Standard overlap check: A.start < B.end AND A.end > B.start
+                    if self.start < contract.ende and self.ende > contract.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Dieser Vertrag überschneidet sich mit bestehendem Vertrag '
+                                         f'({contract.vertragsnummer}) von {contract.start} bis {contract.ende}.'
+                        })
     
-    def _check_for_overlaps(self):
-        """
-        Check if this contract overlaps with any existing ACTIVE contracts for the same MietObjekt.
-        Only active contracts are considered for overlap checking.
-        A contract overlaps if:
-        - Contract A starts before Contract B ends AND Contract A ends after Contract B starts
-        - Special case: if a contract has no end date (NULL), it blocks all future starts
-        """
-        # Get all other ACTIVE contracts for the same MietObjekt
-        existing_contracts = Vertrag.objects.filter(
-            mietobjekt=self.mietobjekt,
-            status='active'  # Only check active contracts
-        ).exclude(pk=self.pk if self.pk else None)
-        
-        # Only check for overlaps if this contract is active
-        if self.status != 'active':
-            return
-        
-        for contract in existing_contracts:
-            # Case 1: Existing contract has no end date (open-ended)
-            # It blocks any new contract that starts after its start date
-            if contract.ende is None:
-                if self.start >= contract.start:
-                    raise ValidationError({
-                        'start': f'Es existiert bereits ein laufender Vertrag ohne Enddatum '
-                                f'({contract.vertragsnummer}) für dieses Mietobjekt ab {contract.start}.'
-                    })
-                # New contract starts before existing open-ended contract
-                if self.ende is None or self.ende > contract.start:
-                    raise ValidationError({
-                        'ende': f'Dieser Vertrag würde mit einem bestehenden Vertrag '
-                               f'({contract.vertragsnummer}) überlappen, der am {contract.start} beginnt.'
-                    })
-            
-            # Case 2: This contract has no end date
-            elif self.ende is None:
-                # It blocks any existing contract that ends after this contract's start
-                if contract.start < self.start and (contract.ende is None or contract.ende > self.start):
-                    raise ValidationError({
-                        'start': f'Ein Vertrag ohne Enddatum würde mit bestehendem Vertrag '
-                                f'({contract.vertragsnummer}) überlappen.'
-                    })
-                # It blocks any existing contract that starts after this contract's start
-                if contract.start >= self.start:
-                    raise ValidationError({
-                        'start': f'Ein Vertrag ohne Enddatum würde mit bestehendem Vertrag '
-                                f'({contract.vertragsnummer}) überlappen.'
-                    })
-            
-            # Case 3: Both contracts have end dates
-            else:
-                # Standard overlap check: A.start < B.end AND A.end > B.start
-                if self.start < contract.ende and self.ende > contract.start:
-                    raise ValidationError({
-                        'start': f'Dieser Vertrag überschneidet sich mit bestehendem Vertrag '
-                                f'({contract.vertragsnummer}) von {contract.start} bis {contract.ende}.'
-                    })
     
     def save(self, *args, **kwargs):
         """
         Override save to auto-generate contract number if not set.
         Uses database-level locking to prevent race conditions.
-        Updates the MietObjekt availability after saving.
+        Also handles backwards compatibility: if legacy mietobjekt field is set,
+        automatically creates VertragsObjekt entry.
         """
         if not self.vertragsnummer:
             self.vertragsnummer = self._generate_vertragsnummer()
@@ -297,29 +351,64 @@ class Vertrag(models.Model):
         # Run full_clean to trigger validation
         self.full_clean()
         
+        is_new = self.pk is None
+        had_legacy_mietobjekt = self.mietobjekt_id
+        
         super().save(*args, **kwargs)
         
-        # Update availability of the MietObjekt after saving
-        self.update_mietobjekt_availability()
+        # Backwards compatibility: If legacy mietobjekt field is used,
+        # automatically create/update VertragsObjekt entry
+        if had_legacy_mietobjekt:
+            # Check if VertragsObjekt already exists for this combination
+            existing = VertragsObjekt.objects.filter(
+                vertrag=self,
+                mietobjekt_id=had_legacy_mietobjekt
+            ).exists()
+            
+            if not existing:
+                # Create VertragsObjekt entry
+                VertragsObjekt.objects.create(
+                    vertrag=self,
+                    mietobjekt_id=had_legacy_mietobjekt
+                )
+            
+            # Update availability
+            self.update_mietobjekte_availability()
     
-    def update_mietobjekt_availability(self):
+    def update_mietobjekte_availability(self):
         """
-        Update the availability of the associated MietObjekt.
-        MietObjekt is available if there are no currently active contracts.
+        Update the availability of all associated MietObjekte.
+        MietObjekt is available if there are no currently active contracts containing it.
         Public method that can be called from admin actions.
         """
-        if not self.mietobjekt_id:
-            return
+        # Get all mietobjekte for this contract (both legacy and new)
+        mietobjekt_ids = set()
         
-        # Check if there are any currently active contracts for this MietObjekt
-        has_active_contract = Vertrag.objects.filter(
-            mietobjekt_id=self.mietobjekt_id
-        ).currently_active().exists()
+        # Legacy field (during migration)
+        if self.mietobjekt_id:
+            mietobjekt_ids.add(self.mietobjekt_id)
         
-        # Update the MietObjekt directly without triggering save
-        MietObjekt.objects.filter(pk=self.mietobjekt_id).update(
-            verfuegbar=not has_active_contract
+        # New VertragsObjekt relationship
+        mietobjekt_ids.update(
+            self.vertragsobjekte.values_list('mietobjekt_id', flat=True)
         )
+        
+        # Update availability for each mietobjekt
+        for mietobjekt_id in mietobjekt_ids:
+            # Check if there are any currently active contracts containing this MietObjekt
+            has_active_contract = VertragsObjekt.objects.filter(
+                mietobjekt_id=mietobjekt_id,
+                vertrag__status='active'
+            ).select_related('vertrag').filter(
+                vertrag__start__lte=timezone.now().date()
+            ).filter(
+                Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=timezone.now().date())
+            ).exists()
+            
+            # Update the MietObjekt directly without triggering save
+            MietObjekt.objects.filter(pk=mietobjekt_id).update(
+                verfuegbar=not has_active_contract
+            )
     
     def _generate_vertragsnummer(self):
         """
@@ -345,6 +434,79 @@ class Vertrag(models.Model):
             
             # Format as V-00000
             return f"V-{next_number:05d}"
+
+
+class VertragsObjekt(models.Model):
+    """
+    Junction model for n:m relationship between Vertrag and MietObjekt.
+    Represents a rental object within a contract.
+    A contract can contain multiple rental objects, and a rental object can be in multiple contracts (over time).
+    """
+    vertrag = models.ForeignKey(
+        Vertrag,
+        on_delete=models.CASCADE,
+        related_name='vertragsobjekte',
+        verbose_name="Vertrag"
+    )
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.PROTECT,
+        related_name='vertragsobjekte',
+        verbose_name="Mietobjekt"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am",
+        help_text="Zeitpunkt der Zuordnung"
+    )
+    
+    class Meta:
+        verbose_name = "Vertragsobjekt"
+        verbose_name_plural = "Vertragsobjekte"
+        # Ensure a mietobjekt can only be added once to a contract
+        unique_together = [['vertrag', 'mietobjekt']]
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"{self.vertrag.vertragsnummer} - {self.mietobjekt.name}"
+    
+    def clean(self):
+        """
+        Validate that the mietobjekt is not in another active contract.
+        Only active contracts are checked for overlaps.
+        """
+        super().clean()
+        
+        # Only validate if this is for an active contract
+        if not self.vertrag_id or self.vertrag.status != 'active':
+            return
+        
+        # Check if this mietobjekt is in any other currently active contract
+        # A contract is currently active if status='active' and start <= today and (ende is NULL or ende > today)
+        today = timezone.now().date()
+        
+        # Find other active contracts that contain this mietobjekt
+        overlapping_contracts = VertragsObjekt.objects.filter(
+            mietobjekt=self.mietobjekt,
+            vertrag__status='active',
+            vertrag__start__lte=today
+        ).filter(
+            Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
+        ).exclude(
+            vertrag_id=self.vertrag_id
+        ).select_related('vertrag')
+        
+        if overlapping_contracts.exists():
+            other_vertrag = overlapping_contracts.first().vertrag
+            raise ValidationError({
+                'mietobjekt': f'Das Mietobjekt "{self.mietobjekt.name}" ist bereits in einem '
+                             f'aktiven Vertrag ({other_vertrag.vertragsnummer}) enthalten.'
+            })
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 UEBERGABE_TYP = [
@@ -455,30 +617,60 @@ class Uebergabeprotokoll(models.Model):
     def clean(self):
         """
         Validate the handover protocol data:
-        1. MietObjekt must match the Vertrag's MietObjekt
+        1. MietObjekt must belong to the Vertrag (via VertragsObjekt or legacy field)
         2. Uebergabetag should be within or near the contract period
         """
         super().clean()
         
-        # Validate that MietObjekt matches Vertrag's MietObjekt
+        # Validate that MietObjekt belongs to the Vertrag
         # Use _id fields to avoid triggering additional queries
         if self.vertrag_id and self.mietobjekt_id:
-            # We need to fetch the vertrag's mietobjekt_id
-            # This is only done during validation, not on every access
-            from django.db.models import F
-            vertrag_mietobjekt_id = Vertrag.objects.filter(
-                pk=self.vertrag_id
-            ).values_list('mietobjekt_id', flat=True).first()
+            # Check if mietobjekt is in this vertrag (via VertragsObjekt or legacy field)
+            is_in_vertrag = False
             
-            if vertrag_mietobjekt_id != self.mietobjekt_id:
-                # Get mietobjekt name for better error message
-                mietobjekt_name = MietObjekt.objects.filter(
-                    pk=vertrag_mietobjekt_id
-                ).values_list('name', flat=True).first()
-                raise ValidationError({
-                    'mietobjekt': f'Das Mietobjekt muss zum Vertrag passen. '
-                                 f'Der Vertrag ist für "{mietobjekt_name}".'
-                })
+            # Check new VertragsObjekt relationship
+            is_in_vertrag = VertragsObjekt.objects.filter(
+                vertrag_id=self.vertrag_id,
+                mietobjekt_id=self.mietobjekt_id
+            ).exists()
+            
+            # Also check legacy field during migration
+            if not is_in_vertrag:
+                vertrag_legacy_mietobjekt_id = Vertrag.objects.filter(
+                    pk=self.vertrag_id
+                ).values_list('mietobjekt_id', flat=True).first()
+                is_in_vertrag = (vertrag_legacy_mietobjekt_id == self.mietobjekt_id)
+            
+            if not is_in_vertrag:
+                # Get available mietobjekte names for better error message
+                vertrag_mietobjekte = []
+                
+                # Get from VertragsObjekt
+                vertrag_mietobjekte.extend(
+                    VertragsObjekt.objects.filter(
+                        vertrag_id=self.vertrag_id
+                    ).values_list('mietobjekt__name', flat=True)
+                )
+                
+                # Get from legacy field
+                legacy_name = Vertrag.objects.filter(
+                    pk=self.vertrag_id,
+                    mietobjekt__isnull=False
+                ).values_list('mietobjekt__name', flat=True).first()
+                if legacy_name:
+                    vertrag_mietobjekte.append(legacy_name)
+                
+                if vertrag_mietobjekte:
+                    mietobjekte_str = ', '.join(f'"{name}"' for name in vertrag_mietobjekte)
+                    raise ValidationError({
+                        'mietobjekt': f'Das Mietobjekt muss zum Vertrag gehören. '
+                                     f'Verfügbare Objekte: {mietobjekte_str}.'
+                    })
+                else:
+                    raise ValidationError({
+                        'mietobjekt': 'Das Mietobjekt muss zum Vertrag gehören. '
+                                     'Dieser Vertrag hat keine zugeordneten Objekte.'
+                    })
         
         # Validate that uebergabetag is reasonable relative to contract dates
         if self.vertrag_id and self.uebergabetag:
@@ -1183,4 +1375,206 @@ class MietObjektBild(models.Model):
             )
         
         return bild
+
+
+# Status choices for Aktivitaet
+AKTIVITAET_STATUS = [
+    ('OFFEN', 'Offen'),
+    ('IN_BEARBEITUNG', 'In Bearbeitung'),
+    ('ERLEDIGT', 'Erledigt'),
+    ('ABGEBROCHEN', 'Abgebrochen'),
+]
+
+# Priority choices for Aktivitaet
+AKTIVITAET_PRIORITAET = [
+    ('NIEDRIG', 'Niedrig'),
+    ('NORMAL', 'Normal'),
+    ('HOCH', 'Hoch'),
+]
+
+
+class Aktivitaet(models.Model):
+    """
+    Task/Activity model for the Vermietung module.
+    
+    Each activity is linked to exactly one context:
+    - MietObjekt (rental object)
+    - Vertrag (contract)
+    - Kunde (customer address)
+    
+    Assignment is flexible and optional:
+    - Can be assigned to internal user (assigned_user)
+    - Can be assigned to external supplier (assigned_supplier)
+    - Can be assigned to both
+    - Can be unassigned
+    """
+    # Core fields
+    titel = models.CharField(
+        max_length=200,
+        verbose_name="Titel",
+        help_text="Titel der Aktivität"
+    )
+    
+    beschreibung = models.TextField(
+        blank=True,
+        verbose_name="Beschreibung",
+        help_text="Detaillierte Beschreibung der Aktivität"
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=AKTIVITAET_STATUS,
+        default='OFFEN',
+        verbose_name="Status",
+        help_text="Status der Aktivität"
+    )
+    
+    prioritaet = models.CharField(
+        max_length=20,
+        choices=AKTIVITAET_PRIORITAET,
+        default='NORMAL',
+        verbose_name="Priorität",
+        help_text="Priorität der Aktivität"
+    )
+    
+    faellig_am = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Fällig am",
+        help_text="Fälligkeitsdatum der Aktivität"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am",
+        help_text="Zeitpunkt der Erstellung"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Aktualisiert am",
+        help_text="Zeitpunkt der letzten Aktualisierung"
+    )
+    
+    # Context fields (exactly one must be set)
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Mietobjekt"
+    )
+    
+    vertrag = models.ForeignKey(
+        Vertrag,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Vertrag"
+    )
+    
+    kunde = models.ForeignKey(
+        Adresse,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Kunde",
+        limit_choices_to={'adressen_type': 'KUNDE'}
+    )
+    
+    # Assignment fields (both optional, flexible combinations)
+    assigned_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Zugewiesen an (Intern)",
+        help_text="Interner Benutzer, dem die Aktivität zugewiesen ist"
+    )
+    
+    assigned_supplier = models.ForeignKey(
+        Adresse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten_als_lieferant',
+        verbose_name="Zugewiesen an (Extern)",
+        help_text="Externer Lieferant, dem die Aktivität zugewiesen ist",
+        limit_choices_to={'adressen_type': 'LIEFERANT'}
+    )
+    
+    class Meta:
+        verbose_name = "Aktivität"
+        verbose_name_plural = "Aktivitäten"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['faellig_am']),
+            models.Index(fields=['assigned_user']),
+            models.Index(fields=['assigned_supplier']),
+        ]
+    
+    def __str__(self):
+        """String representation of the activity."""
+        return f"{self.titel} ({self.get_status_display()})"
+    
+    def clean(self):
+        """
+        Validate the activity data:
+        1. Exactly one context must be set (mietobjekt, vertrag, or kunde)
+        2. If assigned_supplier is set, it must be of type LIEFERANT
+        """
+        super().clean()
+        
+        # Check context constraint: exactly one must be set
+        context_fields = [
+            self.mietobjekt_id,
+            self.vertrag_id,
+            self.kunde_id
+        ]
+        set_contexts = [field for field in context_fields if field is not None]
+        
+        if len(set_contexts) == 0:
+            raise ValidationError(
+                'Die Aktivität muss genau einem Kontext zugeordnet werden '
+                '(Mietobjekt, Vertrag oder Kunde).'
+            )
+        
+        if len(set_contexts) > 1:
+            raise ValidationError(
+                'Die Aktivität kann nur einem einzigen Kontext zugeordnet werden '
+                '(Mietobjekt, Vertrag oder Kunde).'
+            )
+        
+        # Check assigned_supplier is of type LIEFERANT
+        if self.assigned_supplier_id:
+            # We need to check the actual adressen_type
+            # Use _id to avoid additional queries during validation
+            supplier = Adresse.objects.filter(
+                pk=self.assigned_supplier_id
+            ).values_list('adressen_type', flat=True).first()
+            
+            if supplier != 'LIEFERANT':
+                raise ValidationError({
+                    'assigned_supplier': 'Die zugewiesene Adresse muss vom Typ "Lieferant" sein.'
+                })
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def get_context_display(self):
+        """Get a display string for the linked context."""
+        if self.mietobjekt:
+            return f"Mietobjekt: {self.mietobjekt}"
+        elif self.vertrag:
+            return f"Vertrag: {self.vertrag}"
+        elif self.kunde:
+            return f"Kunde: {self.kunde}"
+        return "Kein Kontext"
 
