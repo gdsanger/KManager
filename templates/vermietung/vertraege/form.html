@@ -33,17 +33,17 @@
                     <h5 class="mb-3"><i class="bi bi-file-earmark-text"></i> Vertragsdaten</h5>
                     
                     <div class="mb-3">
-                        <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">{{ form.mietobjekt.label }}</label>
-                        {{ form.mietobjekt }}
-                        {% if form.mietobjekt.errors %}
-                        <div class="text-danger small">{{ form.mietobjekt.errors }}</div>
+                        <label for="{{ form.mietobjekte.id_for_label }}" class="form-label">{{ form.mietobjekte.label }}</label>
+                        {{ form.mietobjekte }}
+                        {% if form.mietobjekte.errors %}
+                        <div class="text-danger small">{{ form.mietobjekte.errors }}</div>
                         {% endif %}
-                        {% if form.mietobjekt.help_text %}
-                        <div class="form-text">{{ form.mietobjekt.help_text }}</div>
+                        {% if form.mietobjekte.help_text %}
+                        <div class="form-text">{{ form.mietobjekte.help_text }}</div>
                         {% endif %}
                         <div id="availabilityWarning" class="alert alert-warning mt-2" style="display: none;">
                             <i class="bi bi-exclamation-triangle"></i> 
-                            <strong>Warnung:</strong> Dieses Mietobjekt ist aktuell als "nicht verfügbar" markiert. 
+                            <strong>Warnung:</strong> Ein oder mehrere Mietobjekte sind aktuell als "nicht verfügbar" markiert. 
                             Es könnte bereits einen aktiven Vertrag geben.
                         </div>
                     </div>
@@ -155,7 +155,7 @@
                     <strong>Vertragsnummer:</strong> Die Vertragsnummer wird automatisch beim Speichern generiert (Format: V-00000).
                 </p>
                 <p class="text-muted small mb-2">
-                    <strong>Mietobjekt:</strong> Wählen Sie das zu vermietende Objekt aus. Sie erhalten eine Warnung, wenn das Objekt bereits vermietet ist.
+                    <strong>Mietobjekte:</strong> Wählen Sie ein oder mehrere Objekte aus (Mehrfachauswahl). Sie erhalten eine Warnung, wenn Objekte bereits vermietet sind.
                 </p>
                 <p class="text-muted small mb-2">
                     <strong>Mieter:</strong> Nur Adressen vom Typ "Kunde" können als Mieter ausgewählt werden.
@@ -164,7 +164,7 @@
                     <strong>Zeitraum:</strong> Der Vertragsbeginn ist Pflicht. Das Enddatum ist optional (leer = unbefristet).
                 </p>
                 <p class="text-muted small mb-0">
-                    <strong>Verfügbarkeit:</strong> Die Verfügbarkeit des Mietobjekts wird automatisch basierend auf aktiven Verträgen aktualisiert.
+                    <strong>Verfügbarkeit:</strong> Die Verfügbarkeit der Mietobjekte wird automatisch basierend auf aktiven Verträgen aktualisiert.
                 </p>
             </div>
         </div>
@@ -192,7 +192,7 @@
 <script>
 // Get mietobjekt availability data
 const mietobjektData = {
-    {% for obj in form.fields.mietobjekt.queryset %}
+    {% for obj in form.fields.mietobjekte.queryset %}
     {{ obj.pk }}: {
         verfuegbar: {% if obj.verfuegbar %}true{% else %}false{% endif %},
         mietpreis: {{ obj.mietpreis }},
@@ -201,43 +201,59 @@ const mietobjektData = {
     {% endfor %}
 };
 
-// Show availability warning and pre-fill prices
-document.getElementById('id_mietobjekt').addEventListener('change', function() {
-    const mietobjektId = this.value;
-    const warningDiv = document.getElementById('availabilityWarning');
+// Handle multi-select checkboxes for availability warning
+const checkboxes = document.querySelectorAll('input[name="mietobjekte"]');
+const warningDiv = document.getElementById('availabilityWarning');
+
+function updateAvailabilityWarning() {
+    let hasUnavailable = false;
+    let totalMiete = 0;
+    let totalKaution = 0;
+    let count = 0;
     
-    if (mietobjektId && mietobjektData[mietobjektId]) {
-        const obj = mietobjektData[mietobjektId];
-        
-        // Show warning if not available
-        if (!obj.verfuegbar) {
-            warningDiv.style.display = 'block';
-        } else {
-            warningDiv.style.display = 'none';
+    checkboxes.forEach(function(checkbox) {
+        if (checkbox.checked) {
+            const objId = checkbox.value;
+            if (mietobjektData[objId]) {
+                const obj = mietobjektData[objId];
+                if (!obj.verfuegbar) {
+                    hasUnavailable = true;
+                }
+                totalMiete += parseFloat(obj.mietpreis) || 0;
+                totalKaution += parseFloat(obj.kaution) || 0;
+                count++;
+            }
         }
-        
-        // Pre-fill miete if empty
-        const mieteField = document.getElementById('id_miete');
-        if (mieteField && !mieteField.value) {
-            mieteField.value = obj.mietpreis;
-        }
-        
-        // Pre-fill kaution if empty
-        const kautionField = document.getElementById('id_kaution');
-        if (kautionField && !kautionField.value && obj.kaution) {
-            kautionField.value = obj.kaution;
-        }
+    });
+    
+    // Show/hide warning
+    if (hasUnavailable) {
+        warningDiv.style.display = 'block';
     } else {
         warningDiv.style.display = 'none';
     }
+    
+    // Pre-fill total miete if empty and objects are selected
+    const mieteField = document.getElementById('id_miete');
+    if (mieteField && !mieteField.value && count > 0) {
+        mieteField.value = totalMiete.toFixed(2);
+    }
+    
+    // Pre-fill total kaution if empty and objects are selected
+    const kautionField = document.getElementById('id_kaution');
+    if (kautionField && !kautionField.value && count > 0 && totalKaution > 0) {
+        kautionField.value = totalKaution.toFixed(2);
+    }
+}
+
+// Add change listener to all checkboxes
+checkboxes.forEach(function(checkbox) {
+    checkbox.addEventListener('change', updateAvailabilityWarning);
 });
 
-// Trigger on page load if mietobjekt is already selected
+// Trigger on page load if any mietobjekte are already selected
 window.addEventListener('DOMContentLoaded', function() {
-    const mietobjektSelect = document.getElementById('id_mietobjekt');
-    if (mietobjektSelect.value) {
-        mietobjektSelect.dispatchEvent(new Event('change'));
-    }
+    updateAvailabilityWarning();
 });
 </script>
 {% endblock %}
