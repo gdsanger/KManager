@@ -208,7 +208,12 @@
             <div class="card-header">
                 <ul class="nav nav-tabs card-header-tabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="uebergaben-tab" data-bs-toggle="tab" data-bs-target="#uebergaben" type="button" role="tab">
+                        <button class="nav-link active" id="aktivitaeten-tab" data-bs-toggle="tab" data-bs-target="#aktivitaeten" type="button" role="tab">
+                            <i class="bi bi-list-check"></i> Aktivitäten ({{ aktivitaeten_page_obj.paginator.count }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="uebergaben-tab" data-bs-toggle="tab" data-bs-target="#uebergaben" type="button" role="tab">
                             <i class="bi bi-clipboard-check"></i> Übergabeprotokolle ({{ uebergaben_page_obj.paginator.count }})
                         </button>
                     </li>
@@ -221,8 +226,124 @@
             </div>
             <div class="card-body">
                 <div class="tab-content">
+                    <!-- Aktivitäten Tab -->
+                    <div class="tab-pane fade show active" id="aktivitaeten" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Aktivitäten für diesen Vertrag</h6>
+                            <a href="{% url 'vermietung:aktivitaet_create_from_vertrag' vertrag.pk %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-plus-circle"></i> Neue Aktivität
+                            </a>
+                        </div>
+                        {% if aktivitaeten_page_obj %}
+                            <div class="table-responsive">
+                                <table class="table table-dark table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Titel</th>
+                                            <th>Status</th>
+                                            <th>Priorität</th>
+                                            <th>Fällig am</th>
+                                            <th>Verantwortlich</th>
+                                            <th class="text-end">Aktionen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for aktivitaet in aktivitaeten_page_obj %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ aktivitaet.titel }}</strong>
+                                                {% if aktivitaet.beschreibung %}
+                                                <br><small class="text-muted">{{ aktivitaet.beschreibung|truncatewords:8 }}</small>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if aktivitaet.status == 'OFFEN' %}
+                                                    <span class="badge bg-info">Offen</span>
+                                                {% elif aktivitaet.status == 'IN_BEARBEITUNG' %}
+                                                    <span class="badge bg-warning text-dark">In Bearb.</span>
+                                                {% elif aktivitaet.status == 'ERLEDIGT' %}
+                                                    <span class="badge bg-success">Erledigt</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">Abgebr.</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if aktivitaet.prioritaet == 'HOCH' %}
+                                                    <span class="badge bg-danger">Hoch</span>
+                                                {% elif aktivitaet.prioritaet == 'NORMAL' %}
+                                                    <span class="badge bg-warning text-dark">Normal</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Niedrig</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if aktivitaet.faellig_am %}
+                                                    {{ aktivitaet.faellig_am|date:"d.m.Y" }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <small>
+                                                {% if aktivitaet.assigned_user %}
+                                                    <i class="bi bi-person-badge"></i> {{ aktivitaet.assigned_user.username }}
+                                                {% endif %}
+                                                {% if aktivitaet.assigned_supplier %}
+                                                    <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.name }}
+                                                {% endif %}
+                                                {% if not aktivitaet.assigned_user and not aktivitaet.assigned_supplier %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                                </small>
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="{% url 'vermietung:aktivitaet_edit' aktivitaet.pk %}" class="btn btn-sm btn-outline-warning">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">
+                                                <i class="bi bi-inbox"></i> Keine Aktivitäten vorhanden
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Pagination for Aktivitäten -->
+                            {% if aktivitaeten_page_obj.has_other_pages %}
+                            <nav aria-label="Aktivitäten Pagination" class="mt-3">
+                                <ul class="pagination pagination-sm justify-content-center">
+                                    {% if aktivitaeten_page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?aktivitaeten_page={{ aktivitaeten_page_obj.previous_page_number }}">
+                                            <i class="bi bi-chevron-left"></i>
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ aktivitaeten_page_obj.number }}</span>
+                                    </li>
+                                    {% if aktivitaeten_page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?aktivitaeten_page={{ aktivitaeten_page_obj.next_page_number }}">
+                                            <i class="bi bi-chevron-right"></i>
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-muted text-center my-4">Keine Aktivitäten vorhanden.</p>
+                        {% endif %}
+                    </div>
+
                     <!-- Übergabeprotokolle Tab -->
-                    <div class="tab-pane fade show active" id="uebergaben" role="tabpanel">
+                    <div class="tab-pane fade" id="uebergaben" role="tabpanel">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h6 class="mb-0">Übergabeprotokolle für diesen Vertrag</h6>
                             <a href="{% url 'vermietung:uebergabeprotokoll_create_from_vertrag' vertrag.pk %}" class="btn btn-sm btn-primary">

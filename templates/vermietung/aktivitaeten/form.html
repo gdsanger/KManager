@@ -1,0 +1,197 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{% block title %}
+{% if is_create %}Neue Aktivität{% else %}Aktivität bearbeiten{% endif %} - K-Manager v1.0
+{% endblock %}
+
+{% block page_title %}
+{% if is_create %}Neue Aktivität anlegen{% else %}Aktivität bearbeiten{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check"></i>
+                    {% if is_create %}Neue Aktivität{% else %}Aktivität bearbeiten{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if context_obj %}
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Kontext:</strong>
+                    {% if context_type == 'vertrag' %}
+                        Vertrag: {{ context_obj }}
+                    {% elif context_type == 'mietobjekt' %}
+                        Mietobjekt: {{ context_obj }}
+                    {% elif context_type == 'kunde' %}
+                        Kunde: {{ context_obj }}
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <!-- Titel -->
+                    <div class="mb-3">
+                        <label for="{{ form.titel.id_for_label }}" class="form-label">
+                            {{ form.titel.label }}
+                        </label>
+                        {{ form.titel }}
+                        {% if form.titel.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.titel.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.titel.help_text %}
+                        <div class="form-text">{{ form.titel.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Beschreibung -->
+                    <div class="mb-3">
+                        <label for="{{ form.beschreibung.id_for_label }}" class="form-label">
+                            {{ form.beschreibung.label }}
+                        </label>
+                        {{ form.beschreibung }}
+                        {% if form.beschreibung.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.beschreibung.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.beschreibung.help_text %}
+                        <div class="form-text">{{ form.beschreibung.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row">
+                        <!-- Status -->
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.status.id_for_label }}" class="form-label">
+                                {{ form.status.label }}
+                            </label>
+                            {{ form.status }}
+                            {% if form.status.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.status.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Priorität -->
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.prioritaet.id_for_label }}" class="form-label">
+                                {{ form.prioritaet.label }}
+                            </label>
+                            {{ form.prioritaet }}
+                            {% if form.prioritaet.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.prioritaet.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Fällig am -->
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.faellig_am.id_for_label }}" class="form-label">
+                                {{ form.faellig_am.label }}
+                            </label>
+                            {{ form.faellig_am }}
+                            {% if form.faellig_am.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.faellig_am.errors }}
+                            </div>
+                            {% endif %}
+                            {% if form.faellig_am.help_text %}
+                            <div class="form-text">{{ form.faellig_am.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h6 class="mb-3">Zuweisung</h6>
+
+                    <!-- Interner Verantwortlicher -->
+                    <div class="mb-3">
+                        <label for="{{ form.assigned_user.id_for_label }}" class="form-label">
+                            {{ form.assigned_user.label }}
+                        </label>
+                        {{ form.assigned_user }}
+                        {% if form.assigned_user.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.assigned_user.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.assigned_user.help_text %}
+                        <div class="form-text">{{ form.assigned_user.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Lieferant -->
+                    <div class="mb-3">
+                        <label for="{{ form.assigned_supplier.id_for_label }}" class="form-label">
+                            {{ form.assigned_supplier.label }}
+                        </label>
+                        {{ form.assigned_supplier }}
+                        {% if form.assigned_supplier.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.assigned_supplier.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.assigned_supplier.help_text %}
+                        <div class="form-text">{{ form.assigned_supplier.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Hidden context fields (already set via form) -->
+                    {{ form.mietobjekt }}
+                    {{ form.vertrag }}
+                    {{ form.kunde }}
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i>
+                            {% if is_create %}Anlegen{% else %}Speichern{% endif %}
+                        </button>
+                    </div>
+                </form>
+
+                {% if not is_create %}
+                <hr class="my-4">
+                <div class="d-grid">
+                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                        <i class="bi bi-trash"></i> Aktivität löschen
+                    </button>
+                </div>
+
+                <form id="deleteForm" method="post" action="{% url 'vermietung:aktivitaet_delete' aktivitaet.pk %}" style="display: none;">
+                    {% csrf_token %}
+                </form>
+
+                <script>
+                function confirmDelete() {
+                    if (confirm('Möchten Sie diese Aktivität wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+                        document.getElementById('deleteForm').submit();
+                    }
+                }
+                </script>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
