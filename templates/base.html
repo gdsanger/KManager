@@ -46,6 +46,21 @@
                             <i class="bi bi-cash-coin"></i> Finanzen
                         </a>
                     </li>
+                    {% if user.is_staff %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="mailDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-envelope"></i> E-Mail
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="mailDropdown">
+                                <li><a class="dropdown-item" href="{% url 'mailtemplate_list' %}">
+                                    <i class="bi bi-file-earmark-text"></i> Templates
+                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'smtp_settings' %}">
+                                    <i class="bi bi-envelope-gear"></i> SMTP Einstellungen
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% endif %}
                     {% if user.is_authenticated %}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'logout' %}">

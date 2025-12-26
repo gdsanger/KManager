@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 ANREDEN = [
     ('HERR', 'Herr'),
@@ -34,3 +35,58 @@ class Adresse(models.Model):
 
     def __str__(self):
         return f"{self.full_name()}, {self.strasse}, {self.plz} {self.ort}, {self.land}"
+
+
+class SmtpSettings(models.Model):
+    """Singleton model for global SMTP configuration"""
+    host = models.CharField(max_length=255, verbose_name="SMTP Host")
+    port = models.IntegerField(default=587, verbose_name="SMTP Port")
+    use_tls = models.BooleanField(default=False, verbose_name="Use STARTTLS")
+    username = models.CharField(max_length=255, blank=True, verbose_name="Username")
+    password = models.CharField(max_length=255, blank=True, verbose_name="Password")
+
+    class Meta:
+        verbose_name = "SMTP Einstellungen"
+        verbose_name_plural = "SMTP Einstellungen"
+
+    def save(self, *args, **kwargs):
+        """Enforce singleton - only one instance allowed"""
+        if not self.pk and SmtpSettings.objects.exists():
+            raise ValidationError("Es kann nur eine SMTP-Konfiguration existieren.")
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def get_settings(cls):
+        """Get the singleton instance, create default if doesn't exist"""
+        obj, created = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                'host': 'localhost',
+                'port': 587,
+                'use_tls': False,
+                'username': '',
+                'password': ''
+            }
+        )
+        return obj
+
+    def __str__(self):
+        return f"SMTP: {self.host}:{self.port}"
+
+
+class MailTemplate(models.Model):
+    """Template for sending emails"""
+    key = models.CharField(max_length=100, unique=True, verbose_name="Template Key")
+    subject = models.CharField(max_length=255, verbose_name="Betreff")
+    message_html = models.TextField(verbose_name="HTML Nachricht")
+    from_address = models.EmailField(verbose_name="Von E-Mail")
+    from_name = models.CharField(max_length=255, verbose_name="Von Name")
+    cc_copy_to = models.EmailField(blank=True, verbose_name="CC Kopie an")
+
+    class Meta:
+        verbose_name = "E-Mail Template"
+        verbose_name_plural = "E-Mail Templates"
+        ordering = ['key']
+
+    def __str__(self):
+        return f"{self.key}: {self.subject}"
