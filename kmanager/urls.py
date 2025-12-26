@@ -15,13 +15,25 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.contrib.auth import views as auth_views
+from django.contrib.auth import views as auth_views, logout
 from django.urls import path, include
+from django.shortcuts import redirect
+from django.conf import settings
+
+class CustomLogoutView(auth_views.LogoutView):
+    """Custom logout view that accepts both GET and POST requests and logs out immediately."""
+    http_method_names = ['get', 'post']
+    
+    def get(self, request, *args, **kwargs):
+        """Handle GET request by logging out and redirecting."""
+        logout(request)
+        next_page = self.next_page or settings.LOGOUT_REDIRECT_URL or '/'
+        return redirect(next_page)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('login/', auth_views.LoginView.as_view(), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('logout/', CustomLogoutView.as_view(), name='logout'),
     path('vermietung/', include('vermietung.urls')),
     path('', include('core.urls')),
 ]
