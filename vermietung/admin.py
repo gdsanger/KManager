@@ -1,8 +1,8 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, 
-    OBJEKT_TYPE, VERTRAG_STATUS, DOKUMENT_ENTITY_TYPES
+    MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, Aktivitaet,
+    OBJEKT_TYPE, VERTRAG_STATUS, DOKUMENT_ENTITY_TYPES, AKTIVITAET_STATUS, AKTIVITAET_PRIORITAET
 )
 from core.models import Adresse
 
@@ -311,3 +311,105 @@ class DokumentAdmin(admin.ModelAdmin):
         else:
             return f"{size_bytes / (1024 * 1024):.1f} MB"
     file_size_display.short_description = 'Größe'
+
+
+class AktivitaetAdminForm(forms.ModelForm):
+    """
+    Custom form for Aktivitaet admin to restrict selections and provide validation.
+    """
+    class Meta:
+        model = Aktivitaet
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Restrict kunde choices to only KUNDE addresses
+        self.fields['kunde'].queryset = Adresse.objects.filter(adressen_type='KUNDE')
+        # Restrict assigned_supplier choices to only LIEFERANT addresses
+        self.fields['assigned_supplier'].queryset = Adresse.objects.filter(adressen_type='LIEFERANT')
+
+
+@admin.register(Aktivitaet)
+class AktivitaetAdmin(admin.ModelAdmin):
+    form = AktivitaetAdminForm
+    list_display = (
+        'titel',
+        'get_context_type',
+        'status',
+        'prioritaet',
+        'faellig_am',
+        'assigned_user',
+        'assigned_supplier',
+        'created_at'
+    )
+    search_fields = (
+        'titel',
+        'beschreibung',
+        'mietobjekt__name',
+        'vertrag__vertragsnummer',
+        'kunde__name',
+        'assigned_user__username',
+        'assigned_supplier__name'
+    )
+    list_filter = ('status', 'prioritaet', 'faellig_am', 'created_at')
+    readonly_fields = ('created_at', 'updated_at')
+    date_hierarchy = 'faellig_am'
+    
+    fieldsets = (
+        ('Aufgabendetails', {
+            'fields': ('titel', 'beschreibung', 'status', 'prioritaet', 'faellig_am')
+        }),
+        ('Kontext (genau einer muss gesetzt sein)', {
+            'fields': ('mietobjekt', 'vertrag', 'kunde'),
+            'description': 'Wählen Sie genau einen Kontext aus, dem diese Aktivität zugeordnet werden soll.'
+        }),
+        ('Zuweisung (optional)', {
+            'fields': ('assigned_user', 'assigned_supplier'),
+            'description': 'Sie können die Aktivität intern (Benutzer), extern (Lieferant), beiden oder keinem zuweisen.'
+        }),
+        ('Zeitstempel', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimize queries by prefetching related objects."""
+        queryset = super().get_queryset(request)
+        return queryset.select_related(
+            'mietobjekt',
+            'vertrag',
+            'kunde',
+            'assigned_user',
+            'assigned_supplier'
+        )
+    
+    def get_context_type(self, obj):
+        """Display the context type."""
+        if obj.mietobjekt:
+            return f"Mietobjekt: {obj.mietobjekt.name}"
+        elif obj.vertrag:
+            return f"Vertrag: {obj.vertrag.vertragsnummer}"
+        elif obj.kunde:
+            return f"Kunde: {obj.kunde.name}"
+        return '-'
+    get_context_type.short_description = 'Kontext'
+    
+    actions = ['mark_as_in_bearbeitung', 'mark_as_erledigt', 'mark_as_abgebrochen']
+    
+    def mark_as_in_bearbeitung(self, request, queryset):
+        """Set selected activities to IN_BEARBEITUNG status."""
+        updated = queryset.update(status='IN_BEARBEITUNG')
+        self.message_user(request, f'{updated} Aktivitäten wurden als "In Bearbeitung" markiert.')
+    mark_as_in_bearbeitung.short_description = 'Als "In Bearbeitung" markieren'
+    
+    def mark_as_erledigt(self, request, queryset):
+        """Set selected activities to ERLEDIGT status."""
+        updated = queryset.update(status='ERLEDIGT')
+        self.message_user(request, f'{updated} Aktivitäten wurden als "Erledigt" markiert.')
+    mark_as_erledigt.short_description = 'Als "Erledigt" markieren'
+    
+    def mark_as_abgebrochen(self, request, queryset):
+        """Set selected activities to ABGEBROCHEN status."""
+        updated = queryset.update(status='ABGEBROCHEN')
+        self.message_user(request, f'{updated} Aktivitäten wurden als "Abgebrochen" markiert.')
+    mark_as_abgebrochen.short_description = 'Als "Abgebrochen" markieren'

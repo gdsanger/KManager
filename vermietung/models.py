@@ -1184,3 +1184,205 @@ class MietObjektBild(models.Model):
         
         return bild
 
+
+# Status choices for Aktivitaet
+AKTIVITAET_STATUS = [
+    ('OFFEN', 'Offen'),
+    ('IN_BEARBEITUNG', 'In Bearbeitung'),
+    ('ERLEDIGT', 'Erledigt'),
+    ('ABGEBROCHEN', 'Abgebrochen'),
+]
+
+# Priority choices for Aktivitaet
+AKTIVITAET_PRIORITAET = [
+    ('NIEDRIG', 'Niedrig'),
+    ('NORMAL', 'Normal'),
+    ('HOCH', 'Hoch'),
+]
+
+
+class Aktivitaet(models.Model):
+    """
+    Task/Activity model for the Vermietung module.
+    
+    Each activity is linked to exactly one context:
+    - MietObjekt (rental object)
+    - Vertrag (contract)
+    - Kunde (customer address)
+    
+    Assignment is flexible and optional:
+    - Can be assigned to internal user (assigned_user)
+    - Can be assigned to external supplier (assigned_supplier)
+    - Can be assigned to both
+    - Can be unassigned
+    """
+    # Core fields
+    titel = models.CharField(
+        max_length=200,
+        verbose_name="Titel",
+        help_text="Titel der Aktivität"
+    )
+    
+    beschreibung = models.TextField(
+        blank=True,
+        verbose_name="Beschreibung",
+        help_text="Detaillierte Beschreibung der Aktivität"
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=AKTIVITAET_STATUS,
+        default='OFFEN',
+        verbose_name="Status",
+        help_text="Status der Aktivität"
+    )
+    
+    prioritaet = models.CharField(
+        max_length=20,
+        choices=AKTIVITAET_PRIORITAET,
+        default='NORMAL',
+        verbose_name="Priorität",
+        help_text="Priorität der Aktivität"
+    )
+    
+    faellig_am = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Fällig am",
+        help_text="Fälligkeitsdatum der Aktivität"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am",
+        help_text="Zeitpunkt der Erstellung"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Aktualisiert am",
+        help_text="Zeitpunkt der letzten Aktualisierung"
+    )
+    
+    # Context fields (exactly one must be set)
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Mietobjekt"
+    )
+    
+    vertrag = models.ForeignKey(
+        Vertrag,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Vertrag"
+    )
+    
+    kunde = models.ForeignKey(
+        Adresse,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Kunde",
+        limit_choices_to={'adressen_type': 'KUNDE'}
+    )
+    
+    # Assignment fields (both optional, flexible combinations)
+    assigned_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Zugewiesen an (Intern)",
+        help_text="Interner Benutzer, dem die Aktivität zugewiesen ist"
+    )
+    
+    assigned_supplier = models.ForeignKey(
+        Adresse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten_als_lieferant',
+        verbose_name="Zugewiesen an (Extern)",
+        help_text="Externer Lieferant, dem die Aktivität zugewiesen ist",
+        limit_choices_to={'adressen_type': 'LIEFERANT'}
+    )
+    
+    class Meta:
+        verbose_name = "Aktivität"
+        verbose_name_plural = "Aktivitäten"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['faellig_am']),
+            models.Index(fields=['assigned_user']),
+            models.Index(fields=['assigned_supplier']),
+        ]
+    
+    def __str__(self):
+        """String representation of the activity."""
+        return f"{self.titel} ({self.get_status_display()})"
+    
+    def clean(self):
+        """
+        Validate the activity data:
+        1. Exactly one context must be set (mietobjekt, vertrag, or kunde)
+        2. If assigned_supplier is set, it must be of type LIEFERANT
+        """
+        super().clean()
+        
+        # Check context constraint: exactly one must be set
+        context_fields = [
+            self.mietobjekt_id,
+            self.vertrag_id,
+            self.kunde_id
+        ]
+        set_contexts = [field for field in context_fields if field is not None]
+        
+        if len(set_contexts) == 0:
+            raise ValidationError(
+                'Die Aktivität muss genau einem Kontext zugeordnet werden '
+                '(Mietobjekt, Vertrag oder Kunde).'
+            )
+        
+        if len(set_contexts) > 1:
+            raise ValidationError(
+                'Die Aktivität kann nur einem einzigen Kontext zugeordnet werden '
+                '(Mietobjekt, Vertrag oder Kunde).'
+            )
+        
+        # Check assigned_supplier is of type LIEFERANT
+        if self.assigned_supplier_id:
+            # We need to check the actual adressen_type
+            # Use _id to avoid additional queries during validation
+            supplier = Adresse.objects.filter(
+                pk=self.assigned_supplier_id
+            ).values_list('adressen_type', flat=True).first()
+            
+            if supplier != 'LIEFERANT':
+                raise ValidationError({
+                    'assigned_supplier': 'Die zugewiesene Adresse muss vom Typ "Lieferant" sein.'
+                })
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def get_context_display(self):
+        """Get a display string for the linked context."""
+        if self.mietobjekt:
+            return f"Mietobjekt: {self.mietobjekt}"
+        elif self.vertrag:
+            return f"Vertrag: {self.vertrag}"
+        elif self.kunde:
+            return f"Kunde: {self.kunde}"
+        return "Kein Kontext"
+
