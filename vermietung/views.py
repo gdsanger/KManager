@@ -1663,8 +1663,6 @@ def aktivitaet_edit(request, pk):
                             context={
                                 'user': new_assigned_user,
                                 'aktivitaet': aktivitaet,
-                                'titel': aktivitaet.titel,
-                                'beschreibung': aktivitaet.beschreibung,
                                 'context': context_display,
                                 'prioritaet': aktivitaet.get_prioritaet_display(),
                                 'faellig_am': aktivitaet.faellig_am,
@@ -1726,11 +1724,13 @@ def aktivitaet_update_status(request, pk):
     Quick update of activity status (for Kanban drag & drop).
     Expects 'status' in POST data.
     """
+    from .models import AKTIVITAET_STATUS
+    
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
     new_status = request.POST.get('status')
     
-    # Validate status
-    valid_statuses = ['OFFEN', 'IN_BEARBEITUNG', 'ERLEDIGT', 'ABGEBROCHEN']
+    # Validate status using model choices
+    valid_statuses = [choice[0] for choice in AKTIVITAET_STATUS]
     if new_status not in valid_statuses:
         return JsonResponse({'error': 'Ungültiger Status'}, status=400)
     

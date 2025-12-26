@@ -208,8 +208,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const aktivitaetId = e.dataTransfer.getData('aktivitaet-id');
             const newStatus = this.dataset.status;
             
+            // Build URL using aktivitaet ID
+            const updateUrl = '{% url "vermietung:aktivitaet_update_status" 0 %}'.replace('/0/', '/' + aktivitaetId + '/');
+            
             // Update status via AJAX
-            fetch(`/vermietung/aktivitaeten/${aktivitaetId}/status/`, {
+            fetch(updateUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',

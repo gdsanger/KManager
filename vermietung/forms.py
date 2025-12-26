@@ -836,18 +836,21 @@ class AktivitaetForm(forms.ModelForm):
         
         # If context was provided in __init__, ensure it's set
         if self.context_type and self.context_id:
-            if self.context_type == 'mietobjekt':
-                cleaned_data['mietobjekt'] = MietObjekt.objects.get(pk=self.context_id)
-                cleaned_data['vertrag'] = None
-                cleaned_data['kunde'] = None
-            elif self.context_type == 'vertrag':
-                cleaned_data['vertrag'] = Vertrag.objects.get(pk=self.context_id)
-                cleaned_data['mietobjekt'] = None
-                cleaned_data['kunde'] = None
-            elif self.context_type == 'kunde':
-                cleaned_data['kunde'] = Adresse.objects.get(pk=self.context_id)
-                cleaned_data['mietobjekt'] = None
-                cleaned_data['vertrag'] = None
+            try:
+                if self.context_type == 'mietobjekt':
+                    cleaned_data['mietobjekt'] = MietObjekt.objects.get(pk=self.context_id)
+                    cleaned_data['vertrag'] = None
+                    cleaned_data['kunde'] = None
+                elif self.context_type == 'vertrag':
+                    cleaned_data['vertrag'] = Vertrag.objects.get(pk=self.context_id)
+                    cleaned_data['mietobjekt'] = None
+                    cleaned_data['kunde'] = None
+                elif self.context_type == 'kunde':
+                    cleaned_data['kunde'] = Adresse.objects.get(pk=self.context_id)
+                    cleaned_data['mietobjekt'] = None
+                    cleaned_data['vertrag'] = None
+            except (MietObjekt.DoesNotExist, Vertrag.DoesNotExist, Adresse.DoesNotExist):
+                raise ValidationError('Das angegebene Kontextobjekt existiert nicht.')
         
         return cleaned_data
 
