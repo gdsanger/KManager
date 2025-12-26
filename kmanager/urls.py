@@ -22,7 +22,7 @@ from django.conf import settings
 
 class CustomLogoutView(auth_views.LogoutView):
     """Custom logout view that accepts both GET and POST requests and logs out immediately."""
-    http_method_names = ['get', 'post']
+    http_method_names = ['get', 'post', 'head']
     
     def get(self, request, *args, **kwargs):
         """Handle GET request by logging out and redirecting."""
