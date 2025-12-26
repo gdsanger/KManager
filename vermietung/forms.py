@@ -5,7 +5,7 @@ Forms for the Vermietung (Rental Management) area.
 from django import forms
 from django.core.exceptions import ValidationError
 from core.models import Adresse
-from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, OBJEKT_TYPE
+from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, VertragsObjekt, OBJEKT_TYPE
 
 
 class MietObjektForm(forms.ModelForm):
@@ -301,12 +301,21 @@ class VertragForm(forms.ModelForm):
     Form for creating/editing Vertrag (rental contracts).
     Includes all fields with proper Bootstrap 5 styling.
     Contract number is auto-generated and not editable.
+    Supports multiple MietObjekte via many-to-many relationship.
     """
+    
+    # Custom field for selecting multiple mietobjekte
+    mietobjekte = forms.ModelMultipleChoiceField(
+        queryset=MietObjekt.objects.all().order_by('name'),
+        widget=forms.CheckboxSelectMultiple(),
+        required=True,
+        label='Mietobjekte *',
+        help_text='Wählen Sie ein oder mehrere Objekte aus (Mehrfachauswahl möglich)'
+    )
     
     class Meta:
         model = Vertrag
         fields = [
-            'mietobjekt',
             'mieter',
             'start',
             'ende',
@@ -315,10 +324,6 @@ class VertragForm(forms.ModelForm):
             'status',
         ]
         widgets = {
-            'mietobjekt': forms.Select(attrs={
-                'class': 'form-select',
-                'id': 'id_mietobjekt',
-            }),
             'mieter': forms.Select(attrs={'class': 'form-select'}),
             'start': forms.DateInput(attrs={
                 'class': 'form-control',
@@ -341,7 +346,6 @@ class VertragForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
-            'mietobjekt': 'Mietobjekt *',
             'mieter': 'Mieter (Kunde) *',
             'start': 'Vertragsbeginn *',
             'ende': 'Vertragsende',
@@ -350,12 +354,11 @@ class VertragForm(forms.ModelForm):
             'status': 'Status *',
         }
         help_texts = {
-            'mietobjekt': 'Wählen Sie das zu vermietende Objekt aus',
             'mieter': 'Nur Adressen vom Typ "Kunde" können ausgewählt werden',
             'start': 'Startdatum des Vertrags',
             'ende': 'Optional: Enddatum des Vertrags (leer = unbefristet)',
             'miete': 'Monatliche Miete in EUR',
-            'kaution': 'Kaution in EUR (wird aus Mietobjekt vorausgefüllt)',
+            'kaution': 'Kaution in EUR',
             'status': 'Status des Vertrags',
         }
     
@@ -367,36 +370,63 @@ class VertragForm(forms.ModelForm):
             adressen_type='KUNDE'
         ).order_by('name')
         
-        # Order mietobjekte by name
-        self.fields['mietobjekt'].queryset = MietObjekt.objects.all().order_by('name')
-        
-        # Pre-fill miete and kaution from mietobjekt if creating new contract
-        if not self.instance.pk and 'mietobjekt' in self.initial:
-            try:
-                mietobjekt = MietObjekt.objects.get(pk=self.initial['mietobjekt'])
-                if 'miete' not in self.initial:
-                    self.initial['miete'] = mietobjekt.mietpreis
-                if 'kaution' not in self.initial and mietobjekt.kaution:
-                    self.initial['kaution'] = mietobjekt.kaution
-            except MietObjekt.DoesNotExist:
-                pass
+        # If editing existing contract, pre-fill mietobjekte from VertragsObjekt
+        if self.instance.pk:
+            # Get currently assigned mietobjekte
+            current_mietobjekte = self.instance.get_mietobjekte()
+            self.fields['mietobjekte'].initial = current_mietobjekte
+    
+    def clean_mietobjekte(self):
+        """Validate that at least one mietobjekt is selected."""
+        mietobjekte = self.cleaned_data.get('mietobjekte')
+        if not mietobjekte:
+            raise ValidationError('Mindestens ein Mietobjekt muss ausgewählt werden.')
+        return mietobjekte
     
     def clean(self):
         """
         Additional validation to warn about unavailable rental objects.
-        The model's clean method will handle overlap validation.
+        VertragsObjekt.clean() will handle overlap validation when objects are saved.
         """
         cleaned_data = super().clean()
-        mietobjekt = cleaned_data.get('mietobjekt')
+        mietobjekte = cleaned_data.get('mietobjekte', [])
         
-        # Add warning if mietobjekt is not available (but don't prevent saving)
-        # This is just a UX improvement - the model validation will catch overlaps
-        if mietobjekt and not mietobjekt.verfuegbar:
-            # We use add_error with None as field to add a non-field warning
-            # But we'll let the model's overlap validation be the final say
-            pass
+        # Check if any selected mietobjekte are not available
+        unavailable = [obj for obj in mietobjekte if not obj.verfuegbar]
+        if unavailable:
+            unavailable_names = ', '.join(obj.name for obj in unavailable)
+            self.add_error(
+                'mietobjekte',
+                f'Achtung: Folgende Objekte sind aktuell nicht verfügbar: {unavailable_names}. '
+                f'Möglicherweise gibt es bereits einen aktiven Vertrag.'
+            )
         
         return cleaned_data
+    
+    def save(self, commit=True):
+        """
+        Save the Vertrag and create VertragsObjekt entries for selected mietobjekte.
+        """
+        instance = super().save(commit=commit)
+        
+        if commit:
+            # Get selected mietobjekte
+            mietobjekte = self.cleaned_data.get('mietobjekte', [])
+            
+            # Clear existing VertragsObjekt entries
+            instance.vertragsobjekte.all().delete()
+            
+            # Create new VertragsObjekt entries
+            for mietobjekt in mietobjekte:
+                VertragsObjekt.objects.create(
+                    vertrag=instance,
+                    mietobjekt=mietobjekt
+                )
+            
+            # Update availability of all affected mietobjekte
+            instance.update_mietobjekte_availability()
+        
+        return instance
 
 
 class VertragEndForm(forms.Form):
@@ -514,7 +544,7 @@ class UebergabeprotokollForm(forms.ModelForm):
     def __init__(self, *args, vertrag=None, **kwargs):
         """
         Initialize form with optional pre-selected vertrag.
-        If vertrag is provided, pre-fill mietobjekt and make fields read-only.
+        If vertrag is provided, restrict mietobjekt choices to those in the vertrag.
         """
         super().__init__(*args, **kwargs)
         
@@ -524,20 +554,21 @@ class UebergabeprotokollForm(forms.ModelForm):
             self.fields['vertrag'].widget.attrs['readonly'] = True
             self.fields['vertrag'].disabled = True
             
-            # Pre-fill mietobjekt from vertrag
-            self.fields['mietobjekt'].initial = vertrag.mietobjekt
-            self.fields['mietobjekt'].widget.attrs['readonly'] = True
-            self.fields['mietobjekt'].disabled = True
+            # Limit queryset to mietobjekte in this vertrag
+            vertrag_mietobjekte = vertrag.get_mietobjekte()
+            self.fields['mietobjekt'].queryset = vertrag_mietobjekte
             
-            # Limit queryset to just this vertrag's mietobjekt
-            self.fields['mietobjekt'].queryset = MietObjekt.objects.filter(pk=vertrag.mietobjekt_id)
+            # Pre-fill with first mietobjekt if available
+            first_mietobjekt = vertrag_mietobjekte.first()
+            if first_mietobjekt:
+                self.fields['mietobjekt'].initial = first_mietobjekt
         
         # Order vertraege by vertragsnummer
         self.fields['vertrag'].queryset = Vertrag.objects.select_related(
             'mieter'
         ).order_by('-start')
         
-        # Order mietobjekte by name
+        # Order mietobjekte by name if vertrag is not set
         if not vertrag:
             self.fields['mietobjekt'].queryset = MietObjekt.objects.all().order_by('name')
 
