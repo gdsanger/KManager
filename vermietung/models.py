@@ -1,5 +1,6 @@
 
 from django.db import models
+from django.db.models import Q
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -232,8 +233,6 @@ class Vertrag(models.Model):
         Returns a queryset of MietObjekt objects.
         Works during migration by checking both legacy field and new VertragsObjekt.
         """
-        from django.db.models import Q
-        
         mietobjekt_ids = set()
         
         # Legacy field (during migration)
@@ -277,8 +276,9 @@ class Vertrag(models.Model):
         """
         Validate the contract data:
         1. If ende is set, it must be greater than start
+        2. For backwards compatibility, check overlaps on legacy mietobjekt field
         
-        Note: Overlap checking for mietobjekte is now handled in VertragsObjekt.clean()
+        Note: Overlap checking for new n:m relationship is handled in VertragsObjekt.clean()
         """
         super().clean()
         
@@ -287,13 +287,63 @@ class Vertrag(models.Model):
             raise ValidationError({
                 'ende': 'Das Vertragsende muss nach dem Vertragsbeginn liegen.'
             })
+        
+        # Backwards compatibility: Check for overlaps on legacy mietobjekt field
+        # This is needed during migration period when tests/code still use the legacy field
+        if self.mietobjekt_id and self.status == 'active':
+            # Find other active contracts for this mietobjekt
+            other_contracts = Vertrag.objects.filter(
+                mietobjekt_id=self.mietobjekt_id,
+                status='active'
+            ).exclude(pk=self.pk if self.pk else None)
+            
+            # Check for date overlaps
+            for contract in other_contracts:
+                # Case 1: Existing contract has no end date (open-ended)
+                if contract.ende is None:
+                    if self.start >= contract.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Es existiert bereits ein laufender Vertrag ohne Enddatum '
+                                         f'({contract.vertragsnummer}) für dieses Mietobjekt ab {contract.start}.'
+                        })
+                    # New contract starts before existing open-ended contract
+                    if self.ende is None or self.ende > contract.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Dieser Vertrag würde mit einem bestehenden Vertrag '
+                                         f'({contract.vertragsnummer}) überlappen, der am {contract.start} beginnt.'
+                        })
+                
+                # Case 2: This contract has no end date
+                elif self.ende is None:
+                    # It blocks any existing contract that ends after this contract's start
+                    if contract.start < self.start and (contract.ende is None or contract.ende > self.start):
+                        raise ValidationError({
+                            'mietobjekt': f'Ein Vertrag ohne Enddatum würde mit bestehendem Vertrag '
+                                         f'({contract.vertragsnummer}) überlappen.'
+                        })
+                    # It blocks any existing contract that starts after this contract's start
+                    if contract.start >= self.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Ein Vertrag ohne Enddatum würde mit bestehendem Vertrag '
+                                         f'({contract.vertragsnummer}) überlappen.'
+                        })
+                
+                # Case 3: Both contracts have end dates
+                else:
+                    # Standard overlap check: A.start < B.end AND A.end > B.start
+                    if self.start < contract.ende and self.ende > contract.start:
+                        raise ValidationError({
+                            'mietobjekt': f'Dieser Vertrag überschneidet sich mit bestehendem Vertrag '
+                                         f'({contract.vertragsnummer}) von {contract.start} bis {contract.ende}.'
+                        })
     
     
     def save(self, *args, **kwargs):
         """
         Override save to auto-generate contract number if not set.
         Uses database-level locking to prevent race conditions.
-        Note: MietObjekt availability is now updated via VertragsObjekt signals/save.
+        Also handles backwards compatibility: if legacy mietobjekt field is set,
+        automatically creates VertragsObjekt entry.
         """
         if not self.vertragsnummer:
             self.vertragsnummer = self._generate_vertragsnummer()
@@ -301,7 +351,29 @@ class Vertrag(models.Model):
         # Run full_clean to trigger validation
         self.full_clean()
         
+        is_new = self.pk is None
+        had_legacy_mietobjekt = self.mietobjekt_id
+        
         super().save(*args, **kwargs)
+        
+        # Backwards compatibility: If legacy mietobjekt field is used,
+        # automatically create/update VertragsObjekt entry
+        if had_legacy_mietobjekt:
+            # Check if VertragsObjekt already exists for this combination
+            existing = VertragsObjekt.objects.filter(
+                vertrag=self,
+                mietobjekt_id=had_legacy_mietobjekt
+            ).exists()
+            
+            if not existing:
+                # Create VertragsObjekt entry
+                VertragsObjekt.objects.create(
+                    vertrag=self,
+                    mietobjekt_id=had_legacy_mietobjekt
+                )
+            
+            # Update availability
+            self.update_mietobjekte_availability()
     
     def update_mietobjekte_availability(self):
         """
