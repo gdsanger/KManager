@@ -16,8 +16,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-User = get_user_model()
-
 OBJEKT_TYPE = [
        ('GEBAEUDE','Gebäude'),
         ('RAUM','Raum'),

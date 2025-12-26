@@ -4,11 +4,13 @@ Tests for Aktivitaet (Activity/Task) model.
 
 from django.test import TestCase
 from django.core.exceptions import ValidationError
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from datetime import date
 from decimal import Decimal
 from core.models import Adresse
 from vermietung.models import MietObjekt, Vertrag, Aktivitaet
+
+User = get_user_model()
 
 
 class AktivitaetModelTest(TestCase):
