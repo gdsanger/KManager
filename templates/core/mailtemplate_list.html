@@ -36,7 +36,7 @@
                     <tbody>
                         {% for template in templates %}
                         <tr>
-                            <td><code>{{ template.key }}</code></td>
+                            <td><a href="{% url 'mailtemplate_detail' template.pk %}"><code>{{ template.key }}</code></a></td>
                             <td>{{ template.subject|truncatewords:10 }}</td>
                             <td>
                                 {{ template.from_name }}<br>
@@ -51,6 +51,9 @@
                             </td>
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'mailtemplate_detail' template.pk %}" class="btn btn-outline-info" title="Details anzeigen">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
                                     <a href="{% url 'mailtemplate_edit' template.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
                                         <i class="bi bi-pencil"></i>
                                     </a>
