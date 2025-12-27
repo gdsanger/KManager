@@ -74,6 +74,16 @@ class VermietungAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, '/')
     
+    def test_logout_get_redirects_to_home(self):
+        """Test that logout via GET request logs out and redirects to home page."""
+        self.client.login(username='staff_user', password='testpass123')
+        response = self.client.get(reverse('logout'))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, '/')
+        # Verify user is logged out
+        response = self.client.get(reverse('vermietung:home'))
+        self.assertEqual(response.status_code, 302)  # Redirected to login
+    
     def test_successful_login_redirects_to_home(self):
         """Test that successful login redirects to home page."""
         response = self.client.post(reverse('login'), {
