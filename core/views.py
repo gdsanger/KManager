@@ -1,9 +1,10 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import update_session_auth_hash
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from core.models import SmtpSettings, MailTemplate
-from core.forms import SmtpSettingsForm, MailTemplateForm
+from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm
 
 
 def home(request):
@@ -101,4 +102,37 @@ def mailtemplate_delete(request, pk):
         return redirect('mailtemplate_list')
     
     return render(request, 'core/mailtemplate_confirm_delete.html', {'template': template})
+
+
+# User Profile Views
+@login_required
+def profile(request):
+    """User profile view with name and password change"""
+    profile_updated = False
+    password_updated = False
+    
+    if request.method == 'POST':
+        if 'update_profile' in request.POST:
+            profile_form = UserProfileForm(request.POST, instance=request.user)
+            if profile_form.is_valid():
+                profile_form.save()
+                messages.success(request, 'Profil erfolgreich aktualisiert.')
+                profile_updated = True
+        elif 'change_password' in request.POST:
+            password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+            if password_form.is_valid():
+                password_form.save()
+                update_session_auth_hash(request, password_form.user)
+                messages.success(request, 'Passwort erfolgreich geändert.')
+                password_updated = True
+    
+    if not profile_updated:
+        profile_form = UserProfileForm(instance=request.user)
+    if not password_updated:
+        password_form = CustomPasswordChangeForm(user=request.user)
+    
+    return render(request, 'core/profile.html', {
+        'profile_form': profile_form,
+        'password_form': password_form,
+    })
 

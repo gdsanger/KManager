@@ -313,6 +313,17 @@ class Vertrag(models.Model):
         
         return True
     
+    def berechne_gesamtmiete(self):
+        """
+        Calculate total rent from all VertragsObjekt items.
+        Returns sum of (anzahl * preis) for all contract objects.
+        Returns Decimal with 2 decimal places.
+        """
+        total = Decimal('0.00')
+        for vo in self.vertragsobjekte.all():
+            total += vo.gesamtpreis
+        return total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    
     def clean(self):
         """
         Validate the contract data:
@@ -477,11 +488,18 @@ class Vertrag(models.Model):
             return f"V-{next_number:05d}"
 
 
+VERTRAGSOBJEKT_STATUS = [
+    ('AKTIV', 'Aktiv'),
+    ('BEENDET', 'Beendet'),
+]
+
+
 class VertragsObjekt(models.Model):
     """
     Junction model for n:m relationship between Vertrag and MietObjekt.
     Represents a rental object within a contract.
     A contract can contain multiple rental objects, and a rental object can be in multiple contracts (over time).
+    Each assignment includes pricing, quantity, dates, and status information.
     """
     vertrag = models.ForeignKey(
         Vertrag,
@@ -494,6 +512,36 @@ class VertragsObjekt(models.Model):
         on_delete=models.PROTECT,
         related_name='vertragsobjekte',
         verbose_name="Mietobjekt"
+    )
+    preis = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Preis",
+        help_text="Preis für dieses Mietobjekt im Vertrag"
+    )
+    anzahl = models.IntegerField(
+        default=1,
+        verbose_name="Anzahl",
+        help_text="Anzahl der gemieteten Einheiten"
+    )
+    zugang = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Zugang",
+        help_text="Datum des Zugangs (Übernahme)"
+    )
+    abgang = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Abgang",
+        help_text="Datum des Abgangs (Rückgabe)"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=VERTRAGSOBJEKT_STATUS,
+        default='AKTIV',
+        verbose_name="Status",
+        help_text="Status dieses Mietobjekts im Vertrag"
     )
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -511,14 +559,48 @@ class VertragsObjekt(models.Model):
     def __str__(self):
         return f"{self.vertrag.vertragsnummer} - {self.mietobjekt.name}"
     
+    @property
+    def gesamtpreis(self):
+        """
+        Calculate total price for this contract object: anzahl * preis.
+        Returns Decimal with 2 decimal places.
+        """
+        if self.preis is None or self.anzahl is None:
+            return Decimal('0.00')
+        return (Decimal(str(self.anzahl)) * Decimal(str(self.preis))).quantize(
+            Decimal('0.01'), 
+            rounding=ROUND_HALF_UP
+        )
+    
     def clean(self):
         """
-        Validate that the mietobjekt is not in another active contract.
-        Only active contracts are checked for overlaps.
+        Validate the contract object data:
+        1. Price must be positive
+        2. Quantity must be positive
+        3. If abgang is set, it must be after zugang
+        4. Mietobjekt must not be in another active contract (only for active contracts)
         """
         super().clean()
         
-        # Only validate if this is for an active contract
+        # Validate price
+        if self.preis is not None and self.preis < 0:
+            raise ValidationError({
+                'preis': 'Der Preis darf nicht negativ sein.'
+            })
+        
+        # Validate quantity
+        if self.anzahl is not None and self.anzahl <= 0:
+            raise ValidationError({
+                'anzahl': 'Die Anzahl muss mindestens 1 sein.'
+            })
+        
+        # Validate date range
+        if self.zugang and self.abgang and self.abgang < self.zugang:
+            raise ValidationError({
+                'abgang': 'Das Abgangsdatum muss nach dem Zugangsdatum liegen oder am gleichen Tag sein.'
+            })
+        
+        # Only validate overlap if this is for an active contract
         if not self.vertrag_id or self.vertrag.status != 'active':
             return
         
@@ -545,7 +627,18 @@ class VertragsObjekt(models.Model):
             })
     
     def save(self, *args, **kwargs):
-        """Override save to run validation."""
+        """
+        Override save to set default price from mietobjekt if not provided.
+        Also runs validation.
+        """
+        # Set default price from mietobjekt if not provided
+        if self.preis is None and self.mietobjekt_id:
+            try:
+                mietobjekt = MietObjekt.objects.get(pk=self.mietobjekt_id)
+                self.preis = mietobjekt.mietpreis
+            except MietObjekt.DoesNotExist:
+                pass
+        
         self.full_clean()
         super().save(*args, **kwargs)
 
