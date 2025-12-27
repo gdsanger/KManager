@@ -214,18 +214,23 @@ class MietObjekt(models.Model):
         active_units = self.get_active_units_count()
         return active_units >= self.verfuegbare_einheiten
     
-    def save(self, *args, **kwargs):
+    def clean(self):
         """
-        Override save to set kaution default value for new objects.
-        For new MietObjekt instances, kaution is pre-filled with 3 × mietpreis.
-        Also validates verfuegbare_einheiten.
+        Validate the MietObjekt data.
         """
+        super().clean()
+        
         # Validate verfuegbare_einheiten
         if self.verfuegbare_einheiten is not None and self.verfuegbare_einheiten < 1:
             raise ValidationError({
                 'verfuegbare_einheiten': 'Die Anzahl der verfügbaren Einheiten muss mindestens 1 sein.'
             })
-        
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to set kaution default value for new objects.
+        For new MietObjekt instances, kaution is pre-filled with 3 × mietpreis.
+        """
         # Only set default kaution if this is a new object (no pk yet) and kaution is not already set
         if not self.pk and self.kaution is None:
             self.kaution = self.mietpreis * 3
@@ -712,6 +717,12 @@ class VertragsObjekt(models.Model):
         """
         Override save to set default price from mietobjekt if not provided.
         Also runs validation and updates MietObjekt availability.
+        
+        Note: We update availability immediately after save to ensure the
+        MietObjekt.verfuegbar field is always current. This is acceptable
+        since VertragsObjekt instances are typically created/updated one
+        at a time through the UI. For bulk operations, consider using
+        MietObjekt.update_availability() separately after the bulk operation.
         """
         # Set default price from mietobjekt if not provided
         if self.preis is None and self.mietobjekt_id:
@@ -725,6 +736,7 @@ class VertragsObjekt(models.Model):
         super().save(*args, **kwargs)
         
         # Update MietObjekt availability after saving
+        # This ensures the verfuegbar field is always current
         if self.mietobjekt_id:
             try:
                 mietobjekt = MietObjekt.objects.get(pk=self.mietobjekt_id)
