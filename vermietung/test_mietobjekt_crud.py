@@ -169,6 +169,7 @@ class MietObjektCRUDTestCase(TestCase):
             'mietpreis': '2000.00',
             'nebenkosten': '300.00',
             'kaution': '6000.00',
+            'verfuegbare_einheiten': '1',
             'verfuegbar': True
         }
         response = self.client.post(reverse('vermietung:mietobjekt_create'), data)
@@ -214,6 +215,7 @@ class MietObjektCRUDTestCase(TestCase):
             'mietpreis': '1100.00',
             'nebenkosten': '250.00',
             'kaution': '3300.00',
+            'verfuegbare_einheiten': '1',
             'verfuegbar': True
         }
         response = self.client.post(reverse('vermietung:mietobjekt_edit', kwargs={'pk': self.objekt1.pk}), data)
