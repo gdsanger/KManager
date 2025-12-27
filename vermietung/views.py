@@ -64,6 +64,7 @@ def vermietung_home(request):
     total_mietobjekte = MietObjekt.objects.count()
     verfuegbare_mietobjekte = MietObjekt.objects.filter(verfuegbar=True).count()
     active_vertraege = Vertrag.objects.currently_active().count()
+    offene_aktivitaeten = Aktivitaet.objects.filter(status='OFFEN').count()
     total_kunden = Adresse.objects.filter(adressen_type='KUNDE').count()
     
     # Get recently created contracts (last 10)
@@ -83,6 +84,7 @@ def vermietung_home(request):
         'total_mietobjekte': total_mietobjekte,
         'verfuegbare_mietobjekte': verfuegbare_mietobjekte,
         'active_vertraege': active_vertraege,
+        'offene_aktivitaeten': offene_aktivitaeten,
         'total_kunden': total_kunden,
         'recent_vertraege': recent_vertraege,
         'expiring_vertraege': expiring_vertraege,
