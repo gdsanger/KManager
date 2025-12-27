@@ -275,3 +275,34 @@ class DashboardTestCase(TestCase):
         self.assertContains(response, 'href="%s?status=active"' % reverse('vermietung:vertrag_list'))
         self.assertContains(response, 'href="%s?status=OFFEN"' % reverse('vermietung:aktivitaet_list'))
         self.assertContains(response, 'href="%s"' % reverse('vermietung:kunde_list'))
+    
+    def test_dashboard_offene_aktivitaeten_kpi_counts_correctly(self):
+        """Test that offene_aktivitaeten KPI counts OFFEN and IN_BEARBEITUNG, but not ERLEDIGT or ABGEBROCHEN."""
+        # Create activities with different statuses
+        Aktivitaet.objects.create(
+            titel='Offene Aktivität',
+            status='OFFEN',
+            kunde=self.kunde1
+        )
+        Aktivitaet.objects.create(
+            titel='In Bearbeitung Aktivität',
+            status='IN_BEARBEITUNG',
+            kunde=self.kunde1
+        )
+        Aktivitaet.objects.create(
+            titel='Erledigte Aktivität',
+            status='ERLEDIGT',
+            kunde=self.kunde1
+        )
+        Aktivitaet.objects.create(
+            titel='Abgebrochene Aktivität',
+            status='ABGEBROCHEN',
+            kunde=self.kunde1
+        )
+        
+        response = self.client.get(reverse('vermietung:home'))
+        
+        self.assertEqual(response.status_code, 200)
+        # Should count only OFFEN (1) and IN_BEARBEITUNG (1) = 2 total
+        # Should NOT count ERLEDIGT or ABGEBROCHEN
+        self.assertEqual(response.context['offene_aktivitaeten'], 2)
