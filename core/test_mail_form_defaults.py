@@ -2,6 +2,7 @@
 Tests for default email sender in MailTemplateForm
 """
 from django.test import TestCase
+from django.conf import settings
 from core.forms import MailTemplateForm
 from core.models import MailTemplate
 
@@ -17,11 +18,11 @@ class MailTemplateFormDefaultsTestCase(TestCase):
         # Check that default values are set
         self.assertEqual(
             form.fields['from_address'].initial,
-            'noreply@ebner-vermietung.de'
+            settings.DEFAULT_FROM_EMAIL
         )
         self.assertEqual(
             form.fields['from_name'].initial,
-            'Domus Notification Manager'
+            settings.DEFAULT_FROM_NAME
         )
     
     def test_existing_template_keeps_values(self):
@@ -52,8 +53,8 @@ class MailTemplateFormDefaultsTestCase(TestCase):
             'key': 'test_template',
             'subject': 'Test Subject',
             'message_html': '<p>Test message</p>',
-            'from_address': 'noreply@ebner-vermietung.de',
-            'from_name': 'Domus Notification Manager',
+            'from_address': settings.DEFAULT_FROM_EMAIL,
+            'from_name': settings.DEFAULT_FROM_NAME,
             'cc_copy_to': ''
         }
         
@@ -64,8 +65,8 @@ class MailTemplateFormDefaultsTestCase(TestCase):
         template = form.save()
         
         # Verify the template was saved with correct values
-        self.assertEqual(template.from_address, 'noreply@ebner-vermietung.de')
-        self.assertEqual(template.from_name, 'Domus Notification Manager')
+        self.assertEqual(template.from_address, settings.DEFAULT_FROM_EMAIL)
+        self.assertEqual(template.from_name, settings.DEFAULT_FROM_NAME)
     
     def test_defaults_can_be_overridden(self):
         """Test that users can override default values"""
