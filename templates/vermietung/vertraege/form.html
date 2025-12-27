@@ -335,7 +335,16 @@ document.querySelectorAll('.formset-row').forEach(setupRowEventListeners);
 if (addButton) {
     addButton.addEventListener('click', function() {
         const totalForms = parseInt(totalFormsInput.value);
-        const newRow = formsetBody.querySelector('.formset-row:last-child').cloneNode(true);
+        const lastRow = formsetBody.querySelector('.formset-row:last-child');
+        
+        // Check if there are existing rows to clone
+        if (!lastRow) {
+            console.error('No formset rows available to clone');
+            alert('Fehler: Keine Vorlage zum Hinzufügen einer neuen Zeile verfügbar.');
+            return;
+        }
+        
+        const newRow = lastRow.cloneNode(true);
         
         // Update form index in all fields
         newRow.innerHTML = newRow.innerHTML.replace(

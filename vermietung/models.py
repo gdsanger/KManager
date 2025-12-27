@@ -565,7 +565,7 @@ class VertragsObjekt(models.Model):
         Calculate total price for this contract object: anzahl * preis.
         Returns Decimal with 2 decimal places.
         """
-        if not self.preis or not self.anzahl:
+        if self.preis is None or self.anzahl is None:
             return Decimal('0.00')
         return (Decimal(str(self.anzahl)) * Decimal(str(self.preis))).quantize(
             Decimal('0.01'), 
@@ -585,7 +585,7 @@ class VertragsObjekt(models.Model):
         # Validate price
         if self.preis is not None and self.preis < 0:
             raise ValidationError({
-                'preis': 'Der Preis muss positiv sein.'
+                'preis': 'Der Preis darf nicht negativ sein.'
             })
         
         # Validate quantity
@@ -595,9 +595,9 @@ class VertragsObjekt(models.Model):
             })
         
         # Validate date range
-        if self.zugang and self.abgang and self.abgang <= self.zugang:
+        if self.zugang and self.abgang and self.abgang < self.zugang:
             raise ValidationError({
-                'abgang': 'Das Abgangsdatum muss nach dem Zugangsdatum liegen.'
+                'abgang': 'Das Abgangsdatum muss nach dem Zugangsdatum liegen oder am gleichen Tag sein.'
             })
         
         # Only validate overlap if this is for an active contract

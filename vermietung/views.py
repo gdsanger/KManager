@@ -900,24 +900,17 @@ def vertrag_create(request):
         
         if form.is_valid() and formset.is_valid():
             try:
-                # Save the contract first
+                # Save the contract first (without committing to DB yet)
                 vertrag = form.save(commit=False)
-                
-                # Calculate total miete from formset
-                total_miete = 0
-                for subform in formset:
-                    if subform.cleaned_data and not subform.cleaned_data.get('DELETE', False):
-                        preis = subform.cleaned_data.get('preis', 0)
-                        anzahl = subform.cleaned_data.get('anzahl', 1)
-                        if preis and anzahl:
-                            total_miete += float(preis) * int(anzahl)
-                
-                vertrag.miete = total_miete
                 vertrag.save()
                 
                 # Save formset with the contract
                 formset.instance = vertrag
                 formset.save()
+                
+                # Calculate and update total miete from all VertragsObjekt items
+                vertrag.miete = vertrag.berechne_gesamtmiete()
+                vertrag.save(update_fields=['miete'])
                 
                 # Update availability of all affected mietobjekte
                 vertrag.update_mietobjekte_availability()
@@ -962,23 +955,13 @@ def vertrag_edit(request, pk):
         
         if form.is_valid() and formset.is_valid():
             try:
-                # Save the contract first
-                vertrag = form.save(commit=False)
-                
-                # Calculate total miete from formset
-                total_miete = 0
-                for subform in formset:
-                    if subform.cleaned_data and not subform.cleaned_data.get('DELETE', False):
-                        preis = subform.cleaned_data.get('preis', 0)
-                        anzahl = subform.cleaned_data.get('anzahl', 1)
-                        if preis and anzahl:
-                            total_miete += float(preis) * int(anzahl)
-                
-                vertrag.miete = total_miete
-                vertrag.save()
-                
-                # Save formset
+                # Save the contract and formset
+                vertrag = form.save()
                 formset.save()
+                
+                # Calculate and update total miete from all VertragsObjekt items
+                vertrag.miete = vertrag.berechne_gesamtmiete()
+                vertrag.save(update_fields=['miete'])
                 
                 # Update availability of all affected mietobjekte
                 vertrag.update_mietobjekte_availability()
