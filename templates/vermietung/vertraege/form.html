@@ -33,22 +33,6 @@
                     <h5 class="mb-3"><i class="bi bi-file-earmark-text"></i> Vertragsdaten</h5>
                     
                     <div class="mb-3">
-                        <label for="{{ form.mietobjekte.id_for_label }}" class="form-label">{{ form.mietobjekte.label }}</label>
-                        {{ form.mietobjekte }}
-                        {% if form.mietobjekte.errors %}
-                        <div class="text-danger small">{{ form.mietobjekte.errors }}</div>
-                        {% endif %}
-                        {% if form.mietobjekte.help_text %}
-                        <div class="form-text">{{ form.mietobjekte.help_text }}</div>
-                        {% endif %}
-                        <div id="availabilityWarning" class="alert alert-warning mt-2" style="display: none;">
-                            <i class="bi bi-exclamation-triangle"></i> 
-                            <strong>Warnung:</strong> Ein oder mehrere Mietobjekte sind aktuell als "nicht verfügbar" markiert. 
-                            Es könnte bereits einen aktiven Vertrag geben.
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
                         <label for="{{ form.mieter.id_for_label }}" class="form-label">{{ form.mieter.label }}</label>
                         {{ form.mieter }}
                         {% if form.mieter.errors %}
@@ -57,6 +41,87 @@
                         {% if form.mieter.help_text %}
                         <div class="form-text">{{ form.mieter.help_text }}</div>
                         {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-building"></i> Mietobjekte</h5>
+                    
+                    {{ formset.management_form }}
+                    {% if formset.non_form_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ formset.non_form_errors }}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="table-responsive">
+                        <table class="table table-sm" id="vertragsobjekte-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 25%;">Mietobjekt *</th>
+                                    <th style="width: 15%;">Preis (€) *</th>
+                                    <th style="width: 10%;">Anzahl *</th>
+                                    <th style="width: 15%;">Zugang</th>
+                                    <th style="width: 15%;">Abgang</th>
+                                    <th style="width: 12%;">Status *</th>
+                                    <th style="width: 8%;">Löschen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="formset-body">
+                                {% for form in formset %}
+                                <tr class="formset-row">
+                                    <td>
+                                        {{ form.id }}
+                                        {{ form.mietobjekt }}
+                                        {% if form.mietobjekt.errors %}
+                                        <div class="text-danger small">{{ form.mietobjekt.errors }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ form.preis }}
+                                        {% if form.preis.errors %}
+                                        <div class="text-danger small">{{ form.preis.errors }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ form.anzahl }}
+                                        {% if form.anzahl.errors %}
+                                        <div class="text-danger small">{{ form.anzahl.errors }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ form.zugang }}
+                                        {% if form.zugang.errors %}
+                                        <div class="text-danger small">{{ form.zugang.errors }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ form.abgang }}
+                                        {% if form.abgang.errors %}
+                                        <div class="text-danger small">{{ form.abgang.errors }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ form.status }}
+                                        {% if form.status.errors %}
+                                        <div class="text-danger small">{{ form.status.errors }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {{ form.DELETE }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="button" class="btn btn-sm btn-secondary" id="add-row">
+                        <i class="bi bi-plus-circle"></i> Weiteres Mietobjekt hinzufügen
+                    </button>
+                    
+                    <div class="mt-3">
+                        <strong>Gesamtmiete: <span id="gesamtmiete">0.00</span> €</strong>
+                        <small class="text-muted d-block">Wird automatisch berechnet aus: Σ(Anzahl × Preis)</small>
                     </div>
 
                     <hr class="my-4">
@@ -155,7 +220,10 @@
                     <strong>Vertragsnummer:</strong> Die Vertragsnummer wird automatisch beim Speichern generiert (Format: V-00000).
                 </p>
                 <p class="text-muted small mb-2">
-                    <strong>Mietobjekte:</strong> Wählen Sie ein oder mehrere Objekte aus (Mehrfachauswahl). Sie erhalten eine Warnung, wenn Objekte bereits vermietet sind.
+                    <strong>Mietobjekte:</strong> Fügen Sie die zu vermietenden Objekte in der Tabelle hinzu. Sie können für jedes Objekt Preis, Anzahl, Zugangs- und Abgangsdatum sowie den Status festlegen.
+                </p>
+                <p class="text-muted small mb-2">
+                    <strong>Gesamtmiete:</strong> Wird automatisch aus der Summe von (Anzahl × Preis) aller Mietobjekte berechnet.
                 </p>
                 <p class="text-muted small mb-2">
                     <strong>Mieter:</strong> Nur Adressen vom Typ "Kunde" können als Mieter ausgewählt werden.
@@ -190,70 +258,127 @@
 
 {% block extra_js %}
 <script>
-// Get mietobjekt availability data
-const mietobjektData = {
-    {% for obj in form.fields.mietobjekte.queryset %}
-    {{ obj.pk }}: {
-        verfuegbar: {% if obj.verfuegbar %}true{% else %}false{% endif %},
-        mietpreis: {{ obj.mietpreis }},
-        kaution: {% if obj.kaution %}{{ obj.kaution }}{% else %}null{% endif %}
-    }{% if not forloop.last %},{% endif %}
+// Formset management
+const formsetBody = document.getElementById('formset-body');
+const addButton = document.getElementById('add-row');
+const totalFormsInput = document.getElementById('id_vertragsobjekte-TOTAL_FORMS');
+const mieteField = document.getElementById('id_miete');
+const gesamtmieteDisplay = document.getElementById('gesamtmiete');
+
+// Get mietobjekt price data for auto-filling
+const mietobjektPreise = {
+    {% for obj in formset.form.base_fields.mietobjekt.queryset %}
+    {{ obj.pk }}: {{ obj.mietpreis }}{% if not forloop.last %},{% endif %}
     {% endfor %}
 };
 
-// Handle multi-select checkboxes for availability warning
-const checkboxes = document.querySelectorAll('input[name="mietobjekte"]');
-const warningDiv = document.getElementById('availabilityWarning');
-
-function updateAvailabilityWarning() {
-    let hasUnavailable = false;
-    let totalMiete = 0;
-    let totalKaution = 0;
-    let count = 0;
+function updateGesamtmiete() {
+    let total = 0;
     
-    checkboxes.forEach(function(checkbox) {
-        if (checkbox.checked) {
-            const objId = checkbox.value;
-            if (mietobjektData[objId]) {
-                const obj = mietobjektData[objId];
-                if (!obj.verfuegbar) {
-                    hasUnavailable = true;
-                }
-                totalMiete += parseFloat(obj.mietpreis) || 0;
-                totalKaution += parseFloat(obj.kaution) || 0;
-                count++;
-            }
+    // Calculate total from all non-deleted rows
+    document.querySelectorAll('.formset-row').forEach(row => {
+        const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
+        if (deleteCheckbox && deleteCheckbox.checked) {
+            return; // Skip deleted rows
+        }
+        
+        const preisInput = row.querySelector('.preis-input');
+        const anzahlInput = row.querySelector('.anzahl-input');
+        
+        if (preisInput && anzahlInput) {
+            const preis = parseFloat(preisInput.value) || 0;
+            const anzahl = parseInt(anzahlInput.value) || 0;
+            total += preis * anzahl;
         }
     });
     
-    // Show/hide warning
-    if (hasUnavailable) {
-        warningDiv.style.display = 'block';
-    } else {
-        warningDiv.style.display = 'none';
-    }
-    
-    // Pre-fill total miete if empty and objects are selected
-    const mieteField = document.getElementById('id_miete');
-    if (mieteField && !mieteField.value && count > 0) {
-        mieteField.value = totalMiete.toFixed(2);
-    }
-    
-    // Pre-fill total kaution if empty and objects are selected
-    const kautionField = document.getElementById('id_kaution');
-    if (kautionField && !kautionField.value && count > 0 && totalKaution > 0) {
-        kautionField.value = totalKaution.toFixed(2);
+    // Update display and hidden field
+    gesamtmieteDisplay.textContent = total.toFixed(2);
+    if (mieteField) {
+        mieteField.value = total.toFixed(2);
     }
 }
 
-// Add change listener to all checkboxes
-checkboxes.forEach(function(checkbox) {
-    checkbox.addEventListener('change', updateAvailabilityWarning);
-});
+function setupRowEventListeners(row) {
+    // Update total when price or quantity changes
+    const preisInput = row.querySelector('.preis-input');
+    const anzahlInput = row.querySelector('.anzahl-input');
+    const mietobjektSelect = row.querySelector('.mietobjekt-select');
+    const deleteCheckbox = row.querySelector('input[name$="-DELETE"]');
+    
+    if (preisInput) {
+        preisInput.addEventListener('input', updateGesamtmiete);
+    }
+    if (anzahlInput) {
+        anzahlInput.addEventListener('input', updateGesamtmiete);
+    }
+    if (deleteCheckbox) {
+        deleteCheckbox.addEventListener('change', updateGesamtmiete);
+    }
+    
+    // Auto-fill price when mietobjekt is selected
+    if (mietobjektSelect) {
+        mietobjektSelect.addEventListener('change', function() {
+            const selectedId = this.value;
+            if (selectedId && mietobjektPreise[selectedId] && preisInput) {
+                preisInput.value = mietobjektPreise[selectedId];
+                updateGesamtmiete();
+            }
+        });
+    }
+}
 
-// Trigger on page load if any mietobjekte are already selected
-window.addEventListener('DOMContentLoaded', function() {
-    updateAvailabilityWarning();
-});
+// Setup existing rows
+document.querySelectorAll('.formset-row').forEach(setupRowEventListeners);
+
+// Add new row functionality
+if (addButton) {
+    addButton.addEventListener('click', function() {
+        const totalForms = parseInt(totalFormsInput.value);
+        const newRow = formsetBody.querySelector('.formset-row:last-child').cloneNode(true);
+        
+        // Update form index in all fields
+        newRow.innerHTML = newRow.innerHTML.replace(
+            /vertragsobjekte-\d+-/g,
+            `vertragsobjekte-${totalForms}-`
+        );
+        newRow.innerHTML = newRow.innerHTML.replace(
+            /vertragsobjekte-\d+/g,
+            `vertragsobjekte-${totalForms}`
+        );
+        
+        // Clear values
+        newRow.querySelectorAll('input:not([type="checkbox"]):not([type="hidden"])').forEach(input => {
+            input.value = '';
+        });
+        newRow.querySelectorAll('select').forEach(select => {
+            select.selectedIndex = 0;
+        });
+        newRow.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // Set default values
+        const anzahlInput = newRow.querySelector('.anzahl-input');
+        if (anzahlInput) {
+            anzahlInput.value = '1';
+        }
+        
+        // Append new row
+        formsetBody.appendChild(newRow);
+        
+        // Update total forms count
+        totalFormsInput.value = totalForms + 1;
+        
+        // Setup event listeners for new row
+        setupRowEventListeners(newRow);
+        
+        // Update gesamtmiete
+        updateGesamtmiete();
+    });
+}
+
+// Calculate initial total
+updateGesamtmiete();
 </script>
 {% endblock %}

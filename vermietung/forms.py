@@ -297,22 +297,78 @@ class AdresseForm(forms.ModelForm):
         return instance
 
 
+class VertragsObjektForm(forms.ModelForm):
+    """
+    Form for creating/editing VertragsObjekt (rental object assignment in a contract).
+    Used in inline formset for managing multiple rental objects in a contract.
+    """
+    
+    class Meta:
+        model = VertragsObjekt
+        fields = ['mietobjekt', 'preis', 'anzahl', 'zugang', 'abgang', 'status']
+        widgets = {
+            'mietobjekt': forms.Select(attrs={
+                'class': 'form-select form-select-sm mietobjekt-select',
+            }),
+            'preis': forms.NumberInput(attrs={
+                'class': 'form-control form-control-sm preis-input',
+                'step': '0.01',
+                'min': '0',
+            }),
+            'anzahl': forms.NumberInput(attrs={
+                'class': 'form-control form-control-sm anzahl-input',
+                'min': '1',
+                'value': '1',
+            }),
+            'zugang': forms.DateInput(attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }),
+            'abgang': forms.DateInput(attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }),
+            'status': forms.Select(attrs={
+                'class': 'form-select form-select-sm',
+            }),
+        }
+        labels = {
+            'mietobjekt': 'Mietobjekt',
+            'preis': 'Preis (€)',
+            'anzahl': 'Anzahl',
+            'zugang': 'Zugang',
+            'abgang': 'Abgang',
+            'status': 'Status',
+        }
+        help_texts = {
+            'preis': 'Preis pro Einheit',
+            'anzahl': 'Anzahl der Einheiten',
+            'zugang': 'Datum des Zugangs',
+            'abgang': 'Datum des Abgangs',
+            'status': 'Status dieses Objekts',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Order mietobjekte by name
+        self.fields['mietobjekt'].queryset = MietObjekt.objects.all().order_by('name')
+        
+        # Pre-fill preis from mietobjekt if creating new
+        if not self.instance.pk and self.initial.get('mietobjekt'):
+            try:
+                mietobjekt = MietObjekt.objects.get(pk=self.initial['mietobjekt'])
+                self.initial['preis'] = mietobjekt.mietpreis
+            except (MietObjekt.DoesNotExist, KeyError):
+                pass
+
+
 class VertragForm(forms.ModelForm):
     """
     Form for creating/editing Vertrag (rental contracts).
     Includes all fields with proper Bootstrap 5 styling.
     Contract number is auto-generated and not editable.
-    Supports multiple MietObjekte via many-to-many relationship.
+    Rental objects are managed separately via VertragsObjektFormSet.
     """
-    
-    # Custom field for selecting multiple mietobjekte
-    mietobjekte = forms.ModelMultipleChoiceField(
-        queryset=MietObjekt.objects.all().order_by('name'),
-        widget=forms.CheckboxSelectMultiple(),
-        required=True,
-        label='Mietobjekte *',
-        help_text='Wählen Sie ein oder mehrere Objekte aus (Mehrfachauswahl möglich)'
-    )
     
     class Meta:
         model = Vertrag
@@ -338,6 +394,7 @@ class VertragForm(forms.ModelForm):
                 'class': 'form-control',
                 'step': '0.01',
                 'id': 'id_miete',
+                'readonly': 'readonly',
             }),
             'kaution': forms.NumberInput(attrs={
                 'class': 'form-control',
@@ -350,7 +407,7 @@ class VertragForm(forms.ModelForm):
             'mieter': 'Mieter (Kunde) *',
             'start': 'Vertragsbeginn *',
             'ende': 'Vertragsende',
-            'miete': 'Monatliche Miete (€) *',
+            'miete': 'Gesamtmiete (€)',
             'kaution': 'Kaution (€) *',
             'status': 'Status *',
         }
@@ -358,7 +415,7 @@ class VertragForm(forms.ModelForm):
             'mieter': 'Nur Adressen vom Typ "Kunde" können ausgewählt werden',
             'start': 'Startdatum des Vertrags',
             'ende': 'Optional: Enddatum des Vertrags (leer = unbefristet)',
-            'miete': 'Monatliche Miete in EUR',
+            'miete': 'Wird automatisch aus den Mietobjekten berechnet (Summe aus Anzahl × Preis)',
             'kaution': 'Kaution in EUR',
             'status': 'Status des Vertrags',
         }
@@ -371,63 +428,8 @@ class VertragForm(forms.ModelForm):
             adressen_type='KUNDE'
         ).order_by('name')
         
-        # If editing existing contract, pre-fill mietobjekte from VertragsObjekt
-        if self.instance.pk:
-            # Get currently assigned mietobjekte
-            current_mietobjekte = self.instance.get_mietobjekte()
-            self.fields['mietobjekte'].initial = current_mietobjekte
-    
-    def clean_mietobjekte(self):
-        """Validate that at least one mietobjekt is selected."""
-        mietobjekte = self.cleaned_data.get('mietobjekte')
-        if not mietobjekte:
-            raise ValidationError('Mindestens ein Mietobjekt muss ausgewählt werden.')
-        return mietobjekte
-    
-    def clean(self):
-        """
-        Additional validation to warn about unavailable rental objects.
-        VertragsObjekt.clean() will handle overlap validation when objects are saved.
-        """
-        cleaned_data = super().clean()
-        mietobjekte = cleaned_data.get('mietobjekte', [])
-        
-        # Check if any selected mietobjekte are not available
-        unavailable = [obj for obj in mietobjekte if not obj.verfuegbar]
-        if unavailable:
-            unavailable_names = ', '.join(obj.name for obj in unavailable)
-            self.add_error(
-                'mietobjekte',
-                f'Achtung: Folgende Objekte sind aktuell nicht verfügbar: {unavailable_names}. '
-                f'Möglicherweise gibt es bereits einen aktiven Vertrag.'
-            )
-        
-        return cleaned_data
-    
-    def save(self, commit=True):
-        """
-        Save the Vertrag and create VertragsObjekt entries for selected mietobjekte.
-        """
-        instance = super().save(commit=commit)
-        
-        if commit:
-            # Get selected mietobjekte
-            mietobjekte = self.cleaned_data.get('mietobjekte', [])
-            
-            # Clear existing VertragsObjekt entries
-            instance.vertragsobjekte.all().delete()
-            
-            # Create new VertragsObjekt entries
-            for mietobjekt in mietobjekte:
-                VertragsObjekt.objects.create(
-                    vertrag=instance,
-                    mietobjekt=mietobjekt
-                )
-            
-            # Update availability of all affected mietobjekte
-            instance.update_mietobjekte_availability()
-        
-        return instance
+        # Make miete field not required since it will be calculated
+        self.fields['miete'].required = False
 
 
 class VertragEndForm(forms.Form):
@@ -882,4 +884,16 @@ class AktivitaetForm(forms.ModelForm):
                 raise ValidationError('Das angegebene Kontextobjekt existiert nicht.')
         
         return cleaned_data
+
+
+# Inline formset for managing VertragsObjekt in Vertrag forms
+VertragsObjektFormSet = forms.inlineformset_factory(
+    Vertrag,
+    VertragsObjekt,
+    form=VertragsObjektForm,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)
 
