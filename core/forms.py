@@ -2,6 +2,7 @@
 Forms for core mailing functionality and user profile management
 """
 from django import forms
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
 from core.models import SmtpSettings, MailTemplate
@@ -69,6 +70,13 @@ class MailTemplateForm(forms.ModelForm):
             'message_html': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
             'cc_copy_to': 'Optional: Diese Adresse erhält automatisch eine Kopie jeder E-Mail',
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set default values for new templates (not when editing existing ones)
+        if not self.instance.pk:
+            self.fields['from_address'].initial = settings.DEFAULT_FROM_EMAIL
+            self.fields['from_name'].initial = settings.DEFAULT_FROM_NAME
 
 
 class UserProfileForm(forms.ModelForm):

@@ -173,7 +173,9 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@domus.local')
+# Default sender used for mail templates and Django system emails (e.g., password reset)
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@ebner-vermietung.de')
+DEFAULT_FROM_NAME = os.getenv('DEFAULT_FROM_NAME', 'Domus Notification Manager')
 
 # Logging configuration
 # Create logs directory in BASE_DIR
