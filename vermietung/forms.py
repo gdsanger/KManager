@@ -352,8 +352,8 @@ class VertragsObjektForm(forms.ModelForm):
         help_texts = {
             'preis': 'Preis pro Einheit',
             'anzahl': 'Anzahl der Einheiten',
-            'zugang': 'Datum des Zugangs',
-            'abgang': 'Datum des Abgangs',
+            'zugang': 'Datum der Übergabe/Übernahme (optional)',
+            'abgang': 'Datum der Rückgabe (optional)',
             'status': 'Status dieses Objekts',
         }
     

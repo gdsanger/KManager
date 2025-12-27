@@ -197,6 +197,16 @@ class MietObjekt(models.Model):
         
         return units_count + legacy_count
     
+    def get_available_units_count(self):
+        """
+        Calculate the number of units still available for booking.
+        
+        Returns:
+            int: Number of units available (verfuegbare_einheiten - active units)
+        """
+        active_units = self.get_active_units_count()
+        return max(0, self.verfuegbare_einheiten - active_units)
+    
     def has_active_contracts(self):
         """
         Check if this MietObjekt has any currently active contracts.
