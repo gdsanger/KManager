@@ -143,22 +143,7 @@
                                     </a>
                                 </li>
                             </ul>
-                        </li>
-
-                        <!-- Einstellungen Section -->
-                        <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#einstellungenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'mail-template' in request.path %}true{% else %}false{% endif %}">
-                                <i class="bi bi-gear"></i> Einstellungen
-                                <i class="bi bi-chevron-down ms-auto"></i>
-                            </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'mail-template' in request.path %}show{% endif %}" id="einstellungenMenu">
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'mail-template' in request.path %}active{% endif %}" href="{% url 'mailtemplate_list' %}">
-                                        <i class="bi bi-envelope"></i> Mail-Templates
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
+                        </li>                     
                     </ul>
                 </div>
             </nav>
