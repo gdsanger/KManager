@@ -329,11 +329,11 @@ class VertragForm(forms.ModelForm):
             'start': forms.DateInput(attrs={
                 'class': 'form-control',
                 'type': 'date',
-            }),
+            }, format='%Y-%m-%d'),
             'ende': forms.DateInput(attrs={
                 'class': 'form-control',
                 'type': 'date',
-            }),
+            }, format='%Y-%m-%d'),
             'miete': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'step': '0.01',
@@ -392,8 +392,19 @@ class VertragForm(forms.ModelForm):
         cleaned_data = super().clean()
         mietobjekte = cleaned_data.get('mietobjekte', [])
         
+        # Get currently assigned mietobjekte if editing
+        current_mietobjekte_ids = set()
+        if self.instance.pk:
+            current_mietobjekte_ids = set(
+                self.instance.get_mietobjekte().values_list('id', flat=True)
+            )
+        
         # Check if any selected mietobjekte are not available
-        unavailable = [obj for obj in mietobjekte if not obj.verfuegbar]
+        # Exclude objects that are already in this contract (when editing)
+        unavailable = [
+            obj for obj in mietobjekte 
+            if not obj.verfuegbar and obj.id not in current_mietobjekte_ids
+        ]
         if unavailable:
             unavailable_names = ', '.join(obj.name for obj in unavailable)
             self.add_error(
