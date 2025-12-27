@@ -1,7 +1,9 @@
 """
-Forms for core mailing functionality
+Forms for core mailing functionality and user profile management
 """
 from django import forms
+from django.contrib.auth.models import User
+from django.contrib.auth.forms import PasswordChangeForm
 from core.models import SmtpSettings, MailTemplate
 
 
@@ -67,3 +69,40 @@ class MailTemplateForm(forms.ModelForm):
             'message_html': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
             'cc_copy_to': 'Optional: Diese Adresse erhält automatisch eine Kopie jeder E-Mail',
         }
+
+
+class UserProfileForm(forms.ModelForm):
+    """Form for updating user profile information"""
+    
+    class Meta:
+        model = User
+        fields = ['username', 'first_name', 'last_name', 'email']
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'username': 'Benutzername *',
+            'first_name': 'Vorname',
+            'last_name': 'Nachname',
+            'email': 'E-Mail',
+        }
+        help_texts = {
+            'username': 'Erforderlich. 150 Zeichen oder weniger. Buchstaben, Ziffern und @/./+/-/_ nur.',
+        }
+
+
+class CustomPasswordChangeForm(PasswordChangeForm):
+    """Custom password change form with Bootstrap styling"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['old_password'].widget.attrs.update({'class': 'form-control'})
+        self.fields['new_password1'].widget.attrs.update({'class': 'form-control'})
+        self.fields['new_password2'].widget.attrs.update({'class': 'form-control'})
+        
+        self.fields['old_password'].label = 'Aktuelles Passwort'
+        self.fields['new_password1'].label = 'Neues Passwort'
+        self.fields['new_password2'].label = 'Neues Passwort bestätigen'

@@ -5,6 +5,9 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('htmx-demo/', views.htmx_demo, name='htmx_demo'),
     
+    # User Profile
+    path('profile/', views.profile, name='profile'),
+    
     # SMTP Settings
     path('smtp-settings/', views.smtp_settings, name='smtp_settings'),
     
