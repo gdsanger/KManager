@@ -9,7 +9,7 @@ from django.utils import timezone
 from datetime import date, timedelta
 from decimal import Decimal
 from core.models import Adresse
-from vermietung.models import MietObjekt, Vertrag
+from vermietung.models import MietObjekt, Vertrag, Aktivitaet
 
 
 class DashboardTestCase(TestCase):
@@ -115,6 +115,23 @@ class DashboardTestCase(TestCase):
             status='ended'
         )
         
+        # Create some activities
+        Aktivitaet.objects.create(
+            titel='Offene Aktivität 1',
+            status='OFFEN',
+            vertrag=vertrag1
+        )
+        Aktivitaet.objects.create(
+            titel='Offene Aktivität 2',
+            status='OFFEN',
+            kunde=self.kunde1
+        )
+        Aktivitaet.objects.create(
+            titel='Erledigte Aktivität',
+            status='ERLEDIGT',
+            kunde=self.kunde2
+        )
+        
         response = self.client.get(reverse('vermietung:home'))
         
         self.assertEqual(response.status_code, 200)
@@ -124,6 +141,7 @@ class DashboardTestCase(TestCase):
         self.assertEqual(response.context['total_mietobjekte'], 3)
         self.assertEqual(response.context['verfuegbare_mietobjekte'], 2)  # mietobjekt1 and mietobjekt3
         self.assertEqual(response.context['active_vertraege'], 1)  # Only vertrag1
+        self.assertEqual(response.context['offene_aktivitaeten'], 2)  # Two open activities
         self.assertEqual(response.context['total_kunden'], 2)
     
     def test_dashboard_shows_recent_contracts(self):
@@ -255,4 +273,5 @@ class DashboardTestCase(TestCase):
         self.assertContains(response, 'href="%s"' % reverse('vermietung:mietobjekt_list'))
         self.assertContains(response, 'href="%s?verfuegbar=true"' % reverse('vermietung:mietobjekt_list'))
         self.assertContains(response, 'href="%s?status=active"' % reverse('vermietung:vertrag_list'))
+        self.assertContains(response, 'href="%s?status=OFFEN"' % reverse('vermietung:aktivitaet_list'))
         self.assertContains(response, 'href="%s"' % reverse('vermietung:kunde_list'))
