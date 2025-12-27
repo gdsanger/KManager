@@ -69,6 +69,13 @@ class MailTemplateForm(forms.ModelForm):
             'message_html': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
             'cc_copy_to': 'Optional: Diese Adresse erhält automatisch eine Kopie jeder E-Mail',
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set default values for new templates (not when editing existing ones)
+        if not self.instance.pk:
+            self.fields['from_address'].initial = 'noreply@ebner-vermietung.de'
+            self.fields['from_name'].initial = 'Domus Notification Manager'
 
 
 class UserProfileForm(forms.ModelForm):
