@@ -12,7 +12,7 @@ from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjek
 from core.models import Adresse
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
-    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm
+    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, VertragsObjektFormSet
 )
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
@@ -891,13 +891,30 @@ def vertrag_detail(request, pk):
 @vermietung_required
 def vertrag_create(request):
     """
-    Create a new contract.
+    Create a new contract with rental objects.
+    Uses inline formset for managing VertragsObjekt entries.
     """
     if request.method == 'POST':
         form = VertragForm(request.POST)
-        if form.is_valid():
+        formset = VertragsObjektFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
             try:
-                vertrag = form.save()
+                # Save the contract first (without committing to DB yet)
+                vertrag = form.save(commit=False)
+                vertrag.save()
+                
+                # Save formset with the contract
+                formset.instance = vertrag
+                formset.save()
+                
+                # Calculate and update total miete from all VertragsObjekt items
+                vertrag.miete = vertrag.berechne_gesamtmiete()
+                vertrag.save(update_fields=['miete'])
+                
+                # Update availability of all affected mietobjekte
+                vertrag.update_mietobjekte_availability()
+                
                 messages.success(
                     request,
                     f'Vertrag "{vertrag.vertragsnummer}" wurde erfolgreich angelegt.'
@@ -905,14 +922,19 @@ def vertrag_create(request):
                 return redirect('vermietung:vertrag_detail', pk=vertrag.pk)
             except ValidationError as e:
                 # Handle validation errors from model's clean() method
-                for field, errors in e.message_dict.items():
-                    for error in errors:
-                        form.add_error(field, error)
+                if hasattr(e, 'message_dict'):
+                    for field, errors in e.message_dict.items():
+                        for error in errors:
+                            form.add_error(field, error)
+                else:
+                    messages.error(request, str(e))
     else:
         form = VertragForm()
+        formset = VertragsObjektFormSet()
     
     context = {
         'form': form,
+        'formset': formset,
         'is_create': True,
     }
     
@@ -922,16 +944,28 @@ def vertrag_create(request):
 @vermietung_required
 def vertrag_edit(request, pk):
     """
-    Edit an existing contract.
-    Only editable fields can be modified.
+    Edit an existing contract with rental objects.
+    Uses inline formset for managing VertragsObjekt entries.
     """
     vertrag = get_object_or_404(Vertrag, pk=pk)
     
     if request.method == 'POST':
         form = VertragForm(request.POST, instance=vertrag)
-        if form.is_valid():
+        formset = VertragsObjektFormSet(request.POST, instance=vertrag)
+        
+        if form.is_valid() and formset.is_valid():
             try:
+                # Save the contract and formset
                 vertrag = form.save()
+                formset.save()
+                
+                # Calculate and update total miete from all VertragsObjekt items
+                vertrag.miete = vertrag.berechne_gesamtmiete()
+                vertrag.save(update_fields=['miete'])
+                
+                # Update availability of all affected mietobjekte
+                vertrag.update_mietobjekte_availability()
+                
                 messages.success(
                     request,
                     f'Vertrag "{vertrag.vertragsnummer}" wurde erfolgreich aktualisiert.'
@@ -939,14 +973,19 @@ def vertrag_edit(request, pk):
                 return redirect('vermietung:vertrag_detail', pk=vertrag.pk)
             except ValidationError as e:
                 # Handle validation errors from model's clean() method
-                for field, errors in e.message_dict.items():
-                    for error in errors:
-                        form.add_error(field, error)
+                if hasattr(e, 'message_dict'):
+                    for field, errors in e.message_dict.items():
+                        for error in errors:
+                            form.add_error(field, error)
+                else:
+                    messages.error(request, str(e))
     else:
         form = VertragForm(instance=vertrag)
+        formset = VertragsObjektFormSet(instance=vertrag)
     
     context = {
         'form': form,
+        'formset': formset,
         'vertrag': vertrag,
         'is_create': False,
     }
