@@ -319,7 +319,6 @@ class Vertrag(models.Model):
         Returns sum of (anzahl * preis) for all contract objects.
         Returns Decimal with 2 decimal places.
         """
-        from decimal import Decimal
         total = Decimal('0.00')
         for vo in self.vertragsobjekte.all():
             total += vo.gesamtpreis
