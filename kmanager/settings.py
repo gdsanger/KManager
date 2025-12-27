@@ -91,13 +91,11 @@ WSGI_APPLICATION = 'kmanager.wsgi.application'
 
 # Use PostgreSQL if configured, otherwise fallback to SQLite for development
 
-db_name = os.getenv('DB_NAME', 'kmanager')
-
-if db_name:
+if os.getenv('DB_NAME'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': db_name,
+            'NAME': os.getenv('DB_NAME'),
             'USER': os.getenv('DB_USER', 'kmanager_user'),
             'PASSWORD': os.getenv('DB_PASSWORD', ''),
             'HOST': os.getenv('DB_HOST', 'localhost'),
