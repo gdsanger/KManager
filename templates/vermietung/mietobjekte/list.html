@@ -87,6 +87,7 @@
                 <th>Standort</th>
                 <th>Fläche</th>
                 <th>Mietpreis</th>
+                <th>Einheiten</th>
                 <th>Status</th>
                 <th class="text-end">Aktionen</th>
                 {% endblock %}
@@ -124,6 +125,13 @@
                         {% endif %}
                     </td>
                     <td>
+                        <span class="badge bg-info">{{ objekt.verfuegbare_einheiten }} gesamt</span>
+                        <br><small class="text-muted">{{ objekt.get_active_units_count }} gebucht</small>
+                        <br><small class="{% if objekt.get_available_units_count > 0 %}text-success{% else %}text-danger{% endif %}">
+                            {{ objekt.get_available_units_count }} verfügbar
+                        </small>
+                    </td>
+                    <td>
                         {% if objekt.verfuegbar %}
                             <span class="badge bg-success"><i class="bi bi-check-circle"></i> Verfügbar</span>
                         {% else %}
@@ -147,7 +155,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted">
+                    <td colspan="8" class="text-center text-muted">
                         <i class="bi bi-inbox"></i> 
                         {% if search_query or type_filter or verfuegbar_filter or standort_filter %}
                             Keine Mietobjekte gefunden mit den aktuellen Filtern

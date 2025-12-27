@@ -38,6 +38,16 @@
                     <div class="col-md-8">{{ mietobjekt.beschreibung }}</div>
                 </div>
                 <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Verfügbare Einheiten:</div>
+                    <div class="col-md-8">
+                        <strong>{{ mietobjekt.verfuegbare_einheiten }} gesamt</strong>
+                        <br><small class="text-muted">{{ mietobjekt.get_active_units_count }} gebucht</small>
+                        <br><small class="{% if mietobjekt.get_available_units_count > 0 %}text-success{% else %}text-danger{% endif %}">
+                            <strong>{{ mietobjekt.get_available_units_count }} verfügbar</strong>
+                        </small>
+                    </div>
+                </div>
+                <div class="row mb-2">
                     <div class="col-md-4 text-muted">Status:</div>
                     <div class="col-md-8">
                         {% if mietobjekt.verfuegbar %}
