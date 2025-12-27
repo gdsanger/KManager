@@ -73,6 +73,19 @@ class MietObjekt(models.Model):
         verbose_name="Kaution",
         help_text="Kautions-Vorgabe (Standard: 3x Miete)"
     )
+    verfuegbare_einheiten = models.IntegerField(
+        default=1,
+        verbose_name="Verfügbare Einheiten",
+        help_text="Anzahl der verfügbaren Einheiten (für mehrfach vermietbare Objekte)"
+    )
+    volumen = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        verbose_name="Volumen (m³)",
+        help_text="Volumen in m³ (wird aus H×B×T berechnet, kann überschrieben werden)"
+    )
     verfuegbar = models.BooleanField(default=True)
 
     def __str__(self):
@@ -91,6 +104,34 @@ class MietObjekt(models.Model):
         result = Decimal(self.mietpreis) / Decimal(self.fläche)
         # Runde auf 2 Nachkommastellen
         return result.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    
+    @property
+    def volumen_berechnet(self):
+        """
+        Berechnet das Volumen aus Höhe × Breite × Tiefe.
+        Rundet auf 3 Nachkommastellen.
+        Gibt None zurück wenn eine der Dimensionen fehlt oder 0 ist.
+        """
+        if not all([self.höhe, self.breite, self.tiefe]) or any([
+            self.höhe == 0, self.breite == 0, self.tiefe == 0
+        ]):
+            return None
+        # Calculate volume: H × B × T
+        result = Decimal(self.höhe) * Decimal(self.breite) * Decimal(self.tiefe)
+        # Round to 3 decimal places
+        return result.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+    
+    def get_volumen(self):
+        """
+        Gibt das Volumen zurück. Wenn volumen gesetzt ist (überschrieben),
+        wird dieser Wert zurückgegeben, ansonsten das berechnete Volumen.
+        
+        Returns:
+            Decimal or None: Das Volumen in m³
+        """
+        if self.volumen is not None:
+            return self.volumen
+        return self.volumen_berechnet
     
     def get_all_vertraege(self):
         """
@@ -119,9 +160,9 @@ class MietObjekt(models.Model):
             return Vertrag.objects.filter(id__in=contract_ids)
         return Vertrag.objects.none()
     
-    def has_active_contracts(self):
+    def get_active_units_count(self):
         """
-        Check if this MietObjekt has any currently active contracts.
+        Count the total number of units currently in active contracts.
         A contract is currently active if:
         - Status is 'active'
         - start <= today
@@ -130,35 +171,61 @@ class MietObjekt(models.Model):
         Works with both new VertragsObjekt relationship and legacy mietobjekt field.
         
         Returns:
-            bool: True if there are active contracts, False otherwise
+            int: Total number of units in active contracts
         """
         today = timezone.now().date()
         
-        # Check via VertragsObjekt (new n:m relationship)
-        has_active = VertragsObjekt.objects.filter(
+        # Count units via VertragsObjekt (new n:m relationship)
+        units_count = VertragsObjekt.objects.filter(
             mietobjekt=self,
             vertrag__status='active',
             vertrag__start__lte=today
         ).filter(
             Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
-        ).exists()
+        ).aggregate(
+            total=models.Sum('anzahl')
+        )['total'] or 0
         
         # Also check legacy relationship during migration period
-        if not has_active:
-            has_active = self.vertraege_legacy.filter(
-                status='active',
-                start__lte=today
-            ).filter(
-                Q(ende__isnull=True) | Q(ende__gt=today)
-            ).exists()
+        # Legacy contracts don't have anzahl, so we count them as 1 unit each
+        legacy_count = self.vertraege_legacy.filter(
+            status='active',
+            start__lte=today
+        ).filter(
+            Q(ende__isnull=True) | Q(ende__gt=today)
+        ).count()
         
-        return has_active
+        return units_count + legacy_count
+    
+    def has_active_contracts(self):
+        """
+        Check if this MietObjekt has any currently active contracts.
+        Now considers verfuegbare_einheiten: returns True if all units are rented.
+        A contract is currently active if:
+        - Status is 'active'
+        - start <= today
+        - ende is NULL or ende > today
+        
+        Works with both new VertragsObjekt relationship and legacy mietobjekt field.
+        
+        Returns:
+            bool: True if all available units are in active contracts, False otherwise
+        """
+        active_units = self.get_active_units_count()
+        return active_units >= self.verfuegbare_einheiten
     
     def save(self, *args, **kwargs):
         """
         Override save to set kaution default value for new objects.
         For new MietObjekt instances, kaution is pre-filled with 3 × mietpreis.
+        Also validates verfuegbare_einheiten.
         """
+        # Validate verfuegbare_einheiten
+        if self.verfuegbare_einheiten is not None and self.verfuegbare_einheiten < 1:
+            raise ValidationError({
+                'verfuegbare_einheiten': 'Die Anzahl der verfügbaren Einheiten muss mindestens 1 sein.'
+            })
+        
         # Only set default kaution if this is a new object (no pk yet) and kaution is not already set
         if not self.pk and self.kaution is None:
             self.kaution = self.mietpreis * 3
@@ -578,7 +645,7 @@ class VertragsObjekt(models.Model):
         1. Price must be positive
         2. Quantity must be positive
         3. If abgang is set, it must be after zugang
-        4. Mietobjekt must not be in another active contract (only for active contracts)
+        4. Check if there are enough available units for this mietobjekt (only for active contracts)
         """
         super().clean()
         
@@ -600,36 +667,51 @@ class VertragsObjekt(models.Model):
                 'abgang': 'Das Abgangsdatum muss nach dem Zugangsdatum liegen oder am gleichen Tag sein.'
             })
         
-        # Only validate overlap if this is for an active contract
+        # Only validate availability if this is for an active contract
         if not self.vertrag_id or self.vertrag.status != 'active':
             return
         
-        # Check if this mietobjekt is in any other currently active contract
+        # Check if there are enough available units for this mietobjekt
         # A contract is currently active if status='active' and start <= today and (ende is NULL or ende > today)
+        if not self.mietobjekt_id:
+            return
+        
         today = timezone.now().date()
         
-        # Find other active contracts that contain this mietobjekt
-        overlapping_contracts = VertragsObjekt.objects.filter(
+        # Get the MietObjekt to check available units
+        try:
+            mietobjekt = MietObjekt.objects.get(pk=self.mietobjekt_id)
+        except MietObjekt.DoesNotExist:
+            return
+        
+        # Count units already in other active contracts
+        active_units = VertragsObjekt.objects.filter(
             mietobjekt=self.mietobjekt,
             vertrag__status='active',
             vertrag__start__lte=today
         ).filter(
             Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
         ).exclude(
-            vertrag_id=self.vertrag_id
-        ).select_related('vertrag')
+            pk=self.pk if self.pk else None
+        ).aggregate(
+            total=models.Sum('anzahl')
+        )['total'] or 0
         
-        if overlapping_contracts.exists():
-            other_vertrag = overlapping_contracts.first().vertrag
+        # Check if adding this contract would exceed available units
+        requested_units = self.anzahl or 1
+        if active_units + requested_units > mietobjekt.verfuegbare_einheiten:
+            available = mietobjekt.verfuegbare_einheiten - active_units
             raise ValidationError({
-                'mietobjekt': f'Das Mietobjekt "{self.mietobjekt.name}" ist bereits in einem '
-                             f'aktiven Vertrag ({other_vertrag.vertragsnummer}) enthalten.'
+                'anzahl': f'Nicht genügend Einheiten verfügbar. '
+                         f'Verfügbare Einheiten: {mietobjekt.verfuegbare_einheiten}, '
+                         f'bereits vergeben: {active_units}, '
+                         f'noch verfügbar: {available}.'
             })
     
     def save(self, *args, **kwargs):
         """
         Override save to set default price from mietobjekt if not provided.
-        Also runs validation.
+        Also runs validation and updates MietObjekt availability.
         """
         # Set default price from mietobjekt if not provided
         if self.preis is None and self.mietobjekt_id:
@@ -641,6 +723,14 @@ class VertragsObjekt(models.Model):
         
         self.full_clean()
         super().save(*args, **kwargs)
+        
+        # Update MietObjekt availability after saving
+        if self.mietobjekt_id:
+            try:
+                mietobjekt = MietObjekt.objects.get(pk=self.mietobjekt_id)
+                mietobjekt.update_availability()
+            except MietObjekt.DoesNotExist:
+                pass
 
 
 UEBERGABE_TYP = [

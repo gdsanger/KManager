@@ -29,6 +29,8 @@ class MietObjektForm(forms.ModelForm):
             'mietpreis',
             'nebenkosten',
             'kaution',
+            'verfuegbare_einheiten',
+            'volumen',
             'verfuegbar'
         ]
         widgets = {
@@ -43,6 +45,8 @@ class MietObjektForm(forms.ModelForm):
             'mietpreis': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'nebenkosten': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'kaution': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'verfuegbare_einheiten': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+            'volumen': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
             'verfuegbar': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
@@ -57,10 +61,14 @@ class MietObjektForm(forms.ModelForm):
             'mietpreis': 'Mietpreis (€) *',
             'nebenkosten': 'Nebenkosten (€)',
             'kaution': 'Kaution (€)',
+            'verfuegbare_einheiten': 'Verfügbare Einheiten',
+            'volumen': 'Volumen (m³)',
             'verfuegbar': 'Verfügbar',
         }
         help_texts = {
             'kaution': 'Standard: 3x Mietpreis (wird automatisch vorausgefüllt)',
+            'verfuegbare_einheiten': 'Anzahl der verfügbaren Einheiten (Standard: 1)',
+            'volumen': 'Optional: Volumen überschreiben (wird aus H×B×T berechnet)',
             'verfuegbar': 'Wird automatisch basierend auf aktiven Verträgen aktualisiert',
         }
     
@@ -68,6 +76,7 @@ class MietObjektForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Filter standort to only show STANDORT addresses
         self.fields['standort'].queryset = Adresse.objects.filter(adressen_type='STANDORT').order_by('name')
+
 
 
 class AdresseKundeForm(forms.ModelForm):

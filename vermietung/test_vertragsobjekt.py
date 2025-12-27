@@ -164,7 +164,8 @@ class VertragsObjektModelTest(TestCase):
         with self.assertRaises(ValidationError) as context:
             VertragsObjekt.objects.create(vertrag=vertrag2, mietobjekt=self.mietobjekt1)
         
-        self.assertIn('bereits in einem aktiven Vertrag', str(context.exception))
+        # Error message should mention insufficient units
+        self.assertIn('Nicht genügend Einheiten verfügbar', str(context.exception))
     
     def test_mietobjekt_in_ended_and_new_contract_succeeds(self):
         """Test that a mietobjekt can be in an ended contract and a new contract."""
