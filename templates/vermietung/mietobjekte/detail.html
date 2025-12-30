@@ -57,6 +57,18 @@
                         {% endif %}
                     </div>
                 </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Mandant:</div>
+                    <div class="col-md-8">
+                        {% if mietobjekt.mandant %}
+                            <strong>{{ mietobjekt.mandant.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ mietobjekt.mandant.plz }} {{ mietobjekt.mandant.ort }}</small>
+                        {% else %}
+                            <em class="text-muted">Kein Mandant zugeordnet</em>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
 
