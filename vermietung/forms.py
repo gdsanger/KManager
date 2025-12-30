@@ -418,7 +418,7 @@ class VertragForm(forms.ModelForm):
             'mieter': 'Mieter (Kunde) *',
             'start': 'Vertragsbeginn *',
             'ende': 'Vertragsende',
-            'miete': 'Gesamtmiete (€)',
+            'miete': 'Gesamtmiete (€) (Netto)',
             'kaution': 'Kaution (€) *',
             'umsatzsteuer_satz': 'Umsatzsteuer *',
             'status': 'Status *',

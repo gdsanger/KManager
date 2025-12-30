@@ -167,7 +167,7 @@ class VertragVATTestCase(TestCase):
             mieter=self.kunde,
             start=date(2024, 1, 1),
             ende=date(2024, 12, 31),
-            miete=Decimal('2500.00'),  # Will be updated
+            miete=Decimal('2500.00'),
             kaution=Decimal('7500.00'),
             umsatzsteuer_satz='19',
             status='active'
@@ -218,7 +218,7 @@ class VertragVATTestCase(TestCase):
             mieter=self.kunde,
             start=date(2024, 1, 1),
             ende=date(2024, 12, 31),
-            miete=Decimal('3000.00'),  # Will be updated
+            miete=Decimal('3000.00'),
             kaution=Decimal('9000.00'),
             umsatzsteuer_satz='19',
             status='active'

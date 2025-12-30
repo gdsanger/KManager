@@ -155,7 +155,7 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="{{ form.miete.id_for_label }}" class="form-label">{{ form.miete.label }} (Netto)</label>
+                            <label for="{{ form.miete.id_for_label }}" class="form-label">{{ form.miete.label }}</label>
                             <div class="input-group">
                                 {{ form.miete }}
                                 <span class="input-group-text">€</span>
@@ -346,8 +346,9 @@ function updateVATCalculations(nettobetrag) {
     // Get selected VAT rate
     const ustSatz = parseFloat(umsatzsteuerSatzSelect.value) || 0;
     
-    // Calculate VAT amount
-    const umsatzsteuer = (nettobetrag * ustSatz / 100);
+    // Calculate VAT amount with proper rounding for financial calculations
+    // Multiply by 100 first, then divide to avoid floating point precision issues
+    const umsatzsteuer = Math.round(nettobetrag * ustSatz) / 100;
     
     // Calculate gross amount
     const bruttobetrag = nettobetrag + umsatzsteuer;
