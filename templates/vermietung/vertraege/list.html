@@ -12,22 +12,28 @@
 
 {% block filters %}
 <div class="row mb-3">
-    <div class="col-md-6">
+    <div class="col-md-8">
         <form method="get" action="{% url 'vermietung:vertrag_list' %}">
             <div class="input-group">
                 <span class="input-group-text">
                     <i class="bi bi-search"></i>
                 </span>
                 <input type="text" class="form-control" name="q" placeholder="Suche nach Vertragsnummer, Kunde, Mietobjekt..." value="{{ search_query }}">
-                <select class="form-select" name="status" style="max-width: 200px;">
+                <select class="form-select" name="status" style="max-width: 150px;">
                     <option value="">Alle Status</option>
                     <option value="draft" {% if status_filter == 'draft' %}selected{% endif %}>Entwurf</option>
                     <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Aktiv</option>
                     <option value="ended" {% if status_filter == 'ended' %}selected{% endif %}>Beendet</option>
                     <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Storniert</option>
                 </select>
+                <select class="form-select" name="mandant" style="max-width: 200px;">
+                    <option value="">Alle Mandanten</option>
+                    {% for mandant in mandanten %}
+                    <option value="{{ mandant.id }}" {% if mandant_filter == mandant.id|stringformat:"s" %}selected{% endif %}>{{ mandant.name }}</option>
+                    {% endfor %}
+                </select>
                 <button type="submit" class="btn btn-outline-secondary">Suchen</button>
-                {% if search_query or status_filter %}
+                {% if search_query or status_filter or mandant_filter %}
                 <a href="{% url 'vermietung:vertrag_list' %}" class="btn btn-outline-secondary">
                     <i class="bi bi-x"></i>
                 </a>
@@ -35,7 +41,7 @@
             </div>
         </form>
     </div>
-    <div class="col-md-6 text-end">
+    <div class="col-md-4 text-end">
         <span class="text-muted">{{ page_obj.paginator.count }} Vertrag/Verträge</span>
     </div>
 </div>
@@ -114,7 +120,7 @@
                 <tr>
                     <td colspan="7" class="text-center text-muted">
                         <i class="bi bi-inbox"></i> 
-                        {% if search_query or status_filter %}
+                        {% if search_query or status_filter or mandant_filter %}
                             Keine Verträge gefunden
                         {% else %}
                             Keine Verträge vorhanden
@@ -136,10 +142,10 @@
         <ul class="pagination pagination-sm mb-0">
             {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Erste</a>
+                <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Erste</a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Zurück</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Zurück</a>
             </li>
             {% else %}
             <li class="page-item disabled">
@@ -153,10 +159,10 @@
             
             {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Weiter</a>
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Weiter</a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Letzte</a>
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Letzte</a>
             </li>
             {% else %}
             <li class="page-item disabled">

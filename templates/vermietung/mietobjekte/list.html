@@ -16,7 +16,7 @@
         <form method="get" action="{% url 'vermietung:mietobjekt_list' %}">
             <div class="row g-2">
                 <!-- Search -->
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="input-group">
                         <span class="input-group-text">
                             <i class="bi bi-search"></i>
@@ -54,13 +54,23 @@
                     </select>
                 </div>
                 
-                <!-- Buttons -->
+                <!-- Mandant Filter -->
                 <div class="col-md-2">
+                    <select name="mandant" class="form-select">
+                        <option value="">Alle Mandanten</option>
+                        {% for mandant in mandanten %}
+                        <option value="{{ mandant.id }}" {% if mandant_filter == mandant.id|stringformat:"s" %}selected{% endif %}>{{ mandant.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Buttons -->
+                <div class="col-md-1">
                     <div class="btn-group w-100" role="group">
-                        <button type="submit" class="btn btn-outline-secondary">
-                            <i class="bi bi-funnel"></i> Filtern
+                        <button type="submit" class="btn btn-outline-secondary" title="Filtern">
+                            <i class="bi bi-funnel"></i>
                         </button>
-                        {% if search_query or type_filter or verfuegbar_filter or standort_filter %}
+                        {% if search_query or type_filter or verfuegbar_filter or standort_filter or mandant_filter %}
                         <a href="{% url 'vermietung:mietobjekt_list' %}" class="btn btn-outline-secondary" title="Filter zurücksetzen">
                             <i class="bi bi-x"></i>
                         </a>
@@ -157,7 +167,7 @@
                 <tr>
                     <td colspan="8" class="text-center text-muted">
                         <i class="bi bi-inbox"></i> 
-                        {% if search_query or type_filter or verfuegbar_filter or standort_filter %}
+                        {% if search_query or type_filter or verfuegbar_filter or standort_filter or mandant_filter %}
                             Keine Mietobjekte gefunden mit den aktuellen Filtern
                         {% else %}
                             Keine Mietobjekte vorhanden
@@ -179,10 +189,10 @@
         <ul class="pagination pagination-sm mb-0">
             {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}">Erste</a>
+                <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Erste</a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}">Zurück</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Zurück</a>
             </li>
             {% else %}
             <li class="page-item disabled">
@@ -196,10 +206,10 @@
             
             {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}">Weiter</a>
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Weiter</a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}">Letzte</a>
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if verfuegbar_filter %}&verfuegbar={{ verfuegbar_filter }}{% endif %}{% if standort_filter %}&standort={{ standort_filter }}{% endif %}{% if mandant_filter %}&mandant={{ mandant_filter }}{% endif %}">Letzte</a>
             </li>
             {% else %}
             <li class="page-item disabled">

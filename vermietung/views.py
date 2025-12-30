@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.db.models import Q
 from datetime import timedelta
 from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, OBJEKT_TYPE
-from core.models import Adresse
+from core.models import Adresse, Mandant
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, VertragsObjektFormSet
@@ -628,16 +628,17 @@ def adresse_delete(request, pk):
 def mietobjekt_list(request):
     """
     List all MietObjekt with search, filtering and pagination.
-    Supports filtering by type, availability, and location.
+    Supports filtering by type, availability, location, and mandant.
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
     type_filter = request.GET.get('type', '')
     verfuegbar_filter = request.GET.get('verfuegbar', '')
     standort_filter = request.GET.get('standort', '')
+    mandant_filter = request.GET.get('mandant', '')
     
     # Base queryset with related data
-    mietobjekte = MietObjekt.objects.select_related('standort').all()
+    mietobjekte = MietObjekt.objects.select_related('standort', 'mandant').all()
     
     # Apply search filter
     if search_query:
@@ -663,6 +664,10 @@ def mietobjekt_list(request):
     if standort_filter:
         mietobjekte = mietobjekte.filter(standort_id=standort_filter)
     
+    # Apply mandant filter
+    if mandant_filter:
+        mietobjekte = mietobjekte.filter(mandant_id=mandant_filter)
+    
     # Order by name
     mietobjekte = mietobjekte.order_by('name')
     
@@ -675,13 +680,18 @@ def mietobjekt_list(request):
     # Always fetch for display consistency
     standorte = Adresse.objects.filter(adressen_type='STANDORT').order_by('name')
     
+    # Get all mandanten for filter dropdown
+    mandanten = Mandant.objects.all().order_by('name')
+    
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
         'type_filter': type_filter,
         'verfuegbar_filter': verfuegbar_filter,
         'standort_filter': standort_filter,
+        'mandant_filter': mandant_filter,
         'standorte': standorte,
+        'mandanten': mandanten,
         'objekt_types': OBJEKT_TYPE,
     }
     
@@ -817,13 +827,15 @@ def mietobjekt_delete(request, pk):
 def vertrag_list(request):
     """
     List all contracts (Verträge) with search and pagination.
+    Supports filtering by status and mandant.
     """
     # Get search query
     search_query = request.GET.get('q', '').strip()
     status_filter = request.GET.get('status', '')
+    mandant_filter = request.GET.get('mandant', '')
     
     # Base queryset with related data
-    vertraege = Vertrag.objects.select_related('mietobjekt', 'mieter').all()
+    vertraege = Vertrag.objects.select_related('mietobjekt', 'mieter', 'mandant').all()
     
     # Apply search filter
     if search_query:
@@ -838,6 +850,10 @@ def vertrag_list(request):
     if status_filter:
         vertraege = vertraege.filter(status=status_filter)
     
+    # Apply mandant filter
+    if mandant_filter:
+        vertraege = vertraege.filter(mandant_id=mandant_filter)
+    
     # Order by start date (newest first)
     vertraege = vertraege.order_by('-start')
     
@@ -846,10 +862,15 @@ def vertrag_list(request):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
+    # Get all mandanten for filter dropdown
+    mandanten = Mandant.objects.all().order_by('name')
+    
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
         'status_filter': status_filter,
+        'mandant_filter': mandant_filter,
+        'mandanten': mandanten,
     }
     
     return render(request, 'vermietung/vertraege/list.html', context)
