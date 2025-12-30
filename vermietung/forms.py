@@ -387,6 +387,7 @@ class VertragForm(forms.ModelForm):
             'ende',
             'miete',
             'kaution',
+            'umsatzsteuer_satz',
             'status',
         ]
         widgets = {
@@ -410,6 +411,7 @@ class VertragForm(forms.ModelForm):
                 'step': '0.01',
                 'id': 'id_kaution',
             }),
+            'umsatzsteuer_satz': forms.Select(attrs={'class': 'form-select'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
@@ -418,6 +420,7 @@ class VertragForm(forms.ModelForm):
             'ende': 'Vertragsende',
             'miete': 'Gesamtmiete (€)',
             'kaution': 'Kaution (€) *',
+            'umsatzsteuer_satz': 'Umsatzsteuer *',
             'status': 'Status *',
         }
         help_texts = {
@@ -426,6 +429,7 @@ class VertragForm(forms.ModelForm):
             'ende': 'Optional: Enddatum des Vertrags (leer = unbefristet)',
             'miete': 'Wird automatisch aus den Mietobjekten berechnet (Summe aus Anzahl × Preis)',
             'kaution': 'Kaution in EUR',
+            'umsatzsteuer_satz': 'Umsatzsteuersatz für die Berechnung des Bruttobetrags',
             'status': 'Status des Vertrags',
         }
     

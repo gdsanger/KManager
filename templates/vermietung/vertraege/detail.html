@@ -205,9 +205,21 @@
             </div>
             <div class="card-body">
                 <div class="row mb-2">
-                    <div class="col-md-4 text-muted">Monatliche Miete:</div>
+                    <div class="col-md-4 text-muted">Monatliche Miete (Netto):</div>
                     <div class="col-md-8"><strong>{{ vertrag.miete|floatformat:2 }} €</strong></div>
                 </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Umsatzsteuer:</div>
+                    <div class="col-md-8">
+                        {{ vertrag.get_umsatzsteuer_satz_display }}
+                        <span class="text-muted">({{ vertrag.berechne_umsatzsteuer|floatformat:2 }} €)</span>
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted"><strong>Monatliche Miete (Brutto):</strong></div>
+                    <div class="col-md-8"><strong>{{ vertrag.berechne_bruttobetrag|floatformat:2 }} €</strong></div>
+                </div>
+                <hr>
                 <div class="row mb-2">
                     <div class="col-md-4 text-muted">Kaution:</div>
                     <div class="col-md-8"><strong>{{ vertrag.kaution|floatformat:2 }} €</strong></div>

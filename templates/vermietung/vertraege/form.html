@@ -155,7 +155,7 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="{{ form.miete.id_for_label }}" class="form-label">{{ form.miete.label }}</label>
+                            <label for="{{ form.miete.id_for_label }}" class="form-label">{{ form.miete.label }} (Netto)</label>
                             <div class="input-group">
                                 {{ form.miete }}
                                 <span class="input-group-text">€</span>
@@ -168,6 +168,41 @@
                             {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
+                            <label for="{{ form.umsatzsteuer_satz.id_for_label }}" class="form-label">{{ form.umsatzsteuer_satz.label }}</label>
+                            {{ form.umsatzsteuer_satz }}
+                            {% if form.umsatzsteuer_satz.errors %}
+                            <div class="text-danger small">{{ form.umsatzsteuer_satz.errors }}</div>
+                            {% endif %}
+                            {% if form.umsatzsteuer_satz.help_text %}
+                            <div class="form-text">{{ form.umsatzsteuer_satz.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <div class="row mb-2">
+                                        <div class="col-6 text-muted">Nettobetrag:</div>
+                                        <div class="col-6 text-end"><span id="nettobetrag-display">0.00</span> €</div>
+                                    </div>
+                                    <div class="row mb-2">
+                                        <div class="col-6 text-muted">Umsatzsteuer (<span id="ust-satz-display">19</span>%):</div>
+                                        <div class="col-6 text-end"><span id="umsatzsteuer-display">0.00</span> €</div>
+                                    </div>
+                                    <hr>
+                                    <div class="row">
+                                        <div class="col-6"><strong>Bruttobetrag:</strong></div>
+                                        <div class="col-6 text-end"><strong><span id="bruttobetrag-display">0.00</span> €</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
                             <label for="{{ form.kaution.id_for_label }}" class="form-label">{{ form.kaution.label }}</label>
                             <div class="input-group">
                                 {{ form.kaution }}
@@ -264,6 +299,11 @@ const addButton = document.getElementById('add-row');
 const totalFormsInput = document.getElementById('id_vertragsobjekte-TOTAL_FORMS');
 const mieteField = document.getElementById('id_miete');
 const gesamtmieteDisplay = document.getElementById('gesamtmiete');
+const umsatzsteuerSatzSelect = document.getElementById('id_umsatzsteuer_satz');
+const nettobetragsDisplay = document.getElementById('nettobetrag-display');
+const umsatzsteuerDisplay = document.getElementById('umsatzsteuer-display');
+const ustSatzDisplay = document.getElementById('ust-satz-display');
+const bruttobetragsDisplay = document.getElementById('bruttobetrag-display');
 
 // Get mietobjekt price data for auto-filling
 const mietobjektPreise = {
@@ -297,6 +337,26 @@ function updateGesamtmiete() {
     if (mieteField) {
         mieteField.value = total.toFixed(2);
     }
+    
+    // Update VAT calculations
+    updateVATCalculations(total);
+}
+
+function updateVATCalculations(nettobetrag) {
+    // Get selected VAT rate
+    const ustSatz = parseFloat(umsatzsteuerSatzSelect.value) || 0;
+    
+    // Calculate VAT amount
+    const umsatzsteuer = (nettobetrag * ustSatz / 100);
+    
+    // Calculate gross amount
+    const bruttobetrag = nettobetrag + umsatzsteuer;
+    
+    // Update displays
+    nettobetragsDisplay.textContent = nettobetrag.toFixed(2);
+    umsatzsteuerDisplay.textContent = umsatzsteuer.toFixed(2);
+    ustSatzDisplay.textContent = ustSatz.toFixed(0);
+    bruttobetragsDisplay.textContent = bruttobetrag.toFixed(2);
 }
 
 function setupRowEventListeners(row) {
@@ -389,5 +449,14 @@ if (addButton) {
 
 // Calculate initial total
 updateGesamtmiete();
+
+// Update VAT calculations when VAT rate changes
+if (umsatzsteuerSatzSelect) {
+    umsatzsteuerSatzSelect.addEventListener('change', function() {
+        // Recalculate with current net amount
+        const nettobetrag = parseFloat(mieteField.value) || 0;
+        updateVATCalculations(nettobetrag);
+    });
+}
 </script>
 {% endblock %}

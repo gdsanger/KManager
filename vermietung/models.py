@@ -33,6 +33,12 @@ VERTRAG_STATUS = [
     ('cancelled', 'Storniert'),
 ]
 
+UMSATZSTEUER_SAETZE = [
+    ('0', '0% Umsatzsteuer (steuerfrei)'),
+    ('7', '7% Umsatzsteuer (Beherbergung)'),
+    ('19', '19% Umsatzsteuer (Gewerbe)'),
+]
+
 
 class VertragQuerySet(models.QuerySet):
     """Custom queryset for Vertrag with helper methods."""
@@ -316,6 +322,13 @@ class Vertrag(models.Model):
         verbose_name="Status",
         help_text="Status des Vertrags"
     )
+    umsatzsteuer_satz = models.CharField(
+        max_length=2,
+        choices=UMSATZSTEUER_SAETZE,
+        default='19',
+        verbose_name="Umsatzsteuer",
+        help_text="Umsatzsteuersatz für diesen Vertrag"
+    )
     
     # Custom manager
     objects = VertragQuerySet.as_manager()
@@ -405,6 +418,26 @@ class Vertrag(models.Model):
         for vo in self.vertragsobjekte.all():
             total += vo.gesamtpreis
         return total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    
+    def berechne_umsatzsteuer(self):
+        """
+        Calculate VAT amount based on total rent (net amount) and VAT rate.
+        Returns Decimal with 2 decimal places.
+        """
+        nettobetrag = self.berechne_gesamtmiete()
+        umsatzsteuer_prozent = Decimal(self.umsatzsteuer_satz)
+        umsatzsteuer_betrag = (nettobetrag * umsatzsteuer_prozent / Decimal('100'))
+        return umsatzsteuer_betrag.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    
+    def berechne_bruttobetrag(self):
+        """
+        Calculate gross amount (net amount + VAT).
+        Returns Decimal with 2 decimal places.
+        """
+        nettobetrag = self.berechne_gesamtmiete()
+        umsatzsteuer = self.berechne_umsatzsteuer()
+        bruttobetrag = nettobetrag + umsatzsteuer
+        return bruttobetrag.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     def clean(self):
         """
