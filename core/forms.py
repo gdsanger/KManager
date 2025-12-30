@@ -5,7 +5,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
-from core.models import SmtpSettings, MailTemplate
+from core.models import SmtpSettings, MailTemplate, Mandant
 
 
 class SmtpSettingsForm(forms.ModelForm):
@@ -114,3 +114,52 @@ class CustomPasswordChangeForm(PasswordChangeForm):
         self.fields['old_password'].label = 'Aktuelles Passwort'
         self.fields['new_password1'].label = 'Neues Passwort'
         self.fields['new_password2'].label = 'Neues Passwort bestätigen'
+
+
+class MandantForm(forms.ModelForm):
+    """Form for Mandant entity"""
+    
+    class Meta:
+        model = Mandant
+        fields = [
+            'name', 'adresse', 'plz', 'ort', 'land',
+            'telefon', 'fax', 'email', 'internet',
+            'steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 
+            'kreditinstitut', 'iban', 'bic', 'kontoinhaber'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'adresse': forms.TextInput(attrs={'class': 'form-control'}),
+            'plz': forms.TextInput(attrs={'class': 'form-control', 'maxlength': '10'}),
+            'ort': forms.TextInput(attrs={'class': 'form-control'}),
+            'land': forms.TextInput(attrs={'class': 'form-control'}),
+            'telefon': forms.TextInput(attrs={'class': 'form-control'}),
+            'fax': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'internet': forms.URLInput(attrs={'class': 'form-control'}),
+            'steuernummer': forms.TextInput(attrs={'class': 'form-control'}),
+            'ust_id_nr': forms.TextInput(attrs={'class': 'form-control'}),
+            'geschaeftsfuehrer': forms.TextInput(attrs={'class': 'form-control'}),
+            'kreditinstitut': forms.TextInput(attrs={'class': 'form-control'}),
+            'iban': forms.TextInput(attrs={'class': 'form-control'}),
+            'bic': forms.TextInput(attrs={'class': 'form-control'}),
+            'kontoinhaber': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'name': 'Name *',
+            'adresse': 'Adresse *',
+            'plz': 'PLZ *',
+            'ort': 'Ort *',
+            'land': 'Land *',
+            'telefon': 'Telefon',
+            'fax': 'Fax',
+            'email': 'E-Mail',
+            'internet': 'Internet',
+            'steuernummer': 'Steuernummer',
+            'ust_id_nr': 'UStIdNr',
+            'geschaeftsfuehrer': 'Geschäftsführer',
+            'kreditinstitut': 'Kreditinstitut',
+            'iban': 'IBAN',
+            'bic': 'BIC',
+            'kontoinhaber': 'Kontoinhaber',
+        }

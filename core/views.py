@@ -3,8 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from core.models import SmtpSettings, MailTemplate
-from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm
+from core.models import SmtpSettings, MailTemplate, Mandant
+from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm
 
 
 def home(request):
@@ -135,4 +135,74 @@ def profile(request):
         'profile_form': profile_form,
         'password_form': password_form,
     })
+
+
+# Mandant CRUD Views
+@login_required
+def mandant_list(request):
+    """List all Mandanten"""
+    mandanten = Mandant.objects.all()
+    return render(request, 'core/mandant_list.html', {'mandanten': mandanten})
+
+
+@login_required
+def mandant_create(request):
+    """Create a new Mandant"""
+    if request.method == 'POST':
+        form = MandantForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Mandant erfolgreich erstellt.')
+            return redirect('mandant_list')
+    else:
+        form = MandantForm()
+    
+    return render(request, 'core/mandant_form.html', {
+        'form': form,
+        'title': 'Neuer Mandant',
+        'action': 'Erstellen'
+    })
+
+
+@login_required
+def mandant_edit(request, pk):
+    """Edit an existing Mandant"""
+    mandant = get_object_or_404(Mandant, pk=pk)
+    
+    if request.method == 'POST':
+        form = MandantForm(request.POST, instance=mandant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Mandant erfolgreich aktualisiert.')
+            return redirect('mandant_list')
+    else:
+        form = MandantForm(instance=mandant)
+    
+    return render(request, 'core/mandant_form.html', {
+        'form': form,
+        'mandant': mandant,
+        'title': f'Mandant bearbeiten: {mandant.name}',
+        'action': 'Speichern'
+    })
+
+
+@login_required
+def mandant_detail(request, pk):
+    """View details of a Mandant"""
+    mandant = get_object_or_404(Mandant, pk=pk)
+    return render(request, 'core/mandant_detail.html', {'mandant': mandant})
+
+
+@login_required
+def mandant_delete(request, pk):
+    """Delete a Mandant"""
+    mandant = get_object_or_404(Mandant, pk=pk)
+    
+    if request.method == 'POST':
+        mandant_name = mandant.name
+        mandant.delete()
+        messages.success(request, f'Mandant "{mandant_name}" wurde gelöscht.')
+        return redirect('mandant_list')
+    
+    return render(request, 'core/mandant_confirm_delete.html', {'mandant': mandant})
 

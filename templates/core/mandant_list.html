@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Mandanten - Domus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-building"></i> Mandanten</h2>
+        <a href="{% url 'mandant_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Neuer Mandant
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Adresse</th>
+                            <th>PLZ / Ort</th>
+                            <th>Land</th>
+                            <th>Telefon</th>
+                            <th>E-Mail</th>
+                            <th class="text-end">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mandant in mandanten %}
+                        <tr>
+                            <td><a href="{% url 'mandant_detail' mandant.pk %}">{{ mandant.name }}</a></td>
+                            <td>{{ mandant.adresse }}</td>
+                            <td>{{ mandant.plz }} {{ mandant.ort }}</td>
+                            <td>{{ mandant.land }}</td>
+                            <td>
+                                {% if mandant.telefon %}
+                                    {{ mandant.telefon }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if mandant.email %}
+                                    {{ mandant.email }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'mandant_detail' mandant.pk %}" class="btn btn-outline-info" title="Details anzeigen">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'mandant_edit' mandant.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'mandant_delete' mandant.pk %}" class="btn btn-outline-danger" title="Löschen">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                <i class="bi bi-inbox"></i> Keine Mandanten vorhanden
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
