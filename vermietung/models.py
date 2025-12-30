@@ -336,6 +336,7 @@ class Vertrag(models.Model):
         default='19',
         verbose_name="Umsatzsteuer",
         help_text="Umsatzsteuersatz für diesen Vertrag"
+    )
     mandant = models.ForeignKey(
         Mandant,
         on_delete=models.PROTECT,
