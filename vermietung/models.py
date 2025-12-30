@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from decimal import Decimal, ROUND_HALF_UP
-from core.models import Adresse
+from core.models import Adresse, Mandant
 import os
 import magic
 from pathlib import Path
@@ -93,6 +93,14 @@ class MietObjekt(models.Model):
         help_text="Volumen in m³ (wird aus H×B×T berechnet, kann überschrieben werden)"
     )
     verfuegbar = models.BooleanField(default=True)
+    mandant = models.ForeignKey(
+        Mandant,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name="Mandant",
+        help_text="Zugeordneter Mandant für dieses Mietobjekt"
+    )
 
     def __str__(self):
         return self.name
@@ -328,6 +336,13 @@ class Vertrag(models.Model):
         default='19',
         verbose_name="Umsatzsteuer",
         help_text="Umsatzsteuersatz für diesen Vertrag"
+    mandant = models.ForeignKey(
+        Mandant,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name="Mandant",
+        help_text="Zugeordneter Mandant für diesen Vertrag"
     )
     
     # Custom manager
@@ -511,9 +526,28 @@ class Vertrag(models.Model):
         Uses database-level locking to prevent race conditions.
         Also handles backwards compatibility: if legacy mietobjekt field is set,
         automatically creates VertragsObjekt entry.
+        Auto-inherits mandant from the first MietObjekt if not explicitly set.
         """
         if not self.vertragsnummer:
             self.vertragsnummer = self._generate_vertragsnummer()
+        
+        # Auto-inherit mandant from MietObjekt if not set
+        # Only do this for new contracts or when mandant is None
+        if not self.mandant_id:
+            # Try legacy mietobjekt field first (during migration)
+            if self.mietobjekt_id:
+                try:
+                    mietobjekt = MietObjekt.objects.get(pk=self.mietobjekt_id)
+                    if mietobjekt.mandant_id:
+                        self.mandant_id = mietobjekt.mandant_id
+                except MietObjekt.DoesNotExist:
+                    pass
+            # If not set via legacy field and this is an existing contract, 
+            # try to get from first VertragsObjekt
+            elif self.pk:
+                first_vo = self.vertragsobjekte.select_related('mietobjekt__mandant').first()
+                if first_vo and first_vo.mietobjekt.mandant_id:
+                    self.mandant_id = first_vo.mietobjekt.mandant_id
         
         # Run full_clean to trigger validation
         self.full_clean()
