@@ -23,9 +23,9 @@ class VertragAdminForm(forms.ModelForm):
 
 @admin.register(MietObjekt)
 class MietObjektAdmin(admin.ModelAdmin):
-    list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'kaution', 'display_qm_mietpreis', 'verfuegbar')
+    list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'kaution', 'display_qm_mietpreis', 'mandant', 'verfuegbar')
     search_fields = ('name', 'standort__strasse', 'standort__ort', 'standort')
-    list_filter = ('type', 'verfuegbar', 'standort')
+    list_filter = ('type', 'verfuegbar', 'standort', 'mandant')
     readonly_fields = ('display_qm_mietpreis',)
     actions = ['recalculate_availability']
     
@@ -56,14 +56,14 @@ class MietObjektAdmin(admin.ModelAdmin):
 @admin.register(Vertrag)
 class VertragAdmin(admin.ModelAdmin):
     form = VertragAdminForm
-    list_display = ('vertragsnummer', 'mietobjekt', 'mieter', 'start', 'ende', 'status', 'miete', 'kaution')
+    list_display = ('vertragsnummer', 'mietobjekt', 'mieter', 'start', 'ende', 'status', 'miete', 'kaution', 'mandant')
     search_fields = ('vertragsnummer', 'mietobjekt__name', 'mieter__name', 'mieter__firma')
-    list_filter = ('status', 'start', 'ende', 'mietobjekt')
+    list_filter = ('status', 'start', 'ende', 'mietobjekt', 'mandant')
     readonly_fields = ('vertragsnummer',)
     
     fieldsets = (
         ('Vertragsdetails', {
-            'fields': ('vertragsnummer', 'mietobjekt', 'mieter', 'status')
+            'fields': ('vertragsnummer', 'mietobjekt', 'mieter', 'status', 'mandant')
         }),
         ('Zeitraum', {
             'fields': ('start', 'ende')
@@ -76,7 +76,7 @@ class VertragAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queries by prefetching related objects."""
         queryset = super().get_queryset(request)
-        return queryset.select_related('mieter', 'mietobjekt')
+        return queryset.select_related('mieter', 'mietobjekt', 'mandant')
     
     actions = ['mark_as_active', 'mark_as_ended', 'mark_as_cancelled']
     
