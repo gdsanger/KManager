@@ -5,7 +5,7 @@ Forms for the Vermietung (Rental Management) area.
 from django import forms
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
-from core.models import Adresse
+from core.models import Adresse, Mandant
 from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, Aktivitaet, VertragsObjekt, OBJEKT_TYPE
 User = get_user_model()
 
@@ -31,7 +31,8 @@ class MietObjektForm(forms.ModelForm):
             'kaution',
             'verfuegbare_einheiten',
             'volumen',
-            'verfuegbar'
+            'verfuegbar',
+            'mandant'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -48,6 +49,7 @@ class MietObjektForm(forms.ModelForm):
             'verfuegbare_einheiten': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
             'volumen': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
             'verfuegbar': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'mandant': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
             'name': 'Name *',
@@ -64,18 +66,22 @@ class MietObjektForm(forms.ModelForm):
             'verfuegbare_einheiten': 'Verfügbare Einheiten',
             'volumen': 'Volumen (m³)',
             'verfuegbar': 'Verfügbar',
+            'mandant': 'Mandant',
         }
         help_texts = {
             'kaution': 'Standard: 3x Mietpreis (wird automatisch vorausgefüllt)',
             'verfuegbare_einheiten': 'Anzahl der verfügbaren Einheiten (Standard: 1)',
             'volumen': 'Optional: Volumen überschreiben (wird aus H×B×T berechnet)',
             'verfuegbar': 'Wird automatisch basierend auf aktiven Verträgen aktualisiert',
+            'mandant': 'Optional: Zugeordneter Mandant für dieses Mietobjekt',
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Filter standort to only show STANDORT addresses
         self.fields['standort'].queryset = Adresse.objects.filter(adressen_type='STANDORT').order_by('name')
+        # Order mandanten by name
+        self.fields['mandant'].queryset = Mandant.objects.all().order_by('name')
 
 
 
@@ -388,6 +394,7 @@ class VertragForm(forms.ModelForm):
             'miete',
             'kaution',
             'status',
+            'mandant',
         ]
         widgets = {
             'mieter': forms.Select(attrs={'class': 'form-select'}),
@@ -411,6 +418,7 @@ class VertragForm(forms.ModelForm):
                 'id': 'id_kaution',
             }),
             'status': forms.Select(attrs={'class': 'form-select'}),
+            'mandant': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
             'mieter': 'Mieter (Kunde) *',
@@ -419,6 +427,7 @@ class VertragForm(forms.ModelForm):
             'miete': 'Gesamtmiete (€)',
             'kaution': 'Kaution (€) *',
             'status': 'Status *',
+            'mandant': 'Mandant',
         }
         help_texts = {
             'mieter': 'Nur Adressen vom Typ "Kunde" können ausgewählt werden',
@@ -427,6 +436,7 @@ class VertragForm(forms.ModelForm):
             'miete': 'Wird automatisch aus den Mietobjekten berechnet (Summe aus Anzahl × Preis)',
             'kaution': 'Kaution in EUR',
             'status': 'Status des Vertrags',
+            'mandant': 'Optional: Zugeordneter Mandant (wird vom Mietobjekt übernommen wenn leer)',
         }
     
     def __init__(self, *args, **kwargs):
@@ -439,6 +449,9 @@ class VertragForm(forms.ModelForm):
         
         # Make miete field not required since it will be calculated
         self.fields['miete'].required = False
+        
+        # Order mandanten by name
+        self.fields['mandant'].queryset = Mandant.objects.all().order_by('name')
 
 
 class VertragEndForm(forms.Form):
