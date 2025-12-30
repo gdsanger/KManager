@@ -161,7 +161,9 @@
                         {% if form.verfuegbar.errors %}
                         <div class="text-danger small">{{ form.verfuegbar.errors }}</div>
                         {% endif %}
+                        {% if form.verfuegbar.help_text %}
                         <div class="form-text">{{ form.verfuegbar.help_text }}</div>
+                        {% endif %}
                     </div>
 
                     <hr class="my-4">
