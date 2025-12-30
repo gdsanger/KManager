@@ -137,7 +137,9 @@
                             {% if form.verfuegbare_einheiten.errors %}
                             <div class="text-danger small">{{ form.verfuegbare_einheiten.errors }}</div>
                             {% endif %}
+                            {% if form.verfuegbare_einheiten.help_text %}
                             <div class="form-text">{{ form.verfuegbare_einheiten.help_text }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.volumen.id_for_label }}" class="form-label">{{ form.volumen.label }}</label>
@@ -145,7 +147,9 @@
                             {% if form.volumen.errors %}
                             <div class="text-danger small">{{ form.volumen.errors }}</div>
                             {% endif %}
+                            {% if form.volumen.help_text %}
                             <div class="form-text">{{ form.volumen.help_text }}</div>
+                            {% endif %}
                         </div>
                     </div>
                     
@@ -169,7 +173,9 @@
                         {% if form.mandant.errors %}
                         <div class="text-danger small">{{ form.mandant.errors }}</div>
                         {% endif %}
+                        {% if form.mandant.help_text %}
                         <div class="form-text">{{ form.mandant.help_text }}</div>
+                        {% endif %}
                     </div>
                     
                     <div class="d-flex justify-content-between mt-4">
