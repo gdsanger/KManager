@@ -81,7 +81,7 @@
                         <dt class="col-sm-3">Internet:</dt>
                         <dd class="col-sm-9">
                             {% if mandant.internet %}
-                                <a href="{{ mandant.internet }}" target="_blank">{{ mandant.internet }}</a>
+                                <a href="{{ mandant.internet }}" target="_blank" rel="noopener noreferrer">{{ mandant.internet }}</a>
                             {% else %}
                                 <span class="text-muted">Nicht angegeben</span>
                             {% endif %}

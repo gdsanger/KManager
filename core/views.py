@@ -199,8 +199,9 @@ def mandant_delete(request, pk):
     mandant = get_object_or_404(Mandant, pk=pk)
     
     if request.method == 'POST':
+        mandant_name = mandant.name
         mandant.delete()
-        messages.success(request, f'Mandant "{mandant.name}" wurde gelöscht.')
+        messages.success(request, f'Mandant "{mandant_name}" wurde gelöscht.')
         return redirect('mandant_list')
     
     return render(request, 'core/mandant_confirm_delete.html', {'mandant': mandant})
