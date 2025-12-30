@@ -90,3 +90,36 @@ class MailTemplate(models.Model):
 
     def __str__(self):
         return f"{self.key}: {self.subject}"
+
+
+class Mandant(models.Model):
+    """Entity representing a client/tenant (Mandant) with contact and legal information"""
+    # Basisdaten
+    name = models.CharField(max_length=200, verbose_name="Name")
+    adresse = models.CharField(max_length=200, verbose_name="Adresse")
+    plz = models.CharField(max_length=10, verbose_name="PLZ")
+    ort = models.CharField(max_length=100, verbose_name="Ort")
+    land = models.CharField(max_length=100, verbose_name="Land", default="Deutschland")
+    
+    # Kontakt
+    telefon = models.CharField(max_length=50, blank=True, verbose_name="Telefon")
+    fax = models.CharField(max_length=50, blank=True, verbose_name="Fax")
+    email = models.EmailField(blank=True, verbose_name="E-Mail")
+    internet = models.URLField(blank=True, verbose_name="Internet")
+    
+    # Rechtliches
+    steuernummer = models.CharField(max_length=50, blank=True, verbose_name="Steuernummer")
+    ust_id_nr = models.CharField(max_length=50, blank=True, verbose_name="UStIdNr")
+    geschaeftsfuehrer = models.CharField(max_length=200, blank=True, verbose_name="Geschäftsführer")
+    kreditinstitut = models.CharField(max_length=200, blank=True, verbose_name="Kreditinstitut")
+    iban = models.CharField(max_length=34, blank=True, verbose_name="IBAN")
+    bic = models.CharField(max_length=11, blank=True, verbose_name="BIC")
+    kontoinhaber = models.CharField(max_length=200, blank=True, verbose_name="Kontoinhaber")
+
+    class Meta:
+        verbose_name = "Mandant"
+        verbose_name_plural = "Mandanten"
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name}, {self.plz} {self.ort}"

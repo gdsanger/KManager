@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from core.models import Adresse, SmtpSettings, MailTemplate
+from core.models import Adresse, SmtpSettings, MailTemplate, Mandant
 
 
 # Register your models here.
@@ -64,3 +64,21 @@ class SmtpSettingsAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Don't allow deletion of SMTP settings"""
         return False
+
+
+@admin.register(Mandant)
+class MandantAdmin(admin.ModelAdmin):
+    list_display = ('name', 'plz', 'ort', 'land', 'telefon', 'email')
+    search_fields = ('name', 'adresse', 'plz', 'ort', 'email', 'telefon')
+    list_filter = ('land',)
+    fieldsets = (
+        ('Basisdaten', {
+            'fields': ('name', 'adresse', 'plz', 'ort', 'land')
+        }),
+        ('Kontakt', {
+            'fields': ('telefon', 'fax', 'email', 'internet')
+        }),
+        ('Rechtliches', {
+            'fields': ('steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 'kreditinstitut', 'iban', 'bic', 'kontoinhaber')
+        }),
+    )

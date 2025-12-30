@@ -17,4 +17,11 @@ urlpatterns = [
     path('mail-templates/<int:pk>/', views.mailtemplate_detail, name='mailtemplate_detail'),
     path('mail-templates/<int:pk>/edit/', views.mailtemplate_edit, name='mailtemplate_edit'),
     path('mail-templates/<int:pk>/delete/', views.mailtemplate_delete, name='mailtemplate_delete'),
+    
+    # Mandanten
+    path('mandanten/', views.mandant_list, name='mandant_list'),
+    path('mandanten/create/', views.mandant_create, name='mandant_create'),
+    path('mandanten/<int:pk>/', views.mandant_detail, name='mandant_detail'),
+    path('mandanten/<int:pk>/edit/', views.mandant_edit, name='mandant_edit'),
+    path('mandanten/<int:pk>/delete/', views.mandant_delete, name='mandant_delete'),
 ]

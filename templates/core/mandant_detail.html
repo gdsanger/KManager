@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}{{ mandant.name }} - Domus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-building"></i> Mandant Details</h2>
+        <a href="{% url 'mandant_list' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Zurück zur Liste
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-building"></i> {{ mandant.name }}</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Basisdaten -->
+                    <h6 class="text-uppercase text-muted mb-3"><i class="bi bi-info-circle"></i> Basisdaten</h6>
+                    <dl class="row mb-4">
+                        <dt class="col-sm-3">Name:</dt>
+                        <dd class="col-sm-9">{{ mandant.name }}</dd>
+
+                        <dt class="col-sm-3">Adresse:</dt>
+                        <dd class="col-sm-9">{{ mandant.adresse }}</dd>
+
+                        <dt class="col-sm-3">PLZ:</dt>
+                        <dd class="col-sm-9">{{ mandant.plz }}</dd>
+
+                        <dt class="col-sm-3">Ort:</dt>
+                        <dd class="col-sm-9">{{ mandant.ort }}</dd>
+
+                        <dt class="col-sm-3">Land:</dt>
+                        <dd class="col-sm-9">{{ mandant.land }}</dd>
+                    </dl>
+
+                    <hr class="my-4">
+
+                    <!-- Kontakt -->
+                    <h6 class="text-uppercase text-muted mb-3"><i class="bi bi-telephone"></i> Kontakt</h6>
+                    <dl class="row mb-4">
+                        <dt class="col-sm-3">Telefon:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.telefon %}
+                                {{ mandant.telefon }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Fax:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.fax %}
+                                {{ mandant.fax }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">E-Mail:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.email %}
+                                <a href="mailto:{{ mandant.email }}">{{ mandant.email }}</a>
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Internet:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.internet %}
+                                <a href="{{ mandant.internet }}" target="_blank">{{ mandant.internet }}</a>
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+
+                    <hr class="my-4">
+
+                    <!-- Rechtliches -->
+                    <h6 class="text-uppercase text-muted mb-3"><i class="bi bi-bank"></i> Rechtliches</h6>
+                    <dl class="row mb-4">
+                        <dt class="col-sm-3">Steuernummer:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.steuernummer %}
+                                {{ mandant.steuernummer }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">UStIdNr:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.ust_id_nr %}
+                                {{ mandant.ust_id_nr }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Geschäftsführer:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.geschaeftsfuehrer %}
+                                {{ mandant.geschaeftsfuehrer }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Kreditinstitut:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.kreditinstitut %}
+                                {{ mandant.kreditinstitut }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">IBAN:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.iban %}
+                                {{ mandant.iban }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">BIC:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.bic %}
+                                {{ mandant.bic }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Kontoinhaber:</dt>
+                        <dd class="col-sm-9">
+                            {% if mandant.kontoinhaber %}
+                                {{ mandant.kontoinhaber }}
+                            {% else %}
+                                <span class="text-muted">Nicht angegeben</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <div>
+                            <a href="{% url 'mandant_edit' mandant.pk %}" class="btn btn-warning">
+                                <i class="bi bi-pencil"></i> Bearbeiten
+                            </a>
+                            <a href="{% url 'mandant_delete' mandant.pk %}" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Löschen
+                            </a>
+                        </div>
+                        <a href="{% url 'mandant_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Zurück
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar with info -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-info-circle"></i> Mandant Informationen
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        <strong>Mandant:</strong> Repräsentiert einen Kunden/Auftraggeber mit vollständigen Kontakt- und Rechtsinformationen.
+                    </p>
+                    <p class="text-muted small mb-0">
+                        <strong>Verwendung:</strong> Mandanten werden in anderen Apps wie Finanzen und Vermietung referenziert.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
