@@ -63,10 +63,32 @@ def vermietung_home(request):
     # Calculate KPIs
     total_mietobjekte = MietObjekt.objects.count()
     
-    # Calculate total available units across all rental objects
-    all_mietobjekte = MietObjekt.objects.all()
-    verfuegbare_einheiten_gesamt = sum(
-        obj.get_available_units_count() for obj in all_mietobjekte
+    # Get all rental objects with prefetched related data to avoid N+1 queries
+    all_mietobjekte = MietObjekt.objects.select_related('standort').all()
+    
+    # Calculate total available units and create breakdown list
+    # We iterate once through all objects to avoid multiple queries
+    verfuegbare_einheiten_gesamt = 0
+    mietobjekte_mit_einheiten = []
+    
+    for obj in all_mietobjekte:
+        verfuegbare = obj.get_available_units_count()
+        gebuchte = obj.get_active_units_count()
+        
+        # Add to total
+        verfuegbare_einheiten_gesamt += verfuegbare
+        
+        # Add to breakdown list
+        mietobjekte_mit_einheiten.append({
+            'objekt': obj,
+            'verfuegbare_einheiten': verfuegbare,
+            'gebuchte_einheiten': gebuchte,
+            'gesamt_einheiten': obj.verfuegbare_einheiten,
+        })
+    
+    # Sort by available units (descending), then by name
+    mietobjekte_mit_einheiten.sort(
+        key=lambda x: (-x['verfuegbare_einheiten'], x['objekt'].name)
     )
     
     active_vertraege = Vertrag.objects.currently_active().count()
@@ -88,24 +110,6 @@ def vermietung_home(request):
         ende__gte=today,
         ende__lte=expiring_soon_date
     ).order_by('ende')[:10]
-    
-    # Get all rental objects with available units for display
-    # Sort by available units count (descending) to show most available first
-    mietobjekte_mit_einheiten = []
-    for obj in all_mietobjekte:
-        verfuegbare = obj.get_available_units_count()
-        gebuchte = obj.get_active_units_count()
-        mietobjekte_mit_einheiten.append({
-            'objekt': obj,
-            'verfuegbare_einheiten': verfuegbare,
-            'gebuchte_einheiten': gebuchte,
-            'gesamt_einheiten': obj.verfuegbare_einheiten,
-        })
-    
-    # Sort by available units (descending), then by name
-    mietobjekte_mit_einheiten.sort(
-        key=lambda x: (-x['verfuegbare_einheiten'], x['objekt'].name)
-    )
     
     context = {
         'total_mietobjekte': total_mietobjekte,
