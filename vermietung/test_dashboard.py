@@ -139,7 +139,9 @@ class DashboardTestCase(TestCase):
         
         # Check KPIs
         self.assertEqual(response.context['total_mietobjekte'], 3)
-        self.assertEqual(response.context['verfuegbare_mietobjekte'], 2)  # mietobjekt1 and mietobjekt3
+        # verfuegbare_einheiten_gesamt is sum of all available units across all objects
+        # mietobjekt1: 1 unit (default), mietobjekt2: 0 units (has active contract), mietobjekt3: 1 unit (default)
+        self.assertEqual(response.context['verfuegbare_einheiten_gesamt'], 2)
         self.assertEqual(response.context['active_vertraege'], 1)  # Only vertrag1
         self.assertEqual(response.context['offene_aktivitaeten'], 2)  # Two open activities
         self.assertEqual(response.context['total_kunden'], 2)
@@ -271,7 +273,8 @@ class DashboardTestCase(TestCase):
         
         # Check for links in response
         self.assertContains(response, 'href="%s"' % reverse('vermietung:mietobjekt_list'))
-        self.assertContains(response, 'href="%s?verfuegbar=true"' % reverse('vermietung:mietobjekt_list'))
+        # Updated: Link now points to #verfuegbare-einheiten anchor instead of filter
+        self.assertContains(response, 'href="#verfuegbare-einheiten"')
         self.assertContains(response, 'href="%s?status=active"' % reverse('vermietung:vertrag_list'))
         self.assertContains(response, 'href="%s?status=OFFEN"' % reverse('vermietung:aktivitaet_list'))
         self.assertContains(response, 'href="%s"' % reverse('vermietung:kunde_list'))
@@ -306,3 +309,156 @@ class DashboardTestCase(TestCase):
         # Should count only OFFEN (1) and IN_BEARBEITUNG (1) = 2 total
         # Should NOT count ERLEDIGT or ABGEBROCHEN
         self.assertEqual(response.context['offene_aktivitaeten'], 2)
+    
+    def test_dashboard_displays_verfuegbare_einheiten(self):
+        """Test that dashboard displays total available rental units correctly."""
+        from vermietung.models import VertragsObjekt
+        
+        # Create rental objects with different unit counts
+        mietobjekt_with_3_units = MietObjekt.objects.create(
+            name='Container',
+            type='CONTAINER',
+            beschreibung='Container mit 3 Einheiten',
+            standort=self.standort,
+            mietpreis=Decimal('100.00'),
+            verfuegbare_einheiten=3,
+            verfuegbar=True
+        )
+        
+        mietobjekt_with_5_units = MietObjekt.objects.create(
+            name='Lagerraum',
+            type='RAUM',
+            beschreibung='Lagerraum mit 5 Einheiten',
+            standort=self.standort,
+            mietpreis=Decimal('150.00'),
+            verfuegbare_einheiten=5,
+            verfuegbar=True
+        )
+        
+        # Create active contract that rents 2 units of the container
+        today = timezone.now().date()
+        vertrag = Vertrag.objects.create(
+            mieter=self.kunde1,
+            start=today - timedelta(days=10),
+            ende=None,
+            miete=Decimal('200.00'),
+            kaution=Decimal('600.00'),
+            status='active'
+        )
+        VertragsObjekt.objects.create(
+            vertrag=vertrag,
+            mietobjekt=mietobjekt_with_3_units,
+            anzahl=2,
+            preis=Decimal('100.00')
+        )
+        
+        response = self.client.get(reverse('vermietung:home'))
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Total available units should be:
+        # mietobjekt1 (1 default) + mietobjekt2 (1 default, no active contract in this test) + mietobjekt3 (1 default)
+        # + mietobjekt_with_3_units (3 - 2 booked = 1) + mietobjekt_with_5_units (5)
+        # = 1 + 1 + 1 + 1 + 5 = 9
+        expected_available = 9
+        
+        self.assertEqual(response.context['verfuegbare_einheiten_gesamt'], expected_available)
+    
+    def test_dashboard_shows_mietobjekte_mit_einheiten_table(self):
+        """Test that dashboard shows the breakdown of available units per MietObjekt."""
+        from vermietung.models import VertragsObjekt
+        
+        # Create rental object with multiple units
+        mietobjekt_multi = MietObjekt.objects.create(
+            name='Multi Unit Container',
+            type='CONTAINER',
+            beschreibung='Container mit mehreren Einheiten',
+            standort=self.standort,
+            mietpreis=Decimal('100.00'),
+            verfuegbare_einheiten=5,
+            verfuegbar=True
+        )
+        
+        # Create active contract that rents 3 units
+        today = timezone.now().date()
+        vertrag = Vertrag.objects.create(
+            mieter=self.kunde1,
+            start=today - timedelta(days=10),
+            ende=None,
+            miete=Decimal('300.00'),
+            kaution=Decimal('900.00'),
+            status='active'
+        )
+        VertragsObjekt.objects.create(
+            vertrag=vertrag,
+            mietobjekt=mietobjekt_multi,
+            anzahl=3,
+            preis=Decimal('100.00')
+        )
+        
+        response = self.client.get(reverse('vermietung:home'))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('mietobjekte_mit_einheiten', response.context)
+        
+        # Find the multi-unit object in the list
+        mietobjekte_list = response.context['mietobjekte_mit_einheiten']
+        multi_item = next(
+            (item for item in mietobjekte_list if item['objekt'].id == mietobjekt_multi.id),
+            None
+        )
+        
+        self.assertIsNotNone(multi_item)
+        self.assertEqual(multi_item['gesamt_einheiten'], 5)
+        self.assertEqual(multi_item['gebuchte_einheiten'], 3)
+        self.assertEqual(multi_item['verfuegbare_einheiten'], 2)
+    
+    def test_dashboard_sorts_mietobjekte_by_available_units(self):
+        """Test that dashboard sorts rental objects by available units (descending)."""
+        # Create objects with different availability
+        obj_with_5_available = MietObjekt.objects.create(
+            name='Most Available',
+            type='RAUM',
+            beschreibung='5 verfügbare Einheiten',
+            standort=self.standort,
+            mietpreis=Decimal('100.00'),
+            verfuegbare_einheiten=5,
+            verfuegbar=True
+        )
+        
+        obj_with_0_available = MietObjekt.objects.create(
+            name='None Available',
+            type='RAUM',
+            beschreibung='0 verfügbare Einheiten',
+            standort=self.standort,
+            mietpreis=Decimal('100.00'),
+            verfuegbare_einheiten=1,
+            verfuegbar=False
+        )
+        
+        # Rent the single unit
+        from vermietung.models import VertragsObjekt
+        today = timezone.now().date()
+        vertrag = Vertrag.objects.create(
+            mieter=self.kunde1,
+            start=today,
+            ende=None,
+            miete=Decimal('100.00'),
+            kaution=Decimal('300.00'),
+            status='active'
+        )
+        VertragsObjekt.objects.create(
+            vertrag=vertrag,
+            mietobjekt=obj_with_0_available,
+            anzahl=1,
+            preis=Decimal('100.00')
+        )
+        
+        response = self.client.get(reverse('vermietung:home'))
+        
+        self.assertEqual(response.status_code, 200)
+        mietobjekte_list = response.context['mietobjekte_mit_einheiten']
+        
+        # First object should have the most available units
+        self.assertEqual(mietobjekte_list[0]['objekt'].id, obj_with_5_available.id)
+        self.assertEqual(mietobjekte_list[0]['verfuegbare_einheiten'], 5)
