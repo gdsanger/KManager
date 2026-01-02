@@ -62,7 +62,13 @@ def vermietung_home(request):
     """Vermietung dashboard/home page - requires Vermietung access."""
     # Calculate KPIs
     total_mietobjekte = MietObjekt.objects.count()
-    verfuegbare_mietobjekte = MietObjekt.objects.filter(verfuegbar=True).count()
+    
+    # Calculate total available units across all rental objects
+    all_mietobjekte = MietObjekt.objects.all()
+    verfuegbare_einheiten_gesamt = sum(
+        obj.get_available_units_count() for obj in all_mietobjekte
+    )
+    
     active_vertraege = Vertrag.objects.currently_active().count()
     # Count all activities that are NOT 'ABGEBROCHEN' or 'ERLEDIGT' (i.e., OFFEN and IN_BEARBEITUNG)
     offene_aktivitaeten = Aktivitaet.objects.exclude(
@@ -83,14 +89,33 @@ def vermietung_home(request):
         ende__lte=expiring_soon_date
     ).order_by('ende')[:10]
     
+    # Get all rental objects with available units for display
+    # Sort by available units count (descending) to show most available first
+    mietobjekte_mit_einheiten = []
+    for obj in all_mietobjekte:
+        verfuegbare = obj.get_available_units_count()
+        gebuchte = obj.get_active_units_count()
+        mietobjekte_mit_einheiten.append({
+            'objekt': obj,
+            'verfuegbare_einheiten': verfuegbare,
+            'gebuchte_einheiten': gebuchte,
+            'gesamt_einheiten': obj.verfuegbare_einheiten,
+        })
+    
+    # Sort by available units (descending), then by name
+    mietobjekte_mit_einheiten.sort(
+        key=lambda x: (-x['verfuegbare_einheiten'], x['objekt'].name)
+    )
+    
     context = {
         'total_mietobjekte': total_mietobjekte,
-        'verfuegbare_mietobjekte': verfuegbare_mietobjekte,
+        'verfuegbare_einheiten_gesamt': verfuegbare_einheiten_gesamt,
         'active_vertraege': active_vertraege,
         'offene_aktivitaeten': offene_aktivitaeten,
         'total_kunden': total_kunden,
         'recent_vertraege': recent_vertraege,
         'expiring_vertraege': expiring_vertraege,
+        'mietobjekte_mit_einheiten': mietobjekte_mit_einheiten,
     }
     
     return render(request, 'vermietung/home.html', context)
