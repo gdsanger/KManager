@@ -1,0 +1,173 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{% block title %}Zähler: {{ zaehler.bezeichnung }} - Domus{% endblock %}
+
+{% block page_title %}Zähler: {{ zaehler.bezeichnung }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:zaehlerstand_create' zaehler.pk %}" class="btn btn-success">
+    <i class="bi bi-plus-circle"></i> Zählerstand erfassen
+</a>
+<a href="{% url 'vermietung:zaehler_edit' zaehler.pk %}" class="btn btn-warning">
+    <i class="bi bi-pencil"></i> Bearbeiten
+</a>
+<form method="post" action="{% url 'vermietung:zaehler_delete' zaehler.pk %}" style="display: inline;" onsubmit="return confirm('Möchten Sie diesen Zähler wirklich löschen?');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">
+        <i class="bi bi-trash"></i> Löschen
+    </button>
+</form>
+<a href="{% url 'vermietung:mietobjekt_detail' mietobjekt.pk %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück zum Mietobjekt
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-4">
+        <!-- Basic Information -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-speedometer2"></i> Zählerdaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-6 text-muted">Typ:</div>
+                    <div class="col-md-6"><strong>{{ zaehler.get_typ_display }}</strong></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-6 text-muted">Bezeichnung:</div>
+                    <div class="col-md-6">{{ zaehler.bezeichnung }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-6 text-muted">Einheit:</div>
+                    <div class="col-md-6">{{ zaehler.einheit }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-6 text-muted">Mietobjekt:</div>
+                    <div class="col-md-6">
+                        <a href="{% url 'vermietung:mietobjekt_detail' mietobjekt.pk %}">{{ mietobjekt.name }}</a>
+                    </div>
+                </div>
+                {% if zaehler.parent %}
+                <div class="row mb-2">
+                    <div class="col-md-6 text-muted">Hauptzähler:</div>
+                    <div class="col-md-6">
+                        <a href="{% url 'vermietung:zaehler_detail' zaehler.parent.pk %}">{{ zaehler.parent.bezeichnung }}</a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Sub-meters -->
+        {% if zaehler.sub_zaehler.all %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Zwischenzähler</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for sub_zaehler in zaehler.sub_zaehler.all %}
+                    <li class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ sub_zaehler.bezeichnung }}</strong>
+                                <br><small class="text-muted">{{ sub_zaehler.einheit }}</small>
+                            </div>
+                            <a href="{% url 'vermietung:zaehler_detail' sub_zaehler.pk %}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-lg-8">
+        <!-- Meter Readings -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-bar-chart-line"></i> Zählerstände</h5>
+                <a href="{% url 'vermietung:zaehlerstand_create' zaehler.pk %}" class="btn btn-sm btn-success">
+                    <i class="bi bi-plus-circle"></i> Stand erfassen
+                </a>
+            </div>
+            <div class="card-body">
+                {% if staende_page_obj %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Datum</th>
+                                <th class="text-end">Zählerstand</th>
+                                <th class="text-end">Verbrauch</th>
+                                <th class="text-end">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stand in staende_page_obj %}
+                            <tr>
+                                <td>{{ stand.datum|date:"d.m.Y" }}</td>
+                                <td class="text-end">
+                                    <strong>{{ stand.wert }} {{ zaehler.einheit }}</strong>
+                                </td>
+                                <td class="text-end">
+                                    {% if forloop.counter < staende_page_obj.object_list|length %}
+                                        {% with next_stand=staende_page_obj.object_list|slice:forloop.counter|first %}
+                                        {% if next_stand %}
+                                            {% with verbrauch=stand.wert|sub:next_stand.wert %}
+                                            <span class="badge bg-info">+{{ verbrauch }} {{ zaehler.einheit }}</span>
+                                            {% endwith %}
+                                        {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <form method="post" action="{% url 'vermietung:zaehlerstand_delete' stand.pk %}" style="display: inline;" onsubmit="return confirm('Möchten Sie diesen Zählerstand wirklich löschen?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Löschen">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if staende_page_obj.has_other_pages %}
+                <nav aria-label="Zählerstände Pagination" class="mt-3">
+                    <ul class="pagination justify-content-center">
+                        {% if staende_page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ staende_page_obj.previous_page_number }}">Zurück</a>
+                        </li>
+                        {% endif %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Seite {{ staende_page_obj.number }} von {{ staende_page_obj.paginator.num_pages }}</span>
+                        </li>
+                        {% if staende_page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ staende_page_obj.next_page_number }}">Weiter</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Noch keine Zählerstände erfasst. Erfassen Sie den ersten Zählerstand für diesen Zähler.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

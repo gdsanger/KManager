@@ -8,11 +8,12 @@ from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
 from datetime import timedelta
-from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, OBJEKT_TYPE
+from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, Zaehler, Zaehlerstand, OBJEKT_TYPE
 from core.models import Adresse, Mandant
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
-    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, VertragsObjektFormSet
+    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, VertragsObjektFormSet,
+    ZaehlerForm, ZaehlerstandForm
 )
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
@@ -728,10 +729,11 @@ def mietobjekt_list(request):
 
 
 @vermietung_required
+@vermietung_required
 def mietobjekt_detail(request, pk):
     """
     Show details of a specific MietObjekt with related data.
-    Shows contracts, handover protocols, documents, and images in tabs with pagination.
+    Shows contracts, handover protocols, documents, images, activities, and meters in tabs with pagination.
     """
     mietobjekt = get_object_or_404(MietObjekt.objects.select_related('standort'), pk=pk)
     
@@ -766,6 +768,10 @@ def mietobjekt_detail(request, pk):
     aktivitaeten_page = request.GET.get('aktivitaeten_page', 1)
     aktivitaeten_page_obj = aktivitaeten_paginator.get_page(aktivitaeten_page)
     
+    # Get related meters (zaehler) - organize hierarchically (parent meters with their sub-meters)
+    # Only get parent meters (no parent field set) and prefetch sub-meters
+    parent_zaehler = mietobjekt.zaehler.filter(parent__isnull=True).prefetch_related('sub_zaehler', 'staende').order_by('typ', 'bezeichnung')
+    
     context = {
         'mietobjekt': mietobjekt,
         'vertraege_page_obj': vertraege_page_obj,
@@ -773,6 +779,7 @@ def mietobjekt_detail(request, pk):
         'dokumente_page_obj': dokumente_page_obj,
         'bilder_page_obj': bilder_page_obj,
         'aktivitaeten_page_obj': aktivitaeten_page_obj,
+        'parent_zaehler': parent_zaehler,
     }
     
     return render(request, 'vermietung/mietobjekte/detail.html', context)
@@ -1838,3 +1845,149 @@ def aktivitaet_update_status(request, pk):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+# =============================================================================
+# Zaehler (Meter) Views
+# =============================================================================
+
+@vermietung_required
+def zaehler_create(request, mietobjekt_pk):
+    """Create a new meter for a MietObjekt."""
+    mietobjekt = get_object_or_404(MietObjekt, pk=mietobjekt_pk)
+    
+    if request.method == 'POST':
+        form = ZaehlerForm(request.POST, mietobjekt=mietobjekt)
+        if form.is_valid():
+            zaehler = form.save(commit=False)
+            zaehler.mietobjekt = mietobjekt
+            try:
+                zaehler.save()
+                messages.success(request, f'Zähler "{zaehler.bezeichnung}" wurde erfolgreich angelegt.')
+                return redirect('vermietung:mietobjekt_detail', pk=mietobjekt.pk)
+            except ValidationError as e:
+                messages.error(request, f'Fehler beim Speichern: {e}')
+    else:
+        form = ZaehlerForm(mietobjekt=mietobjekt)
+    
+    context = {
+        'form': form,
+        'mietobjekt': mietobjekt,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/zaehler/form.html', context)
+
+
+@vermietung_required
+def zaehler_edit(request, pk):
+    """Edit an existing meter."""
+    zaehler = get_object_or_404(Zaehler.objects.select_related('mietobjekt'), pk=pk)
+    mietobjekt = zaehler.mietobjekt
+    
+    if request.method == 'POST':
+        form = ZaehlerForm(request.POST, instance=zaehler, mietobjekt=mietobjekt)
+        if form.is_valid():
+            try:
+                zaehler = form.save()
+                messages.success(request, f'Zähler "{zaehler.bezeichnung}" wurde erfolgreich aktualisiert.')
+                return redirect('vermietung:mietobjekt_detail', pk=mietobjekt.pk)
+            except ValidationError as e:
+                messages.error(request, f'Fehler beim Speichern: {e}')
+    else:
+        form = ZaehlerForm(instance=zaehler, mietobjekt=mietobjekt)
+    
+    context = {
+        'form': form,
+        'zaehler': zaehler,
+        'mietobjekt': mietobjekt,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/zaehler/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def zaehler_delete(request, pk):
+    """Delete a meter."""
+    zaehler = get_object_or_404(Zaehler.objects.select_related('mietobjekt'), pk=pk)
+    mietobjekt = zaehler.mietobjekt
+    bezeichnung = zaehler.bezeichnung
+    
+    try:
+        zaehler.delete()
+        messages.success(request, f'Zähler "{bezeichnung}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen: {e}')
+    
+    return redirect('vermietung:mietobjekt_detail', pk=mietobjekt.pk)
+
+
+@vermietung_required
+def zaehlerstand_create(request, zaehler_pk):
+    """Create a new meter reading for a meter."""
+    zaehler = get_object_or_404(Zaehler.objects.select_related('mietobjekt'), pk=zaehler_pk)
+    mietobjekt = zaehler.mietobjekt
+    
+    if request.method == 'POST':
+        form = ZaehlerstandForm(request.POST)
+        if form.is_valid():
+            zaehlerstand = form.save(commit=False)
+            zaehlerstand.zaehler = zaehler
+            try:
+                zaehlerstand.save()
+                messages.success(request, f'Zählerstand wurde erfolgreich erfasst.')
+                return redirect('vermietung:zaehler_detail', pk=zaehler.pk)
+            except ValidationError as e:
+                messages.error(request, f'Fehler beim Speichern: {e}')
+    else:
+        form = ZaehlerstandForm()
+    
+    context = {
+        'form': form,
+        'zaehler': zaehler,
+        'mietobjekt': mietobjekt,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/zaehler/zaehlerstand_form.html', context)
+
+
+@vermietung_required
+def zaehler_detail(request, pk):
+    """Show details of a meter including all readings."""
+    zaehler = get_object_or_404(
+        Zaehler.objects.select_related('mietobjekt', 'parent').prefetch_related('sub_zaehler', 'staende'),
+        pk=pk
+    )
+    
+    # Get all readings for this meter, ordered by date descending
+    staende = zaehler.staende.order_by('-datum')
+    staende_paginator = Paginator(staende, 20)
+    staende_page = request.GET.get('page', 1)
+    staende_page_obj = staende_paginator.get_page(staende_page)
+    
+    context = {
+        'zaehler': zaehler,
+        'mietobjekt': zaehler.mietobjekt,
+        'staende_page_obj': staende_page_obj,
+    }
+    
+    return render(request, 'vermietung/zaehler/detail.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def zaehlerstand_delete(request, pk):
+    """Delete a meter reading."""
+    zaehlerstand = get_object_or_404(Zaehlerstand.objects.select_related('zaehler'), pk=pk)
+    zaehler = zaehlerstand.zaehler
+    
+    try:
+        zaehlerstand.delete()
+        messages.success(request, f'Zählerstand vom {zaehlerstand.datum} wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen: {e}')
+    
+    return redirect('vermietung:zaehler_detail', pk=zaehler.pk)
