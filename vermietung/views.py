@@ -729,11 +729,10 @@ def mietobjekt_list(request):
 
 
 @vermietung_required
-@vermietung_required
 def mietobjekt_detail(request, pk):
     """
     Show details of a specific MietObjekt with related data.
-    Shows contracts, handover protocols, documents, images, activities, and meters in tabs with pagination.
+    Shows contracts, handover protocols, documents, images, activities, and Zähler (meters) in tabs with pagination.
     """
     mietobjekt = get_object_or_404(MietObjekt.objects.select_related('standort'), pk=pk)
     
@@ -1955,6 +1954,7 @@ def zaehlerstand_create(request, zaehler_pk):
 
 
 @vermietung_required
+@vermietung_required
 def zaehler_detail(request, pk):
     """Show details of a meter including all readings."""
     zaehler = get_object_or_404(
@@ -1963,8 +1963,19 @@ def zaehler_detail(request, pk):
     )
     
     # Get all readings for this meter, ordered by date descending
-    staende = zaehler.staende.order_by('-datum')
-    staende_paginator = Paginator(staende, 20)
+    staende_list = list(zaehler.staende.order_by('-datum'))
+    
+    # Calculate consumption for each reading (difference from previous reading)
+    for i, stand in enumerate(staende_list):
+        if i < len(staende_list) - 1:
+            # There's a previous reading (next in list since we're ordered descending)
+            previous_stand = staende_list[i + 1]
+            stand.verbrauch = stand.wert - previous_stand.wert
+        else:
+            stand.verbrauch = None
+    
+    # Paginate
+    staende_paginator = Paginator(staende_list, 20)
     staende_page = request.GET.get('page', 1)
     staende_page_obj = staende_paginator.get_page(staende_page)
     
@@ -1975,6 +1986,7 @@ def zaehler_detail(request, pk):
     }
     
     return render(request, 'vermietung/zaehler/detail.html', context)
+
 
 
 @vermietung_required

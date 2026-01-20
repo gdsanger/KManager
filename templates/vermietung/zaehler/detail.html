@@ -116,14 +116,8 @@
                                     <strong>{{ stand.wert }} {{ zaehler.einheit }}</strong>
                                 </td>
                                 <td class="text-end">
-                                    {% if forloop.counter < staende_page_obj.object_list|length %}
-                                        {% with next_stand=staende_page_obj.object_list|slice:forloop.counter|first %}
-                                        {% if next_stand %}
-                                            {% with verbrauch=stand.wert|sub:next_stand.wert %}
-                                            <span class="badge bg-info">+{{ verbrauch }} {{ zaehler.einheit }}</span>
-                                            {% endwith %}
-                                        {% endif %}
-                                        {% endwith %}
+                                    {% if stand.verbrauch %}
+                                        <span class="badge bg-info">+{{ stand.verbrauch }} {{ zaehler.einheit }}</span>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
