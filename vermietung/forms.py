@@ -6,7 +6,10 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from core.models import Adresse, Mandant
-from .models import MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, Aktivitaet, VertragsObjekt, OBJEKT_TYPE
+from .models import (
+    MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, 
+    Aktivitaet, VertragsObjekt, Zaehler, Zaehlerstand, OBJEKT_TYPE
+)
 User = get_user_model()
 
 class MietObjektForm(forms.ModelForm):
@@ -922,4 +925,82 @@ VertragsObjektFormSet = forms.inlineformset_factory(
     min_num=1,
     validate_min=True,
 )
+
+
+class ZaehlerForm(forms.ModelForm):
+    """
+    Form for creating/editing Zaehler (meters).
+    Includes all fields with proper Bootstrap 5 styling.
+    """
+    
+    class Meta:
+        model = Zaehler
+        fields = ['typ', 'bezeichnung', 'einheit', 'parent']
+        widgets = {
+            'typ': forms.Select(attrs={'class': 'form-select'}),
+            'bezeichnung': forms.TextInput(attrs={'class': 'form-control'}),
+            'einheit': forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+            'parent': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {
+            'typ': 'Zählertyp *',
+            'bezeichnung': 'Bezeichnung *',
+            'einheit': 'Einheit',
+            'parent': 'Übergeordneter Zähler (optional)',
+        }
+        help_texts = {
+            'typ': 'Art des Zählers (Strom, Gas, Wasser, Heizung, Kühlung)',
+            'bezeichnung': 'Beschreibende Bezeichnung (z.B. "Wohnung EG links", "Garage 1–3")',
+            'einheit': 'Wird automatisch basierend auf dem Zählertyp gesetzt',
+            'parent': 'Optional: Hauptzähler, wenn dieser Zähler ein Zwischenzähler ist',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        mietobjekt = kwargs.pop('mietobjekt', None)
+        super().__init__(*args, **kwargs)
+        
+        # Filter parent field to only show meters from the same MietObjekt
+        if mietobjekt:
+            # Exclude self if editing
+            if self.instance.pk:
+                self.fields['parent'].queryset = Zaehler.objects.filter(
+                    mietobjekt=mietobjekt
+                ).exclude(pk=self.instance.pk)
+            else:
+                self.fields['parent'].queryset = Zaehler.objects.filter(
+                    mietobjekt=mietobjekt
+                )
+        else:
+            self.fields['parent'].queryset = Zaehler.objects.none()
+
+
+class ZaehlerstandForm(forms.ModelForm):
+    """
+    Form for creating/editing Zaehlerstand (meter readings).
+    Includes all fields with proper Bootstrap 5 styling.
+    """
+    
+    class Meta:
+        model = Zaehlerstand
+        fields = ['datum', 'wert']
+        widgets = {
+            'datum': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'wert': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.001',
+                'min': '0'
+            }),
+        }
+        labels = {
+            'datum': 'Datum *',
+            'wert': 'Zählerstand *',
+        }
+        help_texts = {
+            'datum': 'Datum der Ablesung',
+            'wert': 'Wert des Zählerstands',
+        }
+
 
