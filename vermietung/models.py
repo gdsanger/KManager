@@ -202,11 +202,25 @@ class MietObjekt(models.Model):
         
         # Also check legacy relationship during migration period
         # Legacy contracts don't have anzahl, so we count them as 1 unit each
+        # IMPORTANT: Exclude vertraege that already have a VertragsObjekt entry
+        # to avoid double counting (since Vertrag.save() auto-creates VertragsObjekt
+        # when legacy mietobjekt field is set)
+        # Only consider VertragsObjekt entries for currently active contracts
+        vertragsobjekt_vertrag_ids = VertragsObjekt.objects.filter(
+            mietobjekt=self,
+            vertrag__status='active',
+            vertrag__start__lte=today
+        ).filter(
+            Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
+        ).values_list('vertrag_id', flat=True)
+        
         legacy_count = self.vertraege_legacy.filter(
             status='active',
             start__lte=today
         ).filter(
             Q(ende__isnull=True) | Q(ende__gt=today)
+        ).exclude(
+            id__in=vertragsobjekt_vertrag_ids
         ).count()
         
         return units_count + legacy_count
