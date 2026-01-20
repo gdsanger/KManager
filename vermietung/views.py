@@ -62,7 +62,35 @@ def vermietung_home(request):
     """Vermietung dashboard/home page - requires Vermietung access."""
     # Calculate KPIs
     total_mietobjekte = MietObjekt.objects.count()
-    verfuegbare_mietobjekte = MietObjekt.objects.filter(verfuegbar=True).count()
+    
+    # Get all rental objects with prefetched related data to avoid N+1 queries
+    all_mietobjekte = MietObjekt.objects.select_related('standort').all()
+    
+    # Calculate total available units and create breakdown list
+    # We iterate once through all objects to avoid multiple queries
+    verfuegbare_einheiten_gesamt = 0
+    mietobjekte_mit_einheiten = []
+    
+    for obj in all_mietobjekte:
+        verfuegbare = obj.get_available_units_count()
+        gebuchte = obj.get_active_units_count()
+        
+        # Add to total
+        verfuegbare_einheiten_gesamt += verfuegbare
+        
+        # Add to breakdown list
+        mietobjekte_mit_einheiten.append({
+            'objekt': obj,
+            'verfuegbare_einheiten': verfuegbare,
+            'gebuchte_einheiten': gebuchte,
+            'gesamt_einheiten': obj.verfuegbare_einheiten,
+        })
+    
+    # Sort by available units (descending), then by name
+    mietobjekte_mit_einheiten.sort(
+        key=lambda x: (-x['verfuegbare_einheiten'], x['objekt'].name)
+    )
+    
     active_vertraege = Vertrag.objects.currently_active().count()
     # Count all activities that are NOT 'ABGEBROCHEN' or 'ERLEDIGT' (i.e., OFFEN and IN_BEARBEITUNG)
     offene_aktivitaeten = Aktivitaet.objects.exclude(
@@ -85,12 +113,13 @@ def vermietung_home(request):
     
     context = {
         'total_mietobjekte': total_mietobjekte,
-        'verfuegbare_mietobjekte': verfuegbare_mietobjekte,
+        'verfuegbare_einheiten_gesamt': verfuegbare_einheiten_gesamt,
         'active_vertraege': active_vertraege,
         'offene_aktivitaeten': offene_aktivitaeten,
         'total_kunden': total_kunden,
         'recent_vertraege': recent_vertraege,
         'expiring_vertraege': expiring_vertraege,
+        'mietobjekte_mit_einheiten': mietobjekte_mit_einheiten,
     }
     
     return render(request, 'vermietung/home.html', context)
