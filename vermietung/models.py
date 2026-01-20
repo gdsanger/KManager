@@ -205,8 +205,13 @@ class MietObjekt(models.Model):
         # IMPORTANT: Exclude vertraege that already have a VertragsObjekt entry
         # to avoid double counting (since Vertrag.save() auto-creates VertragsObjekt
         # when legacy mietobjekt field is set)
+        # Only consider VertragsObjekt entries for currently active contracts
         vertragsobjekt_vertrag_ids = VertragsObjekt.objects.filter(
-            mietobjekt=self
+            mietobjekt=self,
+            vertrag__status='active',
+            vertrag__start__lte=today
+        ).filter(
+            Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=today)
         ).values_list('vertrag_id', flat=True)
         
         legacy_count = self.vertraege_legacy.filter(

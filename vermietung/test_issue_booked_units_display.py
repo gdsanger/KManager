@@ -1,12 +1,12 @@
 """
 Tests for issue: Fehlerhafte Anzeige von Buchungen und Verfügbarkeiten bei Mietobjekten
 
-This test reproduces the bug where a MietObjekt with 1 available unit
-and 1 rented unit shows 2 booked units instead of 1.
+This test verifies the fix for the bug where a MietObjekt with 1 available unit
+and 1 rented unit showed 2 booked units instead of 1.
 
-The problem is that when a Vertrag is created with the legacy mietobjekt field,
-it automatically creates a VertragsObjekt entry (for backward compatibility).
-But then get_active_units_count() counts BOTH the VertragsObjekt AND the legacy
+The bug was that when a Vertrag was created with the legacy mietobjekt field,
+it automatically created a VertragsObjekt entry (for backward compatibility),
+but then get_active_units_count() counted BOTH the VertragsObjekt AND the legacy
 relationship, causing double counting.
 """
 from django.test import TestCase
@@ -63,10 +63,10 @@ class TestBookedUnitsDisplayBug(TestCase):
     
     def test_single_unit_rented_via_legacy_field(self):
         """
-        Test the bug: When a MietObjekt with 1 unit is rented via legacy field,
-        it should show 1 booked unit, not 2.
+        Test that when a MietObjekt with 1 unit is rented via legacy field,
+        it correctly shows 1 booked unit (not 2).
         
-        This test reproduces the bug reported in the issue.
+        This test verifies the fix for the double-counting bug.
         """
         # Create a contract using the legacy mietobjekt field
         yesterday = timezone.now().date() - timedelta(days=1)
@@ -90,15 +90,11 @@ class TestBookedUnitsDisplayBug(TestCase):
         ).count()
         self.assertEqual(vertragsobjekte_count, 1)
         
-        # BUG: get_active_units_count should return 1, but it returns 2
-        # because it counts both the VertragsObjekt AND the legacy relationship
+        # Verify the fix: should return 1, not 2
         active_units = self.mietobjekt.get_active_units_count()
-        
-        # Expected: 1 (because only 1 unit is rented)
-        # Actual BUG: 2 (because it counts both VertragsObjekt and legacy)
         self.assertEqual(active_units, 1, 
                         f"Expected 1 booked unit, but got {active_units}. "
-                        f"This is the bug: counting both VertragsObjekt and legacy relationship.")
+                        f"The fix should prevent double-counting.")
         
         # Check available units
         available_units = self.mietobjekt.get_available_units_count()
