@@ -158,7 +158,8 @@ class MietObjekt(models.Model):
     
     def get_all_children(self, include_self=False):
         """
-        Get all child MietObjekte recursively.
+        Get all child MietObjekte recursively using an iterative approach
+        to avoid N+1 queries.
         
         Args:
             include_self: If True, includes this object in the result
@@ -166,25 +167,33 @@ class MietObjekt(models.Model):
         Returns:
             QuerySet of all descendant MietObjekt objects
         """
-        descendants = []
+        descendants_set = set()
         
         if include_self:
-            descendants.append(self.pk)
+            descendants_set.add(self.pk)
         
-        # Get immediate children
-        children = list(self.children.values_list('pk', flat=True))
-        descendants.extend(children)
+        # Use iterative approach with a queue to avoid recursion and N+1 queries
+        to_process = list(self.children.values_list('pk', flat=True))
+        descendants_set.update(to_process)
         
-        # Recursively get children of children
-        for child_id in children:
-            try:
-                child = MietObjekt.objects.get(pk=child_id)
-                grandchildren = child.get_all_children(include_self=False)
-                descendants.extend(grandchildren.values_list('pk', flat=True))
-            except MietObjekt.DoesNotExist:
-                pass
+        while to_process:
+            # Get all children of all items in current batch in one query
+            current_batch = to_process
+            to_process = []
+            
+            # Single query to get all children of current batch
+            new_children = list(
+                MietObjekt.objects.filter(parent_id__in=current_batch)
+                .values_list('pk', flat=True)
+            )
+            
+            # Add new children to process and to descendants
+            for child_pk in new_children:
+                if child_pk not in descendants_set:
+                    descendants_set.add(child_pk)
+                    to_process.append(child_pk)
         
-        return MietObjekt.objects.filter(pk__in=descendants)
+        return MietObjekt.objects.filter(pk__in=descendants_set)
     
     def get_hierarchy_level(self):
         """
@@ -342,6 +351,9 @@ class MietObjekt(models.Model):
             
             # Check for circular reference by traversing up the parent chain
             visited = set()
+            if self.pk:
+                visited.add(self.pk)
+            
             current = self.parent
             while current:
                 # If we've already seen this object, there's a cycle
@@ -350,12 +362,6 @@ class MietObjekt(models.Model):
                         'parent': 'Zirkuläre Referenz erkannt. Das gewählte übergeordnete Objekt würde eine Schleife erstellen.'
                     })
                 visited.add(current.pk)
-                
-                # If the current parent is this object, we have a cycle
-                if self.pk and current.pk == self.pk:
-                    raise ValidationError({
-                        'parent': 'Zirkuläre Referenz erkannt. Dieses Objekt ist bereits in der Hierarchie enthalten.'
-                    })
                 
                 # Move up the chain
                 current = current.parent
