@@ -35,7 +35,8 @@ class MietObjektForm(forms.ModelForm):
             'verfuegbare_einheiten',
             'volumen',
             'verfuegbar',
-            'mandant'
+            'mandant',
+            'parent'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -53,6 +54,7 @@ class MietObjektForm(forms.ModelForm):
             'volumen': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
             'verfuegbar': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'mandant': forms.Select(attrs={'class': 'form-select'}),
+            'parent': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
             'name': 'Name *',
@@ -70,6 +72,7 @@ class MietObjektForm(forms.ModelForm):
             'volumen': 'Volumen (m³)',
             'verfuegbar': 'Verfügbar',
             'mandant': 'Mandant',
+            'parent': 'Übergeordnetes Mietobjekt',
         }
         help_texts = {
             'kaution': 'Standard: 3x Mietpreis (wird automatisch vorausgefüllt)',
@@ -77,6 +80,7 @@ class MietObjektForm(forms.ModelForm):
             'volumen': 'Optional: Volumen überschreiben (wird aus H×B×T berechnet)',
             'verfuegbar': 'Wird automatisch basierend auf aktiven Verträgen aktualisiert',
             'mandant': 'Optional: Zugeordneter Mandant für dieses Mietobjekt',
+            'parent': 'Optional: Übergeordnetes Mietobjekt (z.B. Gebäude für eine Wohnung)',
         }
     
     def __init__(self, *args, **kwargs):
@@ -85,6 +89,17 @@ class MietObjektForm(forms.ModelForm):
         self.fields['standort'].queryset = Adresse.objects.filter(adressen_type='STANDORT').order_by('name')
         # Order mandanten by name
         self.fields['mandant'].queryset = Mandant.objects.all().order_by('name')
+        
+        # Filter parent field to exclude self (when editing) and all descendants
+        if self.instance and self.instance.pk:
+            # Exclude self and all descendants to prevent circular references
+            descendants = self.instance.get_all_children(include_self=True)
+            self.fields['parent'].queryset = MietObjekt.objects.exclude(
+                pk__in=descendants.values_list('pk', flat=True)
+            ).order_by('name')
+        else:
+            # For new objects, show all MietObjekte
+            self.fields['parent'].queryset = MietObjekt.objects.all().order_by('name')
 
 
 

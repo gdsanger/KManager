@@ -101,6 +101,15 @@ class MietObjekt(models.Model):
         verbose_name="Mandant",
         help_text="Zugeordneter Mandant für dieses Mietobjekt"
     )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name="Übergeordnetes Mietobjekt",
+        help_text="Übergeordnetes Mietobjekt (z.B. Gebäude für eine Wohnung)"
+    )
 
     def __str__(self):
         return self.name
@@ -146,6 +155,74 @@ class MietObjekt(models.Model):
         if self.volumen is not None:
             return self.volumen
         return self.volumen_berechnet
+    
+    def get_all_children(self, include_self=False):
+        """
+        Get all child MietObjekte recursively using an iterative approach
+        to avoid N+1 queries.
+        
+        Args:
+            include_self: If True, includes this object in the result
+        
+        Returns:
+            QuerySet of all descendant MietObjekt objects
+        """
+        descendants_set = set()
+        
+        if include_self:
+            descendants_set.add(self.pk)
+        
+        # Use iterative approach with a queue to avoid recursion and N+1 queries
+        to_process = list(self.children.values_list('pk', flat=True))
+        descendants_set.update(to_process)
+        
+        while to_process:
+            # Get all children of all items in current batch in one query
+            current_batch = to_process
+            to_process = []
+            
+            # Single query to get all children of current batch
+            new_children = list(
+                MietObjekt.objects.filter(parent_id__in=current_batch)
+                .values_list('pk', flat=True)
+            )
+            
+            # Add new children to process and to descendants
+            for child_pk in new_children:
+                if child_pk not in descendants_set:
+                    descendants_set.add(child_pk)
+                    to_process.append(child_pk)
+        
+        return MietObjekt.objects.filter(pk__in=descendants_set)
+    
+    def get_hierarchy_level(self):
+        """
+        Get the level in the hierarchy (0 = root, 1 = direct child, etc.).
+        
+        Returns:
+            int: Hierarchy level
+        """
+        level = 0
+        current = self.parent
+        while current:
+            level += 1
+            current = current.parent
+        return level
+    
+    def get_root_parent(self):
+        """
+        Get the root parent (topmost MietObjekt in the hierarchy).
+        
+        Returns:
+            MietObjekt: The root parent or self if this is already a root
+        """
+        if not self.parent:
+            return self
+        
+        current = self.parent
+        while current.parent:
+            current = current.parent
+        return current
     
     def get_all_vertraege(self):
         """
@@ -263,6 +340,31 @@ class MietObjekt(models.Model):
             raise ValidationError({
                 'verfuegbare_einheiten': 'Die Anzahl der verfügbaren Einheiten muss mindestens 1 sein.'
             })
+        
+        # Validate parent field to prevent circular references
+        if self.parent:
+            # Check if parent is self
+            if self.pk and self.parent.pk == self.pk:
+                raise ValidationError({
+                    'parent': 'Ein Mietobjekt kann nicht sein eigenes übergeordnetes Objekt sein.'
+                })
+            
+            # Check for circular reference by traversing up the parent chain
+            visited = set()
+            if self.pk:
+                visited.add(self.pk)
+            
+            current = self.parent
+            while current:
+                # If we've already seen this object, there's a cycle
+                if current.pk in visited:
+                    raise ValidationError({
+                        'parent': 'Zirkuläre Referenz erkannt. Das gewählte übergeordnete Objekt würde eine Schleife erstellen.'
+                    })
+                visited.add(current.pk)
+                
+                # Move up the chain
+                current = current.parent
     
     def save(self, *args, **kwargs):
         """

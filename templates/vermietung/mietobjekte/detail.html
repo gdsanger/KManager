@@ -89,6 +89,56 @@
             </div>
         </div>
 
+        <!-- Hierarchy -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Hierarchie</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Übergeordnetes Objekt:</div>
+                    <div class="col-md-8">
+                        {% if mietobjekt.parent %}
+                            <a href="{% url 'vermietung:mietobjekt_detail' mietobjekt.parent.pk %}" class="text-decoration-none">
+                                <i class="bi bi-building"></i> {{ mietobjekt.parent.name }}
+                            </a>
+                            <br>
+                            <small class="text-muted">{{ mietobjekt.parent.get_type_display }}</small>
+                        {% else %}
+                            <em class="text-muted">Kein übergeordnetes Objekt (Root-Level)</em>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Hierarchie-Ebene:</div>
+                    <div class="col-md-8">
+                        Level {{ mietobjekt.get_hierarchy_level }}
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Untergeordnete Objekte:</div>
+                    <div class="col-md-8">
+                        {% with children=mietobjekt.children.all %}
+                            {% if children %}
+                                <ul class="list-unstyled mb-0">
+                                    {% for child in children %}
+                                        <li class="mb-1">
+                                            <a href="{% url 'vermietung:mietobjekt_detail' child.pk %}" class="text-decoration-none">
+                                                <i class="bi bi-building"></i> {{ child.name }}
+                                            </a>
+                                            <small class="text-muted">({{ child.get_type_display }})</small>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <em class="text-muted">Keine untergeordneten Objekte</em>
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Dimensions -->
         <div class="card mb-3">
             <div class="card-header">
