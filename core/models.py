@@ -123,3 +123,44 @@ class Mandant(models.Model):
 
     def __str__(self):
         return f"{self.name}, {self.plz} {self.ort}"
+
+
+class Kostenart(models.Model):
+    """Kostenarten (Cost Types) with hierarchical structure
+    
+    Can be either:
+    - Hauptkostenart (parent=None) - Main cost type
+    - Unterkostenart (parent=Kostenart) - Sub cost type
+    """
+    name = models.CharField(max_length=200, verbose_name="Name")
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name="Hauptkostenart"
+    )
+
+    class Meta:
+        verbose_name = "Kostenart"
+        verbose_name_plural = "Kostenarten"
+        ordering = ['name']
+
+    def __str__(self):
+        if self.parent:
+            return f"{self.parent.name} > {self.name}"
+        return self.name
+
+    def is_hauptkostenart(self):
+        """Check if this is a main cost type (has no parent)"""
+        return self.parent is None
+
+    def clean(self):
+        """Validate that cost type hierarchy is only one level deep"""
+        super().clean()
+        if self.parent and self.parent.parent:
+            raise ValidationError({
+                'parent': 'Kostenarten können nur eine Hierarchieebene haben. '
+                         'Eine Unterkostenart kann nicht einer anderen Unterkostenart zugeordnet werden.'
+            })

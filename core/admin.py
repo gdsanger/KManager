@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django import forms
-from core.models import Adresse, SmtpSettings, MailTemplate, Mandant
+from core.models import Adresse, SmtpSettings, MailTemplate, Mandant, Kostenart
 
 
 # Register your models here.
@@ -82,3 +82,37 @@ class MandantAdmin(admin.ModelAdmin):
             'fields': ('steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 'kreditinstitut', 'iban', 'bic', 'kontoinhaber')
         }),
     )
+
+
+class UnterkostenartInline(admin.TabularInline):
+    """Inline admin for child cost types (Kostenart 2)"""
+    model = Kostenart
+    fk_name = 'parent'
+    extra = 1
+    verbose_name = "Unterkostenart"
+    verbose_name_plural = "Unterkostenarten"
+
+
+@admin.register(Kostenart)
+class KostenartAdmin(admin.ModelAdmin):
+    list_display = ('name', 'parent', 'is_hauptkostenart')
+    list_filter = ('parent',)
+    search_fields = ('name',)
+    inlines = [UnterkostenartInline]
+    
+    def get_queryset(self, request):
+        """Only show Hauptkostenarten (top-level) in main list"""
+        qs = super().get_queryset(request)
+        return qs.filter(parent__isnull=True)
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of Hauptkostenart if it has children"""
+        if obj and obj.children.exists():
+            return False
+        return super().has_delete_permission(request, obj)
+    
+    def is_hauptkostenart(self, obj):
+        """Display whether this is a main cost type"""
+        return obj.is_hauptkostenart()
+    is_hauptkostenart.boolean = True
+    is_hauptkostenart.short_description = "Hauptkostenart"
