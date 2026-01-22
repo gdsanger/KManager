@@ -132,6 +132,12 @@ class Kostenart(models.Model):
     - Hauptkostenart (parent=None) - Main cost type
     - Unterkostenart (parent=Kostenart) - Sub cost type
     """
+    UMSATZSTEUER_SAETZE = [
+        ('0', '0% Umsatzsteuer (steuerfrei)'),
+        ('7', '7% Umsatzsteuer (ermäßigt)'),
+        ('19', '19% Umsatzsteuer (regulär)'),
+    ]
+    
     name = models.CharField(max_length=200, verbose_name="Name")
     parent = models.ForeignKey(
         'self',
@@ -140,6 +146,12 @@ class Kostenart(models.Model):
         blank=True,
         related_name='children',
         verbose_name="Hauptkostenart"
+    )
+    umsatzsteuer_satz = models.CharField(
+        max_length=2,
+        choices=UMSATZSTEUER_SAETZE,
+        default='19',
+        verbose_name="Umsatzsteuer-Satz"
     )
 
     class Meta:

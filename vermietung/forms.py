@@ -8,7 +8,8 @@ from django.contrib.auth import get_user_model
 from core.models import Adresse, Mandant
 from .models import (
     MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, 
-    Aktivitaet, VertragsObjekt, Zaehler, Zaehlerstand, OBJEKT_TYPE
+    Aktivitaet, VertragsObjekt, Zaehler, Zaehlerstand, OBJEKT_TYPE,
+    Eingangsrechnung, EingangsrechnungAufteilung
 )
 User = get_user_model()
 
@@ -1019,3 +1020,110 @@ class ZaehlerstandForm(forms.ModelForm):
         }
 
 
+
+
+class EingangsrechnungForm(forms.ModelForm):
+    """Form for creating/editing incoming invoices (Eingangsrechnungen)"""
+    
+    class Meta:
+        model = Eingangsrechnung
+        fields = [
+            'lieferant',
+            'mietobjekt',
+            'belegdatum',
+            'faelligkeit',
+            'belegnummer',
+            'betreff',
+            'referenznummer',
+            'leistungszeitraum_von',
+            'leistungszeitraum_bis',
+            'notizen',
+            'status',
+            'zahlungsdatum',
+            'umlagefaehig',
+        ]
+        widgets = {
+            'lieferant': forms.Select(attrs={'class': 'form-select'}),
+            'mietobjekt': forms.Select(attrs={'class': 'form-select'}),
+            'belegdatum': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'faelligkeit': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'belegnummer': forms.TextInput(attrs={'class': 'form-control'}),
+            'betreff': forms.TextInput(attrs={'class': 'form-control'}),
+            'referenznummer': forms.TextInput(attrs={'class': 'form-control'}),
+            'leistungszeitraum_von': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'leistungszeitraum_bis': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'notizen': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'zahlungsdatum': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'umlagefaehig': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        labels = {
+            'lieferant': 'Lieferant *',
+            'mietobjekt': 'Mietobjekt *',
+            'belegdatum': 'Belegdatum *',
+            'faelligkeit': 'Fälligkeit *',
+            'belegnummer': 'Belegnummer *',
+            'betreff': 'Betreff *',
+            'referenznummer': 'Referenznummer',
+            'leistungszeitraum_von': 'Leistungszeitraum von',
+            'leistungszeitraum_bis': 'Leistungszeitraum bis',
+            'notizen': 'Notizen',
+            'status': 'Status',
+            'zahlungsdatum': 'Zahlungsdatum',
+            'umlagefaehig': 'Umlagefähig',
+        }
+        help_texts = {
+            'lieferant': 'Wählen Sie den Lieferanten aus',
+            'mietobjekt': 'Wählen Sie das Mietobjekt aus',
+            'umlagefaehig': 'Kann auf Mieter umgelegt werden (flächenbasiert)',
+            'zahlungsdatum': 'Nur bei Status "Bezahlt" erforderlich',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter lieferant to only show suppliers
+        self.fields['lieferant'].queryset = Adresse.objects.filter(adressen_type='LIEFERANT')
+
+
+class EingangsrechnungAufteilungForm(forms.ModelForm):
+    """Form for invoice cost allocations"""
+    
+    class Meta:
+        model = EingangsrechnungAufteilung
+        fields = [
+            'kostenart1',
+            'kostenart2',
+            'nettobetrag',
+            'beschreibung',
+        ]
+        widgets = {
+            'kostenart1': forms.Select(attrs={'class': 'form-select'}),
+            'kostenart2': forms.Select(attrs={'class': 'form-select'}),
+            'nettobetrag': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+            'beschreibung': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'kostenart1': 'Kostenart 1 (Hauptkostenart) *',
+            'kostenart2': 'Kostenart 2 (Unterkostenart)',
+            'nettobetrag': 'Nettobetrag (€) *',
+            'beschreibung': 'Beschreibung',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from core.models import Kostenart
+        # Filter kostenart1 to only show main cost types (Hauptkostenarten)
+        self.fields['kostenart1'].queryset = Kostenart.objects.filter(parent__isnull=True)
+        # kostenart2 will show all for now, validation happens in clean()
+
+
+# Formset for invoice allocations
+EingangsrechnungAufteilungFormSet = forms.inlineformset_factory(
+    Eingangsrechnung,
+    EingangsrechnungAufteilung,
+    form=EingangsrechnungAufteilungForm,
+    extra=1,  # Start with one allocation by default
+    min_num=1,  # At least one allocation required
+    validate_min=True,
+    can_delete=True,
+)

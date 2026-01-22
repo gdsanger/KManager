@@ -1,0 +1,311 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}{% if is_create %}Neue Eingangsrechnung{% else %}Eingangsrechnung bearbeiten{% endif %} - Domus{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+    <i class="bi bi-plus-circle"></i> Neue Eingangsrechnung
+{% else %}
+    <i class="bi bi-pencil"></i> Eingangsrechnung bearbeiten: {{ rechnung.belegnummer }}
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% if is_create %}{% url 'vermietung:eingangsrechnung_list' %}{% else %}{% url 'vermietung:eingangsrechnung_detail' rechnung.pk %}{% endif %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="eingangsrechnung-form">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ form.non_field_errors }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Lieferant & Mietobjekt -->
+                    <h5 class="mb-3"><i class="bi bi-building"></i> Lieferant & Mietobjekt</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.lieferant.id_for_label }}" class="form-label">{{ form.lieferant.label }}</label>
+                            {{ form.lieferant }}
+                            {% if form.lieferant.help_text %}
+                            <div class="form-text">{{ form.lieferant.help_text }}</div>
+                            {% endif %}
+                            {% if form.lieferant.errors %}
+                            <div class="text-danger small">{{ form.lieferant.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">{{ form.mietobjekt.label }}</label>
+                            {{ form.mietobjekt }}
+                            {% if form.mietobjekt.help_text %}
+                            <div class="form-text">{{ form.mietobjekt.help_text }}</div>
+                            {% endif %}
+                            {% if form.mietobjekt.errors %}
+                            <div class="text-danger small">{{ form.mietobjekt.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <!-- Belegdaten -->
+                    <h5 class="mb-3"><i class="bi bi-receipt"></i> Belegdaten</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.belegdatum.id_for_label }}" class="form-label">{{ form.belegdatum.label }}</label>
+                            {{ form.belegdatum }}
+                            {% if form.belegdatum.errors %}
+                            <div class="text-danger small">{{ form.belegdatum.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.faelligkeit.id_for_label }}" class="form-label">{{ form.faelligkeit.label }}</label>
+                            {{ form.faelligkeit }}
+                            {% if form.faelligkeit.errors %}
+                            <div class="text-danger small">{{ form.faelligkeit.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.belegnummer.id_for_label }}" class="form-label">{{ form.belegnummer.label }}</label>
+                            {{ form.belegnummer }}
+                            {% if form.belegnummer.errors %}
+                            <div class="text-danger small">{{ form.belegnummer.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.betreff.id_for_label }}" class="form-label">{{ form.betreff.label }}</label>
+                        {{ form.betreff }}
+                        {% if form.betreff.errors %}
+                        <div class="text-danger small">{{ form.betreff.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.referenznummer.id_for_label }}" class="form-label">{{ form.referenznummer.label }}</label>
+                        {{ form.referenznummer }}
+                        {% if form.referenznummer.errors %}
+                        <div class="text-danger small">{{ form.referenznummer.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <!-- Leistungszeitraum -->
+                    <h5 class="mb-3"><i class="bi bi-calendar-range"></i> Leistungszeitraum (optional)</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.leistungszeitraum_von.id_for_label }}" class="form-label">{{ form.leistungszeitraum_von.label }}</label>
+                            {{ form.leistungszeitraum_von }}
+                            {% if form.leistungszeitraum_von.errors %}
+                            <div class="text-danger small">{{ form.leistungszeitraum_von.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.leistungszeitraum_bis.id_for_label }}" class="form-label">{{ form.leistungszeitraum_bis.label }}</label>
+                            {{ form.leistungszeitraum_bis }}
+                            {% if form.leistungszeitraum_bis.errors %}
+                            <div class="text-danger small">{{ form.leistungszeitraum_bis.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <!-- Kostenaufteilung -->
+                    <h5 class="mb-3"><i class="bi bi-pie-chart"></i> Kostenaufteilung</h5>
+                    
+                    {{ formset.management_form }}
+                    
+                    {% if formset.non_form_errors %}
+                    <div class="alert alert-danger">
+                        {{ formset.non_form_errors }}
+                    </div>
+                    {% endif %}
+                    
+                    <div id="aufteilung-formset">
+                        {% for aufteilung_form in formset %}
+                        <div class="aufteilung-row card mb-2 {% if aufteilung_form.instance.pk %}existing{% else %}new{% endif %}">
+                            <div class="card-body">
+                                {% if aufteilung_form.non_field_errors %}
+                                <div class="alert alert-danger">
+                                    {{ aufteilung_form.non_field_errors }}
+                                </div>
+                                {% endif %}
+                                
+                                <div class="row">
+                                    <div class="col-md-3 mb-2">
+                                        <label class="form-label">{{ aufteilung_form.kostenart1.label }}</label>
+                                        {{ aufteilung_form.kostenart1 }}
+                                        {% if aufteilung_form.kostenart1.errors %}
+                                        <div class="text-danger small">{{ aufteilung_form.kostenart1.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <label class="form-label">{{ aufteilung_form.kostenart2.label }}</label>
+                                        {{ aufteilung_form.kostenart2 }}
+                                        {% if aufteilung_form.kostenart2.errors %}
+                                        <div class="text-danger small">{{ aufteilung_form.kostenart2.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-2 mb-2">
+                                        <label class="form-label">{{ aufteilung_form.nettobetrag.label }}</label>
+                                        {{ aufteilung_form.nettobetrag }}
+                                        {% if aufteilung_form.nettobetrag.errors %}
+                                        <div class="text-danger small">{{ aufteilung_form.nettobetrag.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <label class="form-label">{{ aufteilung_form.beschreibung.label }}</label>
+                                        {{ aufteilung_form.beschreibung }}
+                                        {% if aufteilung_form.beschreibung.errors %}
+                                        <div class="text-danger small">{{ aufteilung_form.beschreibung.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-1 mb-2 d-flex align-items-end">
+                                        {% if not forloop.first or formset|length > 1 %}
+                                        <button type="button" class="btn btn-danger btn-sm delete-row" title="Zeile löschen">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        {% endif %}
+                                        {{ aufteilung_form.id }}
+                                        {{ aufteilung_form.DELETE }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="add-aufteilung">
+                        <i class="bi bi-plus-circle"></i> Aufteilung hinzufügen
+                    </button>
+
+                    <hr class="my-4">
+                    
+                    <!-- Status & Zahlung -->
+                    <h5 class="mb-3"><i class="bi bi-info-circle"></i> Status & Zahlung</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.status.id_for_label }}" class="form-label">{{ form.status.label }}</label>
+                            {{ form.status }}
+                            {% if form.status.errors %}
+                            <div class="text-danger small">{{ form.status.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.zahlungsdatum.id_for_label }}" class="form-label">{{ form.zahlungsdatum.label }}</label>
+                            {{ form.zahlungsdatum }}
+                            {% if form.zahlungsdatum.help_text %}
+                            <div class="form-text">{{ form.zahlungsdatum.help_text }}</div>
+                            {% endif %}
+                            {% if form.zahlungsdatum.errors %}
+                            <div class="text-danger small">{{ form.zahlungsdatum.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3 d-flex align-items-center">
+                            <div class="form-check">
+                                {{ form.umlagefaehig }}
+                                <label class="form-check-label" for="{{ form.umlagefaehig.id_for_label }}">
+                                    {{ form.umlagefaehig.label }}
+                                </label>
+                                {% if form.umlagefaehig.help_text %}
+                                <div class="form-text">{{ form.umlagefaehig.help_text }}</div>
+                                {% endif %}
+                            </div>
+                            {% if form.umlagefaehig.errors %}
+                            <div class="text-danger small">{{ form.umlagefaehig.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <!-- Notizen -->
+                    <h5 class="mb-3"><i class="bi bi-chat-left-text"></i> Notizen</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.notizen.id_for_label }}" class="form-label">{{ form.notizen.label }}</label>
+                        {{ form.notizen }}
+                        {% if form.notizen.errors %}
+                        <div class="text-danger small">{{ form.notizen.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <!-- Submit Button -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% if is_create %}{% url 'vermietung:eingangsrechnung_list' %}{% else %}{% url 'vermietung:eingangsrechnung_detail' rechnung.pk %}{% endif %}" 
+                           class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Speichern
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Formset handling
+document.addEventListener('DOMContentLoaded', function() {
+    const formset = document.getElementById('aufteilung-formset');
+    const addButton = document.getElementById('add-aufteilung');
+    const totalForms = document.querySelector('[name$="-TOTAL_FORMS"]');
+    
+    // Get empty form template
+    let emptyFormHtml = formset.querySelector('.aufteilung-row').cloneNode(true).outerHTML;
+    
+    addButton.addEventListener('click', function() {
+        const formCount = parseInt(totalForms.value);
+        const newFormHtml = emptyFormHtml.replace(/__prefix__/g, formCount);
+        
+        formset.insertAdjacentHTML('beforeend', newFormHtml);
+        totalForms.value = formCount + 1;
+        
+        // Attach delete handler to new row
+        const newRow = formset.lastElementChild;
+        attachDeleteHandler(newRow);
+    });
+    
+    function attachDeleteHandler(row) {
+        const deleteButton = row.querySelector('.delete-row');
+        if (deleteButton) {
+            deleteButton.addEventListener('click', function() {
+                const deleteCheckbox = row.querySelector('[name$="-DELETE"]');
+                if (deleteCheckbox) {
+                    deleteCheckbox.checked = true;
+                    row.style.display = 'none';
+                } else {
+                    row.remove();
+                    totalForms.value = parseInt(totalForms.value) - 1;
+                }
+            });
+        }
+    }
+    
+    // Attach handlers to existing rows
+    document.querySelectorAll('.aufteilung-row').forEach(attachDeleteHandler);
+});
+</script>
+{% endblock %}
