@@ -81,4 +81,14 @@ urlpatterns = [
     path('vertraege/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'vertrag'}, name='aktivitaet_create_from_vertrag'),
     path('mietobjekte/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'mietobjekt'}, name='aktivitaet_create_from_mietobjekt'),
     path('kunden/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'kunde'}, name='aktivitaet_create_from_kunde'),
+    
+    # Zaehler (Meter) URLs
+    path('mietobjekte/<int:mietobjekt_pk>/zaehler/neu/', views.zaehler_create, name='zaehler_create'),
+    path('zaehler/<int:pk>/', views.zaehler_detail, name='zaehler_detail'),
+    path('zaehler/<int:pk>/bearbeiten/', views.zaehler_edit, name='zaehler_edit'),
+    path('zaehler/<int:pk>/loeschen/', views.zaehler_delete, name='zaehler_delete'),
+    
+    # Zaehlerstand (Meter Reading) URLs
+    path('zaehler/<int:zaehler_pk>/zaehlerstand/neu/', views.zaehlerstand_create, name='zaehlerstand_create'),
+    path('zaehlerstand/<int:pk>/loeschen/', views.zaehlerstand_delete, name='zaehlerstand_delete'),
 ]   

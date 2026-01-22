@@ -1906,3 +1906,269 @@ class Aktivitaet(models.Model):
             return f"Kunde: {self.kunde}"
         return "Kein Kontext"
 
+
+# Meter type choices
+ZAEHLER_TYPEN = [
+    ('STROM', 'Strom'),
+    ('GAS', 'Gas'),
+    ('WASSER', 'Wasser'),
+    ('HEIZUNG', 'Heizung'),
+    ('KUEHLUNG', 'Kühlung'),
+]
+
+# Unit mapping for meter types
+ZAEHLER_EINHEITEN = {
+    'STROM': 'kWh',
+    'GAS': 'm³',
+    'WASSER': 'm³',
+    'HEIZUNG': 'kWh',
+    'KUEHLUNG': 'kWh',
+}
+
+
+class Zaehler(models.Model):
+    """
+    Meter model for tracking utility consumption in rental properties.
+    
+    Each meter is linked to a MietObjekt and can optionally have a parent meter
+    for sub-meter functionality. Sub-meters' consumption is subtracted from their
+    parent meter's consumption.
+    """
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.CASCADE,
+        related_name='zaehler',
+        verbose_name="Mietobjekt"
+    )
+    
+    typ = models.CharField(
+        max_length=20,
+        choices=ZAEHLER_TYPEN,
+        verbose_name="Zählertyp",
+        help_text="Typ des Zählers (Strom, Gas, Wasser, Heizung, Kühlung)"
+    )
+    
+    bezeichnung = models.CharField(
+        max_length=255,
+        verbose_name="Bezeichnung",
+        help_text="Beschreibende Bezeichnung des Zählers (z.B. 'Wohnung EG links', 'Garage 1–3')"
+    )
+    
+    einheit = models.CharField(
+        max_length=20,
+        verbose_name="Einheit",
+        help_text="Maßeinheit (kWh, m³, etc.)"
+    )
+    
+    parent = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='sub_zaehler',
+        verbose_name="Übergeordneter Zähler",
+        help_text="Optional: Hauptzähler, wenn dieser Zähler ein Zwischenzähler ist"
+    )
+    
+    class Meta:
+        verbose_name = "Zähler"
+        verbose_name_plural = "Zähler"
+        ordering = ['mietobjekt', 'typ', 'bezeichnung']
+    
+    def __str__(self):
+        """String representation of the meter."""
+        parent_info = f" (Zwischenzähler von {self.parent.bezeichnung})" if self.parent else ""
+        return f"{self.bezeichnung} ({self.get_typ_display()}) - {self.mietobjekt.name}{parent_info}"
+    
+    def clean(self):
+        """
+        Validate meter data:
+        1. Parent meter must have the same type
+        2. No circular parent relationships
+        3. Einheit must match the type
+        """
+        super().clean()
+        
+        # Validate parent type matches
+        if self.parent:
+            if self.parent.typ != self.typ:
+                raise ValidationError({
+                    'parent': f'Der übergeordnete Zähler muss denselben Typ haben ({self.get_typ_display()}).'
+                })
+            
+            # Check for circular references
+            current = self.parent
+            visited = {self.pk} if self.pk else set()
+            
+            while current:
+                if current.pk in visited:
+                    raise ValidationError({
+                        'parent': 'Zyklische Zählerstrukturen sind nicht erlaubt.'
+                    })
+                visited.add(current.pk)
+                current = current.parent
+        
+        # Validate einheit matches typ
+        expected_einheit = ZAEHLER_EINHEITEN.get(self.typ)
+        if expected_einheit and self.einheit != expected_einheit:
+            raise ValidationError({
+                'einheit': f'Die Einheit für {self.get_typ_display()} sollte {expected_einheit} sein.'
+            })
+    
+    def save(self, *args, **kwargs):
+        """Override save to set einheit from typ if not provided."""
+        # Auto-set einheit based on typ
+        if not self.einheit and self.typ:
+            self.einheit = ZAEHLER_EINHEITEN.get(self.typ, '')
+        
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def get_letzter_zaehlerstand(self):
+        """
+        Get the most recent meter reading.
+        
+        Returns:
+            Zaehlerstand instance or None if no readings exist
+        """
+        return self.staende.order_by('-datum').first()
+    
+    def berechne_verbrauch(self, von_datum=None, bis_datum=None):
+        """
+        Calculate consumption between two dates.
+        
+        Args:
+            von_datum: Start date (inclusive). If None, uses oldest reading.
+            bis_datum: End date (inclusive). If None, uses newest reading.
+        
+        Returns:
+            Decimal: Consumption or None if insufficient data
+        """
+        staende = self.staende.order_by('datum')
+        
+        if von_datum:
+            staende = staende.filter(datum__gte=von_datum)
+        if bis_datum:
+            staende = staende.filter(datum__lte=bis_datum)
+        
+        if staende.count() < 2:
+            return None
+        
+        erster_stand = staende.first()
+        letzter_stand = staende.last()
+        
+        return letzter_stand.wert - erster_stand.wert
+    
+    def berechne_effektiver_verbrauch(self, von_datum=None, bis_datum=None):
+        """
+        Calculate effective consumption (consumption - sum of sub-meter consumption).
+        
+        Only applies to meters with sub-meters. For meters without sub-meters,
+        returns the same as berechne_verbrauch().
+        
+        Args:
+            von_datum: Start date (inclusive). If None, uses oldest reading.
+            bis_datum: End date (inclusive). If None, uses newest reading.
+        
+        Returns:
+            Decimal: Effective consumption or None if insufficient data
+        """
+        verbrauch = self.berechne_verbrauch(von_datum, bis_datum)
+        
+        if verbrauch is None:
+            return None
+        
+        # Subtract consumption of all sub-meters
+        sub_verbrauch = Decimal('0.00')
+        for sub_zaehler in self.sub_zaehler.all():
+            sub_v = sub_zaehler.berechne_verbrauch(von_datum, bis_datum)
+            if sub_v is not None:
+                sub_verbrauch += sub_v
+        
+        return verbrauch - sub_verbrauch
+
+
+class Zaehlerstand(models.Model):
+    """
+    Meter reading model for recording readings at specific dates.
+    
+    Each reading is linked to a Zaehler and includes a date and value.
+    Consumption is calculated from differences between readings.
+    """
+    zaehler = models.ForeignKey(
+        Zaehler,
+        on_delete=models.CASCADE,
+        related_name='staende',
+        verbose_name="Zähler"
+    )
+    
+    datum = models.DateField(
+        verbose_name="Datum",
+        help_text="Datum der Ablesung"
+    )
+    
+    wert = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        verbose_name="Zählerstand",
+        help_text="Wert des Zählerstands (z.B. kWh, m³)"
+    )
+    
+    class Meta:
+        verbose_name = "Zählerstand"
+        verbose_name_plural = "Zählerstände"
+        ordering = ['-datum']
+        # Ensure only one reading per meter per date
+        unique_together = [['zaehler', 'datum']]
+    
+    def __str__(self):
+        """String representation of the meter reading."""
+        return f"{self.zaehler.bezeichnung} - {self.datum}: {self.wert} {self.zaehler.einheit}"
+    
+    def clean(self):
+        """
+        Validate meter reading data:
+        1. Reading value must be non-negative
+        2. Reading must be chronologically plausible (not less than previous reading)
+        """
+        super().clean()
+        
+        # Validate non-negative
+        if self.wert < 0:
+            raise ValidationError({
+                'wert': 'Der Zählerstand darf nicht negativ sein.'
+            })
+        
+        # Validate chronological plausibility (value should not decrease)
+        if self.zaehler_id:
+            # Get the previous reading (closest date before this one)
+            previous = Zaehlerstand.objects.filter(
+                zaehler=self.zaehler,
+                datum__lt=self.datum
+            ).order_by('-datum').first()
+            
+            if previous and self.wert < previous.wert:
+                raise ValidationError({
+                    'wert': f'Der neue Zählerstand ({self.wert}) kann nicht kleiner sein als der '
+                           f'vorherige Stand vom {previous.datum} ({previous.wert} {self.zaehler.einheit}).'
+                })
+            
+            # Also check if there's a later reading that would be violated
+            later = Zaehlerstand.objects.filter(
+                zaehler=self.zaehler,
+                datum__gt=self.datum
+            ).exclude(
+                pk=self.pk if self.pk else None
+            ).order_by('datum').first()
+            
+            if later and self.wert > later.wert:
+                raise ValidationError({
+                    'wert': f'Der Zählerstand ({self.wert}) kann nicht größer sein als der '
+                           f'spätere Stand vom {later.datum} ({later.wert} {self.zaehler.einheit}).'
+                })
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+

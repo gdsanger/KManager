@@ -186,6 +186,11 @@
                 </button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="zaehler-tab" data-bs-toggle="tab" data-bs-target="#zaehler" type="button" role="tab">
+                    <i class="bi bi-speedometer2"></i> Zähler ({{ parent_zaehler|length }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="dokumente-tab" data-bs-toggle="tab" data-bs-target="#dokumente" type="button" role="tab">
                     <i class="bi bi-file-earmark"></i> Dokumente ({{ dokumente_page_obj.paginator.count }})
                 </button>
@@ -529,6 +534,101 @@
                         </ul>
                     </nav>
                     {% endif %}
+                {% endif %}
+            </div>
+            
+            <!-- Zaehler Tab -->
+            <div class="tab-pane fade p-3" id="zaehler" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Zähler für dieses Mietobjekt</h6>
+                    <a href="{% url 'vermietung:zaehler_create' mietobjekt.pk %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus-circle"></i> Neuer Zähler
+                    </a>
+                </div>
+                {% if parent_zaehler %}
+                <div class="row">
+                    {% for zaehler in parent_zaehler %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <strong>{{ zaehler.bezeichnung }}</strong>
+                                <span class="badge bg-secondary">{{ zaehler.get_typ_display }}</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-2">
+                                    <div class="col-6 text-muted">Einheit:</div>
+                                    <div class="col-6"><strong>{{ zaehler.einheit }}</strong></div>
+                                </div>
+                                <div class="row mb-2">
+                                    <div class="col-6 text-muted">Letzter Stand:</div>
+                                    <div class="col-6">
+                                        {% with letzter_stand=zaehler.get_letzter_zaehlerstand %}
+                                        {% if letzter_stand %}
+                                            <strong>{{ letzter_stand.wert }} {{ zaehler.einheit }}</strong>
+                                            <br><small class="text-muted">{{ letzter_stand.datum|date:"d.m.Y" }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                                {% if zaehler.sub_zaehler.all %}
+                                <hr>
+                                <div class="mb-2">
+                                    <strong class="text-muted">Zwischenzähler:</strong>
+                                </div>
+                                {% for sub_zaehler in zaehler.sub_zaehler.all %}
+                                <div class="card card-body bg-light mb-2">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>{{ sub_zaehler.bezeichnung }}</strong>
+                                            <br><small class="text-muted">{{ sub_zaehler.einheit }}</small>
+                                            {% with sub_letzter_stand=sub_zaehler.get_letzter_zaehlerstand %}
+                                            {% if sub_letzter_stand %}
+                                                <br><small><strong>{{ sub_letzter_stand.wert }} {{ sub_zaehler.einheit }}</strong> ({{ sub_letzter_stand.datum|date:"d.m.Y" }})</small>
+                                            {% endif %}
+                                            {% endwith %}
+                                        </div>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'vermietung:zaehler_detail' sub_zaehler.pk %}" class="btn btn-outline-info" title="Details">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="{% url 'vermietung:zaehler_edit' sub_zaehler.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% endif %}
+                            </div>
+                            <div class="card-footer bg-light">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'vermietung:zaehler_detail' zaehler.pk %}" class="btn btn-outline-info" title="Details">
+                                        <i class="bi bi-eye"></i> Details
+                                    </a>
+                                    <a href="{% url 'vermietung:zaehlerstand_create' zaehler.pk %}" class="btn btn-outline-success" title="Zählerstand erfassen">
+                                        <i class="bi bi-plus-circle"></i> Stand erfassen
+                                    </a>
+                                    <a href="{% url 'vermietung:zaehler_edit' zaehler.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form method="post" action="{% url 'vermietung:zaehler_delete' zaehler.pk %}" style="display: inline;" onsubmit="return confirm('Möchten Sie diesen Zähler wirklich löschen?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-danger" title="Löschen">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Keine Zähler vorhanden. Erstellen Sie den ersten Zähler für dieses Mietobjekt.
+                </div>
                 {% endif %}
             </div>
             
