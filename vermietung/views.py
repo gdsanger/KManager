@@ -7,8 +7,12 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
-from datetime import timedelta
-from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung
+from datetime import timedelta, datetime
+from .models import (
+    Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, 
+    Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
+    EINGANGSRECHNUNG_STATUS
+)
 from core.models import Adresse, Mandant
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
@@ -2058,7 +2062,6 @@ def eingangsrechnung_list(request):
     page_obj = paginator.get_page(page_number)
     
     # Get all mietobjekte for filter dropdown
-    from .models import EINGANGSRECHNUNG_STATUS
     mietobjekte = MietObjekt.objects.all().order_by('name')
     
     context = {
@@ -2196,7 +2199,6 @@ def eingangsrechnung_mark_paid(request, pk):
     if request.method == 'POST':
         zahlungsdatum_str = request.POST.get('zahlungsdatum')
         if zahlungsdatum_str:
-            from datetime import datetime
             try:
                 zahlungsdatum = datetime.strptime(zahlungsdatum_str, '%Y-%m-%d').date()
                 rechnung.mark_as_paid(zahlungsdatum)
