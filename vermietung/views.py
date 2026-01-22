@@ -7,13 +7,17 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
-from datetime import timedelta
-from .models import Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, Zaehler, Zaehlerstand, OBJEKT_TYPE
+from datetime import timedelta, datetime
+from .models import (
+    Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, 
+    Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
+    EINGANGSRECHNUNG_STATUS
+)
 from core.models import Adresse, Mandant
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, VertragsObjektFormSet,
-    ZaehlerForm, ZaehlerstandForm
+    ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet
 )
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
@@ -771,6 +775,12 @@ def mietobjekt_detail(request, pk):
     # Only get parent meters (no parent field set) and prefetch sub-meters
     parent_zaehler = mietobjekt.zaehler.filter(parent__isnull=True).prefetch_related('sub_zaehler', 'staende').order_by('typ', 'bezeichnung')
     
+    # Get related incoming invoices (eingangsrechnungen) with pagination
+    eingangsrechnungen = mietobjekt.eingangsrechnungen.select_related('lieferant').prefetch_related('aufteilungen').order_by('-belegdatum')
+    eingangsrechnungen_paginator = Paginator(eingangsrechnungen, 10)
+    eingangsrechnungen_page = request.GET.get('eingangsrechnungen_page', 1)
+    eingangsrechnungen_page_obj = eingangsrechnungen_paginator.get_page(eingangsrechnungen_page)
+    
     context = {
         'mietobjekt': mietobjekt,
         'vertraege_page_obj': vertraege_page_obj,
@@ -779,6 +789,7 @@ def mietobjekt_detail(request, pk):
         'bilder_page_obj': bilder_page_obj,
         'aktivitaeten_page_obj': aktivitaeten_page_obj,
         'parent_zaehler': parent_zaehler,
+        'eingangsrechnungen_page_obj': eingangsrechnungen_page_obj,
     }
     
     return render(request, 'vermietung/mietobjekte/detail.html', context)
@@ -2003,3 +2014,208 @@ def zaehlerstand_delete(request, pk):
         messages.error(request, f'Fehler beim Löschen: {e}')
     
     return redirect('vermietung:zaehler_detail', pk=zaehler.pk)
+
+
+# ============================================================================
+# EINGANGSRECHNUNG (Incoming Invoice) Views
+# ============================================================================
+
+@vermietung_required
+def eingangsrechnung_list(request):
+    """
+    List all incoming invoices with search, filter and pagination.
+    """
+    # Get search query and filters
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    mietobjekt_filter = request.GET.get('mietobjekt', '').strip()
+    
+    # Base queryset
+    rechnungen = Eingangsrechnung.objects.select_related(
+        'lieferant', 'mietobjekt'
+    ).prefetch_related('aufteilungen')
+    
+    # Apply search filter if query provided
+    if search_query:
+        rechnungen = rechnungen.filter(
+            Q(belegnummer__icontains=search_query) |
+            Q(betreff__icontains=search_query) |
+            Q(lieferant__name__icontains=search_query) |
+            Q(lieferant__firma__icontains=search_query) |
+            Q(referenznummer__icontains=search_query)
+        )
+    
+    # Apply status filter
+    if status_filter:
+        rechnungen = rechnungen.filter(status=status_filter)
+    
+    # Apply mietobjekt filter
+    if mietobjekt_filter:
+        rechnungen = rechnungen.filter(mietobjekt_id=mietobjekt_filter)
+    
+    # Order by date (newest first)
+    rechnungen = rechnungen.order_by('-belegdatum', '-erstellt_am')
+    
+    # Pagination
+    paginator = Paginator(rechnungen, 20)  # Show 20 invoices per page
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Get all mietobjekte for filter dropdown
+    mietobjekte = MietObjekt.objects.all().order_by('name')
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'mietobjekt_filter': mietobjekt_filter,
+        'mietobjekte': mietobjekte,
+        'status_choices': EINGANGSRECHNUNG_STATUS,
+    }
+    
+    return render(request, 'vermietung/eingangsrechnungen/list.html', context)
+
+
+@vermietung_required
+def eingangsrechnung_detail(request, pk):
+    """
+    Show details of a specific incoming invoice with all allocations.
+    """
+    rechnung = get_object_or_404(
+        Eingangsrechnung.objects.select_related('lieferant', 'mietobjekt'),
+        pk=pk
+    )
+    
+    # Get all allocations
+    aufteilungen = rechnung.aufteilungen.select_related(
+        'kostenart1', 'kostenart2'
+    ).all()
+    
+    context = {
+        'rechnung': rechnung,
+        'aufteilungen': aufteilungen,
+    }
+    
+    return render(request, 'vermietung/eingangsrechnungen/detail.html', context)
+
+
+@vermietung_required
+def eingangsrechnung_create(request):
+    """
+    Create a new incoming invoice with allocations.
+    """
+    if request.method == 'POST':
+        form = EingangsrechnungForm(request.POST)
+        formset = EingangsrechnungAufteilungFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            rechnung = form.save()
+            formset.instance = rechnung
+            formset.save()
+            messages.success(
+                request,
+                f'Eingangsrechnung "{rechnung.belegnummer}" wurde erfolgreich angelegt.'
+            )
+            return redirect('vermietung:eingangsrechnung_detail', pk=rechnung.pk)
+    else:
+        form = EingangsrechnungForm()
+        formset = EingangsrechnungAufteilungFormSet()
+    
+    context = {
+        'form': form,
+        'formset': formset,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/eingangsrechnungen/form.html', context)
+
+
+@vermietung_required
+def eingangsrechnung_edit(request, pk):
+    """
+    Edit an existing incoming invoice and its allocations.
+    """
+    rechnung = get_object_or_404(Eingangsrechnung, pk=pk)
+    
+    if request.method == 'POST':
+        form = EingangsrechnungForm(request.POST, instance=rechnung)
+        formset = EingangsrechnungAufteilungFormSet(request.POST, instance=rechnung)
+        
+        if form.is_valid() and formset.is_valid():
+            rechnung = form.save()
+            formset.save()
+            messages.success(
+                request,
+                f'Eingangsrechnung "{rechnung.belegnummer}" wurde erfolgreich aktualisiert.'
+            )
+            return redirect('vermietung:eingangsrechnung_detail', pk=rechnung.pk)
+    else:
+        form = EingangsrechnungForm(instance=rechnung)
+        formset = EingangsrechnungAufteilungFormSet(instance=rechnung)
+    
+    context = {
+        'form': form,
+        'formset': formset,
+        'rechnung': rechnung,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/eingangsrechnungen/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def eingangsrechnung_delete(request, pk):
+    """
+    Delete an incoming invoice.
+    """
+    rechnung = get_object_or_404(Eingangsrechnung, pk=pk)
+    belegnummer = rechnung.belegnummer
+    
+    try:
+        rechnung.delete()
+        messages.success(request, f'Eingangsrechnung "{belegnummer}" wurde erfolgreich gelöscht.')
+        return redirect('vermietung:eingangsrechnung_list')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen der Eingangsrechnung: {str(e)}')
+        return redirect('vermietung:eingangsrechnung_detail', pk=pk)
+
+
+@vermietung_required
+def eingangsrechnung_mark_paid(request, pk):
+    """
+    Mark an invoice as paid.
+    
+    GET: Show form to enter payment date
+    POST: Save payment date and mark as paid
+    """
+    rechnung = get_object_or_404(Eingangsrechnung, pk=pk)
+    
+    # Check if already paid
+    if rechnung.status == 'BEZAHLT':
+        messages.warning(request, 'Diese Rechnung wurde bereits als bezahlt markiert.')
+        return redirect('vermietung:eingangsrechnung_detail', pk=pk)
+    
+    if request.method == 'POST':
+        zahlungsdatum_str = request.POST.get('zahlungsdatum')
+        if zahlungsdatum_str:
+            try:
+                zahlungsdatum = datetime.strptime(zahlungsdatum_str, '%Y-%m-%d').date()
+                rechnung.mark_as_paid(zahlungsdatum)
+                messages.success(
+                    request,
+                    f'Eingangsrechnung "{rechnung.belegnummer}" wurde als bezahlt markiert.'
+                )
+                return redirect('vermietung:eingangsrechnung_detail', pk=rechnung.pk)
+            except ValueError:
+                messages.error(request, 'Ungültiges Datumsformat.')
+        else:
+            messages.error(request, 'Bitte geben Sie ein Zahlungsdatum an.')
+    
+    # GET: Show form
+    context = {
+        'rechnung': rechnung,
+        'heute': timezone.now().date(),
+    }
+    
+    return render(request, 'vermietung/eingangsrechnungen/mark_paid.html', context)

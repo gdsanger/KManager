@@ -2274,3 +2274,241 @@ class Zaehlerstand(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+
+
+EINGANGSRECHNUNG_STATUS = [
+    ('NEU', 'Neu'),
+    ('PRUEFUNG', 'Prüfung'),
+    ('OFFEN', 'Offen'),
+    ('KLAERUNG', 'Klärung'),
+    ('BEZAHLT', 'Bezahlt'),
+]
+
+
+class Eingangsrechnung(models.Model):
+    """Incoming invoice for rental property costs (utilities, energy, repairs, etc.)"""
+    
+    # Supplier and property
+    lieferant = models.ForeignKey(
+        Adresse,
+        on_delete=models.PROTECT,
+        limit_choices_to={'adressen_type': 'LIEFERANT'},
+        verbose_name="Lieferant",
+        related_name='eingangsrechnungen'
+    )
+    mietobjekt = models.ForeignKey(
+        MietObjekt,
+        on_delete=models.PROTECT,
+        verbose_name="Mietobjekt",
+        related_name='eingangsrechnungen'
+    )
+    
+    # Document details
+    belegdatum = models.DateField(verbose_name="Belegdatum")
+    faelligkeit = models.DateField(verbose_name="Fälligkeit")
+    belegnummer = models.CharField(max_length=100, verbose_name="Belegnummer")
+    betreff = models.CharField(max_length=200, verbose_name="Betreff")
+    referenznummer = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Referenznummer"
+    )
+    
+    # Service period (optional)
+    leistungszeitraum_von = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name="Leistungszeitraum von"
+    )
+    leistungszeitraum_bis = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name="Leistungszeitraum bis"
+    )
+    
+    # Notes
+    notizen = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Notizen"
+    )
+    
+    # Status and payment
+    status = models.CharField(
+        max_length=20,
+        choices=EINGANGSRECHNUNG_STATUS,
+        default='NEU',
+        verbose_name="Status"
+    )
+    zahlungsdatum = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name="Zahlungsdatum"
+    )
+    
+    # Allocation
+    umlagefaehig = models.BooleanField(
+        default=True,
+        verbose_name="Umlagefähig"
+    )
+    
+    # Audit fields
+    erstellt_am = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    geaendert_am = models.DateTimeField(auto_now=True, verbose_name="Geändert am")
+    
+    class Meta:
+        verbose_name = "Eingangsrechnung"
+        verbose_name_plural = "Eingangsrechnungen"
+        ordering = ['-belegdatum', '-erstellt_am']
+    
+    def __str__(self):
+        return f"{self.belegnummer} - {self.lieferant.name} - {self.belegdatum}"
+    
+    @property
+    def nettobetrag(self):
+        """Calculate net amount from all allocations"""
+        return sum(
+            aufteilung.nettobetrag or Decimal('0')
+            for aufteilung in self.aufteilungen.all()
+        )
+    
+    @property
+    def umsatzsteuer(self):
+        """Calculate VAT from all allocations"""
+        return sum(
+            aufteilung.umsatzsteuer or Decimal('0')
+            for aufteilung in self.aufteilungen.all()
+        )
+    
+    @property
+    def bruttobetrag(self):
+        """Calculate gross amount (net + VAT)"""
+        return self.nettobetrag + self.umsatzsteuer
+    
+    def clean(self):
+        """Validate the invoice"""
+        super().clean()
+        errors = {}
+        
+        # Service period validation
+        if self.leistungszeitraum_von and self.leistungszeitraum_bis:
+            if self.leistungszeitraum_von > self.leistungszeitraum_bis:
+                errors['leistungszeitraum_bis'] = 'Leistungszeitraum bis muss nach dem Von-Datum liegen.'
+        
+        # Payment date validation
+        if self.status == 'BEZAHLT' and not self.zahlungsdatum:
+            errors['zahlungsdatum'] = 'Bei Status "Bezahlt" muss ein Zahlungsdatum angegeben werden.'
+        
+        if errors:
+            raise ValidationError(errors)
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def mark_as_paid(self, payment_date=None):
+        """Mark invoice as paid with the given payment date"""
+        from django.utils import timezone
+        self.status = 'BEZAHLT'
+        self.zahlungsdatum = payment_date or timezone.now().date()
+        self.save()
+
+
+class EingangsrechnungAufteilung(models.Model):
+    """Cost allocation for an incoming invoice
+    
+    Splits invoice amounts by cost types with automatic VAT calculation
+    """
+    
+    eingangsrechnung = models.ForeignKey(
+        Eingangsrechnung,
+        on_delete=models.CASCADE,
+        related_name='aufteilungen',
+        verbose_name="Eingangsrechnung"
+    )
+    
+    # Cost types (hierarchical)
+    kostenart1 = models.ForeignKey(
+        'core.Kostenart',
+        on_delete=models.PROTECT,
+        related_name='aufteilungen_hauptkostenart',
+        limit_choices_to={'parent__isnull': True},
+        verbose_name="Kostenart 1 (Hauptkostenart)"
+    )
+    kostenart2 = models.ForeignKey(
+        'core.Kostenart',
+        on_delete=models.PROTECT,
+        related_name='aufteilungen_unterkostenart',
+        blank=True,
+        null=True,
+        verbose_name="Kostenart 2 (Unterkostenart)"
+    )
+    
+    # Amount
+    nettobetrag = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Nettobetrag"
+    )
+    
+    # Optional description
+    beschreibung = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        verbose_name="Beschreibung"
+    )
+    
+    class Meta:
+        verbose_name = "Eingangsrechnungsaufteilung"
+        verbose_name_plural = "Eingangsrechnungsaufteilungen"
+        ordering = ['id']
+    
+    def __str__(self):
+        return f"{self.eingangsrechnung.belegnummer} - {self.kostenart1.name} - {self.nettobetrag}"
+    
+    @property
+    def umsatzsteuer_satz(self):
+        """Get VAT rate from cost type (prefer kostenart2 if set, otherwise kostenart1)"""
+        kostenart = self.kostenart2 if self.kostenart2 else self.kostenart1
+        return Decimal(kostenart.umsatzsteuer_satz)
+    
+    @property
+    def umsatzsteuer(self):
+        """Calculate VAT amount"""
+        if not self.nettobetrag:
+            return Decimal('0')
+        return (self.nettobetrag * self.umsatzsteuer_satz / Decimal('100')).quantize(
+            Decimal('0.01'),
+            rounding=ROUND_HALF_UP
+        )
+    
+    @property
+    def bruttobetrag(self):
+        """Calculate gross amount (net + VAT)"""
+        if not self.nettobetrag:
+            return Decimal('0')
+        return self.nettobetrag + self.umsatzsteuer
+    
+    def clean(self):
+        """Validate the allocation"""
+        super().clean()
+        errors = {}
+        
+        # Validate net amount is non-negative
+        if self.nettobetrag is not None and self.nettobetrag < 0:
+            errors['nettobetrag'] = 'Nettobetrag muss größer oder gleich 0 sein.'
+        
+        # Validate kostenart2 belongs to kostenart1
+        if self.kostenart2 and self.kostenart2.parent != self.kostenart1:
+            errors['kostenart2'] = f'Kostenart 2 "{self.kostenart2.name}" muss zur Hauptkostenart "{self.kostenart1.name}" gehören.'
+        
+        if errors:
+            raise ValidationError(errors)
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)

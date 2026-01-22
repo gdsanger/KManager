@@ -91,4 +91,12 @@ urlpatterns = [
     # Zaehlerstand (Meter Reading) URLs
     path('zaehler/<int:zaehler_pk>/zaehlerstand/neu/', views.zaehlerstand_create, name='zaehlerstand_create'),
     path('zaehlerstand/<int:pk>/loeschen/', views.zaehlerstand_delete, name='zaehlerstand_delete'),
+    
+    # Eingangsrechnung (Incoming Invoice) URLs
+    path('eingangsrechnungen/', views.eingangsrechnung_list, name='eingangsrechnung_list'),
+    path('eingangsrechnungen/neu/', views.eingangsrechnung_create, name='eingangsrechnung_create'),
+    path('eingangsrechnungen/<int:pk>/', views.eingangsrechnung_detail, name='eingangsrechnung_detail'),
+    path('eingangsrechnungen/<int:pk>/bearbeiten/', views.eingangsrechnung_edit, name='eingangsrechnung_edit'),
+    path('eingangsrechnungen/<int:pk>/loeschen/', views.eingangsrechnung_delete, name='eingangsrechnung_delete'),
+    path('eingangsrechnungen/<int:pk>/bezahlt/', views.eingangsrechnung_mark_paid, name='eingangsrechnung_mark_paid'),
 ]   

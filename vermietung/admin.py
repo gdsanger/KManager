@@ -2,7 +2,8 @@ from django.contrib import admin
 from django import forms
 from .models import (
     MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, Aktivitaet,
-    OBJEKT_TYPE, VERTRAG_STATUS, DOKUMENT_ENTITY_TYPES, AKTIVITAET_STATUS, AKTIVITAET_PRIORITAET
+    OBJEKT_TYPE, VERTRAG_STATUS, DOKUMENT_ENTITY_TYPES, AKTIVITAET_STATUS, AKTIVITAET_PRIORITAET,
+    Eingangsrechnung, EingangsrechnungAufteilung
 )
 from core.models import Adresse
 
@@ -442,3 +443,52 @@ class AktivitaetAdmin(admin.ModelAdmin):
         updated = queryset.update(status='ABGEBROCHEN')
         self.message_user(request, f'{updated} Aktivitäten wurden als "Abgebrochen" markiert.')
     mark_as_abgebrochen.short_description = 'Als "Abgebrochen" markieren'
+
+class EingangsrechnungAufteilungInline(admin.TabularInline):
+    """Inline admin for invoice cost allocations"""
+    model = EingangsrechnungAufteilung
+    extra = 1
+    fields = ('kostenart1', 'kostenart2', 'nettobetrag', 'beschreibung')
+    readonly_fields = ()
+
+
+@admin.register(Eingangsrechnung)
+class EingangsrechnungAdmin(admin.ModelAdmin):
+    list_display = (
+        'belegnummer', 'belegdatum', 'lieferant', 'mietobjekt', 
+        'betreff', 'status', 'faelligkeit', 'umlagefaehig'
+    )
+    search_fields = (
+        'belegnummer', 'betreff', 'referenznummer',
+        'lieferant__name', 'lieferant__firma', 'mietobjekt__name'
+    )
+    list_filter = ('status', 'umlagefaehig', 'mietobjekt', 'lieferant')
+    date_hierarchy = 'belegdatum'
+    inlines = [EingangsrechnungAufteilungInline]
+    
+    fieldsets = (
+        ('Lieferant & Mietobjekt', {
+            'fields': ('lieferant', 'mietobjekt')
+        }),
+        ('Belegdaten', {
+            'fields': ('belegnummer', 'belegdatum', 'faelligkeit', 'betreff', 'referenznummer')
+        }),
+        ('Leistungszeitraum', {
+            'fields': ('leistungszeitraum_von', 'leistungszeitraum_bis'),
+            'classes': ('collapse',)
+        }),
+        ('Status & Zahlung', {
+            'fields': ('status', 'zahlungsdatum', 'umlagefaehig')
+        }),
+        ('Notizen', {
+            'fields': ('notizen',),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(EingangsrechnungAufteilung)
+class EingangsrechnungAufteilungAdmin(admin.ModelAdmin):
+    list_display = ('eingangsrechnung', 'kostenart1', 'kostenart2', 'nettobetrag', 'beschreibung')
+    search_fields = ('eingangsrechnung__belegnummer', 'kostenart1__name', 'kostenart2__name', 'beschreibung')
+    list_filter = ('kostenart1', 'kostenart2')

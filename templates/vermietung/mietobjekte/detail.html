@@ -245,6 +245,11 @@
                     <i class="bi bi-file-earmark"></i> Dokumente ({{ dokumente_page_obj.paginator.count }})
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="eingangsrechnungen-tab" data-bs-toggle="tab" data-bs-target="#eingangsrechnungen" type="button" role="tab">
+                    <i class="bi bi-receipt"></i> Eingangsrechnungen ({{ eingangsrechnungen_page_obj.paginator.count }})
+                </button>
+            </li>
         </ul>
         <div class="tab-content card" id="relatedTabsContent">
             <!-- Aktivitäten Tab -->
@@ -757,6 +762,114 @@
                             {% if dokumente_page_obj.has_next %}
                             <li class="page-item">
                                 <a class="page-link" href="?dokumente_page={{ dokumente_page_obj.next_page_number }}#dokumente">Weiter</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Weiter</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                {% endif %}
+            </div>
+            
+            <!-- Eingangsrechnungen Tab -->
+            <div class="tab-pane fade p-3" id="eingangsrechnungen" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Eingangsrechnungen für dieses Mietobjekt</h6>
+                    <a href="{% url 'vermietung:eingangsrechnung_create' %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus-circle"></i> Neue Eingangsrechnung
+                    </a>
+                </div>
+                {% if eingangsrechnungen_page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Belegdatum</th>
+                                    <th>Belegnummer</th>
+                                    <th>Lieferant</th>
+                                    <th>Betreff</th>
+                                    <th class="text-end">Brutto</th>
+                                    <th>Status</th>
+                                    <th>Umlagefähig</th>
+                                    <th class="text-end">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rechnung in eingangsrechnungen_page_obj %}
+                                <tr>
+                                    <td>{{ rechnung.belegdatum|date:"d.m.Y" }}</td>
+                                    <td>
+                                        <a href="{% url 'vermietung:eingangsrechnung_detail' rechnung.pk %}" class="text-decoration-none">
+                                            {{ rechnung.belegnummer }}
+                                        </a>
+                                    </td>
+                                    <td>{{ rechnung.lieferant.full_name }}</td>
+                                    <td>{{ rechnung.betreff|truncatewords:5 }}</td>
+                                    <td class="text-end">{{ rechnung.bruttobetrag|floatformat:2 }} €</td>
+                                    <td>
+                                        {% if rechnung.status == 'NEU' %}
+                                            <span class="badge bg-secondary">{{ rechnung.get_status_display }}</span>
+                                        {% elif rechnung.status == 'PRUEFUNG' %}
+                                            <span class="badge bg-info">{{ rechnung.get_status_display }}</span>
+                                        {% elif rechnung.status == 'OFFEN' %}
+                                            <span class="badge bg-warning">{{ rechnung.get_status_display }}</span>
+                                        {% elif rechnung.status == 'KLAERUNG' %}
+                                            <span class="badge bg-danger">{{ rechnung.get_status_display }}</span>
+                                        {% elif rechnung.status == 'BEZAHLT' %}
+                                            <span class="badge bg-success">{{ rechnung.get_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if rechnung.umlagefaehig %}
+                                            <i class="bi bi-check-circle text-success"></i>
+                                        {% else %}
+                                            <i class="bi bi-x-circle text-muted"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'vermietung:eingangsrechnung_detail' rechnung.pk %}" class="btn btn-sm btn-outline-info" title="Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="{% url 'vermietung:eingangsrechnung_edit' rechnung.pk %}" class="btn btn-sm btn-outline-warning" title="Bearbeiten">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> Keine Eingangsrechnungen vorhanden
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination for Eingangsrechnungen -->
+                    {% if eingangsrechnungen_page_obj.has_other_pages %}
+                    <nav aria-label="Eingangsrechnungen Pagination">
+                        <ul class="pagination pagination-sm">
+                            {% if eingangsrechnungen_page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?eingangsrechnungen_page={{ eingangsrechnungen_page_obj.previous_page_number }}#eingangsrechnungen">Zurück</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Zurück</span>
+                            </li>
+                            {% endif %}
+                            
+                            <li class="page-item active">
+                                <span class="page-link">Seite {{ eingangsrechnungen_page_obj.number }} von {{ eingangsrechnungen_page_obj.paginator.num_pages }}</span>
+                            </li>
+                            
+                            {% if eingangsrechnungen_page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?eingangsrechnungen_page={{ eingangsrechnungen_page_obj.next_page_number }}#eingangsrechnungen">Weiter</a>
                             </li>
                             {% else %}
                             <li class="page-item disabled">
