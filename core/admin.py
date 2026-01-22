@@ -85,7 +85,7 @@ class MandantAdmin(admin.ModelAdmin):
 
 
 class UnterkostenartInline(admin.TabularInline):
-    """Inline admin for child cost types (Kostenart 2)"""
+    """Inline admin for child cost types (Unterkostenarten)"""
     model = Kostenart
     fk_name = 'parent'
     extra = 1

@@ -1,11 +1,11 @@
 """
 Tests for Kostenarten admin interface
 """
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from core.models import Kostenart
-from core.admin import KostenartAdmin
+from core.admin import KostenartAdmin, UnterkostenartInline
 
 
 User = get_user_model()
@@ -50,7 +50,6 @@ class KostenartAdminTestCase(TestCase):
         unter2 = Kostenart.objects.create(name="Rohstoffe", parent=haupt2)
         
         # Get queryset from admin
-        from django.test import RequestFactory
         request = RequestFactory().get('/admin/core/kostenart/')
         request.user = self.user
         
@@ -65,8 +64,6 @@ class KostenartAdminTestCase(TestCase):
     
     def test_has_delete_permission_hauptkostenart_with_children(self):
         """Test that Hauptkostenart with children cannot be deleted via admin"""
-        from django.test import RequestFactory
-        
         hauptkostenart = Kostenart.objects.create(name="Personal")
         Kostenart.objects.create(name="Gehälter", parent=hauptkostenart)
         
@@ -79,8 +76,6 @@ class KostenartAdminTestCase(TestCase):
     
     def test_has_delete_permission_hauptkostenart_without_children(self):
         """Test that Hauptkostenart without children can be deleted via admin"""
-        from django.test import RequestFactory
-        
         hauptkostenart = Kostenart.objects.create(name="Personal")
         
         request = RequestFactory().get('/admin/core/kostenart/')
@@ -92,8 +87,6 @@ class KostenartAdminTestCase(TestCase):
     
     def test_has_delete_permission_no_object(self):
         """Test delete permission when no object is provided"""
-        from django.test import RequestFactory
-        
         request = RequestFactory().get('/admin/core/kostenart/')
         request.user = self.user
         
@@ -106,5 +99,4 @@ class KostenartAdminTestCase(TestCase):
         """Test that inline admin for Unterkostenarten is configured"""
         self.assertEqual(len(self.admin.inlines), 1)
         
-        from core.admin import UnterkostenartInline
         self.assertEqual(self.admin.inlines[0], UnterkostenartInline)
