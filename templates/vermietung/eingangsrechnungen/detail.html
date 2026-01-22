@@ -1,0 +1,267 @@
+{% extends "vermietung/layouts/detail_layout.html" %}
+
+{% block title %}Eingangsrechnung: {{ rechnung.belegnummer }} - Domus{% endblock %}
+
+{% block page_title %}Eingangsrechnung: {{ rechnung.belegnummer }}{% endblock %}
+
+{% block page_actions %}
+{% if rechnung.status != 'BEZAHLT' %}
+<a href="{% url 'vermietung:eingangsrechnung_mark_paid' rechnung.pk %}" class="btn btn-success">
+    <i class="bi bi-check-circle"></i> Als bezahlt markieren
+</a>
+{% endif %}
+<a href="{% url 'vermietung:eingangsrechnung_edit' rechnung.pk %}" class="btn btn-warning">
+    <i class="bi bi-pencil"></i> Bearbeiten
+</a>
+<button type="button" class="btn btn-danger" onclick="confirmDelete()">
+    <i class="bi bi-trash"></i> Löschen
+</button>
+<a href="{% url 'vermietung:eingangsrechnung_list' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück zur Liste
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Belegdaten -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-receipt"></i> Belegdaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Belegnummer:</div>
+                    <div class="col-md-8"><strong>{{ rechnung.belegnummer }}</strong></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Belegdatum:</div>
+                    <div class="col-md-8">{{ rechnung.belegdatum|date:"d.m.Y" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Fälligkeit:</div>
+                    <div class="col-md-8">{{ rechnung.faelligkeit|date:"d.m.Y" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Betreff:</div>
+                    <div class="col-md-8">{{ rechnung.betreff }}</div>
+                </div>
+                {% if rechnung.referenznummer %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Referenznummer:</div>
+                    <div class="col-md-8">{{ rechnung.referenznummer }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Lieferant & Mietobjekt -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-building"></i> Lieferant & Mietobjekt</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Lieferant:</div>
+                    <div class="col-md-8">
+                        <a href="{% url 'vermietung:lieferant_detail' rechnung.lieferant.pk %}">
+                            {{ rechnung.lieferant.full_name }}
+                        </a>
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Mietobjekt:</div>
+                    <div class="col-md-8">
+                        <a href="{% url 'vermietung:mietobjekt_detail' rechnung.mietobjekt.pk %}">
+                            {{ rechnung.mietobjekt.name }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leistungszeitraum -->
+        {% if rechnung.leistungszeitraum_von or rechnung.leistungszeitraum_bis %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-calendar-range"></i> Leistungszeitraum</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Von:</div>
+                    <div class="col-md-8">{{ rechnung.leistungszeitraum_von|date:"d.m.Y"|default:"-" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Bis:</div>
+                    <div class="col-md-8">{{ rechnung.leistungszeitraum_bis|date:"d.m.Y"|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Kostenaufteilung -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Kostenaufteilung</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Kostenart 1</th>
+                                <th>Kostenart 2</th>
+                                <th>Beschreibung</th>
+                                <th class="text-end">Netto</th>
+                                <th class="text-end">USt-Satz</th>
+                                <th class="text-end">USt</th>
+                                <th class="text-end">Brutto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for aufteilung in aufteilungen %}
+                            <tr>
+                                <td>{{ aufteilung.kostenart1.name }}</td>
+                                <td>{{ aufteilung.kostenart2.name|default:"-" }}</td>
+                                <td>{{ aufteilung.beschreibung|default:"-" }}</td>
+                                <td class="text-end">{{ aufteilung.nettobetrag|floatformat:2 }} €</td>
+                                <td class="text-end">{{ aufteilung.umsatzsteuer_satz }}%</td>
+                                <td class="text-end">{{ aufteilung.umsatzsteuer|floatformat:2 }} €</td>
+                                <td class="text-end">{{ aufteilung.bruttobetrag|floatformat:2 }} €</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-active fw-bold">
+                                <td colspan="3">Gesamt</td>
+                                <td class="text-end">{{ rechnung.nettobetrag|floatformat:2 }} €</td>
+                                <td></td>
+                                <td class="text-end">{{ rechnung.umsatzsteuer|floatformat:2 }} €</td>
+                                <td class="text-end">{{ rechnung.bruttobetrag|floatformat:2 }} €</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notizen -->
+        {% if rechnung.notizen %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-chat-left-text"></i> Notizen</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ rechnung.notizen|linebreaks }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Status -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-12">
+                        <strong>Status:</strong>
+                        {% if rechnung.status == 'NEU' %}
+                            <span class="badge bg-secondary ms-2">{{ rechnung.get_status_display }}</span>
+                        {% elif rechnung.status == 'PRUEFUNG' %}
+                            <span class="badge bg-info ms-2">{{ rechnung.get_status_display }}</span>
+                        {% elif rechnung.status == 'OFFEN' %}
+                            <span class="badge bg-warning ms-2">{{ rechnung.get_status_display }}</span>
+                        {% elif rechnung.status == 'KLAERUNG' %}
+                            <span class="badge bg-danger ms-2">{{ rechnung.get_status_display }}</span>
+                        {% elif rechnung.status == 'BEZAHLT' %}
+                            <span class="badge bg-success ms-2">{{ rechnung.get_status_display }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if rechnung.zahlungsdatum %}
+                <div class="row mb-2">
+                    <div class="col-12">
+                        <strong>Zahlungsdatum:</strong> {{ rechnung.zahlungsdatum|date:"d.m.Y" }}
+                    </div>
+                </div>
+                {% endif %}
+                <div class="row mb-2">
+                    <div class="col-12">
+                        <strong>Umlagefähig:</strong>
+                        {% if rechnung.umlagefaehig %}
+                            <i class="bi bi-check-circle text-success"></i> Ja
+                        {% else %}
+                            <i class="bi bi-x-circle text-muted"></i> Nein
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zusammenfassung -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Zusammenfassung</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-7 text-muted">Nettobetrag:</div>
+                    <div class="col-5 text-end">{{ rechnung.nettobetrag|floatformat:2 }} €</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-7 text-muted">Umsatzsteuer:</div>
+                    <div class="col-5 text-end">{{ rechnung.umsatzsteuer|floatformat:2 }} €</div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-7"><strong>Bruttobetrag:</strong></div>
+                    <div class="col-5 text-end"><strong>{{ rechnung.bruttobetrag|floatformat:2 }} €</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metadaten -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Metadaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-12 text-muted small">
+                        Erstellt: {{ rechnung.erstellt_am|date:"d.m.Y H:i" }}
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12 text-muted small">
+                        Geändert: {{ rechnung.geaendert_am|date:"d.m.Y H:i" }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete() {
+    if (confirm('Möchten Sie diese Eingangsrechnung wirklich löschen?')) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "vermietung:eingangsrechnung_delete" rechnung.pk %}';
+        
+        var csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrfmiddlewaretoken';
+        csrfToken.value = '{{ csrf_token }}';
+        form.appendChild(csrfToken);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

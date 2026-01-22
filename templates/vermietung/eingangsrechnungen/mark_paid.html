@@ -1,0 +1,65 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}Rechnung als bezahlt markieren - Domus{% endblock %}
+
+{% block page_title %}
+    <i class="bi bi-check-circle"></i> Rechnung als bezahlt markieren
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:eingangsrechnung_detail' rechnung.pk %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Eingangsrechnung {{ rechnung.belegnummer }}</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">
+                    Möchten Sie diese Rechnung als bezahlt markieren?
+                </p>
+                
+                <div class="alert alert-info">
+                    <strong>Lieferant:</strong> {{ rechnung.lieferant.full_name }}<br>
+                    <strong>Betreff:</strong> {{ rechnung.betreff }}<br>
+                    <strong>Bruttobetrag:</strong> {{ rechnung.bruttobetrag|floatformat:2 }} €
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="zahlungsdatum" class="form-label">Zahlungsdatum *</label>
+                        <input type="date" 
+                               class="form-control" 
+                               id="zahlungsdatum" 
+                               name="zahlungsdatum" 
+                               value="{{ heute|date:'Y-m-d' }}" 
+                               required>
+                        <div class="form-text">
+                            Geben Sie das Datum der Zahlung ein (Standard: heute).
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'vermietung:eingangsrechnung_detail' rechnung.pk %}" 
+                           class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Als bezahlt markieren
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
