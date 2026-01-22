@@ -771,6 +771,12 @@ def mietobjekt_detail(request, pk):
     # Only get parent meters (no parent field set) and prefetch sub-meters
     parent_zaehler = mietobjekt.zaehler.filter(parent__isnull=True).prefetch_related('sub_zaehler', 'staende').order_by('typ', 'bezeichnung')
     
+    # Get related incoming invoices (eingangsrechnungen) with pagination
+    eingangsrechnungen = mietobjekt.eingangsrechnungen.select_related('lieferant').prefetch_related('aufteilungen').order_by('-belegdatum')
+    eingangsrechnungen_paginator = Paginator(eingangsrechnungen, 10)
+    eingangsrechnungen_page = request.GET.get('eingangsrechnungen_page', 1)
+    eingangsrechnungen_page_obj = eingangsrechnungen_paginator.get_page(eingangsrechnungen_page)
+    
     context = {
         'mietobjekt': mietobjekt,
         'vertraege_page_obj': vertraege_page_obj,
@@ -779,6 +785,7 @@ def mietobjekt_detail(request, pk):
         'bilder_page_obj': bilder_page_obj,
         'aktivitaeten_page_obj': aktivitaeten_page_obj,
         'parent_zaehler': parent_zaehler,
+        'eingangsrechnungen_page_obj': eingangsrechnungen_page_obj,
     }
     
     return render(request, 'vermietung/mietobjekte/detail.html', context)
