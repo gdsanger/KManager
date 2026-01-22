@@ -23,11 +23,30 @@ class VertragAdminForm(forms.ModelForm):
 
 @admin.register(MietObjekt)
 class MietObjektAdmin(admin.ModelAdmin):
-    list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'kaution', 'display_qm_mietpreis', 'mandant', 'verfuegbar')
-    search_fields = ('name', 'standort__strasse', 'standort__ort', 'standort')
-    list_filter = ('type', 'verfuegbar', 'standort', 'mandant')
-    readonly_fields = ('display_qm_mietpreis',)
+    list_display = ('name', 'type', 'beschreibung', 'fläche', 'höhe', 'breite', 'tiefe', 'standort', 'mietpreis', 'kaution', 'display_qm_mietpreis', 'mandant', 'parent', 'verfuegbar')
+    search_fields = ('name', 'standort__strasse', 'standort__ort', 'standort', 'parent__name')
+    list_filter = ('type', 'verfuegbar', 'standort', 'mandant', 'parent')
+    readonly_fields = ('display_qm_mietpreis', 'display_children')
     actions = ['recalculate_availability']
+    
+    fieldsets = (
+        ('Grundinformationen', {
+            'fields': ('name', 'type', 'beschreibung', 'standort', 'mandant')
+        }),
+        ('Hierarchie', {
+            'fields': ('parent', 'display_children'),
+            'description': 'Hierarchische Beziehungen zwischen Mietobjekten'
+        }),
+        ('Abmessungen', {
+            'fields': ('fläche', 'höhe', 'breite', 'tiefe', 'volumen')
+        }),
+        ('Finanzielle Details', {
+            'fields': ('mietpreis', 'nebenkosten', 'kaution', 'display_qm_mietpreis')
+        }),
+        ('Verfügbarkeit', {
+            'fields': ('verfuegbare_einheiten', 'verfuegbar')
+        }),
+    )
     
     def display_qm_mietpreis(self, obj):
         """Display qm_mietpreis as read-only field."""
@@ -36,6 +55,16 @@ class MietObjektAdmin(admin.ModelAdmin):
             return f"{qm_preis} €/m²"
         return "-"
     display_qm_mietpreis.short_description = "qm-Mietpreis"
+    
+    def display_children(self, obj):
+        """Display list of child MietObjekte."""
+        if obj.pk:
+            children = obj.children.all()
+            if children.exists():
+                return ", ".join([child.name for child in children])
+            return "Keine untergeordneten Objekte"
+        return "-"
+    display_children.short_description = "Untergeordnete Mietobjekte"
     
     def recalculate_availability(self, request, queryset):
         """Recalculate availability for selected MietObjekt."""
