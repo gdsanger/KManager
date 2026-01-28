@@ -76,12 +76,15 @@ class SmtpSettings(models.Model):
 
 class MailTemplate(models.Model):
     """Template for sending emails"""
-    key = models.CharField(max_length=100, unique=True, verbose_name="Template Key")
-    subject = models.CharField(max_length=255, verbose_name="Betreff")
-    message_html = models.TextField(verbose_name="HTML Nachricht")
-    from_address = models.EmailField(verbose_name="Von E-Mail")
-    from_name = models.CharField(max_length=255, verbose_name="Von Name")
-    cc_copy_to = models.EmailField(blank=True, verbose_name="CC Kopie an")
+    key = models.SlugField(max_length=100, unique=True, verbose_name="Template Key", help_text="Technischer Identifier (z.B. issue-created-confirmation)")
+    subject = models.CharField(max_length=255, verbose_name="Betreff", help_text="Betreff der E-Mail, Platzhalter erlaubt")
+    message = models.TextField(verbose_name="Nachricht", help_text="Inhalt der E-Mail (Markdown oder HTML, Platzhalter erlaubt)")
+    from_name = models.CharField(max_length=255, blank=True, verbose_name="Absendername")
+    from_address = models.EmailField(blank=True, verbose_name="Absenderadresse")
+    cc_address = models.EmailField(blank=True, verbose_name="CC-Adresse")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv", help_text="Template aktiv / deaktiviert")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
 
     class Meta:
         verbose_name = "E-Mail Template"

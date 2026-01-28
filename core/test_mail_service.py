@@ -18,7 +18,7 @@ class RenderTemplateTestCase(TestCase):
         self.template = MailTemplate.objects.create(
             key='test_template',
             subject='Hello {{ name }}',
-            message_html='<p>Welcome {{ name }}, your email is {{ email }}</p>',
+            message='<p>Welcome {{ name }}, your email is {{ email }}</p>',
             from_address='sender@example.com',
             from_name='Test Sender'
         )
@@ -50,7 +50,7 @@ class RenderTemplateTestCase(TestCase):
         template = MailTemplate.objects.create(
             key='filter_test',
             subject='{{ title|upper }}',
-            message_html='<p>{{ text|default:"No text" }}</p>',
+            message='<p>{{ text|default:"No text" }}</p>',
             from_address='sender@example.com',
             from_name='Sender'
         )
@@ -66,7 +66,7 @@ class RenderTemplateTestCase(TestCase):
         template = MailTemplate.objects.create(
             key='error_template',
             subject='{% for x in %}test{% endfor %}',  # Invalid for loop syntax
-            message_html='<p>Test</p>',
+            message='<p>Test</p>',
             from_address='sender@example.com',
             from_name='Sender'
         )
@@ -95,7 +95,7 @@ class SendMailTestCase(TestCase):
         self.template = MailTemplate.objects.create(
             key='welcome_mail',
             subject='Welcome {{ name }}',
-            message_html='<h1>Hello {{ name }}</h1><p>Welcome to our service!</p>',
+            message='<h1>Hello {{ name }}</h1><p>Welcome to our service!</p>',
             from_address='noreply@example.com',
             from_name='Test Service'
         )

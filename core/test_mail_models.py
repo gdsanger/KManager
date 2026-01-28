@@ -65,14 +65,15 @@ class MailTemplateTestCase(TestCase):
         template = MailTemplate.objects.create(
             key='test_template',
             subject='Test Subject',
-            message_html='<p>Test Message</p>',
+            message='<p>Test Message</p>',
             from_address='sender@example.com',
             from_name='Test Sender',
-            cc_copy_to='cc@example.com'
+            cc_address='cc@example.com'
         )
         
         self.assertEqual(template.key, 'test_template')
         self.assertEqual(template.subject, 'Test Subject')
+        self.assertTrue(template.is_active)  # Should be active by default
         self.assertEqual(str(template), 'test_template: Test Subject')
     
     def test_unique_key_constraint(self):
@@ -80,7 +81,7 @@ class MailTemplateTestCase(TestCase):
         MailTemplate.objects.create(
             key='duplicate_key',
             subject='First',
-            message_html='<p>First</p>',
+            message='<p>First</p>',
             from_address='sender@example.com',
             from_name='Sender'
         )
@@ -91,19 +92,55 @@ class MailTemplateTestCase(TestCase):
             MailTemplate.objects.create(
                 key='duplicate_key',
                 subject='Second',
-                message_html='<p>Second</p>',
+                message='<p>Second</p>',
                 from_address='sender2@example.com',
                 from_name='Sender 2'
             )
     
     def test_cc_optional(self):
-        """Test that cc_copy_to is optional"""
+        """Test that cc_address is optional"""
         template = MailTemplate.objects.create(
             key='no_cc',
             subject='No CC',
-            message_html='<p>Test</p>',
+            message='<p>Test</p>',
             from_address='sender@example.com',
             from_name='Sender'
         )
         
-        self.assertEqual(template.cc_copy_to, '')
+        self.assertEqual(template.cc_address, '')
+    
+    def test_is_active_default(self):
+        """Test that is_active defaults to True"""
+        template = MailTemplate.objects.create(
+            key='active_test',
+            subject='Test',
+            message='<p>Test</p>',
+            from_address='sender@example.com',
+            from_name='Sender'
+        )
+        
+        self.assertTrue(template.is_active)
+    
+    def test_timestamps(self):
+        """Test that created_at and updated_at are set"""
+        template = MailTemplate.objects.create(
+            key='timestamp_test',
+            subject='Test',
+            message='<p>Test</p>',
+            from_address='sender@example.com',
+            from_name='Sender'
+        )
+        
+        self.assertIsNotNone(template.created_at)
+        self.assertIsNotNone(template.updated_at)
+        
+    def test_optional_sender_fields(self):
+        """Test that from_name and from_address are optional"""
+        template = MailTemplate.objects.create(
+            key='minimal_template',
+            subject='Test',
+            message='<p>Test</p>'
+        )
+        
+        self.assertEqual(template.from_name, '')
+        self.assertEqual(template.from_address, '')

@@ -18,7 +18,7 @@ class MailTemplateAdminForm(forms.ModelForm):
         model = MailTemplate
         fields = '__all__'
         widgets = {
-            'message_html': forms.Textarea(attrs={
+            'message': forms.Textarea(attrs={
                 'class': 'tinymce',
                 'rows': 20,
             }),
@@ -28,8 +28,23 @@ class MailTemplateAdminForm(forms.ModelForm):
 @admin.register(MailTemplate)
 class MailTemplateAdmin(admin.ModelAdmin):
     form = MailTemplateAdminForm
-    list_display = ('key', 'subject', 'from_name', 'from_address')
+    list_display = ('key', 'subject', 'from_name', 'from_address', 'is_active')
+    list_filter = ('is_active',)
     search_fields = ('key', 'subject', 'from_name', 'from_address')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('key', 'subject', 'message', 'is_active')
+        }),
+        ('Absender', {
+            'fields': ('from_name', 'from_address', 'cc_address')
+        }),
+        ('Zeitstempel', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
     
     class Media:
         js = ('https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js',)

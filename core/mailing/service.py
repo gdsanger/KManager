@@ -43,11 +43,11 @@ def render_template(mail_template, context):
         subject_template = Template(mail_template.subject)
         rendered_subject = subject_template.render(Context(context))
         
-        # Render HTML message
-        html_template = Template(mail_template.message_html)
-        rendered_html = html_template.render(Context(context))
+        # Render message
+        message_template = Template(mail_template.message)
+        rendered_message = message_template.render(Context(context))
         
-        return rendered_subject, rendered_html
+        return rendered_subject, rendered_message
     except TemplateSyntaxError as e:
         raise TemplateRenderError(f"Template-Syntax-Fehler: {str(e)}")
     except Exception as e:
@@ -87,10 +87,10 @@ def send_mail(template_key, to, context):
     msg['To'] = ', '.join(to)
     
     # Add CC if configured
-    if mail_template.cc_copy_to:
-        msg['Cc'] = mail_template.cc_copy_to
+    if mail_template.cc_address:
+        msg['Cc'] = mail_template.cc_address
         # Add CC to recipients list
-        to = list(to) + [mail_template.cc_copy_to]
+        to = list(to) + [mail_template.cc_address]
     
     # Attach HTML body
     html_part = MIMEText(html_body, 'html', 'utf-8')
