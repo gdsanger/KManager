@@ -44,31 +44,33 @@ class MailTemplateForm(forms.ModelForm):
     
     class Meta:
         model = MailTemplate
-        fields = ['key', 'subject', 'message_html', 'from_address', 'from_name', 'cc_copy_to']
+        fields = ['key', 'subject', 'message', 'from_address', 'from_name', 'cc_address', 'is_active']
         widgets = {
             'key': forms.TextInput(attrs={'class': 'form-control'}),
             'subject': forms.TextInput(attrs={'class': 'form-control'}),
-            'message_html': forms.Textarea(attrs={
+            'message': forms.Textarea(attrs={
                 'class': 'form-control tinymce-editor',
                 'rows': 15,
             }),
             'from_address': forms.EmailInput(attrs={'class': 'form-control'}),
             'from_name': forms.TextInput(attrs={'class': 'form-control'}),
-            'cc_copy_to': forms.EmailInput(attrs={'class': 'form-control'}),
+            'cc_address': forms.EmailInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'key': 'Template Key *',
             'subject': 'Betreff *',
-            'message_html': 'HTML Nachricht *',
-            'from_address': 'Von E-Mail *',
-            'from_name': 'Von Name *',
-            'cc_copy_to': 'CC Kopie an',
+            'message': 'Nachricht *',
+            'from_address': 'Von E-Mail',
+            'from_name': 'Von Name',
+            'cc_address': 'CC-Adresse',
+            'is_active': 'Aktiv',
         }
         help_texts = {
-            'key': 'Eindeutiger technischer Name (z.B. "vertrag_erstellt")',
+            'key': 'Eindeutiger technischer Name (z.B. "issue-created-confirmation")',
             'subject': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
-            'message_html': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
-            'cc_copy_to': 'Optional: Diese Adresse erhält automatisch eine Kopie jeder E-Mail',
+            'message': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
+            'cc_address': 'Optional: Diese Adresse erhält automatisch eine Kopie jeder E-Mail',
         }
     
     def __init__(self, *args, **kwargs):

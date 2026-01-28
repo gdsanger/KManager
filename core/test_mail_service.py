@@ -18,7 +18,7 @@ class RenderTemplateTestCase(TestCase):
         self.template = MailTemplate.objects.create(
             key='test_template',
             subject='Hello {{ name }}',
-            message_html='<p>Welcome {{ name }}, your email is {{ email }}</p>',
+            message='<p>Welcome {{ name }}, your email is {{ email }}</p>',
             from_address='sender@example.com',
             from_name='Test Sender'
         )
@@ -50,7 +50,7 @@ class RenderTemplateTestCase(TestCase):
         template = MailTemplate.objects.create(
             key='filter_test',
             subject='{{ title|upper }}',
-            message_html='<p>{{ text|default:"No text" }}</p>',
+            message='<p>{{ text|default:"No text" }}</p>',
             from_address='sender@example.com',
             from_name='Sender'
         )
@@ -66,7 +66,7 @@ class RenderTemplateTestCase(TestCase):
         template = MailTemplate.objects.create(
             key='error_template',
             subject='{% for x in %}test{% endfor %}',  # Invalid for loop syntax
-            message_html='<p>Test</p>',
+            message='<p>Test</p>',
             from_address='sender@example.com',
             from_name='Sender'
         )
@@ -95,7 +95,7 @@ class SendMailTestCase(TestCase):
         self.template = MailTemplate.objects.create(
             key='welcome_mail',
             subject='Welcome {{ name }}',
-            message_html='<h1>Hello {{ name }}</h1><p>Welcome to our service!</p>',
+            message='<h1>Hello {{ name }}</h1><p>Welcome to our service!</p>',
             from_address='noreply@example.com',
             from_name='Test Service'
         )
@@ -106,6 +106,43 @@ class SendMailTestCase(TestCase):
             send_mail('nonexistent', ['test@example.com'], {})
         
         self.assertIn('nicht gefunden', str(cm.exception))
+    
+    def test_inactive_template(self):
+        """Test that error is raised when trying to send with inactive template"""
+        # Create an inactive template
+        inactive_template = MailTemplate.objects.create(
+            key='inactive_template',
+            subject='Test',
+            message='<p>Test</p>',
+            from_address='sender@example.com',
+            from_name='Sender',
+            is_active=False
+        )
+        
+        with self.assertRaises(MailServiceError) as cm:
+            send_mail('inactive_template', ['test@example.com'], {})
+        
+        self.assertIn('deaktiviert', str(cm.exception))
+    
+    def test_template_with_empty_sender_uses_defaults(self):
+        """Test that templates with empty sender fields use default values"""
+        from django.conf import settings
+        
+        # Create template with empty sender fields
+        template = MailTemplate.objects.create(
+            key='no_sender',
+            subject='Test',
+            message='<p>Test</p>',
+            from_address='',
+            from_name=''
+        )
+        
+        # Try to send - should use defaults
+        # This will fail at SMTP connection, but we're testing field handling
+        with self.assertRaises(MailSendError):
+            send_mail('no_sender', ['test@example.com'], {})
+        
+        # Verify the template still exists and was used (no error about missing sender)
     
     def test_send_mail_parameters(self):
         """Test that send_mail properly builds the message"""

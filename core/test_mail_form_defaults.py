@@ -31,7 +31,7 @@ class MailTemplateFormDefaultsTestCase(TestCase):
         existing_template = MailTemplate.objects.create(
             key='existing_template',
             subject='Test Subject',
-            message_html='<p>Test</p>',
+            message='<p>Test</p>',
             from_address='custom@example.com',
             from_name='Custom Sender'
         )
@@ -52,10 +52,11 @@ class MailTemplateFormDefaultsTestCase(TestCase):
         form_data = {
             'key': 'test_template',
             'subject': 'Test Subject',
-            'message_html': '<p>Test message</p>',
+            'message': '<p>Test message</p>',
             'from_address': settings.DEFAULT_FROM_EMAIL,
             'from_name': settings.DEFAULT_FROM_NAME,
-            'cc_copy_to': ''
+            'cc_address': '',
+            'is_active': True
         }
         
         form = MailTemplateForm(data=form_data)
@@ -73,10 +74,11 @@ class MailTemplateFormDefaultsTestCase(TestCase):
         form_data = {
             'key': 'custom_template',
             'subject': 'Custom Subject',
-            'message_html': '<p>Custom message</p>',
+            'message': '<p>Custom message</p>',
             'from_address': 'different@example.com',
             'from_name': 'Different Sender',
-            'cc_copy_to': ''
+            'cc_address': '',
+            'is_active': True
         }
         
         form = MailTemplateForm(data=form_data)
