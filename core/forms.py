@@ -67,7 +67,7 @@ class MailTemplateForm(forms.ModelForm):
             'is_active': 'Aktiv',
         }
         help_texts = {
-            'key': 'Eindeutiger technischer Name (z.B. "vertrag_erstellt")',
+            'key': 'Eindeutiger technischer Name (z.B. "issue-created-confirmation")',
             'subject': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
             'message': 'Sie können Django Template-Variablen verwenden: {{ variable }}',
             'cc_address': 'Optional: Diese Adresse erhält automatisch eine Kopie jeder E-Mail',

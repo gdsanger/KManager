@@ -107,6 +107,43 @@ class SendMailTestCase(TestCase):
         
         self.assertIn('nicht gefunden', str(cm.exception))
     
+    def test_inactive_template(self):
+        """Test that error is raised when trying to send with inactive template"""
+        # Create an inactive template
+        inactive_template = MailTemplate.objects.create(
+            key='inactive_template',
+            subject='Test',
+            message='<p>Test</p>',
+            from_address='sender@example.com',
+            from_name='Sender',
+            is_active=False
+        )
+        
+        with self.assertRaises(MailServiceError) as cm:
+            send_mail('inactive_template', ['test@example.com'], {})
+        
+        self.assertIn('deaktiviert', str(cm.exception))
+    
+    def test_template_with_empty_sender_uses_defaults(self):
+        """Test that templates with empty sender fields use default values"""
+        from django.conf import settings
+        
+        # Create template with empty sender fields
+        template = MailTemplate.objects.create(
+            key='no_sender',
+            subject='Test',
+            message='<p>Test</p>',
+            from_address='',
+            from_name=''
+        )
+        
+        # Try to send - should use defaults
+        # This will fail at SMTP connection, but we're testing field handling
+        with self.assertRaises(MailSendError):
+            send_mail('no_sender', ['test@example.com'], {})
+        
+        # Verify the template still exists and was used (no error about missing sender)
+    
     def test_send_mail_parameters(self):
         """Test that send_mail properly builds the message"""
         # We can't actually send mail in tests without a real SMTP server

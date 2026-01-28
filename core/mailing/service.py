@@ -64,7 +64,7 @@ def send_mail(template_key, to, context):
         context: dict with template variables
         
     Raises:
-        MailServiceError: If template not found
+        MailServiceError: If template not found or inactive
         TemplateRenderError: If template rendering fails
         MailSendError: If sending fails
     """
@@ -73,6 +73,15 @@ def send_mail(template_key, to, context):
         mail_template = MailTemplate.objects.get(key=template_key)
     except MailTemplate.DoesNotExist:
         raise MailServiceError(f"Mail-Template mit Key '{template_key}' nicht gefunden.")
+    
+    # Check if template is active
+    if not mail_template.is_active:
+        raise MailServiceError(f"Mail-Template '{template_key}' ist deaktiviert.")
+    
+    # Validate sender fields - use defaults if empty
+    from django.conf import settings
+    from_address = mail_template.from_address or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com')
+    from_name = mail_template.from_name or getattr(settings, 'DEFAULT_FROM_NAME', 'KManager')
     
     # Render template
     subject, html_body = render_template(mail_template, context)
@@ -83,7 +92,7 @@ def send_mail(template_key, to, context):
     # Build email message
     msg = MIMEMultipart('alternative')
     msg['Subject'] = Header(subject, 'utf-8')
-    msg['From'] = f'"{mail_template.from_name}" <{mail_template.from_address}>'
+    msg['From'] = f'"{from_name}" <{from_address}>'
     msg['To'] = ', '.join(to)
     
     # Add CC if configured
@@ -111,7 +120,7 @@ def send_mail(template_key, to, context):
             server.login(smtp_settings.username, smtp_settings.password)
         
         # Send message
-        server.sendmail(mail_template.from_address, to, msg.as_string())
+        server.sendmail(from_address, to, msg.as_string())
         server.quit()
         
     except smtplib.SMTPException as e:
