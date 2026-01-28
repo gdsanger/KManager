@@ -139,7 +139,17 @@
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'aktivitaet' in request.path %}active{% endif %}" href="{% url 'vermietung:aktivitaet_kanban' %}">
-                                        <i class="bi bi-list-check"></i> Aktivitäten
+                                        <i class="bi bi-list-check"></i> Aktivitäten (Kanban)
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_assigned_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_assigned_list' %}">
+                                        <i class="bi bi-person-check"></i> Meine zugewiesenen
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_created_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_created_list' %}">
+                                        <i class="bi bi-pencil-square"></i> Meine erstellten
                                     </a>
                                 </li>
                             </ul>

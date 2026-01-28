@@ -120,7 +120,23 @@
 
                     <hr class="my-4">
 
-                    <h6 class="mb-3">Zuweisung</h6>
+                    <h6 class="mb-3">Zuweisung & Ersteller</h6>
+
+                    <!-- Ersteller -->
+                    <div class="mb-3">
+                        <label for="{{ form.ersteller.id_for_label }}" class="form-label">
+                            {{ form.ersteller.label }}
+                        </label>
+                        {{ form.ersteller }}
+                        {% if form.ersteller.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.ersteller.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.ersteller.help_text %}
+                        <div class="form-text">{{ form.ersteller.help_text }}</div>
+                        {% endif %}
+                    </div>
 
                     <!-- Interner Verantwortlicher -->
                     <div class="mb-3">
@@ -154,10 +170,95 @@
                         {% endif %}
                     </div>
 
+                    <hr class="my-4">
+
+                    <h6 class="mb-3">Serien-Aktivität</h6>
+
+                    <!-- Ist Serie -->
+                    <div class="mb-3 form-check">
+                        {{ form.ist_serie }}
+                        <label class="form-check-label" for="{{ form.ist_serie.id_for_label }}">
+                            {{ form.ist_serie.label }}
+                        </label>
+                        {% if form.ist_serie.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.ist_serie.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.ist_serie.help_text %}
+                        <div class="form-text">{{ form.ist_serie.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Intervall Monate -->
+                    <div class="mb-3" id="intervall_container">
+                        <label for="{{ form.intervall_monate.id_for_label }}" class="form-label">
+                            {{ form.intervall_monate.label }}
+                        </label>
+                        {{ form.intervall_monate }}
+                        {% if form.intervall_monate.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.intervall_monate.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.intervall_monate.help_text %}
+                        <div class="form-text">{{ form.intervall_monate.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    {% if not context_obj %}
+                    <hr class="my-4">
+
+                    <h6 class="mb-3">Kontext (Wählen Sie genau einen)</h6>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Wählen Sie genau einen Kontext: Mietobjekt, Vertrag oder Kunde.
+                    </div>
+
+                    <!-- Mietobjekt -->
+                    <div class="mb-3">
+                        <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">
+                            {{ form.mietobjekt.label }}
+                        </label>
+                        {{ form.mietobjekt }}
+                        {% if form.mietobjekt.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.mietobjekt.errors }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Vertrag -->
+                    <div class="mb-3">
+                        <label for="{{ form.vertrag.id_for_label }}" class="form-label">
+                            {{ form.vertrag.label }}
+                        </label>
+                        {{ form.vertrag }}
+                        {% if form.vertrag.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.vertrag.errors }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Kunde -->
+                    <div class="mb-3">
+                        <label for="{{ form.kunde.id_for_label }}" class="form-label">
+                            {{ form.kunde.label }}
+                        </label>
+                        {{ form.kunde }}
+                        {% if form.kunde.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.kunde.errors }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
                     <!-- Hidden context fields (already set via form) -->
                     {{ form.mietobjekt }}
                     {{ form.vertrag }}
                     {{ form.kunde }}
+                    {% endif %}
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                         <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
@@ -194,4 +295,86 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle series checkbox - enable/disable intervall_monate field
+    const istSerieCheckbox = document.getElementById('id_ist_serie');
+    const intervallInput = document.getElementById('id_intervall_monate');
+    const intervallContainer = document.getElementById('intervall_container');
+    
+    function toggleIntervallField() {
+        if (istSerieCheckbox && intervallInput) {
+            if (istSerieCheckbox.checked) {
+                intervallInput.disabled = false;
+                intervallInput.required = true;
+                if (intervallContainer) {
+                    intervallContainer.style.display = 'block';
+                }
+            } else {
+                intervallInput.disabled = true;
+                intervallInput.required = false;
+                intervallInput.value = '';
+                if (intervallContainer) {
+                    intervallContainer.style.display = 'none';
+                }
+            }
+        }
+    }
+    
+    if (istSerieCheckbox) {
+        istSerieCheckbox.addEventListener('change', toggleIntervallField);
+        // Initialize on page load
+        toggleIntervallField();
+    }
+    
+    {% if not context_obj %}
+    // Handle context field mutual exclusivity
+    const mietobjektSelect = document.getElementById('id_mietobjekt');
+    const vertragSelect = document.getElementById('id_vertrag');
+    const kundeSelect = document.getElementById('id_kunde');
+    
+    function updateContextFields(changedField) {
+        const fields = [mietobjektSelect, vertragSelect, kundeSelect];
+        
+        fields.forEach(field => {
+            if (field && field !== changedField) {
+                // If the changed field has a value, disable others
+                if (changedField && changedField.value) {
+                    field.disabled = true;
+                    field.value = '';
+                } else {
+                    // If changed field is empty, enable all
+                    field.disabled = false;
+                }
+            }
+        });
+    }
+    
+    if (mietobjektSelect) {
+        mietobjektSelect.addEventListener('change', function() {
+            updateContextFields(this);
+        });
+    }
+    
+    if (vertragSelect) {
+        vertragSelect.addEventListener('change', function() {
+            updateContextFields(this);
+        });
+    }
+    
+    if (kundeSelect) {
+        kundeSelect.addEventListener('change', function() {
+            updateContextFields(this);
+        });
+    }
+    
+    // Initialize on page load - check if any field has a value
+    const initialField = [mietobjektSelect, vertragSelect, kundeSelect].find(f => f && f.value);
+    if (initialField) {
+        updateContextFields(initialField);
+    }
+    {% endif %}
+});
+</script>
 {% endblock %}

@@ -113,6 +113,7 @@ class AktivitaetViewTest(TestCase):
             'status': 'OFFEN',
             'prioritaet': 'HOCH',
             'faellig_am': (date.today() + timedelta(days=7)).isoformat(),
+            'ersteller': self.user.pk,
         })
         
         # Should redirect to vertrag detail
@@ -123,6 +124,7 @@ class AktivitaetViewTest(TestCase):
         self.assertEqual(aktivitaet.vertrag, self.vertrag)
         self.assertEqual(aktivitaet.status, 'OFFEN')
         self.assertEqual(aktivitaet.prioritaet, 'HOCH')
+        self.assertEqual(aktivitaet.ersteller, self.user)
     
     def test_create_aktivitaet_from_mietobjekt(self):
         """Test creating an activity from a mietobjekt."""
@@ -132,6 +134,7 @@ class AktivitaetViewTest(TestCase):
             'beschreibung': 'Jährliche Wartung',
             'status': 'OFFEN',
             'prioritaet': 'NORMAL',
+            'ersteller': self.user.pk,
         })
         
         self.assertEqual(response.status_code, 302)
@@ -139,6 +142,7 @@ class AktivitaetViewTest(TestCase):
         # Check activity was created
         aktivitaet = Aktivitaet.objects.get(titel='Wartung')
         self.assertEqual(aktivitaet.mietobjekt, self.mietobjekt)
+        self.assertEqual(aktivitaet.ersteller, self.user)
     
     def test_create_aktivitaet_from_kunde(self):
         """Test creating an activity from a customer."""
@@ -148,6 +152,7 @@ class AktivitaetViewTest(TestCase):
             'beschreibung': 'Vertragsverlängerung besprechen',
             'status': 'OFFEN',
             'prioritaet': 'HOCH',
+            'ersteller': self.user.pk,
         })
         
         self.assertEqual(response.status_code, 302)
@@ -155,10 +160,12 @@ class AktivitaetViewTest(TestCase):
         # Check activity was created
         aktivitaet = Aktivitaet.objects.get(titel='Kunde kontaktieren')
         self.assertEqual(aktivitaet.kunde, self.kunde)
+        self.assertEqual(aktivitaet.ersteller, self.user)
     
     def test_edit_aktivitaet(self):
         """Test editing an existing activity."""
         aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Original Title',
             vertrag=self.vertrag,
             status='OFFEN',
@@ -176,6 +183,7 @@ class AktivitaetViewTest(TestCase):
             'status': 'IN_BEARBEITUNG',
             'prioritaet': 'HOCH',
             'vertrag': self.vertrag.pk,  # Hidden field
+            'ersteller': self.user.pk,
         })
         
         # Should redirect after successful save
@@ -195,6 +203,7 @@ class AktivitaetViewTest(TestCase):
     def test_delete_aktivitaet(self):
         """Test deleting an activity."""
         aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='To Delete',
             vertrag=self.vertrag,
             status='OFFEN',
@@ -212,6 +221,7 @@ class AktivitaetViewTest(TestCase):
     def test_update_status_ajax(self):
         """Test quick status update for Kanban."""
         aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Test',
             vertrag=self.vertrag,
             status='OFFEN',
@@ -231,6 +241,7 @@ class AktivitaetViewTest(TestCase):
         """Test that activities are shown in contract detail view."""
         # Create an activity for the contract
         aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Vertrag Aktivität',
             vertrag=self.vertrag,
             status='OFFEN',
@@ -248,6 +259,7 @@ class AktivitaetViewTest(TestCase):
         """Test that activities are shown in mietobjekt detail view."""
         # Create an activity for the mietobjekt
         aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Mietobjekt Aktivität',
             mietobjekt=self.mietobjekt,
             status='OFFEN',
@@ -265,6 +277,7 @@ class AktivitaetViewTest(TestCase):
         """Test that activities are shown in customer detail view."""
         # Create an activity for the customer
         aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Kunden Aktivität',
             kunde=self.kunde,
             status='OFFEN',
@@ -282,18 +295,21 @@ class AktivitaetViewTest(TestCase):
         """Test that Kanban view properly groups activities by status."""
         # Create activities with different statuses
         Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Offen 1',
             vertrag=self.vertrag,
             status='OFFEN',
             prioritaet='NORMAL'
         )
         Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='In Bearbeitung 1',
             vertrag=self.vertrag,
             status='IN_BEARBEITUNG',
             prioritaet='NORMAL'
         )
         Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Erledigt 1',
             vertrag=self.vertrag,
             status='ERLEDIGT',
@@ -310,6 +326,7 @@ class AktivitaetViewTest(TestCase):
     def test_assignment_to_user(self):
         """Test assigning an activity to a user."""
         aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
             titel='Assign Test',
             vertrag=self.vertrag,
             status='OFFEN',
@@ -323,6 +340,7 @@ class AktivitaetViewTest(TestCase):
             'prioritaet': 'NORMAL',
             'assigned_user': self.assigned_user.pk,
             'vertrag': self.vertrag.pk,  # Hidden field
+            'ersteller': self.user.pk,
         })
         
         # Should redirect after successful save
@@ -336,3 +354,140 @@ class AktivitaetViewTest(TestCase):
         # Check assignment was saved
         aktivitaet.refresh_from_db()
         self.assertEqual(aktivitaet.assigned_user, self.assigned_user)
+    
+    def test_assigned_activities_list(self):
+        """Test the list of activities assigned to current user."""
+        # Create activities assigned to test user
+        Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Assigned to me',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='HOCH',
+            assigned_user=self.user
+        )
+        
+        # Create activity assigned to different user
+        Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Assigned to someone else',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL',
+            assigned_user=self.assigned_user
+        )
+        
+        # Create unassigned activity
+        Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Unassigned',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL'
+        )
+        
+        url = reverse('vermietung:aktivitaet_assigned_list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'vermietung/aktivitaeten/list.html')
+        
+        # Only the activity assigned to the current user should be shown
+        self.assertContains(response, 'Assigned to me')
+        self.assertNotContains(response, 'Assigned to someone else')
+        self.assertNotContains(response, 'Unassigned')
+    
+    def test_created_activities_list(self):
+        """Test the list of activities created by current user."""
+        # Create activities created by test user
+        Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Created by me',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='HOCH'
+        )
+        
+        # Create activity created by different user
+        Aktivitaet.objects.create(
+            ersteller=self.assigned_user,
+            titel='Created by someone else',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL'
+        )
+        
+        url = reverse('vermietung:aktivitaet_created_list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'vermietung/aktivitaeten/list.html')
+        
+        # Only the activity created by the current user should be shown
+        self.assertContains(response, 'Created by me')
+        self.assertNotContains(response, 'Created by someone else')
+    
+    def test_series_activity_creation(self):
+        """Test creating a series activity with intervall."""
+        url = reverse('vermietung:aktivitaet_create_from_vertrag', args=[self.vertrag.pk])
+        
+        response = self.client.post(url, {
+            'titel': 'Monthly Inspection',
+            'beschreibung': 'Regular monthly inspection',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+            'faellig_am': (date.today() + timedelta(days=30)).isoformat(),
+            'ersteller': self.user.pk,
+            'ist_serie': True,
+            'intervall_monate': 1,
+        })
+        
+        self.assertEqual(response.status_code, 302)
+        
+        # Check series activity was created with correct fields
+        aktivitaet = Aktivitaet.objects.get(titel='Monthly Inspection')
+        self.assertTrue(aktivitaet.ist_serie)
+        self.assertEqual(aktivitaet.intervall_monate, 1)
+        self.assertIsNotNone(aktivitaet.faellig_am)
+    
+    def test_series_activity_auto_create_next(self):
+        """Test that completing a series activity creates the next one."""
+        # Create a series activity
+        series_aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Monthly Check',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL',
+            faellig_am=date.today(),
+            ist_serie=True,
+            intervall_monate=1
+        )
+        
+        original_id = series_aktivitaet.pk
+        
+        # Mark it as ERLEDIGT
+        series_aktivitaet.status = 'ERLEDIGT'
+        series_aktivitaet.save()
+        
+        # Check that a new activity was created
+        new_activities = Aktivitaet.objects.filter(
+            titel='Monthly Check',
+            status='OFFEN'
+        ).exclude(pk=original_id)
+        
+        self.assertEqual(new_activities.count(), 1)
+        
+        new_aktivitaet = new_activities.first()
+        self.assertTrue(new_aktivitaet.ist_serie)
+        self.assertEqual(new_aktivitaet.intervall_monate, 1)
+        self.assertEqual(new_aktivitaet.vertrag, self.vertrag)
+        self.assertEqual(new_aktivitaet.ersteller, self.user)
+        
+        # Check that due date was incremented by 1 month
+        from dateutil.relativedelta import relativedelta
+        expected_date = date.today() + relativedelta(months=1)
+        self.assertEqual(new_aktivitaet.faellig_am, expected_date)
+        
+        # Check that serien_id is the same
+        self.assertEqual(new_aktivitaet.serien_id, series_aktivitaet.serien_id)

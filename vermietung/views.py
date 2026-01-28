@@ -1681,6 +1681,124 @@ def aktivitaet_list(request):
 
 
 @vermietung_required
+def aktivitaet_assigned_list(request):
+    """
+    List view for activities assigned to the current user.
+    Shows only non-completed and non-cancelled activities.
+    """
+    # Get filter parameters
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '')
+    prioritaet_filter = request.GET.get('prioritaet', '')
+    
+    # Base queryset: activities assigned to current user
+    aktivitaeten = Aktivitaet.objects.select_related(
+        'assigned_user', 'assigned_supplier', 'ersteller',
+        'mietobjekt', 'vertrag', 'kunde'
+    ).filter(
+        assigned_user=request.user
+    ).exclude(
+        status__in=['ERLEDIGT', 'ABGEBROCHEN']
+    )
+    
+    # Apply search filter
+    if search_query:
+        aktivitaeten = aktivitaeten.filter(
+            Q(titel__icontains=search_query) |
+            Q(beschreibung__icontains=search_query)
+        )
+    
+    # Apply status filter
+    if status_filter:
+        aktivitaeten = aktivitaeten.filter(status=status_filter)
+    
+    # Apply priority filter
+    if prioritaet_filter:
+        aktivitaeten = aktivitaeten.filter(prioritaet=prioritaet_filter)
+    
+    # Order by priority and due date
+    aktivitaeten = aktivitaeten.order_by('-prioritaet', 'faellig_am', '-created_at')
+    
+    # Pagination
+    paginator = Paginator(aktivitaeten, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'prioritaet_filter': prioritaet_filter,
+        'view_type': 'assigned',
+        'page_title': 'Meine zugewiesenen Aktivitäten',
+    }
+    
+    return render(request, 'vermietung/aktivitaeten/list.html', context)
+
+
+@vermietung_required
+def aktivitaet_created_list(request):
+    """
+    List view for activities created by the current user.
+    Shows only non-completed and non-cancelled activities by default.
+    """
+    # Get filter parameters
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '')
+    prioritaet_filter = request.GET.get('prioritaet', '')
+    assigned_user_filter = request.GET.get('assigned_user', '')
+    
+    # Base queryset: activities created by current user
+    aktivitaeten = Aktivitaet.objects.select_related(
+        'assigned_user', 'assigned_supplier', 'ersteller',
+        'mietobjekt', 'vertrag', 'kunde'
+    ).filter(
+        ersteller=request.user
+    ).exclude(
+        status__in=['ERLEDIGT', 'ABGEBROCHEN']
+    )
+    
+    # Apply search filter
+    if search_query:
+        aktivitaeten = aktivitaeten.filter(
+            Q(titel__icontains=search_query) |
+            Q(beschreibung__icontains=search_query)
+        )
+    
+    # Apply status filter
+    if status_filter:
+        aktivitaeten = aktivitaeten.filter(status=status_filter)
+    
+    # Apply priority filter
+    if prioritaet_filter:
+        aktivitaeten = aktivitaeten.filter(prioritaet=prioritaet_filter)
+    
+    # Apply assigned user filter
+    if assigned_user_filter:
+        aktivitaeten = aktivitaeten.filter(assigned_user_id=assigned_user_filter)
+    
+    # Order by priority and due date
+    aktivitaeten = aktivitaeten.order_by('-prioritaet', 'faellig_am', '-created_at')
+    
+    # Pagination
+    paginator = Paginator(aktivitaeten, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'prioritaet_filter': prioritaet_filter,
+        'assigned_user_filter': assigned_user_filter,
+        'view_type': 'created',
+        'page_title': 'Meine erstellten Aktivitäten',
+    }
+    
+    return render(request, 'vermietung/aktivitaeten/list.html', context)
+
+
+@vermietung_required
 def aktivitaet_create(request, context_type=None, context_id=None):
     """
     Create a new activity.
@@ -1712,7 +1830,8 @@ def aktivitaet_create(request, context_type=None, context_id=None):
         form = AktivitaetForm(
             request.POST,
             context_type=context_type,
-            context_id=context_id
+            context_id=context_id,
+            current_user=request.user
         )
         if form.is_valid():
             try:
@@ -1734,7 +1853,8 @@ def aktivitaet_create(request, context_type=None, context_id=None):
     else:
         form = AktivitaetForm(
             context_type=context_type,
-            context_id=context_id
+            context_id=context_id,
+            current_user=request.user
         )
     
     context = {
@@ -1758,7 +1878,7 @@ def aktivitaet_edit(request, pk):
     original_assigned_user = aktivitaet.assigned_user
     
     if request.method == 'POST':
-        form = AktivitaetForm(request.POST, instance=aktivitaet)
+        form = AktivitaetForm(request.POST, instance=aktivitaet, current_user=request.user)
         if form.is_valid():
             try:
                 aktivitaet = form.save()
@@ -1800,7 +1920,7 @@ def aktivitaet_edit(request, pk):
                     for error in errors:
                         form.add_error(field, error)
     else:
-        form = AktivitaetForm(instance=aktivitaet)
+        form = AktivitaetForm(instance=aktivitaet, current_user=request.user)
     
     context = {
         'form': form,

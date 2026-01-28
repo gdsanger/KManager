@@ -2,6 +2,7 @@
 from django.db import models
 from django.db.models import Q
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
@@ -14,6 +15,7 @@ from pathlib import Path
 from PIL import Image
 import uuid
 import logging
+from dateutil.relativedelta import relativedelta
 
 logger = logging.getLogger(__name__)
 
@@ -1937,6 +1939,39 @@ class Aktivitaet(models.Model):
         limit_choices_to={'adressen_type': 'LIEFERANT'}
     )
     
+    # Creator field - who created this activity
+    ersteller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=False,
+        related_name='aktivitaeten_erstellt',
+        verbose_name="Ersteller",
+        help_text="Benutzer, der diese Aktivität erstellt hat"
+    )
+    
+    # Series/recurring activity fields
+    ist_serie = models.BooleanField(
+        default=False,
+        verbose_name="Serien-Aktivität",
+        help_text="Ist dies eine wiederkehrende Aktivität?"
+    )
+    
+    intervall_monate = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Intervall (Monate)",
+        help_text="Intervall in Monaten für wiederkehrende Aktivitäten (1-12)",
+        validators=[MinValueValidator(1), MaxValueValidator(12)]
+    )
+    
+    serien_id = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name="Serien-ID",
+        help_text="Eindeutige ID zur Gruppierung von Aktivitäten einer Serie"
+    )
+    
     class Meta:
         verbose_name = "Aktivität"
         verbose_name_plural = "Aktivitäten"
@@ -1946,6 +1981,9 @@ class Aktivitaet(models.Model):
             models.Index(fields=['faellig_am']),
             models.Index(fields=['assigned_user']),
             models.Index(fields=['assigned_supplier']),
+            models.Index(fields=['ersteller']),
+            models.Index(fields=['ist_serie']),
+            models.Index(fields=['serien_id']),
         ]
     
     def __str__(self):
@@ -1957,6 +1995,7 @@ class Aktivitaet(models.Model):
         Validate the activity data:
         1. Exactly one context must be set (mietobjekt, vertrag, or kunde)
         2. If assigned_supplier is set, it must be of type LIEFERANT
+        3. If ist_serie is True, intervall_monate must be set
         """
         super().clean()
         
@@ -1992,11 +2031,79 @@ class Aktivitaet(models.Model):
                 raise ValidationError({
                     'assigned_supplier': 'Die zugewiesene Adresse muss vom Typ "Lieferant" sein.'
                 })
+        
+        # Check series fields consistency
+        if self.ist_serie:
+            if not self.intervall_monate:
+                raise ValidationError({
+                    'intervall_monate': 'Intervall muss für Serien-Aktivitäten angegeben werden.'
+                })
+            if self.intervall_monate < 1 or self.intervall_monate > 12:
+                raise ValidationError({
+                    'intervall_monate': 'Intervall muss zwischen 1 und 12 Monaten liegen.'
+                })
+        
+        # If not a series activity, clear series-related fields
+        if not self.ist_serie:
+            self.intervall_monate = None
     
     def save(self, *args, **kwargs):
-        """Override save to run validation."""
+        """
+        Override save to run validation and handle series logic.
+        When a series activity is marked as ERLEDIGT, create the next one.
+        """
+        # Track if status changed to ERLEDIGT
+        status_changed_to_erledigt = False
+        if self.pk:  # Existing instance
+            old_instance = Aktivitaet.objects.filter(pk=self.pk).first()
+            if old_instance and old_instance.status != 'ERLEDIGT' and self.status == 'ERLEDIGT':
+                status_changed_to_erledigt = True
+        
         self.full_clean()
         super().save(*args, **kwargs)
+        
+        # Create next activity in series if applicable
+        if status_changed_to_erledigt and self.ist_serie and self.intervall_monate:
+            self.create_next_series_activity()
+    
+    def create_next_series_activity(self):
+        """
+        Create the next activity in a recurring series.
+        Called automatically when a series activity is marked as ERLEDIGT.
+        """
+        from datetime import date
+        
+        # Generate serien_id if not set
+        if not self.serien_id:
+            self.serien_id = uuid.uuid4()
+            # Save without triggering save logic again
+            Aktivitaet.objects.filter(pk=self.pk).update(serien_id=self.serien_id)
+        
+        # Calculate new due date
+        new_faellig_am = None
+        if self.faellig_am:
+            new_faellig_am = self.faellig_am + relativedelta(months=self.intervall_monate)
+        
+        # Create the next activity
+        next_activity = Aktivitaet(
+            titel=self.titel,
+            beschreibung=self.beschreibung,
+            status='OFFEN',
+            prioritaet=self.prioritaet,
+            faellig_am=new_faellig_am,
+            mietobjekt=self.mietobjekt,
+            vertrag=self.vertrag,
+            kunde=self.kunde,
+            assigned_user=self.assigned_user,
+            assigned_supplier=self.assigned_supplier,
+            ersteller=self.ersteller,
+            ist_serie=True,
+            intervall_monate=self.intervall_monate,
+            serien_id=self.serien_id
+        )
+        
+        # Use update_fields to avoid triggering validation in save
+        next_activity.save(update_fields=None)
     
     def get_context_display(self):
         """Get a display string for the linked context."""

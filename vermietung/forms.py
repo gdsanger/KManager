@@ -827,6 +827,9 @@ class AktivitaetForm(forms.ModelForm):
             'faellig_am',
             'assigned_user',
             'assigned_supplier',
+            'ersteller',
+            'ist_serie',
+            'intervall_monate',
             'mietobjekt',
             'vertrag',
             'kunde',
@@ -839,9 +842,12 @@ class AktivitaetForm(forms.ModelForm):
             'faellig_am': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'assigned_user': forms.Select(attrs={'class': 'form-select'}),
             'assigned_supplier': forms.Select(attrs={'class': 'form-select'}),
-            'mietobjekt': forms.Select(attrs={'class': 'form-select'}),
-            'vertrag': forms.Select(attrs={'class': 'form-select'}),
-            'kunde': forms.Select(attrs={'class': 'form-select'}),
+            'ersteller': forms.Select(attrs={'class': 'form-select'}),
+            'ist_serie': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_ist_serie'}),
+            'intervall_monate': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '12', 'id': 'id_intervall_monate'}),
+            'mietobjekt': forms.Select(attrs={'class': 'form-select', 'id': 'id_mietobjekt'}),
+            'vertrag': forms.Select(attrs={'class': 'form-select', 'id': 'id_vertrag'}),
+            'kunde': forms.Select(attrs={'class': 'form-select', 'id': 'id_kunde'}),
         }
         labels = {
             'titel': 'Titel *',
@@ -851,6 +857,9 @@ class AktivitaetForm(forms.ModelForm):
             'faellig_am': 'Fällig am',
             'assigned_user': 'Interner Verantwortlicher',
             'assigned_supplier': 'Lieferant',
+            'ersteller': 'Ersteller',
+            'ist_serie': 'Serien-Aktivität',
+            'intervall_monate': 'Intervall (Monate)',
             'mietobjekt': 'Mietobjekt',
             'vertrag': 'Vertrag',
             'kunde': 'Kunde',
@@ -859,12 +868,16 @@ class AktivitaetForm(forms.ModelForm):
             'assigned_user': 'Optional: Interner Benutzer, der für diese Aktivität verantwortlich ist',
             'assigned_supplier': 'Optional: Externer Lieferant, dem die Aktivität zugewiesen ist',
             'faellig_am': 'Optional: Fälligkeitsdatum für diese Aktivität',
+            'ersteller': 'Benutzer, der diese Aktivität erstellt hat',
+            'ist_serie': 'Wiederkehrende Aktivität mit festem Intervall',
+            'intervall_monate': 'Intervall in Monaten (1-12) für wiederkehrende Aktivitäten',
         }
     
     def __init__(self, *args, **kwargs):
         # Extract context parameters if provided
         self.context_type = kwargs.pop('context_type', None)
         self.context_id = kwargs.pop('context_id', None)
+        self.current_user = kwargs.pop('current_user', None)
         
         super().__init__(*args, **kwargs)
         
@@ -878,11 +891,22 @@ class AktivitaetForm(forms.ModelForm):
         ).order_by('name')
         self.fields['assigned_supplier'].required = False
         
+        # Filter ersteller to show all users
+        self.fields['ersteller'].queryset = User.objects.all().order_by('username')
+        self.fields['ersteller'].required = True
+        
+        # Pre-fill ersteller with current user for new activities
+        if not self.instance.pk and self.current_user:
+            self.fields['ersteller'].initial = self.current_user.pk
+        
         # Filter kunde to only show KUNDE addresses
         self.fields['kunde'].queryset = Adresse.objects.filter(
             adressen_type='KUNDE'
         ).order_by('name')
         self.fields['kunde'].required = False
+        
+        # Make intervall_monate optional initially
+        self.fields['intervall_monate'].required = False
         
         # If context is provided, pre-fill and lock the context field
         if self.context_type and self.context_id:
