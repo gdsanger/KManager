@@ -26,12 +26,21 @@ Das Core-Mail-Modul bietet eine vollständige Lösung für E-Mail-Verwaltung und
 - Keine Authentifizierung wenn `username` leer
 
 #### `MailTemplate`
-- `key`: Eindeutiger technischer Schlüssel
+- `key`: Eindeutiger technischer Schlüssel (SlugField)
 - `subject`: Betreffzeile
-- `message_html`: HTML-Nachricht
-- `from_address`: Absender E-Mail
-- `from_name`: Absender Name
-- `cc_copy_to`: Optionale CC-Adresse
+- `message`: Nachricht (Markdown oder HTML)
+- `from_address`: Absender E-Mail (optional, fällt auf DEFAULT_FROM_EMAIL zurück)
+- `from_name`: Absender Name (optional, fällt auf DEFAULT_FROM_NAME zurück)
+- `cc_address`: Optionale CC-Adresse
+- `is_active`: Template aktiv/deaktiviert (Boolean, Standard: True)
+- `created_at`: Erstellungszeitpunkt (automatisch)
+- `updated_at`: Letzte Änderung (automatisch)
+
+**Besonderheiten:**
+- `key` ist ein SlugField (URL-sicher mit Bindestrichen)
+- Nur aktive Templates können versendet werden
+- Leere Absenderfelder werden durch Defaults ersetzt
+- Zeitstempel werden automatisch gepflegt
 
 ### Service Layer (`core/mailing/service.py`)
 
@@ -67,7 +76,9 @@ send_mail(
 ```
 
 **Features:**
+- Prüfung ob Template aktiv ist (is_active=True)
 - Automatisches CC wenn im Template konfiguriert
+- Fallback auf DEFAULT_FROM_EMAIL/DEFAULT_FROM_NAME bei leeren Feldern
 - TLS-Unterstützung (STARTTLS)
 - Optionale SMTP-Authentifizierung
 - Fehlerbehandlung mit spezifischen Exceptions
@@ -95,9 +106,9 @@ send_mail(
 from core.models import MailTemplate
 
 template = MailTemplate.objects.create(
-    key='vertrag_erstellt',
+    key='vertrag-erstellt',  # SlugField: Bindestriche statt Unterstriche
     subject='Neuer Mietvertrag {{ vertrag_nummer }}',
-    message_html='''
+    message='''
         <h1>Guten Tag {{ kunde_name }},</h1>
         <p>Ihr Mietvertrag {{ vertrag_nummer }} wurde erstellt.</p>
         <p>Objekt: {{ objekt_name }}</p>
@@ -105,7 +116,8 @@ template = MailTemplate.objects.create(
     ''',
     from_address='noreply@kmanager.example.com',
     from_name='K-Manager',
-    cc_copy_to='office@kmanager.example.com'
+    cc_address='office@kmanager.example.com',
+    is_active=True  # Template ist aktiv
 )
 ```
 
@@ -116,7 +128,7 @@ from core.mailing.service import send_mail
 
 # In einer View oder Service-Methode
 send_mail(
-    template_key='vertrag_erstellt',
+    template_key='vertrag-erstellt',  # Muss mit Template-Key übereinstimmen
     to=['kunde@example.com'],
     context={
         'kunde_name': 'Max Mustermann',
@@ -125,6 +137,8 @@ send_mail(
     }
 )
 ```
+
+**Hinweis:** Inaktive Templates (is_active=False) können nicht versendet werden und führen zu einem MailServiceError.
 
 ### Beispiel 3: Template mit Schleifen
 

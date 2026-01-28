@@ -60,13 +60,13 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="{{ form.message_html.id_for_label }}" class="form-label">{{ form.message_html.label }}</label>
-                            {{ form.message_html }}
-                            {% if form.message_html.errors %}
-                            <div class="text-danger small">{{ form.message_html.errors }}</div>
+                            <label for="{{ form.message.id_for_label }}" class="form-label">{{ form.message.label }}</label>
+                            {{ form.message }}
+                            {% if form.message.errors %}
+                            <div class="text-danger small">{{ form.message.errors }}</div>
                             {% endif %}
-                            {% if form.message_html.help_text %}
-                            <div class="form-text">{{ form.message_html.help_text }}</div>
+                            {% if form.message.help_text %}
+                            <div class="form-text">{{ form.message.help_text }}</div>
                             {% endif %}
                         </div>
 

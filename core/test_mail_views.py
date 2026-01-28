@@ -89,14 +89,14 @@ class MailTemplateListViewTestCase(TestCase):
         MailTemplate.objects.create(
             key='template1',
             subject='Test Subject 1',
-            message_html='<p>Test</p>',
+            message='<p>Test</p>',
             from_address='sender@example.com',
             from_name='Sender'
         )
         MailTemplate.objects.create(
             key='template2',
             subject='Test Subject 2',
-            message_html='<p>Test 2</p>',
+            message='<p>Test 2</p>',
             from_address='sender2@example.com',
             from_name='Sender 2'
         )
@@ -153,10 +153,11 @@ class MailTemplateCreateViewTestCase(TestCase):
         data = {
             'key': 'new_template',
             'subject': 'New Subject',
-            'message_html': '<p>New message</p>',
+            'message': '<p>New message</p>',
             'from_address': 'new@example.com',
             'from_name': 'New Sender',
-            'cc_copy_to': 'cc@example.com'
+            'cc_address': 'cc@example.com',
+            'is_active': True
         }
         
         response = self.client.post(reverse('mailtemplate_create'), data)
@@ -166,7 +167,7 @@ class MailTemplateCreateViewTestCase(TestCase):
         template = MailTemplate.objects.get(key='new_template')
         self.assertEqual(template.subject, 'New Subject')
         self.assertEqual(template.from_address, 'new@example.com')
-        self.assertEqual(template.cc_copy_to, 'cc@example.com')
+        self.assertEqual(template.cc_address, 'cc@example.com')
     
     def test_create_template_invalid_email(self):
         """Test creating template with invalid email"""
@@ -175,7 +176,7 @@ class MailTemplateCreateViewTestCase(TestCase):
         data = {
             'key': 'invalid_template',
             'subject': 'Subject',
-            'message_html': '<p>Message</p>',
+            'message': '<p>Message</p>',
             'from_address': 'invalid-email',  # Invalid email
             'from_name': 'Sender'
         }
@@ -200,7 +201,7 @@ class MailTemplateEditViewTestCase(TestCase):
         self.template = MailTemplate.objects.create(
             key='edit_template',
             subject='Original Subject',
-            message_html='<p>Original</p>',
+            message='<p>Original</p>',
             from_address='original@example.com',
             from_name='Original Sender'
         )
@@ -220,10 +221,11 @@ class MailTemplateEditViewTestCase(TestCase):
         data = {
             'key': 'edit_template',  # Key cannot be changed to maintain uniqueness
             'subject': 'Updated Subject',
-            'message_html': '<p>Updated</p>',
+            'message': '<p>Updated</p>',
             'from_address': 'updated@example.com',
             'from_name': 'Updated Sender',
-            'cc_copy_to': ''
+            'cc_address': '',
+            'is_active': True
         }
         
         response = self.client.post(reverse('mailtemplate_edit', args=[self.template.pk]), data)
@@ -250,7 +252,7 @@ class MailTemplateDeleteViewTestCase(TestCase):
         self.template = MailTemplate.objects.create(
             key='delete_template',
             subject='Delete Me',
-            message_html='<p>Delete</p>',
+            message='<p>Delete</p>',
             from_address='delete@example.com',
             from_name='Delete Sender'
         )
@@ -294,7 +296,7 @@ class MailTemplateDetailViewTestCase(TestCase):
         self.template = MailTemplate.objects.create(
             key='detail_template',
             subject='Detail Subject',
-            message_html='<p>Detail message</p>',
+            message='<p>Detail message</p>',
             from_address='detail@example.com',
             from_name='Detail Sender'
         )
