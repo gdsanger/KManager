@@ -367,13 +367,8 @@ a:hover {
 
 /* Main content adjustment for collapsed sidebar */
 @media (min-width: 768px) {
-    main.col-md-9 {
+    main.col-md-9.ms-sm-auto.col-lg-10 {
         transition: margin-left 0.3s ease, width 0.3s ease;
-    }
-    
-    .sidebar.collapsed ~ main.col-md-9 {
-        margin-left: 70px !important;
-        width: calc(100% - 70px) !important;
     }
 }
 
