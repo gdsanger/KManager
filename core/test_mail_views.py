@@ -124,6 +124,50 @@ class MailTemplateListViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'template1')
         self.assertContains(response, 'template2')
+    
+    def test_search_by_key(self):
+        """Test searching templates by key"""
+        self.client.login(username='staff', password='testpass123')
+        response = self.client.get(reverse('mailtemplate_list'), {'search_key': 'template1'})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'template1')
+        self.assertNotContains(response, 'template2')
+    
+    def test_search_by_subject(self):
+        """Test searching templates by subject"""
+        self.client.login(username='staff', password='testpass123')
+        response = self.client.get(reverse('mailtemplate_list'), {'search_subject': 'Subject 2'})
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'template2')
+        self.assertNotContains(response, 'template1')
+    
+    def test_filter_by_active(self):
+        """Test filtering templates by is_active status"""
+        # Create an inactive template
+        MailTemplate.objects.create(
+            key='inactive_template',
+            subject='Inactive Template',
+            message='<p>Inactive</p>',
+            from_address='inactive@example.com',
+            from_name='Inactive',
+            is_active=False
+        )
+        
+        self.client.login(username='staff', password='testpass123')
+        
+        # Test filtering for active only
+        response = self.client.get(reverse('mailtemplate_list'), {'filter_active': '1'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'template1')
+        self.assertNotContains(response, 'inactive_template')
+        
+        # Test filtering for inactive only
+        response = self.client.get(reverse('mailtemplate_list'), {'filter_active': '0'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'inactive_template')
+        self.assertNotContains(response, 'template1')
 
 
 class MailTemplateCreateViewTestCase(TestCase):
@@ -184,6 +228,47 @@ class MailTemplateCreateViewTestCase(TestCase):
         response = self.client.post(reverse('mailtemplate_create'), data)
         self.assertEqual(response.status_code, 200)  # Form error, stay on page
         self.assertContains(response, 'E-Mail')
+    
+    def test_create_template_save_and_close(self):
+        """Test creating template with 'Save & Close' button"""
+        self.client.login(username='staff', password='testpass123')
+        
+        data = {
+            'key': 'new_template_close',
+            'subject': 'New Subject',
+            'message': '<p>New message</p>',
+            'from_address': 'new@example.com',
+            'from_name': 'New Sender',
+            'is_active': True,
+            'action': 'save_and_close'
+        }
+        
+        response = self.client.post(reverse('mailtemplate_create'), data)
+        # Should redirect to list
+        self.assertRedirects(response, reverse('mailtemplate_list'))
+        
+        # Check that template was created
+        template = MailTemplate.objects.get(key='new_template_close')
+        self.assertEqual(template.subject, 'New Subject')
+    
+    def test_create_template_save_only(self):
+        """Test creating template with 'Save' button"""
+        self.client.login(username='staff', password='testpass123')
+        
+        data = {
+            'key': 'new_template_save',
+            'subject': 'New Subject',
+            'message': '<p>New message</p>',
+            'from_address': 'new@example.com',
+            'from_name': 'New Sender',
+            'is_active': True,
+            'action': 'save'
+        }
+        
+        response = self.client.post(reverse('mailtemplate_create'), data)
+        # Should redirect to edit page of the newly created template
+        template = MailTemplate.objects.get(key='new_template_save')
+        self.assertRedirects(response, reverse('mailtemplate_edit', args=[template.pk]))
 
 
 class MailTemplateEditViewTestCase(TestCase):
@@ -235,6 +320,50 @@ class MailTemplateEditViewTestCase(TestCase):
         self.template.refresh_from_db()
         self.assertEqual(self.template.subject, 'Updated Subject')
         self.assertEqual(self.template.from_address, 'updated@example.com')
+    
+    def test_edit_template_save_and_close(self):
+        """Test editing template with 'Save & Close' button"""
+        self.client.login(username='staff', password='testpass123')
+        
+        data = {
+            'key': 'edit_template',
+            'subject': 'Updated Subject',
+            'message': '<p>Updated</p>',
+            'from_address': 'updated@example.com',
+            'from_name': 'Updated Sender',
+            'is_active': True,
+            'action': 'save_and_close'
+        }
+        
+        response = self.client.post(reverse('mailtemplate_edit', args=[self.template.pk]), data)
+        # Should redirect to list
+        self.assertRedirects(response, reverse('mailtemplate_list'))
+        
+        # Verify template was updated
+        self.template.refresh_from_db()
+        self.assertEqual(self.template.subject, 'Updated Subject')
+    
+    def test_edit_template_save_only(self):
+        """Test editing template with 'Save' button"""
+        self.client.login(username='staff', password='testpass123')
+        
+        data = {
+            'key': 'edit_template',
+            'subject': 'Updated Subject',
+            'message': '<p>Updated</p>',
+            'from_address': 'updated@example.com',
+            'from_name': 'Updated Sender',
+            'is_active': True,
+            'action': 'save'
+        }
+        
+        response = self.client.post(reverse('mailtemplate_edit', args=[self.template.pk]), data)
+        # Should redirect back to edit page
+        self.assertRedirects(response, reverse('mailtemplate_edit', args=[self.template.pk]))
+        
+        # Verify template was updated
+        self.template.refresh_from_db()
+        self.assertEqual(self.template.subject, 'Updated Subject')
 
 
 class MailTemplateDeleteViewTestCase(TestCase):
