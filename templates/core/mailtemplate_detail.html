@@ -42,12 +42,27 @@
 
                         <dt class="col-sm-3">CC Kopie an:</dt>
                         <dd class="col-sm-9">
-                            {% if template.cc_copy_to %}
-                                {{ template.cc_copy_to }}
+                            {% if template.cc_address %}
+                                {{ template.cc_address }}
                             {% else %}
                                 <span class="text-muted">Nicht gesetzt</span>
                             {% endif %}
                         </dd>
+
+                        <dt class="col-sm-3">Status:</dt>
+                        <dd class="col-sm-9">
+                            {% if template.is_active %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Aktiv</span>
+                            {% else %}
+                                <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Inaktiv</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Erstellt am:</dt>
+                        <dd class="col-sm-9">{{ template.created_at|date:"d.m.Y H:i" }} Uhr</dd>
+
+                        <dt class="col-sm-3">Aktualisiert am:</dt>
+                        <dd class="col-sm-9">{{ template.updated_at|date:"d.m.Y H:i" }} Uhr</dd>
                     </dl>
 
                     <hr class="my-4">

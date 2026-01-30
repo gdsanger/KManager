@@ -20,6 +20,38 @@
         {% endfor %}
     {% endif %}
 
+    <!-- Search and Filter -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="search_key" class="form-label">Template Key</label>
+                    <input type="text" class="form-control" id="search_key" name="search_key" value="{{ request.GET.search_key }}" placeholder="z.B. issue-created">
+                </div>
+                <div class="col-md-4">
+                    <label for="search_subject" class="form-label">Betreff</label>
+                    <input type="text" class="form-control" id="search_subject" name="search_subject" value="{{ request.GET.search_subject }}" placeholder="Betreff suchen...">
+                </div>
+                <div class="col-md-2">
+                    <label for="filter_active" class="form-label">Status</label>
+                    <select class="form-select" id="filter_active" name="filter_active">
+                        <option value="">Alle</option>
+                        <option value="1" {% if request.GET.filter_active == '1' %}selected{% endif %}>Nur Aktiv</option>
+                        <option value="0" {% if request.GET.filter_active == '0' %}selected{% endif %}>Nur Inaktiv</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-search"></i> Suchen
+                    </button>
+                    <a href="{% url 'mailtemplate_list' %}" class="btn btn-secondary">
+                        <i class="bi bi-x"></i> Reset
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
@@ -28,8 +60,10 @@
                         <tr>
                             <th>Template Key</th>
                             <th>Betreff</th>
+                            <th>Aktiv</th>
                             <th>Von</th>
-                            <th>CC Kopie</th>
+                            <th>CC-Adresse</th>
+                            <th>Aktualisiert am</th>
                             <th class="text-end">Aktionen</th>
                         </tr>
                     </thead>
@@ -39,16 +73,24 @@
                             <td><a href="{% url 'mailtemplate_detail' template.pk %}"><code>{{ template.key }}</code></a></td>
                             <td>{{ template.subject|truncatewords:10 }}</td>
                             <td>
+                                {% if template.is_active %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Aktiv</span>
+                                {% else %}
+                                    <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Inaktiv</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 {{ template.from_name }}<br>
                                 <small class="text-muted">{{ template.from_address }}</small>
                             </td>
                             <td>
-                                {% if template.cc_copy_to %}
-                                    {{ template.cc_copy_to }}
+                                {% if template.cc_address %}
+                                    {{ template.cc_address }}
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
+                            <td>{{ template.updated_at|date:"d.m.Y H:i" }}</td>
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm" role="group">
                                     <a href="{% url 'mailtemplate_detail' template.pk %}" class="btn btn-outline-info" title="Details anzeigen">
@@ -65,7 +107,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center text-muted">
+                            <td colspan="7" class="text-center text-muted">
                                 <i class="bi bi-inbox"></i> Keine E-Mail Templates vorhanden
                             </td>
                         </tr>

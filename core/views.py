@@ -38,8 +38,26 @@ def smtp_settings(request):
 # MailTemplate CRUD Views
 @login_required
 def mailtemplate_list(request):
-    """List all mail templates"""
+    """List all mail templates with search and filter"""
     templates = MailTemplate.objects.all()
+    
+    # Search by key
+    search_key = request.GET.get('search_key', '').strip()
+    if search_key:
+        templates = templates.filter(key__icontains=search_key)
+    
+    # Search by subject
+    search_subject = request.GET.get('search_subject', '').strip()
+    if search_subject:
+        templates = templates.filter(subject__icontains=search_subject)
+    
+    # Filter by is_active
+    filter_active = request.GET.get('filter_active', '')
+    if filter_active == '1':
+        templates = templates.filter(is_active=True)
+    elif filter_active == '0':
+        templates = templates.filter(is_active=False)
+    
     return render(request, 'core/mailtemplate_list.html', {'templates': templates})
 
 
@@ -51,7 +69,11 @@ def mailtemplate_create(request):
         if form.is_valid():
             form.save()
             messages.success(request, 'E-Mail Template erfolgreich erstellt.')
-            return redirect('mailtemplate_list')
+            # Check if "Save & Close" was clicked
+            if request.POST.get('action') == 'save_and_close':
+                return redirect('mailtemplate_list')
+            # Otherwise stay on the form (redirect to edit the newly created template)
+            return redirect('mailtemplate_edit', pk=form.instance.pk)
     else:
         form = MailTemplateForm()
     
@@ -72,7 +94,11 @@ def mailtemplate_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'E-Mail Template erfolgreich aktualisiert.')
-            return redirect('mailtemplate_list')
+            # Check if "Save & Close" was clicked
+            if request.POST.get('action') == 'save_and_close':
+                return redirect('mailtemplate_list')
+            # Otherwise stay on the edit form
+            return redirect('mailtemplate_edit', pk=pk)
     else:
         form = MailTemplateForm(instance=template)
     
