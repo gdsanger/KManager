@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, Http404, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
@@ -1875,8 +1876,6 @@ def aktivitaet_edit(request, pk):
     - assigned_user changes
     - status changes to ERLEDIGT
     """
-    from django.contrib.auth.models import User
-    
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
     
     if request.method == 'POST':
@@ -1960,8 +1959,6 @@ def aktivitaet_assign(request, pk):
     Assign an activity to a new user.
     Triggers email notification to the new assignee via signal.
     """
-    from django.contrib.auth.models import User
-    
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
     
     # Get the new assigned user from POST data
@@ -1978,7 +1975,6 @@ def aktivitaet_assign(request, pk):
         if aktivitaet.assigned_user == new_user:
             messages.info(request, f'Die Aktivität ist bereits {new_user.get_full_name() or new_user.username} zugewiesen.')
         else:
-            old_assignee = aktivitaet.assigned_user
             aktivitaet.assigned_user = new_user
             aktivitaet.save()
             
