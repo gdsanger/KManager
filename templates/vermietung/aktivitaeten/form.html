@@ -264,6 +264,11 @@
                         <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> Abbrechen
                         </a>
+                        {% if not is_create and aktivitaet.status != 'ERLEDIGT' %}
+                        <button type="button" class="btn btn-success" onclick="markAsCompleted()">
+                            <i class="bi bi-check-circle-fill"></i> Als erledigt markieren
+                        </button>
+                        {% endif %}
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check-circle"></i>
                             {% if is_create %}Anlegen{% else %}Speichern{% endif %}
@@ -283,10 +288,20 @@
                     {% csrf_token %}
                 </form>
 
+                <form id="completedForm" method="post" action="{% url 'vermietung:aktivitaet_mark_completed' aktivitaet.pk %}" style="display: none;">
+                    {% csrf_token %}
+                </form>
+
                 <script>
                 function confirmDelete() {
                     if (confirm('Möchten Sie diese Aktivität wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
                         document.getElementById('deleteForm').submit();
+                    }
+                }
+                
+                function markAsCompleted() {
+                    if (confirm('Möchten Sie diese Aktivität als erledigt markieren? Der Ersteller wird per E-Mail benachrichtigt.')) {
+                        document.getElementById('completedForm').submit();
                     }
                 }
                 </script>

@@ -1871,45 +1871,17 @@ def aktivitaet_create(request, context_type=None, context_id=None):
 def aktivitaet_edit(request, pk):
     """
     Edit an existing activity.
+    Email notifications are sent automatically via signals when:
+    - assigned_user changes
+    - status changes to ERLEDIGT
     """
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
-    
-    # Store original assigned_user to detect changes
-    original_assigned_user = aktivitaet.assigned_user
     
     if request.method == 'POST':
         form = AktivitaetForm(request.POST, instance=aktivitaet, current_user=request.user)
         if form.is_valid():
             try:
                 aktivitaet = form.save()
-                
-                # Check if assigned_user changed
-                new_assigned_user = aktivitaet.assigned_user
-                if new_assigned_user and new_assigned_user != original_assigned_user:
-                    # Send email notification
-                    try:
-                        context_display = aktivitaet.get_context_display()
-                        send_mail(
-                            template_key='aktivitaet_assigned',
-                            to=[new_assigned_user.email],
-                            context={
-                                'user': new_assigned_user,
-                                'aktivitaet': aktivitaet,
-                                'context': context_display,
-                                'prioritaet': aktivitaet.get_prioritaet_display(),
-                                'faellig_am': aktivitaet.faellig_am,
-                            }
-                        )
-                        messages.info(
-                            request,
-                            f'Benachrichtigung wurde an {new_assigned_user.username} gesendet.'
-                        )
-                    except MailServiceError as e:
-                        messages.warning(
-                            request,
-                            f'Aktivität wurde gespeichert, aber E-Mail-Benachrichtigung konnte nicht gesendet werden: {str(e)}'
-                        )
-                
                 messages.success(
                     request,
                     f'Aktivität "{aktivitaet.titel}" wurde erfolgreich aktualisiert.'
@@ -1947,6 +1919,32 @@ def aktivitaet_delete(request, pk):
         messages.error(request, f'Fehler beim Löschen der Aktivität: {str(e)}')
     
     return redirect('vermietung:aktivitaet_kanban')
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def aktivitaet_mark_completed(request, pk):
+    """
+    Mark an activity as completed (ERLEDIGT).
+    Triggers email notification to the creator via signal.
+    """
+    aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    
+    if aktivitaet.status == 'ERLEDIGT':
+        messages.info(request, 'Diese Aktivität ist bereits als erledigt markiert.')
+    else:
+        try:
+            aktivitaet.status = 'ERLEDIGT'
+            aktivitaet.save()
+            messages.success(
+                request,
+                f'Aktivität "{aktivitaet.titel}" wurde als erledigt markiert. '
+                f'Der Ersteller wurde per E-Mail benachrichtigt.'
+            )
+        except Exception as e:
+            messages.error(request, f'Fehler beim Markieren der Aktivität: {str(e)}')
+    
+    return redirect('vermietung:aktivitaet_edit', pk=pk)
 
 
 @vermietung_required

@@ -14,8 +14,11 @@ class VermietungConfig(AppConfig):
     def ready(self):
         """
         Called when the app is ready.
-        Ensures that required media directories exist.
+        Ensures that required media directories exist and registers signal handlers.
         """
+        # Import signals to register handlers
+        from . import signals  # noqa: F401
+        
         # Ensure VERMIETUNG_DOCUMENTS_ROOT directory exists
         # This is critical for file uploads to work properly
         vermietung_docs_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
