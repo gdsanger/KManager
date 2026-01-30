@@ -195,28 +195,35 @@ class PasswordResetAdminActionTest(TestCase):
         
         # Assert
         # Both users should have new passwords
-        self.assertTrue(mock_send_mail.call_count == 2)
+        self.assertEqual(mock_send_mail.call_count, 2)
     
     def test_reset_password_max_selection_limit(self):
         """Test that action rejects more than 10 users"""
         # Arrange
         request = MockRequest()
-        # Create 11 users
-        users = [
-            User.objects.create_user(
+        # Create 11 users and store their passwords
+        users = []
+        for i in range(11):
+            user = User.objects.create_user(
                 username=f'bulkuser{i}',
-                email=f'bulkuser{i}@example.com'
+                email=f'bulkuser{i}@example.com',
+                password='oldpass123'
             )
-            for i in range(11)
-        ]
+            users.append((user, user.password))
+        
         queryset = User.objects.filter(username__startswith='bulkuser')
         
         # Act
         self.user_admin.reset_user_password(request, queryset)
         
         # Assert - should show warning and not process
-        # (Implementation shows warning via messages framework)
         self.assertEqual(queryset.count(), 11)
+        
+        # Verify passwords were NOT changed
+        for user, old_password_hash in users:
+            user.refresh_from_db()
+            self.assertEqual(user.password, old_password_hash, 
+                           f"Password for {user.username} should not have changed")
     
     @patch('core.admin.send_mail')
     @patch('core.admin.settings')
@@ -255,11 +262,11 @@ class PasswordResetAdminActionTest(TestCase):
         # Should be at least 12 characters
         self.assertGreaterEqual(len(new_password), 12)
         
-        # Should contain mix of character types
-        # (implementation uses ascii_letters + digits + punctuation)
+        # Should contain mix of character types (letters AND digits/special chars)
         has_letter = any(c.isalpha() for c in new_password)
         has_digit_or_punct = any(c.isdigit() or not c.isalnum() for c in new_password)
-        self.assertTrue(has_letter or has_digit_or_punct)
+        self.assertTrue(has_letter and has_digit_or_punct, 
+                       "Password should contain both letters and digits/special characters")
 
 
 class PasswordResetMailTemplateTest(TestCase):
