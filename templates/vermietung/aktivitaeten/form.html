@@ -44,7 +44,6 @@
 
                     <!-- Section 1: Grunddaten (Basic Information) -->
                     <h5 class="mb-3"><i class="bi bi-card-text"></i> Grunddaten</h5>
-                    
                     <div class="mb-3">
                         <label for="{{ form.titel.id_for_label }}" class="form-label">
                             {{ form.titel.label }}
@@ -79,7 +78,6 @@
 
                     <!-- Section 2: Status & Planung (Status & Planning) -->
                     <h5 class="mb-3"><i class="bi bi-calendar-check"></i> Status & Planung</h5>
-                    
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label for="{{ form.status.id_for_label }}" class="form-label">
@@ -123,9 +121,8 @@
 
                     <hr class="my-4">
 
-                    <!-- Section 3: Zuständigkeit (Assignment & Responsibility) -->
+                    <!-- Section 3: Zuständigkeit (Assignment) -->
                     <h5 class="mb-3"><i class="bi bi-people"></i> Zuständigkeit</h5>
-
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.ersteller.id_for_label }}" class="form-label">
@@ -177,7 +174,6 @@
 
                     <!-- Section 4: Serien-Aktivität (Recurring Activity) -->
                     <h5 class="mb-3"><i class="bi bi-arrow-repeat"></i> Serien-Aktivität</h5>
-
                     <div class="mb-3 form-check">
                         {{ form.ist_serie }}
                         <label class="form-check-label" for="{{ form.ist_serie.id_for_label }}">
