@@ -90,20 +90,43 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="{{ form.cc_copy_to.id_for_label }}" class="form-label">{{ form.cc_copy_to.label }}</label>
-                            {{ form.cc_copy_to }}
-                            {% if form.cc_copy_to.errors %}
-                            <div class="text-danger small">{{ form.cc_copy_to.errors }}</div>
+                            <label for="{{ form.cc_address.id_for_label }}" class="form-label">{{ form.cc_address.label }}</label>
+                            {{ form.cc_address }}
+                            {% if form.cc_address.errors %}
+                            <div class="text-danger small">{{ form.cc_address.errors }}</div>
                             {% endif %}
-                            {% if form.cc_copy_to.help_text %}
-                            <div class="form-text">{{ form.cc_copy_to.help_text }}</div>
+                            {% if form.cc_address.help_text %}
+                            <div class="form-text">{{ form.cc_address.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            {{ form.is_active }}
+                            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                {{ form.is_active.label }}
+                            </label>
+                            {% if form.is_active.errors %}
+                            <div class="text-danger small">{{ form.is_active.errors }}</div>
+                            {% endif %}
+                            {% if form.is_active.help_text %}
+                            <div class="form-text">{{ form.is_active.help_text }}</div>
                             {% endif %}
                         </div>
                         
                         <div class="d-flex justify-content-between mt-4">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save"></i> {{ action }}
-                            </button>
+                            <div>
+                                <button type="submit" name="action" value="save" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> {{ action }}
+                                </button>
+                                <button type="submit" name="action" value="save_and_close" class="btn btn-success">
+                                    <i class="bi bi-save"></i> Speichern &amp; Schließen
+                                </button>
+                                {% if template %}
+                                <a href="{% url 'mailtemplate_delete' template.pk %}" class="btn btn-danger">
+                                    <i class="bi bi-trash"></i> Löschen
+                                </a>
+                                {% endif %}
+                            </div>
                             <a href="{% url 'mailtemplate_list' %}" class="btn btn-secondary">
                                 <i class="bi bi-x-circle"></i> Abbrechen
                             </a>
