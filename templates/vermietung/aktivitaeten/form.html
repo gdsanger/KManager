@@ -25,24 +25,26 @@
                 </h5>
             </div>
             <div class="card-body">
-                {% if context_obj %}
-                <div class="alert alert-info mb-3">
-                    <i class="bi bi-info-circle"></i>
-                    <strong>Kontext:</strong>
-                    {% if context_type == 'vertrag' %}
-                        Vertrag: {{ context_obj }}
-                    {% elif context_type == 'mietobjekt' %}
-                        Mietobjekt: {{ context_obj }}
-                    {% elif context_type == 'kunde' %}
-                        Kunde: {{ context_obj }}
-                    {% endif %}
-                </div>
-                {% endif %}
-
                 <form method="post" novalidate>
                     {% csrf_token %}
                     
-                    <!-- Titel -->
+                    {% if context_obj %}
+                    <div class="alert alert-info mb-4">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Kontext:</strong>
+                        {% if context_type == 'vertrag' %}
+                            Vertrag: {{ context_obj }}
+                        {% elif context_type == 'mietobjekt' %}
+                            Mietobjekt: {{ context_obj }}
+                        {% elif context_type == 'kunde' %}
+                            Kunde: {{ context_obj }}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Section 1: Grunddaten (Basic Information) -->
+                    <h5 class="mb-3"><i class="bi bi-card-text"></i> Grunddaten</h5>
+                    
                     <div class="mb-3">
                         <label for="{{ form.titel.id_for_label }}" class="form-label">
                             {{ form.titel.label }}
@@ -58,7 +60,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- Beschreibung -->
                     <div class="mb-3">
                         <label for="{{ form.beschreibung.id_for_label }}" class="form-label">
                             {{ form.beschreibung.label }}
@@ -74,8 +75,12 @@
                         {% endif %}
                     </div>
 
+                    <hr class="my-4">
+
+                    <!-- Section 2: Status & Planung (Status & Planning) -->
+                    <h5 class="mb-3"><i class="bi bi-calendar-check"></i> Status & Planung</h5>
+                    
                     <div class="row">
-                        <!-- Status -->
                         <div class="col-md-4 mb-3">
                             <label for="{{ form.status.id_for_label }}" class="form-label">
                                 {{ form.status.label }}
@@ -88,7 +93,6 @@
                             {% endif %}
                         </div>
 
-                        <!-- Priorität -->
                         <div class="col-md-4 mb-3">
                             <label for="{{ form.prioritaet.id_for_label }}" class="form-label">
                                 {{ form.prioritaet.label }}
@@ -101,7 +105,6 @@
                             {% endif %}
                         </div>
 
-                        <!-- Fällig am -->
                         <div class="col-md-4 mb-3">
                             <label for="{{ form.faellig_am.id_for_label }}" class="form-label">
                                 {{ form.faellig_am.label }}
@@ -120,41 +123,41 @@
 
                     <hr class="my-4">
 
-                    <h6 class="mb-3">Zuweisung & Ersteller</h6>
+                    <!-- Section 3: Zuständigkeit (Assignment & Responsibility) -->
+                    <h5 class="mb-3"><i class="bi bi-people"></i> Zuständigkeit</h5>
 
-                    <!-- Ersteller -->
-                    <div class="mb-3">
-                        <label for="{{ form.ersteller.id_for_label }}" class="form-label">
-                            {{ form.ersteller.label }}
-                        </label>
-                        {{ form.ersteller }}
-                        {% if form.ersteller.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.ersteller.errors }}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.ersteller.id_for_label }}" class="form-label">
+                                {{ form.ersteller.label }}
+                            </label>
+                            {{ form.ersteller }}
+                            {% if form.ersteller.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.ersteller.errors }}
+                            </div>
+                            {% endif %}
+                            {% if form.ersteller.help_text %}
+                            <div class="form-text">{{ form.ersteller.help_text }}</div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                        {% if form.ersteller.help_text %}
-                        <div class="form-text">{{ form.ersteller.help_text }}</div>
-                        {% endif %}
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.assigned_user.id_for_label }}" class="form-label">
+                                {{ form.assigned_user.label }}
+                            </label>
+                            {{ form.assigned_user }}
+                            {% if form.assigned_user.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.assigned_user.errors }}
+                            </div>
+                            {% endif %}
+                            {% if form.assigned_user.help_text %}
+                            <div class="form-text">{{ form.assigned_user.help_text }}</div>
+                            {% endif %}
+                        </div>
                     </div>
 
-                    <!-- Interner Verantwortlicher -->
-                    <div class="mb-3">
-                        <label for="{{ form.assigned_user.id_for_label }}" class="form-label">
-                            {{ form.assigned_user.label }}
-                        </label>
-                        {{ form.assigned_user }}
-                        {% if form.assigned_user.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.assigned_user.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.assigned_user.help_text %}
-                        <div class="form-text">{{ form.assigned_user.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    <!-- Lieferant -->
                     <div class="mb-3">
                         <label for="{{ form.assigned_supplier.id_for_label }}" class="form-label">
                             {{ form.assigned_supplier.label }}
@@ -172,9 +175,9 @@
 
                     <hr class="my-4">
 
-                    <h6 class="mb-3">Serien-Aktivität</h6>
+                    <!-- Section 4: Serien-Aktivität (Recurring Activity) -->
+                    <h5 class="mb-3"><i class="bi bi-arrow-repeat"></i> Serien-Aktivität</h5>
 
-                    <!-- Ist Serie -->
                     <div class="mb-3 form-check">
                         {{ form.ist_serie }}
                         <label class="form-check-label" for="{{ form.ist_serie.id_for_label }}">
@@ -190,7 +193,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- Intervall Monate -->
                     <div class="mb-3" id="intervall_container">
                         <label for="{{ form.intervall_monate.id_for_label }}" class="form-label">
                             {{ form.intervall_monate.label }}
@@ -209,49 +211,49 @@
                     {% if not context_obj %}
                     <hr class="my-4">
 
-                    <h6 class="mb-3">Kontext (Wählen Sie genau einen)</h6>
+                    <!-- Section 5: Kontext/Zuordnung (Context/Reference) -->
+                    <h5 class="mb-3"><i class="bi bi-link-45deg"></i> Kontext/Zuordnung</h5>
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i>
                         Wählen Sie genau einen Kontext: Mietobjekt, Vertrag oder Kunde.
                     </div>
 
-                    <!-- Mietobjekt -->
-                    <div class="mb-3">
-                        <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">
-                            {{ form.mietobjekt.label }}
-                        </label>
-                        {{ form.mietobjekt }}
-                        {% if form.mietobjekt.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.mietobjekt.errors }}
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">
+                                {{ form.mietobjekt.label }}
+                            </label>
+                            {{ form.mietobjekt }}
+                            {% if form.mietobjekt.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.mietobjekt.errors }}
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                    </div>
 
-                    <!-- Vertrag -->
-                    <div class="mb-3">
-                        <label for="{{ form.vertrag.id_for_label }}" class="form-label">
-                            {{ form.vertrag.label }}
-                        </label>
-                        {{ form.vertrag }}
-                        {% if form.vertrag.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.vertrag.errors }}
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.vertrag.id_for_label }}" class="form-label">
+                                {{ form.vertrag.label }}
+                            </label>
+                            {{ form.vertrag }}
+                            {% if form.vertrag.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.vertrag.errors }}
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                    </div>
 
-                    <!-- Kunde -->
-                    <div class="mb-3">
-                        <label for="{{ form.kunde.id_for_label }}" class="form-label">
-                            {{ form.kunde.label }}
-                        </label>
-                        {{ form.kunde }}
-                        {% if form.kunde.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.kunde.errors }}
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.kunde.id_for_label }}" class="form-label">
+                                {{ form.kunde.label }}
+                            </label>
+                            {{ form.kunde }}
+                            {% if form.kunde.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.kunde.errors }}
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
                     </div>
                     {% else %}
                     <!-- Hidden context fields (already set via form) -->
@@ -260,7 +262,10 @@
                     {{ form.kunde }}
                     {% endif %}
 
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                    <hr class="my-4">
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> Abbrechen
                         </a>
@@ -273,6 +278,8 @@
 
                 {% if not is_create %}
                 <hr class="my-4">
+                
+                <!-- Delete Section -->
                 <div class="d-grid">
                     <button type="button" class="btn btn-danger" onclick="confirmDelete()">
                         <i class="bi bi-trash"></i> Aktivität löschen
