@@ -302,13 +302,13 @@
 
                 <!-- Assignment Modal -->
                 <div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content bg-dark text-light">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title" id="assignModalLabel">
                                     <i class="bi bi-person-plus"></i> Aktivität zuweisen
                                 </h5>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             
                             <form id="assignForm" method="post" action="{% url 'vermietung:aktivitaet_assign' aktivitaet.pk %}">
@@ -326,7 +326,7 @@
                                             </option>
                                             {% endfor %}
                                         </select>
-                                        <div class="form-text text-light">
+                                        <div class="form-text">
                                             Der neue Verantwortliche wird per E-Mail benachrichtigt.
                                         </div>
                                     </div>
