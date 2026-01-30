@@ -53,7 +53,7 @@ def send_activity_notifications(sender, instance, created, **kwargs):
             if instance.assigned_user.email:
                 try:
                     # Build activity URL
-                    activity_url = reverse('aktivitaet_edit', kwargs={'pk': instance.pk})
+                    activity_url = reverse('vermietung:aktivitaet_edit', kwargs={'pk': instance.pk})
                     # Make it absolute (assuming request is not available here)
                     # In production, you might want to configure BASE_URL in settings
                     from django.conf import settings
@@ -107,7 +107,7 @@ def send_activity_notifications(sender, instance, created, **kwargs):
         if instance.ersteller and instance.ersteller.email:
             try:
                 # Build activity URL
-                activity_url = reverse('aktivitaet_edit', kwargs={'pk': instance.pk})
+                activity_url = reverse('vermietung:aktivitaet_edit', kwargs={'pk': instance.pk})
                 from django.conf import settings
                 base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
                 activity_url = f"{base_url}{activity_url}"
