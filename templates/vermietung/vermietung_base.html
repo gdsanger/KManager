@@ -72,88 +72,137 @@
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar Navigation -->
-            <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse" id="sidebarMenu">
+            <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar" id="sidebarMenu">
                 <div class="position-sticky pt-3">
-                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                        <span>VERMIETUNG MENÜ</span>
-                    </h6>
+                    <!-- Hamburger Toggle Button -->
+                    <div class="d-flex justify-content-between align-items-center px-3 mb-3">
+                        <h6 class="sidebar-heading text-muted mb-0 sidebar-text">
+                            <span>VERMIETUNG MENÜ</span>
+                        </h6>
+                        <button class="btn btn-link text-light p-0" id="sidebarToggle" type="button" aria-label="Seitenleiste umschalten">
+                            <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+                        </button>
+                    </div>
+                    
                     <ul class="nav flex-column">
                         <!-- Dashboard -->
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'vermietung:home' %}">
-                                <i class="bi bi-speedometer2"></i> Dashboard
+                                <i class="bi bi-speedometer2"></i> <span class="sidebar-text">Dashboard</span>
                             </a>
                         </li>
                         
                         <!-- Adressen Section -->
                         <li class="nav-item nav-section">
                             <a class="nav-link nav-category" href="#adressenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}true{% else %}false{% endif %}">
-                                <i class="bi bi-person-vcard"></i> Adressen
-                                <i class="bi bi-chevron-down ms-auto"></i>
+                                <i class="bi bi-person-vcard"></i> <span class="sidebar-text">Adressen</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
                             </a>
                             <ul class="collapse nav flex-column ms-3 {% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}show{% endif %}" id="adressenMenu">
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'adressen' in request.path %}active{% endif %}" href="{% url 'vermietung:adresse_list' %}">
-                                        <i class="bi bi-signpost"></i> Adressen
+                                        <i class="bi bi-signpost"></i> <span class="sidebar-text">Adressen</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'kunde' in request.path %}active{% endif %}" href="{% url 'vermietung:kunde_list' %}">
-                                        <i class="bi bi-people"></i> Kunden
+                                        <i class="bi bi-people"></i> <span class="sidebar-text">Kunden</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'lieferant' in request.path %}active{% endif %}" href="{% url 'vermietung:lieferant_list' %}">
-                                        <i class="bi bi-truck"></i> Lieferanten
+                                        <i class="bi bi-truck"></i> <span class="sidebar-text">Lieferanten</span>
                                     </a>
                                 </li>
                             </ul>
                         </li>
 
-                        <!-- Vermietung Section -->
+                        <!-- Aktivitäten Section (NEW - after Adressen) -->
                         <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'aktivitaet' in request.path %}true{% else %}false{% endif %}">
-                                <i class="bi bi-building"></i> Vermietung
-                                <i class="bi bi-chevron-down ms-auto"></i>
+                            <a class="nav-link nav-category" href="#aktivitaetenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'aktivitaet' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-list-check"></i> <span class="sidebar-text">Aktivitäten</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
                             </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'aktivitaet' in request.path %}show{% endif %}" id="vermietungMenu">
+                            <ul class="collapse nav flex-column ms-3 {% if 'aktivitaet' in request.path %}show{% endif %}" id="aktivitaetenMenu">
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
-                                        <i class="bi bi-geo-alt"></i> Standorte
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_kanban' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_kanban' %}">
+                                        <i class="bi bi-kanban"></i> <span class="sidebar-text">Kanban</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
-                                        <i class="bi bi-house-door"></i> Mietobjekte
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'vertraege' in request.path or 'vertrag' in request.path %}active{% endif %}" href="{% url 'vermietung:vertrag_list' %}">
-                                        <i class="bi bi-file-earmark-text"></i> Verträge
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
-                                        <i class="bi bi-clipboard-check"></i> Übergabeprotokolle
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'aktivitaet' in request.path %}active{% endif %}" href="{% url 'vermietung:aktivitaet_kanban' %}">
-                                        <i class="bi bi-list-check"></i> Aktivitäten (Kanban)
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_list' %}">
+                                        <i class="bi bi-list-ul"></i> <span class="sidebar-text">Alle Aktivitäten</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_assigned_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_assigned_list' %}">
-                                        <i class="bi bi-person-check"></i> Meine zugewiesenen
+                                        <i class="bi bi-person-check"></i> <span class="sidebar-text">Meine zugewiesenen</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_created_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_created_list' %}">
-                                        <i class="bi bi-pencil-square"></i> Meine erstellten
+                                        <i class="bi bi-pencil-square"></i> <span class="sidebar-text">Meine erstellten</span>
                                     </a>
                                 </li>
                             </ul>
-                        </li>                     
+                        </li>
+
+                        <!-- Vermietung Section (activities removed) -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-building"></i> <span class="sidebar-text">Vermietung</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                            </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}show{% endif %}" id="vermietungMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
+                                        <i class="bi bi-geo-alt"></i> <span class="sidebar-text">Standorte</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
+                                        <i class="bi bi-house-door"></i> <span class="sidebar-text">Mietobjekte</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'vertraege' in request.path or 'vertrag' in request.path %}active{% endif %}" href="{% url 'vermietung:vertrag_list' %}">
+                                        <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Verträge</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
+                                        <i class="bi bi-clipboard-check"></i> <span class="sidebar-text">Übergabeprotokolle</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+
+                        <!-- Einstellungen Section (NEW) -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#einstellungenMenu" data-bs-toggle="collapse" aria-expanded="{% if request.resolver_match.url_name == 'mailtemplate_list' or request.resolver_match.url_name == 'smtp_settings' %}true{% else %}false{% endif %}">
+                                <i class="bi bi-gear"></i> <span class="sidebar-text">Einstellungen</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                            </a>
+                            <ul class="collapse nav flex-column ms-3 {% if request.resolver_match.url_name == 'mailtemplate_list' or request.resolver_match.url_name == 'smtp_settings' %}show{% endif %}" id="einstellungenMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'mailtemplate_list' %}active{% endif %}" href="{% url 'mailtemplate_list' %}">
+                                        <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Template-Einstellungen</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'smtp_settings' %}active{% endif %}" href="{% url 'smtp_settings' %}">
+                                        <i class="bi bi-envelope-gear"></i> <span class="sidebar-text">E-Mail-Einstellungen</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+
+                        <!-- Support Link (NEW - always visible as last entry) -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
+                                <i class="bi bi-headset"></i> <span class="sidebar-text">Support</span>
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
@@ -273,6 +322,45 @@
                 }
             });
         });
+
+        // Sidebar Toggle Functionality
+        const sidebar = document.getElementById('sidebarMenu');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const mainContent = document.querySelector('main.col-md-9');
+        const SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed';
+        
+        // Load saved state from localStorage
+        const isCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+        if (isCollapsed && sidebar) {
+            sidebar.classList.add('collapsed');
+            if (mainContent) {
+                mainContent.style.marginLeft = '70px';
+                mainContent.style.width = 'calc(100% - 70px)';
+            }
+        }
+        
+        // Toggle sidebar on button click
+        if (sidebarToggle && sidebar) {
+            sidebarToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                sidebar.classList.toggle('collapsed');
+                
+                // Adjust main content
+                if (mainContent) {
+                    if (sidebar.classList.contains('collapsed')) {
+                        mainContent.style.marginLeft = '70px';
+                        mainContent.style.width = 'calc(100% - 70px)';
+                    } else {
+                        mainContent.style.marginLeft = '';
+                        mainContent.style.width = '';
+                    }
+                }
+                
+                // Save state to localStorage
+                const collapsed = sidebar.classList.contains('collapsed');
+                localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed);
+            });
+        }
     });
     </script>
     
