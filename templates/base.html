@@ -53,7 +53,7 @@
                     {% if user.is_authenticated %}
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
-                                <i class="bi bi-headset"></i> Customer Support Portal
+                                <i class="bi bi-headset"></i> Support Portal
                             </a>
                         </li>
                         <li class="nav-item dropdown">
