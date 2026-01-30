@@ -1875,6 +1875,8 @@ def aktivitaet_edit(request, pk):
     - assigned_user changes
     - status changes to ERLEDIGT
     """
+    from django.contrib.auth.models import User
+    
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
     
     if request.method == 'POST':
@@ -1894,10 +1896,14 @@ def aktivitaet_edit(request, pk):
     else:
         form = AktivitaetForm(instance=aktivitaet, current_user=request.user)
     
+    # Get list of available users for assignment modal
+    available_users = User.objects.filter(is_active=True).order_by('first_name', 'last_name', 'username')
+    
     context = {
         'form': form,
         'aktivitaet': aktivitaet,
         'is_create': False,
+        'available_users': available_users,
     }
     
     return render(request, 'vermietung/aktivitaeten/form.html', context)
@@ -1943,6 +1949,49 @@ def aktivitaet_mark_completed(request, pk):
             )
         except Exception as e:
             messages.error(request, f'Fehler beim Markieren der Aktivität: {str(e)}')
+    
+    return redirect('vermietung:aktivitaet_edit', pk=pk)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def aktivitaet_assign(request, pk):
+    """
+    Assign an activity to a new user.
+    Triggers email notification to the new assignee via signal.
+    """
+    from django.contrib.auth.models import User
+    
+    aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    
+    # Get the new assigned user from POST data
+    assigned_user_id = request.POST.get('assigned_user')
+    
+    if not assigned_user_id:
+        messages.error(request, 'Bitte wählen Sie einen Verantwortlichen aus.')
+        return redirect('vermietung:aktivitaet_edit', pk=pk)
+    
+    try:
+        new_user = User.objects.get(pk=assigned_user_id, is_active=True)
+        
+        # Check if assignment actually changes
+        if aktivitaet.assigned_user == new_user:
+            messages.info(request, f'Die Aktivität ist bereits {new_user.get_full_name() or new_user.username} zugewiesen.')
+        else:
+            old_assignee = aktivitaet.assigned_user
+            aktivitaet.assigned_user = new_user
+            aktivitaet.save()
+            
+            # Signal will automatically send email
+            messages.success(
+                request,
+                f'Aktivität "{aktivitaet.titel}" wurde {new_user.get_full_name() or new_user.username} zugewiesen. '
+                f'Eine E-Mail-Benachrichtigung wurde versendet.'
+            )
+    except User.DoesNotExist:
+        messages.error(request, 'Der ausgewählte Benutzer wurde nicht gefunden.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Zuweisen der Aktivität: {str(e)}')
     
     return redirect('vermietung:aktivitaet_edit', pk=pk)
 
