@@ -77,6 +77,7 @@ urlpatterns = [
     path('aktivitaeten/neu/', views.aktivitaet_create, name='aktivitaet_create'),
     path('aktivitaeten/<int:pk>/bearbeiten/', views.aktivitaet_edit, name='aktivitaet_edit'),
     path('aktivitaeten/<int:pk>/loeschen/', views.aktivitaet_delete, name='aktivitaet_delete'),
+    path('aktivitaeten/<int:pk>/erledigt/', views.aktivitaet_mark_completed, name='aktivitaet_mark_completed'),
     path('aktivitaeten/<int:pk>/status/', views.aktivitaet_update_status, name='aktivitaet_update_status'),
     
     # Contextual Aktivitaet creation URLs
