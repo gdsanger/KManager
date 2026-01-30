@@ -179,6 +179,9 @@ DEFAULT_FROM_NAME = os.getenv('DEFAULT_FROM_NAME', 'Domus Notification Manager')
 # Agira Customer Support Portal configuration
 AGIRA_TOKEN = os.getenv('AGIRA_TOKEN', '')
 
+# Application Base URL for email templates and notifications
+BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
+
 # Logging configuration
 # Create logs directory in BASE_DIR
 LOGS_DIR = BASE_DIR / 'logs'
