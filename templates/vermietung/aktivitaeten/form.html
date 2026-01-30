@@ -265,6 +265,11 @@
                         <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> Abbrechen
                         </a>
+                        {% if not is_create %}
+                        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#assignModal">
+                            <i class="bi bi-person-plus"></i> Zuweisen
+                        </button>
+                        {% endif %}
                         {% if not is_create and aktivitaet.status != 'ERLEDIGT' %}
                         <button type="button" class="btn btn-success" onclick="markAsCompleted()">
                             <i class="bi bi-check-circle-fill"></i> Als erledigt markieren
@@ -294,6 +299,49 @@
                 <form id="completedForm" method="post" action="{% url 'vermietung:aktivitaet_mark_completed' aktivitaet.pk %}" style="display: none;">
                     {% csrf_token %}
                 </form>
+
+                <!-- Assignment Modal -->
+                <div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content bg-dark text-light">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="assignModalLabel">
+                                    <i class="bi bi-person-plus"></i> Aktivität zuweisen
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            
+                            <form id="assignForm" method="post" action="{% url 'vermietung:aktivitaet_assign' aktivitaet.pk %}">
+                                {% csrf_token %}
+                                <div class="modal-body">
+                                    <p class="mb-3">Wählen Sie einen neuen Verantwortlichen für diese Aktivität:</p>
+                                    
+                                    <div class="mb-3">
+                                        <label for="new_assigned_user" class="form-label">Verantwortlicher</label>
+                                        <select name="assigned_user" id="new_assigned_user" class="form-select" required>
+                                            <option value="">-- Bitte wählen --</option>
+                                            {% for user in available_users %}
+                                            <option value="{{ user.id }}" {% if aktivitaet.assigned_user_id == user.id %}selected{% endif %}>
+                                                {{ user.get_full_name|default:user.username }}{% if user.email %} ({{ user.email }}){% endif %}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="form-text text-light">
+                                            Der neue Verantwortliche wird per E-Mail benachrichtigt.
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-person-check"></i> Zuweisen
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
 
                 <script>
                 function confirmDelete() {

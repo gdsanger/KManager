@@ -428,3 +428,152 @@ class ActivityMarkCompletedViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         # Button should not be present
         self.assertNotContains(response, 'Als erledigt markieren')
+
+
+class ActivityAssignmentButtonTest(TransactionTestCase):
+    """Test the assignment button and modal functionality."""
+    
+    def setUp(self):
+        """Set up test data."""
+        from core.models import Mandant
+        
+        # Create mandant
+        self.mandant = Mandant.objects.create(name='Test Mandant')
+        
+        # Create users
+        self.creator = User.objects.create_user(
+            username='creator',
+            email='creator@example.com',
+            password='testpass123'
+        )
+        self.assignee1 = User.objects.create_user(
+            username='assignee1',
+            email='assignee1@example.com',
+            password='testpass123',
+            first_name='John',
+            last_name='Doe'
+        )
+        self.assignee2 = User.objects.create_user(
+            username='assignee2',
+            email='assignee2@example.com',
+            password='testpass123',
+            first_name='Jane',
+            last_name='Smith'
+        )
+        
+        # Create standort
+        self.standort = Adresse.objects.create(
+            adressen_type='STANDORT',
+            name='Test Standort',
+            strasse='Test Str.',
+            plz='12345',
+            ort='Test Stadt'
+        )
+        
+        # Create mietobjekt
+        self.mietobjekt = MietObjekt.objects.create(
+            name='Test Objekt',
+            mandant=self.mandant,
+            standort=self.standort,
+            verfuegbare_einheiten=10,
+            mietpreis=Decimal('1000.00')
+        )
+        
+        # Create activity
+        self.aktivitaet = Aktivitaet.objects.create(
+            titel='Test Activity',
+            beschreibung='Test Description',
+            ersteller=self.creator,
+            assigned_user=self.assignee1,
+            mietobjekt=self.mietobjekt,
+            status='OFFEN'
+        )
+        
+        # Mark creator as staff to pass vermietung_required
+        self.creator.is_staff = True
+        self.creator.save()
+        
+        # Login
+        self.client.login(username='creator', password='testpass123')
+    
+    def test_assignment_button_visible_in_edit_view(self):
+        """Test that assignment button is visible in edit view."""
+        url = reverse('vermietung:aktivitaet_edit', kwargs={'pk': self.aktivitaet.pk})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        # Check that button is visible
+        self.assertContains(response, 'Zuweisen')
+        self.assertContains(response, 'id="assignModal"')
+    
+    def test_assignment_button_not_visible_in_create_view(self):
+        """Test that assignment button is NOT visible in create view."""
+        url = reverse('vermietung:aktivitaet_create')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        # Check that modal is NOT present
+        self.assertNotContains(response, 'id="assignModal"')
+    
+    def test_assignment_modal_contains_users(self):
+        """Test that assignment modal contains list of users."""
+        url = reverse('vermietung:aktivitaet_edit', kwargs={'pk': self.aktivitaet.pk})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        # Check that users are in the select options
+        self.assertContains(response, 'John Doe')
+        self.assertContains(response, 'Jane Smith')
+    
+    @patch('vermietung.signals.send_mail')
+    def test_assign_user_via_modal(self, mock_send_mail):
+        """Test assigning activity to new user via assignment button."""
+        url = reverse('vermietung:aktivitaet_assign', kwargs={'pk': self.aktivitaet.pk})
+        
+        # Assign to assignee2
+        response = self.client.post(url, {
+            'assigned_user': self.assignee2.pk
+        })
+        
+        # Check redirect
+        self.assertEqual(response.status_code, 302)
+        
+        # Reload activity
+        self.aktivitaet.refresh_from_db()
+        
+        # Check that assignment changed
+        self.assertEqual(self.aktivitaet.assigned_user, self.assignee2)
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        
+        # Check that it was called with correct template
+        call_args = mock_send_mail.call_args
+        self.assertEqual(call_args[1]['template_key'], 'activity-assigned')
+        self.assertEqual(call_args[1]['to'], [self.assignee2.email])
+    
+    def test_assign_same_user_shows_info_message(self):
+        """Test that assigning to same user shows info message."""
+        url = reverse('vermietung:aktivitaet_assign', kwargs={'pk': self.aktivitaet.pk})
+        
+        # Assign to same user (assignee1)
+        response = self.client.post(url, {
+            'assigned_user': self.assignee1.pk
+        }, follow=True)
+        
+        # Check that info message is shown
+        messages = list(response.context['messages'])
+        self.assertEqual(len(messages), 1)
+        self.assertIn('bereits', str(messages[0]))
+    
+    def test_assign_without_user_shows_error(self):
+        """Test that assigning without selecting user shows error."""
+        url = reverse('vermietung:aktivitaet_assign', kwargs={'pk': self.aktivitaet.pk})
+        
+        # POST without assigned_user
+        response = self.client.post(url, {}, follow=True)
+        
+        # Check that error message is shown
+        messages = list(response.context['messages'])
+        self.assertEqual(len(messages), 1)
+        self.assertIn('wählen', str(messages[0]))
