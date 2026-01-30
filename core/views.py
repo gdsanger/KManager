@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from core.models import SmtpSettings, MailTemplate, Mandant
 from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm
+import os
 
 
 def home(request):
@@ -231,4 +232,17 @@ def mandant_delete(request, pk):
         return redirect('mandant_list')
     
     return render(request, 'core/mandant_confirm_delete.html', {'mandant': mandant})
+
+
+@login_required
+def support_portal(request):
+    """Customer Support Portal - Agira iframe integration"""
+    agira_token = os.getenv('AgiraToken', '').strip()
+    
+    context = {
+        'agira_token': agira_token,
+        'token_missing': not agira_token
+    }
+    
+    return render(request, 'core/support_portal.html', context)
 

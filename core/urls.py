@@ -24,4 +24,7 @@ urlpatterns = [
     path('mandanten/<int:pk>/', views.mandant_detail, name='mandant_detail'),
     path('mandanten/<int:pk>/edit/', views.mandant_edit, name='mandant_edit'),
     path('mandanten/<int:pk>/delete/', views.mandant_delete, name='mandant_delete'),
+    
+    # Customer Support Portal
+    path('support-portal/', views.support_portal, name='support_portal'),
 ]
