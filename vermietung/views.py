@@ -8,7 +8,9 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
+import tempfile
+import os
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, 
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
@@ -22,6 +24,8 @@ from .forms import (
 )
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
+from core.services.ai.invoice_extraction import InvoiceExtractionService
+from core.services.ai.supplier_matching import SupplierMatchingService
 
 
 @login_required
@@ -2337,11 +2341,6 @@ def eingangsrechnung_create_from_pdf(request):
             return redirect('vermietung:eingangsrechnung_create')
         
         # Save PDF temporarily to extract data
-        import tempfile
-        import os
-        from core.services.ai.invoice_extraction import InvoiceExtractionService
-        from core.services.ai.supplier_matching import SupplierMatchingService
-        
         temp_pdf_path = None
         try:
             # Save uploaded file to temporary location
@@ -2408,13 +2407,11 @@ def eingangsrechnung_create_from_pdf(request):
             
             # Create invoice with extracted data (or empty if extraction failed)
             # Use defaults for required fields that weren't extracted
-            from datetime import date, datetime
-            
             rechnung_data = {
                 'mietobjekt': mietobjekt,
                 'belegdatum': date.today(),  # Default to today
                 'faelligkeit': date.today() + timedelta(days=30),  # Default to 30 days from today
-                'belegnummer': 'TEMP-' + timezone.now().strftime('%Y%m%d%H%M%S'),  # Temporary number
+                'belegnummer': 'UNBEKANNT-' + timezone.now().strftime('%Y%m%d%H%M%S'),  # Placeholder - user MUST update
                 'betreff': 'Automatisch aus PDF erstellt',
             }
             
@@ -2493,6 +2490,14 @@ def eingangsrechnung_create_from_pdf(request):
             )
             dokument.save()
             
+            # Add warning if invoice number was not extracted
+            if rechnung.belegnummer.startswith('UNBEKANNT-'):
+                messages.warning(
+                    request,
+                    'WICHTIG: Belegnummer konnte nicht extrahiert werden und wurde automatisch generiert. '
+                    'Bitte manuell aktualisieren!'
+                )
+            
             messages.success(
                 request,
                 f'Eingangsrechnung "{rechnung.belegnummer}" wurde erfolgreich angelegt und PDF hochgeladen.'
@@ -2506,8 +2511,6 @@ def eingangsrechnung_create_from_pdf(request):
         
         except Exception as e:
             messages.error(request, f'Fehler beim Erstellen der Rechnung: {str(e)}')
-            import traceback
-            traceback.print_exc()
             return redirect('vermietung:eingangsrechnung_create')
         
         finally:
