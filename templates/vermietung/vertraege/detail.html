@@ -217,8 +217,30 @@
             </div>
             <div class="card-body">
                 <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Berechnungsmodus:</div>
+                    <div class="col-md-8">
+                        {% if vertrag.auto_total %}
+                            <span class="badge bg-success">Automatisch aus Positionen</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">Manueller Pauschalpreis</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if not vertrag.auto_total and vertrag.manual_net_total %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Manueller Pauschalpreis (Netto):</div>
+                    <div class="col-md-8"><strong>{{ vertrag.manual_net_total|floatformat:2 }} €</strong></div>
+                </div>
+                {% endif %}
+                {% if not vertrag.auto_total %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Summe Positionen (informativ):</div>
+                    <div class="col-md-8 text-muted">{{ vertrag.berechne_gesamtmiete|floatformat:2 }} €</div>
+                </div>
+                {% endif %}
+                <div class="row mb-2">
                     <div class="col-md-4 text-muted">Monatliche Miete (Netto):</div>
-                    <div class="col-md-8"><strong>{{ vertrag.miete|floatformat:2 }} €</strong></div>
+                    <div class="col-md-8"><strong>{{ vertrag.effective_net_total|floatformat:2 }} €</strong></div>
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4 text-muted">Umsatzsteuer:</div>
