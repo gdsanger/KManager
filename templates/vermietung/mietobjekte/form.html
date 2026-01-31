@@ -166,6 +166,19 @@
                         {% endif %}
                     </div>
 
+                    <div class="mb-3 form-check">
+                        {{ form.is_mietobjekt }}
+                        <label class="form-check-label" for="{{ form.is_mietobjekt.id_for_label }}">
+                            {{ form.is_mietobjekt.label }}
+                        </label>
+                        {% if form.is_mietobjekt.errors %}
+                        <div class="text-danger small">{{ form.is_mietobjekt.errors }}</div>
+                        {% endif %}
+                        {% if form.is_mietobjekt.help_text %}
+                        <div class="form-text">{{ form.is_mietobjekt.help_text }}</div>
+                        {% endif %}
+                    </div>
+
                     <hr class="my-4">
                     <h5 class="mb-3"><i class="bi bi-building-gear"></i> Mandant</h5>
                     

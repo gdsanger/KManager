@@ -95,6 +95,11 @@ class MietObjekt(models.Model):
         help_text="Volumen in m³ (wird aus H×B×T berechnet, kann überschrieben werden)"
     )
     verfuegbar = models.BooleanField(default=True)
+    is_mietobjekt = models.BooleanField(
+        default=True,
+        verbose_name="Mietobjekt",
+        help_text="Kennzeichnet, ob es sich um ein Mietobjekt handelt"
+    )
     mandant = models.ForeignKey(
         Mandant,
         on_delete=models.PROTECT,
