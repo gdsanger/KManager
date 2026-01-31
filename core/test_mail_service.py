@@ -205,7 +205,6 @@ class SmtpConfigurationTestCase(TestCase):
     def test_smtp_connection_timeout(self):
         """Test that SMTP connection has timeout to prevent infinite hangs"""
         import time
-        import socket
         
         # Create settings pointing to a non-routable IP (192.0.2.0/24 is TEST-NET-1)
         # This will timeout instead of connecting
