@@ -1,5 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
+from django.utils import timezone
 
 ANREDEN = [
     ('HERR', 'Herr'),
@@ -179,3 +181,175 @@ class Kostenart(models.Model):
                 'parent': 'Kostenarten können nur eine Hierarchieebene haben. '
                          'Eine Unterkostenart kann nicht einer anderen Unterkostenart zugeordnet werden.'
             })
+
+
+class AIProvider(models.Model):
+    """AI Provider configuration (OpenAI, Gemini, Claude)"""
+    PROVIDER_TYPES = [
+        ('OpenAI', 'OpenAI'),
+        ('Gemini', 'Gemini'),
+        ('Claude', 'Claude'),
+    ]
+    
+    name = models.CharField(max_length=100, verbose_name="Name")
+    provider_type = models.CharField(
+        max_length=20, 
+        choices=PROVIDER_TYPES, 
+        verbose_name="Provider Type"
+    )
+    api_key = models.CharField(
+        max_length=500, 
+        verbose_name="API Key",
+        help_text="Encrypted API key for the provider"
+    )
+    organization_id = models.CharField(
+        max_length=200, 
+        blank=True, 
+        verbose_name="Organization ID",
+        help_text="Optional organization ID (e.g., for OpenAI)"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Active")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+    
+    class Meta:
+        verbose_name = "AI Provider"
+        verbose_name_plural = "AI Providers"
+        ordering = ['provider_type', 'name']
+    
+    def __str__(self):
+        return f"{self.provider_type}: {self.name}"
+
+
+class AIModel(models.Model):
+    """AI Model configuration with pricing"""
+    provider = models.ForeignKey(
+        AIProvider, 
+        on_delete=models.CASCADE, 
+        related_name='models',
+        verbose_name="Provider"
+    )
+    name = models.CharField(max_length=100, verbose_name="Name")
+    model_id = models.CharField(
+        max_length=100, 
+        verbose_name="Model ID",
+        help_text="Provider-specific model identifier (e.g., gpt-4, gemini-pro)"
+    )
+    input_price_per_1m_tokens = models.DecimalField(
+        max_digits=10, 
+        decimal_places=4, 
+        default=0,
+        verbose_name="Input Price per 1M Tokens",
+        help_text="Price in USD per 1 million input tokens"
+    )
+    output_price_per_1m_tokens = models.DecimalField(
+        max_digits=10, 
+        decimal_places=4, 
+        default=0,
+        verbose_name="Output Price per 1M Tokens",
+        help_text="Price in USD per 1 million output tokens"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Active")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Updated At")
+    
+    class Meta:
+        verbose_name = "AI Model"
+        verbose_name_plural = "AI Models"
+        ordering = ['provider', 'name']
+        unique_together = [['provider', 'model_id']]
+    
+    def __str__(self):
+        return f"{self.provider.provider_type}: {self.name} ({self.model_id})"
+
+
+class AIJobsHistory(models.Model):
+    """History of AI API calls with usage tracking and cost calculation"""
+    STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Completed', 'Completed'),
+        ('Error', 'Error'),
+    ]
+    
+    agent = models.CharField(
+        max_length=100, 
+        verbose_name="Agent",
+        help_text="Agent or service that initiated the call (e.g., 'core.ai', 'manual')"
+    )
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='ai_jobs',
+        verbose_name="User"
+    )
+    provider = models.ForeignKey(
+        AIProvider, 
+        on_delete=models.SET_NULL, 
+        null=True,
+        related_name='jobs',
+        verbose_name="Provider"
+    )
+    model = models.ForeignKey(
+        AIModel, 
+        on_delete=models.SET_NULL, 
+        null=True,
+        related_name='jobs',
+        verbose_name="Model"
+    )
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_CHOICES, 
+        default='Pending',
+        verbose_name="Status"
+    )
+    client_ip = models.GenericIPAddressField(
+        null=True, 
+        blank=True,
+        verbose_name="Client IP"
+    )
+    input_tokens = models.IntegerField(
+        null=True, 
+        blank=True,
+        verbose_name="Input Tokens"
+    )
+    output_tokens = models.IntegerField(
+        null=True, 
+        blank=True,
+        verbose_name="Output Tokens"
+    )
+    costs = models.DecimalField(
+        max_digits=10, 
+        decimal_places=6, 
+        null=True, 
+        blank=True,
+        verbose_name="Costs (USD)",
+        help_text="Calculated cost in USD"
+    )
+    timestamp = models.DateTimeField(default=timezone.now, verbose_name="Timestamp")
+    duration_ms = models.IntegerField(
+        null=True, 
+        blank=True,
+        verbose_name="Duration (ms)",
+        help_text="API call duration in milliseconds"
+    )
+    error_message = models.TextField(
+        blank=True,
+        verbose_name="Error Message",
+        help_text="Error details if status is Error"
+    )
+    
+    class Meta:
+        verbose_name = "AI Job History"
+        verbose_name_plural = "AI Jobs History"
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['status']),
+            models.Index(fields=['provider']),
+            models.Index(fields=['model']),
+        ]
+    
+    def __str__(self):
+        return f"{self.timestamp} - {self.agent} - {self.status}"
