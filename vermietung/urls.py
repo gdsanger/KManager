@@ -99,6 +99,7 @@ urlpatterns = [
     # Eingangsrechnung (Incoming Invoice) URLs
     path('eingangsrechnungen/', views.eingangsrechnung_list, name='eingangsrechnung_list'),
     path('eingangsrechnungen/neu/', views.eingangsrechnung_create, name='eingangsrechnung_create'),
+    path('eingangsrechnungen/neu/pdf/', views.eingangsrechnung_create_from_pdf, name='eingangsrechnung_create_from_pdf'),
     path('eingangsrechnungen/<int:pk>/', views.eingangsrechnung_detail, name='eingangsrechnung_detail'),
     path('eingangsrechnungen/<int:pk>/bearbeiten/', views.eingangsrechnung_edit, name='eingangsrechnung_edit'),
     path('eingangsrechnungen/<int:pk>/loeschen/', views.eingangsrechnung_delete, name='eingangsrechnung_delete'),

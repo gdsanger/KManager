@@ -1346,6 +1346,15 @@ class Dokument(models.Model):
         verbose_name="Übergabeprotokoll"
     )
     
+    eingangsrechnung = models.ForeignKey(
+        'Eingangsrechnung',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='dokumente',
+        verbose_name="Eingangsrechnung"
+    )
+    
     class Meta:
         verbose_name = "Dokument"
         verbose_name_plural = "Dokumente"
@@ -1367,14 +1376,15 @@ class Dokument(models.Model):
             self.vertrag_id,
             self.mietobjekt_id,
             self.adresse_id,
-            self.uebergabeprotokoll_id
+            self.uebergabeprotokoll_id,
+            self.eingangsrechnung_id
         ]
         set_entities = [e for e in target_entities if e is not None]
         
         if len(set_entities) == 0:
             raise ValidationError(
                 'Das Dokument muss genau einem Zielobjekt zugeordnet werden '
-                '(Vertrag, Mietobjekt, Adresse oder Übergabeprotokoll).'
+                '(Vertrag, Mietobjekt, Adresse, Übergabeprotokoll oder Eingangsrechnung).'
             )
         
         if len(set_entities) > 1:
@@ -1397,6 +1407,8 @@ class Dokument(models.Model):
             return 'adresse'
         elif self.uebergabeprotokoll_id:
             return 'uebergabeprotokoll'
+        elif self.eingangsrechnung_id:
+            return 'eingangsrechnung'
         return None
     
     def get_entity_id(self):
@@ -1409,6 +1421,8 @@ class Dokument(models.Model):
             return self.adresse_id
         elif self.uebergabeprotokoll_id:
             return self.uebergabeprotokoll_id
+        elif self.eingangsrechnung_id:
+            return self.eingangsrechnung_id
         return None
     
     def get_entity_display(self):
@@ -1421,6 +1435,8 @@ class Dokument(models.Model):
             return f"Adresse: {self.adresse}"
         elif self.uebergabeprotokoll:
             return f"Übergabeprotokoll: {self.uebergabeprotokoll}"
+        elif self.eingangsrechnung:
+            return f"Eingangsrechnung: {self.eingangsrechnung}"
         return "Unbekannt"
     
     def get_absolute_path(self):
