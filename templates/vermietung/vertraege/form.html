@@ -154,6 +154,23 @@
                     <h5 class="mb-3"><i class="bi bi-currency-euro"></i> Finanzielle Konditionen</h5>
                     
                     <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <div class="form-check">
+                                {{ form.auto_total }}
+                                <label class="form-check-label" for="{{ form.auto_total.id_for_label }}">
+                                    {{ form.auto_total.label }}
+                                </label>
+                                {% if form.auto_total.errors %}
+                                <div class="text-danger small">{{ form.auto_total.errors }}</div>
+                                {% endif %}
+                                {% if form.auto_total.help_text %}
+                                <div class="form-text">{{ form.auto_total.help_text }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="auto-total-section">
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.miete.id_for_label }}" class="form-label">{{ form.miete.label }}</label>
                             <div class="input-group">
@@ -166,6 +183,38 @@
                             {% if form.miete.help_text %}
                             <div class="form-text">{{ form.miete.help_text }}</div>
                             {% endif %}
+                            <small class="text-muted d-block mt-1">
+                                <i class="bi bi-info-circle"></i> Automatisch berechnet aus Positionen
+                            </small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.umsatzsteuer_satz.id_for_label }}" class="form-label">{{ form.umsatzsteuer_satz.label }}</label>
+                            {{ form.umsatzsteuer_satz }}
+                            {% if form.umsatzsteuer_satz.errors %}
+                            <div class="text-danger small">{{ form.umsatzsteuer_satz.errors }}</div>
+                            {% endif %}
+                            {% if form.umsatzsteuer_satz.help_text %}
+                            <div class="form-text">{{ form.umsatzsteuer_satz.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row" id="manual-total-section" style="display: none;">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.manual_net_total.id_for_label }}" class="form-label">{{ form.manual_net_total.label }}</label>
+                            <div class="input-group">
+                                {{ form.manual_net_total }}
+                                <span class="input-group-text">€</span>
+                            </div>
+                            {% if form.manual_net_total.errors %}
+                            <div class="text-danger small">{{ form.manual_net_total.errors }}</div>
+                            {% endif %}
+                            {% if form.manual_net_total.help_text %}
+                            <div class="form-text">{{ form.manual_net_total.help_text }}</div>
+                            {% endif %}
+                            <small class="text-muted d-block mt-1">
+                                <i class="bi bi-exclamation-triangle"></i> Überschreibt die Summe der Positionen
+                            </small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="{{ form.umsatzsteuer_satz.id_for_label }}" class="form-label">{{ form.umsatzsteuer_satz.label }}</label>
@@ -184,7 +233,10 @@
                             <div class="card bg-light">
                                 <div class="card-body">
                                     <div class="row mb-2">
-                                        <div class="col-6 text-muted">Nettobetrag:</div>
+                                        <div class="col-6 text-muted">
+                                            Nettobetrag:
+                                            <span id="netto-source-hint" class="badge bg-secondary ms-2" style="font-size: 0.7em;"></span>
+                                        </div>
                                         <div class="col-6 text-end"><span id="nettobetrag-display">0.00</span> €</div>
                                     </div>
                                     <div class="row mb-2">
@@ -315,6 +367,13 @@ const nettobetragsDisplay = document.getElementById('nettobetrag-display');
 const umsatzsteuerDisplay = document.getElementById('umsatzsteuer-display');
 const ustSatzDisplay = document.getElementById('ust-satz-display');
 const bruttobetragsDisplay = document.getElementById('bruttobetrag-display');
+const nettoSourceHint = document.getElementById('netto-source-hint');
+
+// Flat rate fields
+const autoTotalCheckbox = document.getElementById('id_auto_total');
+const manualNetTotalField = document.getElementById('id_manual_net_total');
+const autoTotalSection = document.getElementById('auto-total-section');
+const manualTotalSection = document.getElementById('manual-total-section');
 
 // Get mietobjekt price data for auto-filling
 const mietobjektPreise = {
@@ -322,6 +381,27 @@ const mietobjektPreise = {
     {{ obj.pk }}: {{ obj.mietpreis }}{% if not forloop.last %},{% endif %}
     {% endfor %}
 };
+
+function toggleTotalMode() {
+    const isAutoTotal = autoTotalCheckbox.checked;
+    
+    if (isAutoTotal) {
+        // Show auto section, hide manual section
+        autoTotalSection.style.display = '';
+        manualTotalSection.style.display = 'none';
+        manualNetTotalField.removeAttribute('required');
+        
+        // Update calculations from line items
+        updateGesamtmiete();
+    } else {
+        // Show manual section, hide auto section
+        autoTotalSection.style.display = 'none';
+        manualTotalSection.style.display = '';
+        
+        // Update calculations from manual field
+        updateManualTotalCalculations();
+    }
+}
 
 function updateGesamtmiete() {
     let total = 0;
@@ -349,11 +429,18 @@ function updateGesamtmiete() {
         mieteField.value = total.toFixed(2);
     }
     
-    // Update VAT calculations
-    updateVATCalculations(total);
+    // Only update VAT if in auto mode
+    if (autoTotalCheckbox.checked) {
+        updateVATCalculations(total, 'Auto');
+    }
 }
 
-function updateVATCalculations(nettobetrag) {
+function updateManualTotalCalculations() {
+    const manualTotal = parseFloat(manualNetTotalField.value) || 0;
+    updateVATCalculations(manualTotal, 'Manuell');
+}
+
+function updateVATCalculations(nettobetrag, source) {
     // Get selected VAT rate
     const ustSatz = parseFloat(umsatzsteuerSatzSelect.value) || 0;
     
@@ -369,6 +456,11 @@ function updateVATCalculations(nettobetrag) {
     umsatzsteuerDisplay.textContent = umsatzsteuer.toFixed(2);
     ustSatzDisplay.textContent = ustSatz.toFixed(0);
     bruttobetragsDisplay.textContent = bruttobetrag.toFixed(2);
+    
+    // Update source hint badge
+    if (source) {
+        nettoSourceHint.textContent = source;
+    }
 }
 
 function setupRowEventListeners(row) {
@@ -459,15 +551,37 @@ if (addButton) {
     });
 }
 
+// Setup auto_total toggle event listener
+if (autoTotalCheckbox) {
+    autoTotalCheckbox.addEventListener('change', toggleTotalMode);
+    
+    // Initialize the correct mode on page load
+    toggleTotalMode();
+}
+
+// Setup manual net total input event listener
+if (manualNetTotalField) {
+    manualNetTotalField.addEventListener('input', function() {
+        if (!autoTotalCheckbox.checked) {
+            updateManualTotalCalculations();
+        }
+    });
+}
+
 // Calculate initial total
 updateGesamtmiete();
 
 // Update VAT calculations when VAT rate changes
 if (umsatzsteuerSatzSelect) {
     umsatzsteuerSatzSelect.addEventListener('change', function() {
-        // Recalculate with current net amount
-        const nettobetrag = parseFloat(mieteField.value) || 0;
-        updateVATCalculations(nettobetrag);
+        if (autoTotalCheckbox.checked) {
+            // Recalculate with current auto total
+            const nettobetrag = parseFloat(mieteField.value) || 0;
+            updateVATCalculations(nettobetrag, 'Auto');
+        } else {
+            // Recalculate with current manual total
+            updateManualTotalCalculations();
+        }
     });
 }
 </script>
