@@ -36,6 +36,7 @@ class MietObjektForm(forms.ModelForm):
             'verfuegbare_einheiten',
             'volumen',
             'verfuegbar',
+            'is_mietobjekt',
             'mandant',
             'parent'
         ]
@@ -54,6 +55,7 @@ class MietObjektForm(forms.ModelForm):
             'verfuegbare_einheiten': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
             'volumen': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.001'}),
             'verfuegbar': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_mietobjekt': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'mandant': forms.Select(attrs={'class': 'form-select'}),
             'parent': forms.Select(attrs={'class': 'form-select'}),
         }
@@ -72,6 +74,7 @@ class MietObjektForm(forms.ModelForm):
             'verfuegbare_einheiten': 'Verfügbare Einheiten',
             'volumen': 'Volumen (m³)',
             'verfuegbar': 'Verfügbar',
+            'is_mietobjekt': 'Mietobjekt',
             'mandant': 'Mandant',
             'parent': 'Übergeordnetes Mietobjekt',
         }
@@ -80,6 +83,7 @@ class MietObjektForm(forms.ModelForm):
             'verfuegbare_einheiten': 'Anzahl der verfügbaren Einheiten (Standard: 1)',
             'volumen': 'Optional: Volumen überschreiben (wird aus H×B×T berechnet)',
             'verfuegbar': 'Wird automatisch basierend auf aktiven Verträgen aktualisiert',
+            'is_mietobjekt': 'Kennzeichnet, ob es sich um ein Mietobjekt handelt',
             'mandant': 'Optional: Zugeordneter Mandant für dieses Mietobjekt',
             'parent': 'Optional: Übergeordnetes Mietobjekt (z.B. Gebäude für eine Wohnung)',
         }
