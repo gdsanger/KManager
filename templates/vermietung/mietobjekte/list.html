@@ -1,8 +1,8 @@
 {% extends "vermietung/layouts/list_layout.html" %}
 
-{% block title %}Mietobjekte - Domus{% endblock %}
+{% block title %}Objekte - Domus{% endblock %}
 
-{% block page_title %}Mietobjekte{% endblock %}
+{% block page_title %}Objekte{% endblock %}
 
 {% block page_actions %}
 <a href="{% url 'vermietung:mietobjekt_create' %}" class="btn btn-primary">
@@ -81,7 +81,7 @@
         </form>
     </div>
     <div class="col-12 text-end mt-2">
-        <span class="text-muted">{{ page_obj.paginator.count }} Mietobjekt{{ page_obj.paginator.count|pluralize:"e" }}</span>
+        <span class="text-muted">{{ page_obj.paginator.count }} Objekt{{ page_obj.paginator.count|pluralize:"e" }}</span>
     </div>
 </div>
 {% endblock %}
@@ -112,6 +112,7 @@
                         <a href="{% url 'vermietung:mietobjekt_detail' objekt.pk %}" class="text-decoration-none">
                             <strong>{{ objekt.name }}</strong>
                         </a>
+                        <span class="badge bg-secondary ms-2">Mietobjekt</span>
                         {% if objekt.beschreibung %}
                         <br><small class="text-muted">{{ objekt.beschreibung|truncatewords:10 }}</small>
                         {% endif %}
@@ -168,9 +169,9 @@
                     <td colspan="8" class="text-center text-muted">
                         <i class="bi bi-inbox"></i> 
                         {% if search_query or type_filter or verfuegbar_filter or standort_filter or mandant_filter %}
-                            Keine Mietobjekte gefunden mit den aktuellen Filtern
+                            Keine Objekte gefunden mit den aktuellen Filtern
                         {% else %}
-                            Keine Mietobjekte vorhanden
+                            Keine Objekte vorhanden
                         {% endif %}
                     </td>
                 </tr>

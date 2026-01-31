@@ -94,10 +94,10 @@
         </div>
         {% endif %}
 
-        <!-- Mietobjekte at this location -->
+        <!-- Objekte at this location -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-building"></i> Mietobjekte an diesem Standort</h5>
+                <h5 class="mb-0"><i class="bi bi-building"></i> Objekte an diesem Standort</h5>
                 <span class="badge bg-secondary">{{ mietobjekte_page_obj.paginator.count }}</span>
             </div>
             <div class="card-body">
@@ -139,7 +139,7 @@
                                 {% empty %}
                                 <tr>
                                     <td colspan="5" class="text-center text-muted">
-                                        <i class="bi bi-inbox"></i> Keine Mietobjekte an diesem Standort
+                                        <i class="bi bi-inbox"></i> Keine Objekte an diesem Standort
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -147,9 +147,9 @@
                         </table>
                     </div>
 
-                    <!-- Pagination for mietobjekte -->
+                    <!-- Pagination for objekte -->
                     {% if mietobjekte_page_obj.has_other_pages %}
-                    <nav aria-label="Mietobjekte pagination">
+                    <nav aria-label="Objekte pagination">
                         <ul class="pagination pagination-sm mb-0">
                             {% if mietobjekte_page_obj.has_previous %}
                             <li class="page-item">
@@ -178,7 +178,7 @@
                     </nav>
                     {% endif %}
                 {% else %}
-                    <p class="text-muted mb-0"><i class="bi bi-inbox"></i> Keine Mietobjekte an diesem Standort</p>
+                    <p class="text-muted mb-0"><i class="bi bi-inbox"></i> Keine Objekte an diesem Standort</p>
                 {% endif %}
             </div>
         </div>
@@ -208,7 +208,7 @@
             </div>
             <div class="card-body">
                 <div class="row mb-2">
-                    <div class="col-6 text-muted">Mietobjekte:</div>
+                    <div class="col-6 text-muted">Objekte:</div>
                     <div class="col-6 text-end"><strong>{{ mietobjekte_page_obj.paginator.count }}</strong></div>
                 </div>
             </div>
@@ -220,7 +220,7 @@
 {% block extra_js %}
 <script>
 function confirmDelete() {
-    if (confirm('Möchten Sie den Standort "{{ standort.name }}" wirklich löschen?\n\nHinweis: Der Standort kann nur gelöscht werden, wenn keine Mietobjekte mehr zugeordnet sind.')) {
+    if (confirm('Möchten Sie den Standort "{{ standort.name }}" wirklich löschen?\n\nHinweis: Der Standort kann nur gelöscht werden, wenn keine Objekte mehr zugeordnet sind.')) {
         // Create a form and submit it
         var form = document.createElement('form');
         form.method = 'POST';

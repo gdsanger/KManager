@@ -69,7 +69,7 @@
 
         <div class="card mb-3">
             <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-building"></i> Mietobjekte im Vertrag</h5>
+                <h5 class="mb-0"><i class="bi bi-building"></i> Objekte im Vertrag</h5>
             </div>
             <div class="card-body">
                 {% with vertragsobjekte=vertrag.vertragsobjekte.all %}
@@ -137,10 +137,10 @@
                     </div>
                     <small class="text-muted">
                         <i class="bi bi-info-circle"></i> 
-                        <strong>Hinweis:</strong> Die Felder "Zugang" und "Abgang" sind optional und dienen zur Dokumentation der tatsächlichen Übergabe- und Rückgabedaten der einzelnen Mietobjekte.
+                        <strong>Hinweis:</strong> Die Felder "Zugang" und "Abgang" sind optional und dienen zur Dokumentation der tatsächlichen Übergabe- und Rückgabedaten der einzelnen Objekte.
                     </small>
                 {% else %}
-                    <p class="text-muted mb-0">Keine Mietobjekte zugeordnet.</p>
+                    <p class="text-muted mb-0">Keine Objekte zugeordnet.</p>
                 {% endif %}
                 {% endwith %}
             </div>
