@@ -33,6 +33,17 @@
                     <h5 class="mb-3"><i class="bi bi-file-earmark-text"></i> Vertragsdaten</h5>
                     
                     <div class="mb-3">
+                        <label for="{{ form.vertragsnummer.id_for_label }}" class="form-label">{{ form.vertragsnummer.label }}</label>
+                        {{ form.vertragsnummer }}
+                        {% if form.vertragsnummer.errors %}
+                        <div class="text-danger small">{{ form.vertragsnummer.errors }}</div>
+                        {% endif %}
+                        {% if form.vertragsnummer.help_text %}
+                        <div class="form-text">{{ form.vertragsnummer.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
                         <label for="{{ form.mieter.id_for_label }}" class="form-label">{{ form.mieter.label }}</label>
                         {{ form.mieter }}
                         {% if form.mieter.errors %}
@@ -315,7 +326,7 @@
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-2">
-                    <strong>Vertragsnummer:</strong> Die Vertragsnummer wird automatisch beim Speichern generiert (Format: V-00000).
+                    <strong>Vertragsnummer:</strong> Kann manuell eingegeben werden, oder wird automatisch beim Speichern generiert (Format: V-00000), wenn das Feld leer bleibt.
                 </p>
                 <p class="text-muted small mb-2">
                     <strong>Mietobjekte:</strong> Fügen Sie die zu vermietenden Objekte in der Tabelle hinzu. Sie können für jedes Objekt Preis, Anzahl, Zugangs- und Abgangsdatum sowie den Status festlegen.
