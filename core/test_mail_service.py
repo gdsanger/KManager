@@ -235,3 +235,165 @@ class SmtpConfigurationTestCase(TestCase):
         # Allow some margin for test execution overhead
         self.assertLess(elapsed_time, 15, 
                        "SMTP connection should timeout within 15 seconds, not hang indefinitely")
+
+
+class SendMailCCTestCase(TestCase):
+    """Test CC functionality in send_mail"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create SMTP settings
+        SmtpSettings.objects.create(
+            host='localhost',
+            port=1025,
+            use_tls=False,
+            username='',
+            password=''
+        )
+        
+        # Create mail template without static CC
+        self.template = MailTemplate.objects.create(
+            key='test_cc',
+            subject='Test with CC',
+            message='<p>Test message</p>',
+            from_address='sender@example.com',
+            from_name='Test Sender'
+        )
+        
+        # Create mail template with static CC
+        self.template_with_cc = MailTemplate.objects.create(
+            key='test_static_cc',
+            subject='Test with static CC',
+            message='<p>Test message</p>',
+            from_address='sender@example.com',
+            from_name='Test Sender',
+            cc_address='static_cc@example.com'
+        )
+    
+    def test_send_mail_with_dynamic_cc(self):
+        """Test that dynamic CC is properly added to email"""
+        from unittest.mock import patch, MagicMock
+        
+        # Mock SMTP to verify CC is included
+        with patch('core.mailing.service.smtplib.SMTP') as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value = mock_server
+            
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['cc1@example.com', 'cc2@example.com']
+            )
+            
+            # Verify sendmail was called with all recipients (To + CC)
+            self.assertTrue(mock_server.sendmail.called)
+            args = mock_server.sendmail.call_args[0]
+            # args[1] is the recipient list (To + CC combined)
+            self.assertIn('recipient@example.com', args[1])
+            self.assertIn('cc1@example.com', args[1])
+            self.assertIn('cc2@example.com', args[1])
+    
+    def test_send_mail_with_empty_cc_list(self):
+        """Test that empty CC list is handled properly"""
+        from unittest.mock import patch, MagicMock
+        
+        with patch('core.mailing.service.smtplib.SMTP') as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value = mock_server
+            
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=[]
+            )
+            
+            # Should still send successfully with just To recipient
+            self.assertTrue(mock_server.sendmail.called)
+    
+    def test_send_mail_with_none_cc(self):
+        """Test that None CC is handled properly"""
+        from unittest.mock import patch, MagicMock
+        
+        with patch('core.mailing.service.smtplib.SMTP') as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value = mock_server
+            
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=None
+            )
+            
+            # Should still send successfully
+            self.assertTrue(mock_server.sendmail.called)
+    
+    def test_send_mail_removes_duplicate_cc(self):
+        """Test that CC recipients that are also in To are filtered out"""
+        from unittest.mock import patch, MagicMock
+        
+        with patch('core.mailing.service.smtplib.SMTP') as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value = mock_server
+            
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['recipient@example.com', 'other@example.com']  # First one should be filtered
+            )
+            
+            # Verify recipient@example.com appears only once in recipient list
+            args = mock_server.sendmail.call_args[0]
+            recipients = args[1]
+            recipient_count = recipients.count('recipient@example.com')
+            self.assertEqual(recipient_count, 1, "Duplicate recipient should be filtered out")
+            # other@example.com should still be in CC
+            self.assertIn('other@example.com', recipients)
+    
+    def test_send_mail_with_static_and_dynamic_cc(self):
+        """Test that both static (template) and dynamic CC work together"""
+        from unittest.mock import patch, MagicMock
+        
+        with patch('core.mailing.service.smtplib.SMTP') as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value = mock_server
+            
+            send_mail(
+                'test_static_cc',  # This template has cc_address='static_cc@example.com'
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['dynamic_cc@example.com']
+            )
+            
+            # Verify both static and dynamic CC are included
+            args = mock_server.sendmail.call_args[0]
+            recipients = args[1]
+            self.assertIn('static_cc@example.com', recipients)
+            self.assertIn('dynamic_cc@example.com', recipients)
+            self.assertIn('recipient@example.com', recipients)
+    
+    def test_send_mail_filters_empty_cc_addresses(self):
+        """Test that empty strings and None in CC list are filtered out"""
+        from unittest.mock import patch, MagicMock
+        
+        with patch('core.mailing.service.smtplib.SMTP') as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value = mock_server
+            
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['valid@example.com', '', None, 'another@example.com']
+            )
+            
+            # Verify only valid emails are in recipients
+            args = mock_server.sendmail.call_args[0]
+            recipients = args[1]
+            self.assertIn('valid@example.com', recipients)
+            self.assertIn('another@example.com', recipients)
+            # Verify empty string and None are not included (list should have 3 items total)
+            self.assertEqual(len(recipients), 3)  # recipient + valid + another

@@ -577,3 +577,261 @@ class ActivityAssignmentButtonTest(TransactionTestCase):
         messages = list(response.context['messages'])
         self.assertEqual(len(messages), 1)
         self.assertIn('wählen', str(messages[0]))
+
+
+class ActivityEmailCCTest(TestCase):
+    """Test CC functionality in activity email notifications."""
+    
+    def setUp(self):
+        """Set up test data."""
+        # Clear the test outbox
+        mail.outbox = []
+        
+        # Create users with different emails
+        self.creator = User.objects.create_user(
+            username='creator',
+            email='creator@example.com',
+            password='pass123',
+            first_name='Creator',
+            last_name='User'
+        )
+        
+        self.assignee = User.objects.create_user(
+            username='assignee',
+            email='assignee@example.com',
+            password='pass123',
+            first_name='Assignee',
+            last_name='User'
+        )
+        
+        self.same_user = User.objects.create_user(
+            username='sameuser',
+            email='same@example.com',
+            password='pass123',
+            first_name='Same',
+            last_name='User'
+        )
+        
+        # Create a standort
+        self.standort = Adresse.objects.create(
+            adressen_type='STANDORT',
+            name='Hauptstandort',
+            strasse='Hauptstrasse 1',
+            plz='12345',
+            ort='Stadt',
+            land='Deutschland'
+        )
+        
+        # Create a MietObjekt for context
+        self.mietobjekt = MietObjekt.objects.create(
+            name='Büro 1',
+            type='RAUM',
+            standort=self.standort,
+            mietpreis=Decimal('500.00'),
+            verfuegbar=True
+        )
+    
+    @patch('vermietung.signals.send_mail')
+    def test_assignment_email_includes_creator_in_cc(self, mock_send_mail):
+        """Test that assignment email includes creator in CC when creator != assignee."""
+        # Create activity with different creator and assignee
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Test Activity',
+            beschreibung='Test description',
+            status='OFFEN',
+            mietobjekt=self.mietobjekt,
+            ersteller=self.creator,
+            assigned_user=self.assignee
+        )
+        
+        # Check that send_mail was called with CC
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.assignee.email])
+        
+        # Verify CC includes creator
+        self.assertIn('cc', call_args[1])
+        self.assertIn(self.creator.email, call_args[1]['cc'])
+        
+        # Verify no duplicate (creator should not be in To)
+        self.assertNotIn(self.creator.email, call_args[1]['to'])
+    
+    @patch('vermietung.signals.send_mail')
+    def test_assignment_email_no_cc_when_creator_is_assignee(self, mock_send_mail):
+        """Test that assignment email has no CC when creator == assignee."""
+        # Create activity where creator is also the assignee
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Self-Assigned Activity',
+            status='OFFEN',
+            mietobjekt=self.mietobjekt,
+            ersteller=self.same_user,
+            assigned_user=self.same_user
+        )
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.same_user.email])
+        
+        # Verify CC is empty (no duplicate)
+        self.assertEqual(call_args[1]['cc'], [])
+    
+    @patch('vermietung.signals.send_mail')
+    def test_assignment_email_no_cc_when_creator_has_no_email(self, mock_send_mail):
+        """Test that assignment email has no CC when creator has no email."""
+        # Create user without email
+        creator_no_email = User.objects.create_user(
+            username='no_email_creator',
+            email='',  # No email
+            password='pass123'
+        )
+        
+        # Create activity
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Activity without creator email',
+            status='OFFEN',
+            mietobjekt=self.mietobjekt,
+            ersteller=creator_no_email,
+            assigned_user=self.assignee
+        )
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.assignee.email])
+        
+        # Verify CC is empty (creator has no email)
+        self.assertEqual(call_args[1]['cc'], [])
+    
+    @patch('vermietung.signals.send_mail')
+    def test_completed_email_includes_assignee_in_cc(self, mock_send_mail):
+        """Test that completed email includes assignee in CC when assignee != creator."""
+        # Create activity
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Activity to Complete',
+            status='OFFEN',
+            mietobjekt=self.mietobjekt,
+            ersteller=self.creator,
+            assigned_user=self.assignee
+        )
+        
+        # Clear mock
+        mock_send_mail.reset_mock()
+        
+        # Mark as completed
+        aktivitaet.status = 'ERLEDIGT'
+        aktivitaet.save()
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient (creator)
+        self.assertEqual(call_args[1]['to'], [self.creator.email])
+        
+        # Verify CC includes assignee
+        self.assertIn('cc', call_args[1])
+        self.assertIn(self.assignee.email, call_args[1]['cc'])
+        
+        # Verify no duplicate
+        self.assertNotIn(self.assignee.email, call_args[1]['to'])
+    
+    @patch('vermietung.signals.send_mail')
+    def test_completed_email_no_cc_when_assignee_is_creator(self, mock_send_mail):
+        """Test that completed email has no CC when assignee == creator."""
+        # Create activity where creator is also the assignee
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Self-Completed Activity',
+            status='OFFEN',
+            mietobjekt=self.mietobjekt,
+            ersteller=self.same_user,
+            assigned_user=self.same_user
+        )
+        
+        # Clear mock
+        mock_send_mail.reset_mock()
+        
+        # Mark as completed
+        aktivitaet.status = 'ERLEDIGT'
+        aktivitaet.save()
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.same_user.email])
+        
+        # Verify CC is empty (no duplicate)
+        self.assertEqual(call_args[1]['cc'], [])
+    
+    @patch('vermietung.signals.send_mail')
+    def test_completed_email_no_cc_when_no_assignee(self, mock_send_mail):
+        """Test that completed email has no CC when there's no assignee."""
+        # Create activity without assignee
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Activity without assignee',
+            status='OFFEN',
+            mietobjekt=self.mietobjekt,
+            ersteller=self.creator,
+            assigned_user=None
+        )
+        
+        # Clear mock
+        mock_send_mail.reset_mock()
+        
+        # Mark as completed
+        aktivitaet.status = 'ERLEDIGT'
+        aktivitaet.save()
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.creator.email])
+        
+        # Verify CC is empty (no assignee)
+        self.assertEqual(call_args[1]['cc'], [])
+    
+    @patch('vermietung.signals.send_mail')
+    def test_completed_email_no_cc_when_assignee_has_no_email(self, mock_send_mail):
+        """Test that completed email has no CC when assignee has no email."""
+        # Create user without email
+        assignee_no_email = User.objects.create_user(
+            username='no_email_assignee',
+            email='',  # No email
+            password='pass123'
+        )
+        
+        # Create activity
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Activity with assignee without email',
+            status='OFFEN',
+            mietobjekt=self.mietobjekt,
+            ersteller=self.creator,
+            assigned_user=assignee_no_email
+        )
+        
+        # Clear mock
+        mock_send_mail.reset_mock()
+        
+        # Mark as completed
+        aktivitaet.status = 'ERLEDIGT'
+        aktivitaet.save()
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.creator.email])
+        
+        # Verify CC is empty (assignee has no email)
+        self.assertEqual(call_args[1]['cc'], [])

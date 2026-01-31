@@ -432,3 +432,161 @@ class ActivityReminderCommandTest(TestCase):
         # Output should show error
         output = out.getvalue()
         self.assertIn('Error', output)
+
+
+class ActivityReminderEmailCCTest(TestCase):
+    """Test CC functionality in activity reminder emails."""
+    
+    def setUp(self):
+        """Set up test data."""
+        # Create users with different emails
+        self.creator = User.objects.create_user(
+            username='creator',
+            email='creator@example.com',
+            first_name='Creator',
+            last_name='User'
+        )
+        
+        self.assignee = User.objects.create_user(
+            username='assignee',
+            email='assignee@example.com',
+            first_name='Assignee',
+            last_name='User'
+        )
+        
+        self.same_user = User.objects.create_user(
+            username='sameuser',
+            email='same@example.com',
+            first_name='Same',
+            last_name='User'
+        )
+        
+        # Create test address
+        self.kunde = Adresse.objects.create(
+            adressen_type='KUNDE',
+            name='Test Kunde',
+            strasse='Teststr. 1',
+            plz='12345',
+            ort='Berlin',
+            land='Deutschland'
+        )
+        
+        # Calculate dates
+        self.today = date.today()
+        self.in_2_days = self.today + timedelta(days=2)
+    
+    @patch('vermietung.management.commands.send_activity_reminders.send_mail')
+    def test_reminder_email_includes_creator_in_cc(self, mock_send_mail):
+        """Test that reminder email includes creator in CC when creator != assignee."""
+        activity = Aktivitaet.objects.create(
+            titel='Test Activity',
+            status='OFFEN',
+            faellig_am=self.in_2_days,
+            assigned_user=self.assignee,
+            ersteller=self.creator,
+            kunde=self.kunde
+        )
+        
+        out = StringIO()
+        call_command('send_activity_reminders', stdout=out)
+        
+        # Check that send_mail was called with CC
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.assignee.email])
+        
+        # Verify CC includes creator
+        self.assertIn('cc', call_args[1])
+        self.assertIn(self.creator.email, call_args[1]['cc'])
+        
+        # Verify no duplicate (creator should not be in To)
+        self.assertNotIn(self.creator.email, call_args[1]['to'])
+    
+    @patch('vermietung.management.commands.send_activity_reminders.send_mail')
+    def test_reminder_email_no_cc_when_creator_is_assignee(self, mock_send_mail):
+        """Test that reminder email has no CC when creator == assignee."""
+        activity = Aktivitaet.objects.create(
+            titel='Self-Assigned Activity',
+            status='OFFEN',
+            faellig_am=self.in_2_days,
+            assigned_user=self.same_user,
+            ersteller=self.same_user,
+            kunde=self.kunde
+        )
+        
+        out = StringIO()
+        call_command('send_activity_reminders', stdout=out)
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.same_user.email])
+        
+        # Verify CC is empty (no duplicate)
+        self.assertEqual(call_args[1]['cc'], [])
+    
+    @patch('vermietung.management.commands.send_activity_reminders.send_mail')
+    def test_reminder_email_no_cc_when_creator_has_no_email(self, mock_send_mail):
+        """Test that reminder email has no CC when creator has no email."""
+        creator_no_email = User.objects.create_user(
+            username='no_email_creator',
+            email='',  # No email
+        )
+        
+        activity = Aktivitaet.objects.create(
+            titel='Activity without creator email',
+            status='OFFEN',
+            faellig_am=self.in_2_days,
+            assigned_user=self.assignee,
+            ersteller=creator_no_email,
+            kunde=self.kunde
+        )
+        
+        out = StringIO()
+        call_command('send_activity_reminders', stdout=out)
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.assignee.email])
+        
+        # Verify CC is empty (creator has no email)
+        self.assertEqual(call_args[1]['cc'], [])
+    
+    @patch('vermietung.management.commands.send_activity_reminders.send_mail')
+    def test_reminder_email_no_cc_when_no_creator(self, mock_send_mail):
+        """Test that reminder email works when there's no creator (edge case)."""
+        # Note: In practice, ersteller should always exist based on model constraints,
+        # but this test verifies the code handles None gracefully if it occurs
+        # We'll use update() to bypass model validation for this edge case test
+        activity = Aktivitaet.objects.create(
+            titel='Activity with creator',
+            status='OFFEN',
+            faellig_am=self.in_2_days,
+            assigned_user=self.assignee,
+            ersteller=self.creator,  # Start with creator
+            kunde=self.kunde
+        )
+        
+        # Use update to set ersteller to None, bypassing validation
+        Aktivitaet.objects.filter(pk=activity.pk).update(ersteller=None)
+        activity.refresh_from_db()
+        
+        out = StringIO()
+        call_command('send_activity_reminders', stdout=out)
+        
+        # Check that send_mail was called
+        self.assertTrue(mock_send_mail.called)
+        call_args = mock_send_mail.call_args
+        
+        # Verify To recipient
+        self.assertEqual(call_args[1]['to'], [self.assignee.email])
+        
+        # Verify CC is empty (no creator)
+        self.assertEqual(call_args[1]['cc'], [])
