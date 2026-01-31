@@ -96,6 +96,11 @@ class Command(BaseCommand):
                     email_context['creator_name'] = activity.ersteller.get_full_name() or activity.ersteller.username
                     email_context['creator_email'] = activity.ersteller.email or ''
                 
+                # Prepare CC list (creator, if different from assignee)
+                cc_list = []
+                if activity.ersteller and activity.ersteller.email and activity.ersteller != activity.assigned_user:
+                    cc_list.append(activity.ersteller.email)
+                
                 if dry_run:
                     self.stdout.write(
                         f"[DRY RUN] Would send reminder to {activity.assigned_user.email} "
@@ -107,7 +112,8 @@ class Command(BaseCommand):
                     send_mail(
                         template_key='activity-reminder',
                         to=[activity.assigned_user.email],
-                        context=email_context
+                        context=email_context,
+                        cc=cc_list
                     )
                     
                     # Mark reminder as sent

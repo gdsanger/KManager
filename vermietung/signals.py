@@ -87,11 +87,17 @@ def send_activity_notifications(sender, instance, created, **kwargs):
                         email_context['creator_name'] = instance.ersteller.get_full_name() or instance.ersteller.username
                         email_context['creator_email'] = instance.ersteller.email or ''
                     
+                    # Prepare CC list (creator, if different from assignee)
+                    cc_list = []
+                    if instance.ersteller and instance.ersteller.email and instance.ersteller != instance.assigned_user:
+                        cc_list.append(instance.ersteller.email)
+                    
                     # Send email
                     send_mail(
                         template_key='activity-assigned',
                         to=[instance.assigned_user.email],
-                        context=email_context
+                        context=email_context,
+                        cc=cc_list
                     )
                     
                     logger.info(f"Sent activity assigned notification to {instance.assigned_user.email} for activity #{instance.pk}")
@@ -136,11 +142,17 @@ def send_activity_notifications(sender, instance, created, **kwargs):
                     'completed_at': instance.updated_at.strftime('%d.%m.%Y %H:%M') if instance.updated_at else '',
                 }
                 
+                # Prepare CC list (assigned user, if different from creator)
+                cc_list = []
+                if instance.assigned_user and instance.assigned_user.email and instance.assigned_user != instance.ersteller:
+                    cc_list.append(instance.assigned_user.email)
+                
                 # Send email
                 send_mail(
                     template_key='activity-completed',
                     to=[instance.ersteller.email],
-                    context=email_context
+                    context=email_context,
+                    cc=cc_list
                 )
                 
                 logger.info(f"Sent activity completed notification to {instance.ersteller.email} for activity #{instance.pk}")

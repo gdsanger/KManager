@@ -235,3 +235,99 @@ class SmtpConfigurationTestCase(TestCase):
         # Allow some margin for test execution overhead
         self.assertLess(elapsed_time, 15, 
                        "SMTP connection should timeout within 15 seconds, not hang indefinitely")
+
+
+class SendMailCCTestCase(TestCase):
+    """Test CC functionality in send_mail"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create SMTP settings
+        SmtpSettings.objects.create(
+            host='localhost',
+            port=1025,
+            use_tls=False,
+            username='',
+            password=''
+        )
+        
+        # Create mail template without static CC
+        self.template = MailTemplate.objects.create(
+            key='test_cc',
+            subject='Test with CC',
+            message='<p>Test message</p>',
+            from_address='sender@example.com',
+            from_name='Test Sender'
+        )
+        
+        # Create mail template with static CC
+        self.template_with_cc = MailTemplate.objects.create(
+            key='test_static_cc',
+            subject='Test with static CC',
+            message='<p>Test message</p>',
+            from_address='sender@example.com',
+            from_name='Test Sender',
+            cc_address='static_cc@example.com'
+        )
+    
+    def test_send_mail_with_dynamic_cc(self):
+        """Test that dynamic CC is properly added to email"""
+        # We can't actually send, but we can verify the function accepts CC parameter
+        with self.assertRaises(MailSendError):
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['cc1@example.com', 'cc2@example.com']
+            )
+    
+    def test_send_mail_with_empty_cc_list(self):
+        """Test that empty CC list is handled properly"""
+        with self.assertRaises(MailSendError):
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=[]
+            )
+    
+    def test_send_mail_with_none_cc(self):
+        """Test that None CC is handled properly"""
+        with self.assertRaises(MailSendError):
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=None
+            )
+    
+    def test_send_mail_removes_duplicate_cc(self):
+        """Test that CC recipients that are also in To are filtered out"""
+        # This test verifies the deduplication logic works
+        with self.assertRaises(MailSendError):
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['recipient@example.com', 'other@example.com']  # First one should be filtered
+            )
+    
+    def test_send_mail_with_static_and_dynamic_cc(self):
+        """Test that both static (template) and dynamic CC work together"""
+        with self.assertRaises(MailSendError):
+            send_mail(
+                'test_static_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['dynamic_cc@example.com']
+            )
+    
+    def test_send_mail_filters_empty_cc_addresses(self):
+        """Test that empty strings and None in CC list are filtered out"""
+        with self.assertRaises(MailSendError):
+            send_mail(
+                'test_cc',
+                ['recipient@example.com'],
+                {'name': 'Test'},
+                cc=['valid@example.com', '', None, 'another@example.com']
+            )

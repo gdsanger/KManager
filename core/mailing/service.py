@@ -54,7 +54,7 @@ def render_template(mail_template, context):
         raise TemplateRenderError(f"Fehler beim Rendern des Templates: {str(e)}")
 
 
-def send_mail(template_key, to, context):
+def send_mail(template_key, to, context, cc=None):
     """
     Send an email using a template.
     
@@ -62,6 +62,7 @@ def send_mail(template_key, to, context):
         template_key: str, the unique key of the MailTemplate
         to: list of recipient email addresses
         context: dict with template variables
+        cc: optional list of CC recipient email addresses
         
     Raises:
         MailServiceError: If template not found or inactive
@@ -95,11 +96,34 @@ def send_mail(template_key, to, context):
     msg['From'] = f'"{from_name}" <{from_address}>'
     msg['To'] = ', '.join(to)
     
-    # Add CC if configured
+    # Collect all recipients (To + CC)
+    all_recipients = list(to)
+    
+    # Add CC if configured in template
     if mail_template.cc_address:
         msg['Cc'] = mail_template.cc_address
-        # Add CC to recipients list
-        to = list(to) + [mail_template.cc_address]
+        all_recipients.append(mail_template.cc_address)
+    
+    # Add dynamic CC if provided
+    if cc:
+        # Filter out empty strings and None values
+        cc_list = [addr for addr in cc if addr]
+        
+        # Remove duplicates with To recipients
+        cc_list = [addr for addr in cc_list if addr not in to]
+        
+        if cc_list:
+            # Add to CC header (append to existing if template CC exists)
+            existing_cc = msg.get('Cc', '')
+            if existing_cc:
+                msg['Cc'] = existing_cc + ', ' + ', '.join(cc_list)
+            else:
+                msg['Cc'] = ', '.join(cc_list)
+            
+            # Add to recipients list (avoid duplicates)
+            for addr in cc_list:
+                if addr not in all_recipients:
+                    all_recipients.append(addr)
     
     # Attach HTML body
     html_part = MIMEText(html_body, 'html', 'utf-8')
@@ -120,7 +144,7 @@ def send_mail(template_key, to, context):
             server.login(smtp_settings.username, smtp_settings.password)
         
         # Send message
-        server.sendmail(from_address, to, msg.as_string())
+        server.sendmail(from_address, all_recipients, msg.as_string())
         server.quit()
         
     except smtplib.SMTPException as e:
