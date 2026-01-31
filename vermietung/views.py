@@ -2408,7 +2408,7 @@ def eingangsrechnung_create_from_pdf(request):
             
             # Create invoice with extracted data (or empty if extraction failed)
             # Use defaults for required fields that weren't extracted
-            from datetime import date
+            from datetime import date, datetime
             
             rechnung_data = {
                 'mietobjekt': mietobjekt,
@@ -2423,11 +2423,9 @@ def eingangsrechnung_create_from_pdf(request):
                 validated_data = invoice_data.validate()
                 
                 if 'belegdatum' in validated_data:
-                    from datetime import datetime
                     rechnung_data['belegdatum'] = datetime.strptime(validated_data['belegdatum'], '%Y-%m-%d').date()
                 
                 if 'faelligkeit' in validated_data:
-                    from datetime import datetime
                     rechnung_data['faelligkeit'] = datetime.strptime(validated_data['faelligkeit'], '%Y-%m-%d').date()
                 
                 if 'belegnummer' in validated_data:
@@ -2440,13 +2438,11 @@ def eingangsrechnung_create_from_pdf(request):
                     rechnung_data['referenznummer'] = validated_data['referenznummer']
                 
                 if 'leistungszeitraum_von' in validated_data:
-                    from datetime import datetime
                     rechnung_data['leistungszeitraum_von'] = datetime.strptime(
                         validated_data['leistungszeitraum_von'], '%Y-%m-%d'
                     ).date()
                 
                 if 'leistungszeitraum_bis' in validated_data:
-                    from datetime import datetime
                     rechnung_data['leistungszeitraum_bis'] = datetime.strptime(
                         validated_data['leistungszeitraum_bis'], '%Y-%m-%d'
                     ).date()
@@ -2460,7 +2456,8 @@ def eingangsrechnung_create_from_pdf(request):
             else:
                 # Use first available supplier as fallback (to satisfy NOT NULL constraint)
                 # User will need to correct this manually
-                fallback_lieferant = Adresse.objects.filter(adressen_type='LIEFERANT').first()
+                # Order by ID for deterministic behavior
+                fallback_lieferant = Adresse.objects.filter(adressen_type='LIEFERANT').order_by('id').first()
                 if fallback_lieferant:
                     rechnung_data['lieferant'] = fallback_lieferant
                     messages.warning(
