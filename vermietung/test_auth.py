@@ -202,9 +202,9 @@ class NavigationTests(TestCase):
         self.assertContains(response, 'staff_user')
         self.assertNotContains(response, 'Anmelden')
     
-    def test_authenticated_user_sees_vermietung_link(self):
-        """Test that authenticated users see Vermietung link in navbar."""
+    def test_authenticated_user_sees_gebaeude_link(self):
+        """Test that authenticated users see Gebäude link in navbar."""
         self.client.login(username='staff_user', password='testpass123')
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'Vermietung')
+        self.assertContains(response, 'Gebäude')
         self.assertContains(response, reverse('vermietung:home'))

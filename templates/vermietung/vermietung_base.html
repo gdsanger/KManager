@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Vermietung - Domus{% endblock %}</title>
+    <title>{% block title %}Gebäude - Domus{% endblock %}</title>
     
     <!-- Favicon -->
     <link rel="icon" type="image/webp" href="{% static 'images/logo.webp' %}">
@@ -42,7 +42,7 @@
                     {% if user.is_authenticated %}
                         <li class="nav-item">
                             <a class="nav-link active" href="{% url 'vermietung:home' %}">
-                                <i class="bi bi-building"></i> Vermietung
+                                <i class="bi bi-building"></i> Gebäude
                             </a>
                         </li>
                     {% endif %}
@@ -77,7 +77,7 @@
                     <!-- Hamburger Toggle Button -->
                     <div class="d-flex justify-content-between align-items-center px-3 mb-3">
                         <h6 class="sidebar-heading text-muted mb-0 sidebar-text">
-                            <span>VERMIETUNG MENÜ</span>
+                            <span>GEBÄUDE MENÜ</span>
                         </h6>
                         <button class="btn btn-link text-light p-0" id="sidebarToggle" type="button" aria-label="Seitenleiste umschalten">
                             <i class="bi bi-list" style="font-size: 1.5rem;"></i>
@@ -147,10 +147,10 @@
                             </ul>
                         </li>
 
-                        <!-- Vermietung Section (activities removed) -->
+                        <!-- Gebäude Section (activities removed) -->
                         <li class="nav-item nav-section">
                             <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}true{% else %}false{% endif %}">
-                                <i class="bi bi-building"></i> <span class="sidebar-text">Vermietung</span>
+                                <i class="bi bi-building"></i> <span class="sidebar-text">Gebäude</span>
                                 <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
                             </a>
                             <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}show{% endif %}" id="vermietungMenu">
@@ -161,7 +161,7 @@
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
-                                        <i class="bi bi-house-door"></i> <span class="sidebar-text">Mietobjekte</span>
+                                        <i class="bi bi-house-door"></i> <span class="sidebar-text">Objekte</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
@@ -236,7 +236,7 @@
                 <!-- Page Header -->
                 {% block page_header %}
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">{% block page_title %}Vermietung{% endblock %}</h1>
+                    <h1 class="h2">{% block page_title %}Gebäude{% endblock %}</h1>
                     <div class="btn-toolbar mb-2 mb-md-0">
                         {% block page_actions %}{% endblock %}
                     </div>

@@ -33,7 +33,7 @@
                 </div>
                 <div class="col-md-3">
                     <select class="form-select" name="mietobjekt">
-                        <option value="">Alle Mietobjekte</option>
+                        <option value="">Alle Objekte</option>
                         {% for obj in mietobjekte %}
                         <option value="{{ obj.pk }}" {% if mietobjekt_filter == obj.pk|stringformat:"s" %}selected{% endif %}>{{ obj.name }}</option>
                         {% endfor %}

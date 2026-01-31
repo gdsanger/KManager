@@ -154,6 +154,7 @@ class MietObjektCRUDTestCase(TestCase):
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get(reverse('vermietung:mietobjekt_create'))
         self.assertEqual(response.status_code, 200)
+        # Note: "Neues Mietobjekt" button text kept as singular (used for badge)
         self.assertContains(response, 'Neues Mietobjekt')
         self.assertIsInstance(response.context['form'], MietObjektForm)
     

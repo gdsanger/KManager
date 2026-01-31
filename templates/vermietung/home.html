@@ -1,9 +1,9 @@
 {% extends "vermietung/vermietung_base.html" %}
 
-{% block title %}Dashboard - Vermietung - Domus{% endblock %}
+{% block title %}Dashboard - Gebäude - Domus{% endblock %}
 
 {% block page_title %}
-<i class="bi bi-speedometer2"></i> Vermietung Dashboard
+<i class="bi bi-speedometer2"></i> Gebäude Dashboard
 {% endblock %}
 
 {% block content %}
@@ -16,7 +16,7 @@
             {% if request.user.is_staff %}
                 (Administrator)
             {% else %}
-                (Vermietung)
+                (Gebäude)
             {% endif %}
         </div>
     </div>
@@ -134,7 +134,7 @@
                 <div class="display-4 text-primary mb-3">
                     <i class="bi bi-house-door"></i>
                 </div>
-                <h5 class="card-title">Mietobjekte</h5>
+                <h5 class="card-title">Objekte</h5>
                 <p class="card-text text-muted">Verwalten Sie Ihre Immobilien</p>
                 <a href="{% url 'vermietung:mietobjekt_list' %}" class="btn btn-primary">
                     <i class="bi bi-arrow-right-circle"></i> Anzeigen
@@ -195,7 +195,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="bi bi-key"></i> Verfügbare Mietobjekte
+                    <i class="bi bi-key"></i> Verfügbare Objekte
                 </h5>
             </div>
             <div class="card-body">
@@ -204,7 +204,7 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Mietobjekt</th>
+                                    <th>Objekt</th>
                                     <th>Typ</th>
                                     <th>Standort</th>
                                     <th class="text-center">Gesamt Einheiten</th>
@@ -249,12 +249,12 @@
                         </table>
                     </div>
                 {% else %}
-                    <p class="text-muted mb-0">Keine Mietobjekte vorhanden.</p>
+                    <p class="text-muted mb-0">Keine Objekte vorhanden.</p>
                 {% endif %}
             </div>
             <div class="card-footer">
                 <a href="{% url 'vermietung:mietobjekt_list' %}" class="text-decoration-none">
-                    Alle Mietobjekte anzeigen <i class="bi bi-arrow-right"></i>
+                    Alle Objekte anzeigen <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
         </div>

@@ -1,8 +1,11 @@
 {% extends "vermietung/vermietung_base.html" %}
 
-{% block title %}Mietobjekt: {{ mietobjekt.name }} - Domus{% endblock %}
+{% block title %}Objekt: {{ mietobjekt.name }} - Domus{% endblock %}
 
-{% block page_title %}Mietobjekt: {{ mietobjekt.name }}{% endblock %}
+{% block page_title %}
+    Objekt: {{ mietobjekt.name }}
+    <span class="badge bg-secondary ms-2">Mietobjekt</span>
+{% endblock %}
 
 {% block page_actions %}
 <a href="{% url 'vermietung:mietobjekt_edit' mietobjekt.pk %}" class="btn btn-warning">
