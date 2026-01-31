@@ -25,6 +25,9 @@ class SupplierMatchingService:
     # Minimum similarity score for fuzzy matching (0.0 - 1.0)
     SIMILARITY_THRESHOLD = 0.85
     
+    # Maximum number of suppliers to send to AI for matching (to avoid token overflow)
+    MAX_AI_MATCHING_SUPPLIERS = 20
+    
     # AI matching prompt
     AI_MATCHING_PROMPT = """You are an AI assistant that helps match company names and addresses.
 Given a target supplier and a list of existing suppliers, determine if any of them match.
@@ -282,8 +285,8 @@ Rules:
         logger.info("Attempting AI-based supplier matching fallback")
         
         try:
-            # Get all suppliers for AI comparison
-            suppliers = Adresse.objects.filter(adressen_type='LIEFERANT')[:20]  # Limit to avoid token overflow
+            # Get suppliers for AI comparison (limit to avoid token overflow)
+            suppliers = Adresse.objects.filter(adressen_type='LIEFERANT')[:self.MAX_AI_MATCHING_SUPPLIERS]
             
             if not suppliers:
                 logger.info("No suppliers in database for AI matching")

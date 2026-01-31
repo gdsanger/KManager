@@ -2315,6 +2315,11 @@ def eingangsrechnung_create_from_pdf(request):
     
     If AI extraction fails, the invoice is still created with empty fields.
     """
+    # Helper function for parsing ISO date strings
+    def parse_iso_date(date_str):
+        """Parse ISO date string (YYYY-MM-DD) to date object."""
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+    
     if request.method == 'POST':
         # Handle PDF file upload
         if 'pdf_file' not in request.FILES:
@@ -2420,10 +2425,10 @@ def eingangsrechnung_create_from_pdf(request):
                 validated_data = invoice_data.validate()
                 
                 if 'belegdatum' in validated_data:
-                    rechnung_data['belegdatum'] = datetime.strptime(validated_data['belegdatum'], '%Y-%m-%d').date()
+                    rechnung_data['belegdatum'] = parse_iso_date(validated_data['belegdatum'])
                 
                 if 'faelligkeit' in validated_data:
-                    rechnung_data['faelligkeit'] = datetime.strptime(validated_data['faelligkeit'], '%Y-%m-%d').date()
+                    rechnung_data['faelligkeit'] = parse_iso_date(validated_data['faelligkeit'])
                 
                 if 'belegnummer' in validated_data:
                     rechnung_data['belegnummer'] = validated_data['belegnummer']
@@ -2435,14 +2440,14 @@ def eingangsrechnung_create_from_pdf(request):
                     rechnung_data['referenznummer'] = validated_data['referenznummer']
                 
                 if 'leistungszeitraum_von' in validated_data:
-                    rechnung_data['leistungszeitraum_von'] = datetime.strptime(
-                        validated_data['leistungszeitraum_von'], '%Y-%m-%d'
-                    ).date()
+                    rechnung_data['leistungszeitraum_von'] = parse_iso_date(
+                        validated_data['leistungszeitraum_von']
+                    )
                 
                 if 'leistungszeitraum_bis' in validated_data:
-                    rechnung_data['leistungszeitraum_bis'] = datetime.strptime(
-                        validated_data['leistungszeitraum_bis'], '%Y-%m-%d'
-                    ).date()
+                    rechnung_data['leistungszeitraum_bis'] = parse_iso_date(
+                        validated_data['leistungszeitraum_bis']
+                    )
                 
                 if 'notizen' in validated_data:
                     rechnung_data['notizen'] = validated_data['notizen']
