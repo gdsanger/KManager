@@ -135,7 +135,7 @@ class DashboardTestCase(TestCase):
         response = self.client.get(reverse('vermietung:home'))
         
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Vermietung Dashboard')
+        self.assertContains(response, 'Gebäude Dashboard')
         
         # Check KPIs
         self.assertEqual(response.context['total_mietobjekte'], 3)

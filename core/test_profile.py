@@ -181,12 +181,12 @@ class HomePageTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get(reverse('home'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Vermietung')
+        self.assertContains(response, 'Gebäude')
         self.assertContains(response, 'Finanzen')
         self.assertNotContains(response, 'Bitte melden Sie sich an')
     
-    def test_home_vermietung_tile_has_link(self):
-        """Test that Vermietung tile has proper link."""
+    def test_home_gebaeude_tile_has_link(self):
+        """Test that Gebäude tile has proper link."""
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get(reverse('home'))
         self.assertContains(response, reverse('vermietung:home'))
