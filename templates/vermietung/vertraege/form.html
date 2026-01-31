@@ -1,4 +1,5 @@
 {% extends "vermietung/layouts/form_layout.html" %}
+{% load l10n %}
 
 {% block title %}{% if is_create %}Neuer Vertrag{% else %}Vertrag bearbeiten{% endif %} - Domus{% endblock %}
 
@@ -378,7 +379,7 @@ const manualTotalSection = document.getElementById('manual-total-section');
 // Get mietobjekt price data for auto-filling
 const mietobjektPreise = {
     {% for obj in formset.form.base_fields.mietobjekt.queryset %}
-    {{ obj.pk }}: {{ obj.mietpreis }}{% if not forloop.last %},{% endif %}
+    {{ obj.pk }}: {{ obj.mietpreis|unlocalize }}{% if not forloop.last %},{% endif %}
     {% endfor %}
 };
 
