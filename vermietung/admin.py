@@ -89,7 +89,6 @@ class VertragAdmin(admin.ModelAdmin):
     list_display = ('vertragsnummer', 'mietobjekt', 'mieter', 'start', 'ende', 'status', 'miete', 'kaution', 'mandant')
     search_fields = ('vertragsnummer', 'mietobjekt__name', 'mieter__name', 'mieter__firma')
     list_filter = ('status', 'start', 'ende', 'mietobjekt', 'mandant')
-    readonly_fields = ('vertragsnummer',)
     
     fieldsets = (
         ('Vertragsdetails', {
