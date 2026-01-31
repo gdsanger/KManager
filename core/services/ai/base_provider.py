@@ -44,7 +44,7 @@ class BaseProvider(ABC):
         Args:
             messages: List of message dicts with 'role' and 'content'
             model_id: Provider-specific model identifier
-            temperature: Sampling temperature (0-1)
+            temperature: Sampling temperature (typically 0-2, provider-dependent)
             max_tokens: Maximum tokens to generate
             **kwargs: Additional provider-specific parameters
             
