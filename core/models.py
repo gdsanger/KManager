@@ -353,3 +353,80 @@ class AIJobsHistory(models.Model):
     
     def __str__(self):
         return f"{self.timestamp} - {self.agent} - {self.status}"
+
+
+class ReportDocument(models.Model):
+    """
+    Stores generated PDF reports with context snapshot for audit trail.
+    
+    This model provides generic infrastructure for report generation and versioning.
+    It stores:
+    - The generated PDF file
+    - A JSON snapshot of the context used to generate the report
+    - Metadata about the report type and related object
+    """
+    report_key = models.CharField(
+        max_length=100,
+        verbose_name="Report Key",
+        help_text="Report type identifier (e.g., 'change.v1', 'invoice.v1')"
+    )
+    object_type = models.CharField(
+        max_length=100,
+        verbose_name="Object Type",
+        help_text="Type of the related object (e.g., 'change', 'invoice')"
+    )
+    object_id = models.CharField(
+        max_length=100,
+        verbose_name="Object ID",
+        help_text="ID of the related object"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Created At"
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_reports',
+        verbose_name="Created By"
+    )
+    context_json = models.JSONField(
+        verbose_name="Context Snapshot",
+        help_text="JSON snapshot of the data used to generate the report"
+    )
+    pdf_file = models.FileField(
+        upload_to='reports/%Y/%m/%d/',
+        verbose_name="PDF File"
+    )
+    template_version = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="Template Version",
+        help_text="Version or hash of the template used"
+    )
+    sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        verbose_name="SHA256 Hash",
+        help_text="SHA256 hash of the PDF for integrity verification"
+    )
+    metadata = models.JSONField(
+        blank=True,
+        null=True,
+        verbose_name="Additional Metadata",
+        help_text="Optional additional metadata"
+    )
+    
+    class Meta:
+        verbose_name = "Report Document"
+        verbose_name_plural = "Report Documents"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['report_key', '-created_at']),
+            models.Index(fields=['object_type', 'object_id', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.report_key} - {self.object_type}:{self.object_id} ({self.created_at})"
