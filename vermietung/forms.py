@@ -653,7 +653,7 @@ class DokumentUploadForm(forms.ModelForm):
     """
     Form for uploading documents.
     Allows uploading a file and optional description.
-    The entity (Vertrag, MietObjekt, Adresse, Uebergabeprotokoll) is set programmatically.
+    The entity (Vertrag, MietObjekt, Adresse, Uebergabeprotokoll, Eingangsrechnung) is set programmatically.
     """
     
     # Mapping of entity types to foreign key field names
@@ -663,6 +663,7 @@ class DokumentUploadForm(forms.ModelForm):
         'mietobjekt': 'mietobjekt_id',
         'adresse': 'adresse_id',
         'uebergabeprotokoll': 'uebergabeprotokoll_id',
+        'eingangsrechnung': 'eingangsrechnung_id',
     }
     
     file = forms.FileField(
@@ -693,7 +694,7 @@ class DokumentUploadForm(forms.ModelForm):
         Initialize form with entity type and ID.
         
         Args:
-            entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll)
+            entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll, eingangsrechnung)
             entity_id: ID of the entity
             user: User who is uploading the file
         """
@@ -756,7 +757,8 @@ class DokumentUploadForm(forms.ModelForm):
         # Foreign key is already set in _post_clean() which runs during is_valid()
         # Safety check: Ensure foreign key is set (fallback if is_valid() wasn't called)
         if not any([instance.vertrag_id, instance.mietobjekt_id, 
-                    instance.adresse_id, instance.uebergabeprotokoll_id]):
+                    instance.adresse_id, instance.uebergabeprotokoll_id,
+                    instance.eingangsrechnung_id]):
             # Fallback mechanism: set FK here if _post_clean() wasn't called
             if self.entity_type and self.entity_id:
                 fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
