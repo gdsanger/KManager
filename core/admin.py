@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.conf import settings
 from core.models import (
     Adresse, SmtpSettings, MailTemplate, Mandant, Kostenart,
-    AIProvider, AIModel, AIJobsHistory
+    AIProvider, AIModel, AIJobsHistory, ReportDocument
 )
 from core.mailing.service import send_mail, MailServiceError
 import secrets
@@ -317,3 +317,34 @@ class AIJobsHistoryAdmin(admin.ModelAdmin):
 # Unregister default User admin and register custom one
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
+
+
+@admin.register(ReportDocument)
+class ReportDocumentAdmin(admin.ModelAdmin):
+    """Admin interface for Report Documents"""
+    list_display = ('report_key', 'object_type', 'object_id', 'created_at', 'created_by', 'sha256')
+    list_filter = ('report_key', 'object_type', 'created_at')
+    search_fields = ('report_key', 'object_type', 'object_id', 'sha256')
+    readonly_fields = ('created_at', 'sha256', 'template_version', 'context_json', 'metadata')
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Report Information', {
+            'fields': ('report_key', 'object_type', 'object_id', 'created_by', 'created_at')
+        }),
+        ('PDF File', {
+            'fields': ('pdf_file', 'sha256', 'template_version')
+        }),
+        ('Context Snapshot', {
+            'fields': ('context_json', 'metadata'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """Prevent manual creation - reports should be generated via service"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Make reports read-only after creation"""
+        return False
