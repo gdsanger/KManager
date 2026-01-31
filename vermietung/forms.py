@@ -400,13 +400,14 @@ class VertragForm(forms.ModelForm):
     """
     Form for creating/editing Vertrag (rental contracts).
     Includes all fields with proper Bootstrap 5 styling.
-    Contract number is auto-generated and not editable.
+    Contract number can be manually set or auto-generated if left empty.
     Rental objects are managed separately via VertragsObjektFormSet.
     """
     
     class Meta:
         model = Vertrag
         fields = [
+            'vertragsnummer',
             'mieter',
             'start',
             'ende',
@@ -417,6 +418,10 @@ class VertragForm(forms.ModelForm):
             'mandant',
         ]
         widgets = {
+            'vertragsnummer': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Leer lassen für automatische Generierung',
+            }),
             'mieter': forms.Select(attrs={'class': 'form-select'}),
             'start': forms.DateInput(attrs={
                 'class': 'form-control',
@@ -442,6 +447,7 @@ class VertragForm(forms.ModelForm):
             'mandant': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
+            'vertragsnummer': 'Vertragsnummer',
             'mieter': 'Mieter (Kunde) *',
             'start': 'Vertragsbeginn *',
             'ende': 'Vertragsende',
@@ -452,6 +458,7 @@ class VertragForm(forms.ModelForm):
             'mandant': 'Mandant',
         }
         help_texts = {
+            'vertragsnummer': 'Optional: Vertragsnummer manuell eingeben, oder leer lassen für automatische Generierung',
             'mieter': 'Nur Adressen vom Typ "Kunde" können ausgewählt werden',
             'start': 'Startdatum des Vertrags',
             'ende': 'Optional: Enddatum des Vertrags (leer = unbefristet)',
@@ -470,7 +477,8 @@ class VertragForm(forms.ModelForm):
             adressen_type='KUNDE'
         ).order_by('name')
         
-        # Make miete field not required since it will be calculated
+        # Make vertragsnummer and miete not required
+        self.fields['vertragsnummer'].required = False
         self.fields['miete'].required = False
         
         # Order mandanten by name

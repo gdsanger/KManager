@@ -397,9 +397,10 @@ class Vertrag(models.Model):
     vertragsnummer = models.CharField(
         max_length=10,
         unique=True,
-        editable=False,
+        editable=True,
+        blank=True,
         verbose_name="Vertragsnummer",
-        help_text="Automatisch generierte Vertragsnummer im Format V-00000"
+        help_text="Vertragsnummer (wird automatisch generiert, wenn leer gelassen)"
     )
     # Legacy field - will be removed after migration
     # Kept temporarily for backwards compatibility during migration
@@ -647,7 +648,8 @@ class Vertrag(models.Model):
         automatically creates VertragsObjekt entry.
         Auto-inherits mandant from the first MietObjekt if not explicitly set.
         """
-        if not self.vertragsnummer:
+        # Only auto-generate vertragsnummer for new instances without a number
+        if not self.pk and not self.vertragsnummer:
             self.vertragsnummer = self._generate_vertragsnummer()
         
         # Auto-inherit mandant from MietObjekt if not set
