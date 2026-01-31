@@ -412,6 +412,8 @@ class VertragForm(forms.ModelForm):
             'start',
             'ende',
             'miete',
+            'auto_total',
+            'manual_net_total',
             'kaution',
             'umsatzsteuer_satz',
             'status',
@@ -437,6 +439,15 @@ class VertragForm(forms.ModelForm):
                 'id': 'id_miete',
                 'readonly': 'readonly',
             }),
+            'auto_total': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+                'id': 'id_auto_total',
+            }),
+            'manual_net_total': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'id': 'id_manual_net_total',
+            }),
             'kaution': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'step': '0.01',
@@ -452,6 +463,8 @@ class VertragForm(forms.ModelForm):
             'start': 'Vertragsbeginn *',
             'ende': 'Vertragsende',
             'miete': 'Gesamtmiete (€) (Netto)',
+            'auto_total': 'Automatisch aus Positionen berechnen',
+            'manual_net_total': 'Manueller Netto-Gesamtpreis (€)',
             'kaution': 'Kaution (€) *',
             'umsatzsteuer_satz': 'Umsatzsteuer *',
             'status': 'Status *',
@@ -462,7 +475,9 @@ class VertragForm(forms.ModelForm):
             'mieter': 'Nur Adressen vom Typ "Kunde" können ausgewählt werden',
             'start': 'Startdatum des Vertrags',
             'ende': 'Optional: Enddatum des Vertrags (leer = unbefristet)',
-            'miete': 'Wird automatisch aus den Mietobjekten berechnet (Summe aus Anzahl × Preis)',
+            'miete': 'Wird automatisch aus den Mietobjekten berechnet (Summe aus Anzahl × Preis) im Auto-Modus',
+            'auto_total': 'Aktiviert: Gesamtpreis wird aus Positionen berechnet. Deaktiviert: Manueller Pauschalpreis wird verwendet.',
+            'manual_net_total': 'Pauschaler Netto-Gesamtpreis. Nur aktiv wenn "Automatisch berechnen" deaktiviert ist.',
             'kaution': 'Kaution in EUR',
             'umsatzsteuer_satz': 'Umsatzsteuersatz für die Berechnung des Bruttobetrags',
             'status': 'Status des Vertrags',
@@ -477,9 +492,10 @@ class VertragForm(forms.ModelForm):
             adressen_type='KUNDE'
         ).order_by('name')
         
-        # Make vertragsnummer and miete not required
+        # Make vertragsnummer, miete and manual_net_total not required
         self.fields['vertragsnummer'].required = False
         self.fields['miete'].required = False
+        self.fields['manual_net_total'].required = False
         
         # Order mandanten by name
         self.fields['mandant'].queryset = Mandant.objects.all().order_by('name')

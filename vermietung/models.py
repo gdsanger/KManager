@@ -456,6 +456,19 @@ class Vertrag(models.Model):
         verbose_name="Umsatzsteuer",
         help_text="Umsatzsteuersatz für diesen Vertrag"
     )
+    auto_total = models.BooleanField(
+        default=True,
+        verbose_name="Automatische Gesamtberechnung",
+        help_text="Wenn aktiviert, wird der Gesamtbetrag aus den Vertragszeilen berechnet. Wenn deaktiviert, kann ein manueller Pauschalpreis eingegeben werden."
+    )
+    manual_net_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Manueller Netto-Gesamtpreis",
+        help_text="Manueller Netto-Gesamtpreis (Pauschale). Nur relevant wenn automatische Berechnung deaktiviert ist."
+    )
     mandant = models.ForeignKey(
         Mandant,
         on_delete=models.PROTECT,
@@ -554,22 +567,34 @@ class Vertrag(models.Model):
             total += vo.gesamtpreis
         return total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
-    def berechne_umsatzsteuer(self):
+    @property
+    def effective_net_total(self):
         """
-        Calculate VAT amount based on total rent (net amount) and VAT rate.
+        Get the effective net total for this contract.
+        Returns the manual_net_total if auto_total is False and manual_net_total is set,
+        otherwise returns the calculated total from VertragsObjekt items.
         Returns Decimal with 2 decimal places.
         """
-        nettobetrag = self.berechne_gesamtmiete()
+        if not self.auto_total and self.manual_net_total is not None:
+            return self.manual_net_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return self.berechne_gesamtmiete()
+    
+    def berechne_umsatzsteuer(self):
+        """
+        Calculate VAT amount based on effective net total and VAT rate.
+        Returns Decimal with 2 decimal places.
+        """
+        nettobetrag = self.effective_net_total
         umsatzsteuer_prozent = Decimal(self.umsatzsteuer_satz)
         umsatzsteuer_betrag = (nettobetrag * umsatzsteuer_prozent / Decimal('100'))
         return umsatzsteuer_betrag.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     def berechne_bruttobetrag(self):
         """
-        Calculate gross amount (net amount + VAT).
+        Calculate gross amount (effective net total + VAT).
         Returns Decimal with 2 decimal places.
         """
-        nettobetrag = self.berechne_gesamtmiete()
+        nettobetrag = self.effective_net_total
         umsatzsteuer = self.berechne_umsatzsteuer()
         bruttobetrag = nettobetrag + umsatzsteuer
         return bruttobetrag.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -578,7 +603,8 @@ class Vertrag(models.Model):
         """
         Validate the contract data:
         1. If ende is set, it must be greater than start
-        2. For backwards compatibility, check overlaps on legacy mietobjekt field
+        2. If manual_net_total is set, it must be non-negative
+        3. For backwards compatibility, check overlaps on legacy mietobjekt field
         
         Note: Overlap checking for new n:m relationship is handled in VertragsObjekt.clean()
         """
@@ -588,6 +614,12 @@ class Vertrag(models.Model):
         if self.ende and self.start and self.ende <= self.start:
             raise ValidationError({
                 'ende': 'Das Vertragsende muss nach dem Vertragsbeginn liegen.'
+            })
+        
+        # Validate manual_net_total
+        if self.manual_net_total is not None and self.manual_net_total < 0:
+            raise ValidationError({
+                'manual_net_total': 'Der manuelle Netto-Gesamtpreis darf nicht negativ sein.'
             })
         
         # Backwards compatibility: Check for overlaps on legacy mietobjekt field
