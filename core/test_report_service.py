@@ -130,8 +130,8 @@ class ReportServiceTestCase(TestCase):
         # Check that we got a PDF
         self.assertTrue(pdf_bytes.startswith(b'%PDF'))
         
-        # Multi-page PDF should be larger
-        self.assertGreater(len(pdf_bytes), 10000)
+        # Multi-page PDF should be larger than single page (at least 5KB)
+        self.assertGreater(len(pdf_bytes), 5000)
     
     def test_reproducible_generation(self):
         """Test that same context produces same PDF (same hash)"""

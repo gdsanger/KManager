@@ -10,12 +10,13 @@ from typing import Optional, Dict, Any
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate
 
 from core.models import ReportDocument
 from core.services.base import ServiceError
 from .registry import get_template
-from .canvas import NumberedCanvas
 
 
 class ReportServiceError(ServiceError):
@@ -71,13 +72,15 @@ class ReportService:
             buffer = io.BytesIO()
             
             # Create document with A4 page size
+            # Margins: 2cm on all sides (using cm units from reportlab)
+            from reportlab.lib.units import cm
             doc = SimpleDocTemplate(
                 buffer,
                 pagesize=A4,
-                rightMargin=2*72,  # 2cm in points
-                leftMargin=2*72,
-                topMargin=2.5*72,
-                bottomMargin=2.5*72,
+                rightMargin=2*cm,
+                leftMargin=2*cm,
+                topMargin=2.5*cm,
+                bottomMargin=2.5*cm,
             )
             
             # Build story (content) using template
@@ -90,9 +93,46 @@ class ReportService:
                     template.draw_header_footer(canvas, doc, context)
                 doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
             else:
-                # Use numbered canvas for standard page numbers
-                numbered_canvas = NumberedCanvas()
-                doc.build(story, onFirstPage=numbered_canvas, onLaterPages=numbered_canvas)
+                # Two-pass approach for "Page X of Y" numbering
+                # First pass: count pages
+                first_pass_buffer = io.BytesIO()
+                first_pass_doc = SimpleDocTemplate(
+                    first_pass_buffer,
+                    pagesize=A4,
+                    rightMargin=2*cm,
+                    leftMargin=2*cm,
+                    topMargin=2.5*cm,
+                    bottomMargin=2.5*cm,
+                )
+                
+                # Simple canvas for first pass (just count pages)
+                page_count = [0]  # Use list to allow modification in closure
+                def count_pages(canvas, doc):
+                    page_count[0] = max(page_count[0], canvas.getPageNumber())
+                
+                first_pass_doc.build(story, onFirstPage=count_pages, onLaterPages=count_pages)
+                
+                # Second pass: render with correct page numbers
+                # Rebuild story as it was consumed in first pass
+                story = template.build_story(context)
+                
+                def on_page_with_total(canvas, doc):
+                    canvas.saveState()
+                    # Draw header line
+                    canvas.setStrokeColor(colors.HexColor('#4a5568'))
+                    canvas.setLineWidth(1)
+                    canvas.line(2*cm, doc.pagesize[1] - 2*cm, doc.pagesize[0] - 2*cm, doc.pagesize[1] - 2*cm)
+                    # Draw footer line
+                    canvas.line(2*cm, 2*cm, doc.pagesize[0] - 2*cm, 2*cm)
+                    # Add page number
+                    page_num = canvas.getPageNumber()
+                    text = f"Seite {page_num} von {page_count[0]}"
+                    canvas.setFont('Helvetica', 9)
+                    canvas.setFillColor(colors.HexColor('#666666'))
+                    canvas.drawRightString(doc.pagesize[0] - 2*cm, 1.5*cm, text)
+                    canvas.restoreState()
+                
+                doc.build(story, onFirstPage=on_page_with_total, onLaterPages=on_page_with_total)
             
             # Get PDF bytes
             pdf_bytes = buffer.getvalue()

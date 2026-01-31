@@ -8,6 +8,8 @@ This script demonstrates:
 3. Multi-page reports with headers, footers, and page numbers
 4. Querying stored reports
 
+Note: Dates in examples are hardcoded for consistency, not dynamic.
+
 Run this with: python manage.py shell < demo_report_service.py
 Or: python demo_report_service.py (if Django environment is set up)
 """
