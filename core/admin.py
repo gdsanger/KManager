@@ -4,7 +4,10 @@ from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib import messages
 from django.conf import settings
-from core.models import Adresse, SmtpSettings, MailTemplate, Mandant, Kostenart
+from core.models import (
+    Adresse, SmtpSettings, MailTemplate, Mandant, Kostenart,
+    AIProvider, AIModel, AIJobsHistory
+)
 from core.mailing.service import send_mail, MailServiceError
 import secrets
 import string
@@ -229,6 +232,86 @@ class CustomUserAdmin(BaseUserAdmin):
             )
     
     reset_user_password.short_description = "Kennwort zurücksetzen (neues Kennwort per E-Mail)"
+
+
+@admin.register(AIProvider)
+class AIProviderAdmin(admin.ModelAdmin):
+    list_display = ('name', 'provider_type', 'is_active', 'created_at')
+    list_filter = ('provider_type', 'is_active')
+    search_fields = ('name', 'provider_type')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Provider Information', {
+            'fields': ('name', 'provider_type', 'is_active')
+        }),
+        ('API Configuration', {
+            'fields': ('api_key', 'organization_id'),
+            'description': 'API credentials (stored securely)'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(AIModel)
+class AIModelAdmin(admin.ModelAdmin):
+    list_display = ('provider', 'name', 'model_id', 'is_active', 'input_price_per_1m_tokens', 'output_price_per_1m_tokens')
+    list_filter = ('provider', 'is_active')
+    search_fields = ('name', 'model_id')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Model Information', {
+            'fields': ('provider', 'name', 'model_id', 'is_active')
+        }),
+        ('Pricing', {
+            'fields': ('input_price_per_1m_tokens', 'output_price_per_1m_tokens'),
+            'description': 'Pricing in USD per 1 million tokens'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(AIJobsHistory)
+class AIJobsHistoryAdmin(admin.ModelAdmin):
+    list_display = ('timestamp', 'agent', 'user', 'provider', 'model', 'status', 'costs', 'duration_ms')
+    list_filter = ('status', 'provider', 'model', 'agent')
+    search_fields = ('agent', 'user__username', 'error_message')
+    readonly_fields = ('timestamp', 'duration_ms', 'costs', 'input_tokens', 'output_tokens')
+    date_hierarchy = 'timestamp'
+    
+    fieldsets = (
+        ('Job Information', {
+            'fields': ('agent', 'user', 'status', 'client_ip')
+        }),
+        ('AI Configuration', {
+            'fields': ('provider', 'model')
+        }),
+        ('Usage & Costs', {
+            'fields': ('input_tokens', 'output_tokens', 'costs', 'duration_ms')
+        }),
+        ('Timing', {
+            'fields': ('timestamp',)
+        }),
+        ('Error Details', {
+            'fields': ('error_message',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """Prevent manual creation of job history records"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Make job history read-only"""
+        return False
 
 
 # Unregister default User admin and register custom one
