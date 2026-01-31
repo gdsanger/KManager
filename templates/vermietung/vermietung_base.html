@@ -363,7 +363,7 @@
         }
 
         // Menu Group Expansion Persistence
-        const EXPANDED_MENU_GROUPS_KEY = 'nav.expandedMenuGroupIds';
+        const NAV_EXPANDED_MENU_GROUP_IDS_KEY = 'nav.expandedMenuGroupIds';
         
         /**
          * Helper function to safely access localStorage
@@ -389,7 +389,7 @@
             }
             
             try {
-                const stored = localStorage.getItem(EXPANDED_MENU_GROUPS_KEY);
+                const stored = localStorage.getItem(NAV_EXPANDED_MENU_GROUP_IDS_KEY);
                 if (!stored) {
                     return [];
                 }
@@ -413,9 +413,9 @@
             try {
                 if (ids.length === 0) {
                     // Remove key when empty for cleaner storage
-                    localStorage.removeItem(EXPANDED_MENU_GROUPS_KEY);
+                    localStorage.removeItem(NAV_EXPANDED_MENU_GROUP_IDS_KEY);
                 } else {
-                    localStorage.setItem(EXPANDED_MENU_GROUPS_KEY, JSON.stringify(ids));
+                    localStorage.setItem(NAV_EXPANDED_MENU_GROUP_IDS_KEY, JSON.stringify(ids));
                 }
             } catch (e) {
                 console.warn('Failed to write expanded menu groups to localStorage:', e);
