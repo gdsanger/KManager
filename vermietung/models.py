@@ -2006,6 +2006,14 @@ class Aktivitaet(models.Model):
         help_text="Eindeutige ID zur Gruppierung von Aktivitäten einer Serie"
     )
     
+    # Email reminder tracking
+    reminder_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Erinnerung gesendet am",
+        help_text="Zeitpunkt, zu dem die Erinnerungs-E-Mail gesendet wurde"
+    )
+    
     class Meta:
         verbose_name = "Aktivität"
         verbose_name_plural = "Aktivitäten"
@@ -2018,6 +2026,7 @@ class Aktivitaet(models.Model):
             models.Index(fields=['ersteller']),
             models.Index(fields=['ist_serie']),
             models.Index(fields=['serien_id']),
+            models.Index(fields=['reminder_sent_at']),
         ]
     
     def __str__(self):
