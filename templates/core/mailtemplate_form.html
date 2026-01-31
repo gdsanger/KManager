@@ -163,14 +163,17 @@
 <!-- TinyMCE from CDN -->
 <!-- Note: Using CDN for external resources is acceptable per architecture guidelines.
      For production, consider obtaining a proper API key or hosting locally. -->
-<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script src="https://cdn.tiny.cloud/1/ommjaew9ko96e2kzfsag3kz1fixxl156qbibmaawx9eeqek3/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 <script>
 tinymce.init({
     selector: 'textarea.tinymce-editor',
-    plugins: 'link image code table lists',
-    toolbar: 'undo redo | formatselect | bold italic | alignleft aligncenter alignright | bullist numlist | link image | code',
-    menubar: false,
-    height: 400,
+    plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table help wordcount',        
+    toolbar: 'undo redo | blocks | ' +
+        'bold italic forecolor | alignleft aligncenter ' +
+        'alignright alignjustify | bullist numlist outdent indent | ' +
+        'removeformat | help',
+    menubar: true,
+    height: 500,
     skin: 'oxide-dark',
     content_css: 'dark'
 });
