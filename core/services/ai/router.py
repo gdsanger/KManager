@@ -5,7 +5,6 @@ import time
 from typing import List, Dict, Optional
 from decimal import Decimal
 from django.contrib.auth.models import User
-from django.db import transaction
 
 from core.models import AIProvider, AIModel, AIJobsHistory
 from core.services.base import ServiceNotConfigured, ServiceDisabled
@@ -148,7 +147,6 @@ class AIRouter:
         
         return model.provider, model
     
-    @transaction.atomic
     def chat(
         self,
         messages: List[Dict[str, str]],
