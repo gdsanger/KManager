@@ -561,15 +561,22 @@ class ActivityReminderEmailCCTest(TestCase):
     
     @patch('vermietung.management.commands.send_activity_reminders.send_mail')
     def test_reminder_email_no_cc_when_no_creator(self, mock_send_mail):
-        """Test that reminder email has no CC when there's no creator."""
+        """Test that reminder email works when there's no creator (edge case)."""
+        # Note: In practice, ersteller should always exist based on model constraints,
+        # but this test verifies the code handles None gracefully if it occurs
+        # We'll use update() to bypass model validation for this edge case test
         activity = Aktivitaet.objects.create(
-            titel='Activity without creator',
+            titel='Activity with creator',
             status='OFFEN',
             faellig_am=self.in_2_days,
             assigned_user=self.assignee,
-            ersteller=None,
+            ersteller=self.creator,  # Start with creator
             kunde=self.kunde
         )
+        
+        # Use update to set ersteller to None, bypassing validation
+        Aktivitaet.objects.filter(pk=activity.pk).update(ersteller=None)
+        activity.refresh_from_db()
         
         out = StringIO()
         call_command('send_activity_reminders', stdout=out)
