@@ -201,3 +201,38 @@ class SmtpConfigurationTestCase(TestCase):
         )
         
         self.assertTrue(settings.use_tls)
+    
+    def test_smtp_connection_timeout(self):
+        """Test that SMTP connection has timeout to prevent infinite hangs"""
+        import time
+        import socket
+        
+        # Create settings pointing to a non-routable IP (192.0.2.0/24 is TEST-NET-1)
+        # This will timeout instead of connecting
+        SmtpSettings.objects.create(
+            host='192.0.2.1',  # Non-routable test IP
+            port=25,
+            use_tls=False,
+            username='',
+            password=''
+        )
+        
+        # Create a mail template
+        MailTemplate.objects.create(
+            key='timeout_test',
+            subject='Test',
+            message='<p>Test</p>',
+            from_address='test@example.com',
+            from_name='Test'
+        )
+        
+        # Attempt to send mail - should timeout quickly, not hang indefinitely
+        start_time = time.time()
+        with self.assertRaises(MailSendError):
+            send_mail('timeout_test', ['test@example.com'], {})
+        elapsed_time = time.time() - start_time
+        
+        # Should timeout in around 10 seconds (our configured timeout)
+        # Allow some margin for test execution overhead
+        self.assertLess(elapsed_time, 15, 
+                       "SMTP connection should timeout within 15 seconds, not hang indefinitely")
