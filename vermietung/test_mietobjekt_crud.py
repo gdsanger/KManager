@@ -289,3 +289,103 @@ class MietObjektCRUDTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, contract.vertragsnummer)
         self.assertContains(response, 'Test Mieter')
+    
+    def test_is_mietobjekt_field_default_value(self):
+        """Test that is_mietobjekt field has default value True."""
+        objekt = MietObjekt.objects.create(
+            name='Test Objekt',
+            type='RAUM',
+            beschreibung='Test',
+            standort=self.standort1,
+            mietpreis=Decimal('1000.00')
+        )
+        self.assertTrue(objekt.is_mietobjekt)
+    
+    def test_is_mietobjekt_field_in_form(self):
+        """Test that is_mietobjekt field is included in the form."""
+        form = MietObjektForm()
+        self.assertIn('is_mietobjekt', form.fields)
+        self.assertEqual(form.fields['is_mietobjekt'].label, 'Mietobjekt')
+    
+    def test_mietobjekt_edit_toggle_is_mietobjekt_to_false(self):
+        """Test toggling is_mietobjekt from True to False."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Verify initial value is True
+        self.assertTrue(self.objekt1.is_mietobjekt)
+        
+        data = {
+            'name': self.objekt1.name,
+            'type': self.objekt1.type,
+            'beschreibung': self.objekt1.beschreibung,
+            'fläche': str(self.objekt1.fläche),
+            'standort': self.objekt1.standort.id,
+            'mietpreis': str(self.objekt1.mietpreis),
+            'nebenkosten': str(self.objekt1.nebenkosten),
+            'verfuegbare_einheiten': '1',
+            'verfuegbar': True,
+            'is_mietobjekt': False  # Toggle to False
+        }
+        response = self.client.post(reverse('vermietung:mietobjekt_edit', kwargs={'pk': self.objekt1.pk}), data)
+        self.assertEqual(response.status_code, 302)  # Redirect after success
+        
+        # Check that field was updated
+        self.objekt1.refresh_from_db()
+        self.assertFalse(self.objekt1.is_mietobjekt)
+    
+    def test_mietobjekt_edit_toggle_is_mietobjekt_to_true(self):
+        """Test toggling is_mietobjekt from False to True."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Set initial value to False
+        self.objekt1.is_mietobjekt = False
+        self.objekt1.save()
+        
+        data = {
+            'name': self.objekt1.name,
+            'type': self.objekt1.type,
+            'beschreibung': self.objekt1.beschreibung,
+            'fläche': str(self.objekt1.fläche),
+            'standort': self.objekt1.standort.id,
+            'mietpreis': str(self.objekt1.mietpreis),
+            'nebenkosten': str(self.objekt1.nebenkosten),
+            'verfuegbare_einheiten': '1',
+            'verfuegbar': True,
+            'is_mietobjekt': True  # Toggle to True
+        }
+        response = self.client.post(reverse('vermietung:mietobjekt_edit', kwargs={'pk': self.objekt1.pk}), data)
+        self.assertEqual(response.status_code, 302)  # Redirect after success
+        
+        # Check that field was updated
+        self.objekt1.refresh_from_db()
+        self.assertTrue(self.objekt1.is_mietobjekt)
+    
+    def test_mietobjekt_create_with_is_mietobjekt_false(self):
+        """Test creating a new mietobjekt with is_mietobjekt set to False."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        data = {
+            'name': 'New Object',
+            'type': 'RAUM',
+            'beschreibung': 'Test description',
+            'fläche': '30.00',
+            'standort': self.standort1.id,
+            'mietpreis': '800.00',
+            'verfuegbare_einheiten': '1',
+            'verfuegbar': True,
+            'is_mietobjekt': False
+        }
+        response = self.client.post(reverse('vermietung:mietobjekt_create'), data)
+        self.assertEqual(response.status_code, 302)  # Redirect after success
+        
+        # Check that object was created with correct value
+        new_objekt = MietObjekt.objects.get(name='New Object')
+        self.assertFalse(new_objekt.is_mietobjekt)
+    
+    def test_mietobjekt_form_displays_is_mietobjekt_checkbox(self):
+        """Test that the form template displays the is_mietobjekt checkbox."""
+        self.client.login(username='testuser', password='testpass123')
+        response = self.client.get(reverse('vermietung:mietobjekt_edit', kwargs={'pk': self.objekt1.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'is_mietobjekt')
+        self.assertContains(response, 'Mietobjekt')
