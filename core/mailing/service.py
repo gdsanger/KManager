@@ -108,12 +108,12 @@ def send_mail(template_key, to, context):
     # Send via SMTP
     try:
         if smtp_settings.use_tls:
-            # Use STARTTLS
-            server = smtplib.SMTP(smtp_settings.host, smtp_settings.port)
+            # Use STARTTLS with timeout
+            server = smtplib.SMTP(smtp_settings.host, smtp_settings.port, timeout=10)
             server.starttls()
         else:
-            # Plain connection
-            server = smtplib.SMTP(smtp_settings.host, smtp_settings.port)
+            # Plain connection with timeout
+            server = smtplib.SMTP(smtp_settings.host, smtp_settings.port, timeout=10)
         
         # Login if credentials provided
         if smtp_settings.username:
