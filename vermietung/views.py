@@ -8,7 +8,9 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
+import tempfile
+import os
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, 
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
@@ -22,6 +24,8 @@ from .forms import (
 )
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
+from core.services.ai.invoice_extraction import InvoiceExtractionService
+from core.services.ai.supplier_matching import SupplierMatchingService
 
 
 @login_required
@@ -1356,7 +1360,7 @@ def dokument_upload(request, entity_type, entity_id):
         Redirects back to entity detail page with success/error message
     """
     # Validate entity type
-    valid_entity_types = ['vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll']
+    valid_entity_types = ['vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll', 'eingangsrechnung']
     if entity_type not in valid_entity_types:
         messages.error(request, f'Ungültiger Entity-Typ: {entity_type}')
         return redirect('vermietung:home')
@@ -1382,6 +1386,10 @@ def dokument_upload(request, entity_type, entity_id):
         entity = get_object_or_404(Uebergabeprotokoll, pk=entity_id)
         entity_name = f'Übergabeprotokoll {entity}'
         redirect_url = 'vermietung:uebergabeprotokoll_detail'
+    elif entity_type == 'eingangsrechnung':
+        entity = get_object_or_404(Eingangsrechnung, pk=entity_id)
+        entity_name = f'Eingangsrechnung {entity.belegnummer}'
+        redirect_url = 'vermietung:eingangsrechnung_detail'
     
     if request.method == 'POST':
         form = DokumentUploadForm(
@@ -2291,6 +2299,240 @@ def eingangsrechnung_create(request):
     }
     
     return render(request, 'vermietung/eingangsrechnungen/form.html', context)
+
+
+@vermietung_required
+def eingangsrechnung_create_from_pdf(request):
+    """
+    Create a new incoming invoice from a PDF upload with AI extraction.
+    
+    This view:
+    1. Accepts a PDF upload
+    2. Extracts invoice data using AI
+    3. Matches the supplier
+    4. Creates the invoice with pre-filled data
+    5. Attaches the PDF to the invoice
+    
+    If AI extraction fails, the invoice is still created with empty fields.
+    """
+    # Helper function for parsing ISO date strings
+    def parse_iso_date(date_str):
+        """Parse ISO date string (YYYY-MM-DD) to date object."""
+        return datetime.strptime(date_str, '%Y-%m-%d').date()
+    
+    if request.method == 'POST':
+        # Handle PDF file upload
+        if 'pdf_file' not in request.FILES:
+            messages.error(request, 'Bitte wählen Sie eine PDF-Datei aus.')
+            return redirect('vermietung:eingangsrechnung_create')
+        
+        pdf_file = request.FILES['pdf_file']
+        
+        # Validate file type
+        if not pdf_file.name.lower().endswith('.pdf'):
+            messages.error(request, 'Bitte laden Sie nur PDF-Dateien hoch.')
+            return redirect('vermietung:eingangsrechnung_create')
+        
+        # Get mandatory mietobjekt from form
+        mietobjekt_id = request.POST.get('mietobjekt')
+        if not mietobjekt_id:
+            messages.error(request, 'Bitte wählen Sie ein Mietobjekt aus.')
+            return redirect('vermietung:eingangsrechnung_create')
+        
+        try:
+            mietobjekt = MietObjekt.objects.get(pk=mietobjekt_id)
+        except MietObjekt.DoesNotExist:
+            messages.error(request, 'Ungültiges Mietobjekt.')
+            return redirect('vermietung:eingangsrechnung_create')
+        
+        # Save PDF temporarily to extract data
+        temp_pdf_path = None
+        try:
+            # Save uploaded file to temporary location
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                for chunk in pdf_file.chunks():
+                    temp_file.write(chunk)
+                temp_pdf_path = temp_file.name
+            
+            # Extract invoice data using AI
+            extraction_service = InvoiceExtractionService()
+            invoice_data = None
+            lieferant = None
+            
+            try:
+                invoice_data = extraction_service.extract_invoice_data(
+                    pdf_path=temp_pdf_path,
+                    user=request.user,
+                    client_ip=request.META.get('REMOTE_ADDR')
+                )
+                
+                if invoice_data:
+                    messages.info(request, 'Rechnungsdaten wurden erfolgreich durch KI extrahiert.')
+                    
+                    # Validate extracted data
+                    validated_data = invoice_data.validate()
+                    
+                    # Match supplier if data available
+                    if invoice_data.lieferant_name:
+                        matching_service = SupplierMatchingService()
+                        lieferant = matching_service.match_supplier_with_ai_fallback(
+                            name=invoice_data.lieferant_name,
+                            strasse=invoice_data.lieferant_strasse,
+                            plz=invoice_data.lieferant_plz,
+                            ort=invoice_data.lieferant_ort,
+                            land=invoice_data.lieferant_land,
+                            user=request.user,
+                            client_ip=request.META.get('REMOTE_ADDR')
+                        )
+                        
+                        if lieferant:
+                            messages.success(
+                                request,
+                                f'Lieferant "{lieferant.full_name()}" wurde automatisch zugeordnet.'
+                            )
+                        else:
+                            messages.warning(
+                                request,
+                                f'Lieferant "{invoice_data.lieferant_name}" konnte nicht automatisch zugeordnet werden. '
+                                'Bitte manuell auswählen.'
+                            )
+                else:
+                    messages.warning(
+                        request,
+                        'KI-Extraktion fehlgeschlagen oder keine Daten gefunden. '
+                        'Bitte Felder manuell ausfüllen.'
+                    )
+            
+            except Exception as e:
+                messages.warning(
+                    request,
+                    f'KI-Extraktion fehlgeschlagen: {str(e)}. Bitte Felder manuell ausfüllen.'
+                )
+                invoice_data = None
+            
+            # Create invoice with extracted data (or empty if extraction failed)
+            # Use defaults for required fields that weren't extracted
+            rechnung_data = {
+                'mietobjekt': mietobjekt,
+                'belegdatum': date.today(),  # Default to today
+                'faelligkeit': date.today() + timedelta(days=30),  # Default to 30 days from today
+                'belegnummer': 'UNBEKANNT-' + timezone.now().strftime('%Y%m%d%H%M%S'),  # Placeholder - user MUST update
+                'betreff': 'Automatisch aus PDF erstellt',
+            }
+            
+            # Override with extracted data if available
+            if invoice_data:
+                validated_data = invoice_data.validate()
+                
+                if 'belegdatum' in validated_data:
+                    rechnung_data['belegdatum'] = parse_iso_date(validated_data['belegdatum'])
+                
+                if 'faelligkeit' in validated_data:
+                    rechnung_data['faelligkeit'] = parse_iso_date(validated_data['faelligkeit'])
+                
+                if 'belegnummer' in validated_data:
+                    rechnung_data['belegnummer'] = validated_data['belegnummer']
+                
+                if 'betreff' in validated_data:
+                    rechnung_data['betreff'] = validated_data['betreff']
+                
+                if 'referenznummer' in validated_data:
+                    rechnung_data['referenznummer'] = validated_data['referenznummer']
+                
+                if 'leistungszeitraum_von' in validated_data:
+                    rechnung_data['leistungszeitraum_von'] = parse_iso_date(
+                        validated_data['leistungszeitraum_von']
+                    )
+                
+                if 'leistungszeitraum_bis' in validated_data:
+                    rechnung_data['leistungszeitraum_bis'] = parse_iso_date(
+                        validated_data['leistungszeitraum_bis']
+                    )
+                
+                if 'notizen' in validated_data:
+                    rechnung_data['notizen'] = validated_data['notizen']
+            
+            # Set lieferant if matched
+            if lieferant:
+                rechnung_data['lieferant'] = lieferant
+            else:
+                # Use first available supplier as fallback (to satisfy NOT NULL constraint)
+                # User will need to correct this manually
+                # Order by ID for deterministic behavior
+                fallback_lieferant = Adresse.objects.filter(adressen_type='LIEFERANT').order_by('id').first()
+                if fallback_lieferant:
+                    rechnung_data['lieferant'] = fallback_lieferant
+                    messages.warning(
+                        request,
+                        'Kein Lieferant gefunden. Bitte manuell zuordnen.'
+                    )
+                else:
+                    messages.error(request, 'Keine Lieferanten im System. Bitte zuerst einen Lieferanten anlegen.')
+                    return redirect('vermietung:eingangsrechnung_create')
+            
+            # Create the invoice
+            rechnung = Eingangsrechnung(**rechnung_data)
+            rechnung.save()
+            
+            # Upload PDF and link to invoice
+            # Reset file pointer
+            pdf_file.seek(0)
+            
+            storage_path, mime_type = Dokument.save_uploaded_file(
+                pdf_file,
+                'eingangsrechnung',
+                rechnung.id
+            )
+            
+            dokument = Dokument(
+                original_filename=pdf_file.name,
+                storage_path=storage_path,
+                file_size=pdf_file.size,
+                mime_type=mime_type,
+                uploaded_by=request.user,
+                beschreibung='Automatisch hochgeladen bei Rechnungserstellung',
+                eingangsrechnung=rechnung
+            )
+            dokument.save()
+            
+            # Add warning if invoice number was not extracted
+            if rechnung.belegnummer.startswith('UNBEKANNT-'):
+                messages.warning(
+                    request,
+                    'WICHTIG: Belegnummer konnte nicht extrahiert werden und wurde automatisch generiert. '
+                    'Bitte manuell aktualisieren!'
+                )
+            
+            messages.success(
+                request,
+                f'Eingangsrechnung "{rechnung.belegnummer}" wurde erfolgreich angelegt und PDF hochgeladen.'
+            )
+            
+            return redirect('vermietung:eingangsrechnung_detail', pk=rechnung.pk)
+        
+        except ValidationError as e:
+            messages.error(request, f'Validierungsfehler: {str(e)}')
+            return redirect('vermietung:eingangsrechnung_create')
+        
+        except Exception as e:
+            messages.error(request, f'Fehler beim Erstellen der Rechnung: {str(e)}')
+            return redirect('vermietung:eingangsrechnung_create')
+        
+        finally:
+            # Clean up temporary file
+            if temp_pdf_path and os.path.exists(temp_pdf_path):
+                os.unlink(temp_pdf_path)
+    
+    else:
+        # GET request - show upload form
+        mietobjekte = MietObjekt.objects.all().order_by('name')
+        
+        context = {
+            'mietobjekte': mietobjekte,
+            'is_pdf_upload': True,
+        }
+        
+        return render(request, 'vermietung/eingangsrechnungen/pdf_upload_form.html', context)
 
 
 @vermietung_required
