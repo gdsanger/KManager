@@ -863,6 +863,7 @@ class AktivitaetForm(forms.ModelForm):
             'bereich',
             'assigned_user',
             'assigned_supplier',
+            'cc_users',
             'ersteller',
             'ist_serie',
             'intervall_monate',
@@ -879,6 +880,7 @@ class AktivitaetForm(forms.ModelForm):
             'bereich': forms.Select(attrs={'class': 'form-select', 'id': 'id_bereich'}),
             'assigned_user': forms.Select(attrs={'class': 'form-select'}),
             'assigned_supplier': forms.Select(attrs={'class': 'form-select'}),
+            'cc_users': forms.SelectMultiple(attrs={'class': 'form-select', 'size': '5'}),
             'ersteller': forms.Select(attrs={'class': 'form-select'}),
             'ist_serie': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_ist_serie'}),
             'intervall_monate': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '12', 'id': 'id_intervall_monate'}),
@@ -895,6 +897,7 @@ class AktivitaetForm(forms.ModelForm):
             'bereich': 'Bereich',
             'assigned_user': 'Interner Verantwortlicher',
             'assigned_supplier': 'Lieferant',
+            'cc_users': 'Zur Kontrolle informieren',
             'ersteller': 'Ersteller',
             'ist_serie': 'Serien-Aktivität',
             'intervall_monate': 'Intervall (Monate)',
@@ -906,6 +909,7 @@ class AktivitaetForm(forms.ModelForm):
             'bereich': 'Optional: Kategorie zur Organisation der Aktivität (z.B. "Finanzen", "Sport", "Privat")',
             'assigned_user': 'Optional: Interner Benutzer, der für diese Aktivität verantwortlich ist',
             'assigned_supplier': 'Optional: Externer Lieferant, dem die Aktivität zugewiesen ist',
+            'cc_users': 'Optional: Weitere Benutzer zur Information/Kontrolle (erhalten Benachrichtigungen bei Erstellung, Änderung der CC-Liste und Abschluss)',
             'faellig_am': 'Optional: Fälligkeitsdatum für diese Aktivität',
             'ersteller': 'Benutzer, der diese Aktivität erstellt hat',
             'ist_serie': 'Wiederkehrende Aktivität mit festem Intervall',
@@ -936,6 +940,10 @@ class AktivitaetForm(forms.ModelForm):
         # Filter ersteller to show all users
         self.fields['ersteller'].queryset = User.objects.all().order_by('username')
         self.fields['ersteller'].required = False
+        
+        # Configure CC users field - show all users
+        self.fields['cc_users'].queryset = User.objects.all().order_by('username')
+        self.fields['cc_users'].required = False
         
         # Pre-fill ersteller with current user for new activities
         if not self.instance.pk and self.current_user:

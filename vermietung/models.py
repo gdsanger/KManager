@@ -2091,6 +2091,15 @@ class Aktivitaet(models.Model):
         help_text="Zeitpunkt, zu dem die Erinnerungs-E-Mail gesendet wurde"
     )
     
+    # CC/Reviewer users - informed for control/review purposes
+    cc_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='aktivitaeten_cc',
+        verbose_name="Zur Kontrolle informieren",
+        help_text="Benutzer, die zur Kontrolle/Information über diese Aktivität benachrichtigt werden"
+    )
+    
     class Meta:
         verbose_name = "Aktivität"
         verbose_name_plural = "Aktivitäten"

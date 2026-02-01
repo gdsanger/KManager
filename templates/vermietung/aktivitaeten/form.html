@@ -200,6 +200,21 @@
                         {% endif %}
                     </div>
 
+                    <div class="mb-3">
+                        <label for="{{ form.cc_users.id_for_label }}" class="form-label">
+                            {{ form.cc_users.label }}
+                        </label>
+                        {{ form.cc_users }}
+                        {% if form.cc_users.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.cc_users.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.cc_users.help_text %}
+                        <div class="form-text">{{ form.cc_users.help_text }}</div>
+                        {% endif %}
+                    </div>
+
                     <hr class="my-4">
 
                     <!-- Section 4: Serien-Aktivität (Recurring Activity) -->
