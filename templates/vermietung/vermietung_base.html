@@ -149,11 +149,11 @@
 
                         <!-- Gebäude Section (activities removed) -->
                         <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}true{% else %}false{% endif %}">
+                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'eingangsrechnung' in request.path %}true{% else %}false{% endif %}">
                                 <i class="bi bi-building"></i> <span class="sidebar-text">Gebäude</span>
                                 <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
                             </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path %}show{% endif %}" id="vermietungMenu">
+                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'eingangsrechnung' in request.path %}show{% endif %}" id="vermietungMenu">
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
                                         <i class="bi bi-geo-alt"></i> <span class="sidebar-text">Standorte</span>
@@ -174,21 +174,21 @@
                                         <i class="bi bi-clipboard-check"></i> <span class="sidebar-text">Übergabeprotokolle</span>
                                     </a>
                                 </li>
-                            </ul>
-                        </li>
-
-                        <!-- Finanzen Section -->
-                        <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#finanzenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'eingangsrechnung' in request.path or 'kostenarten' in request.path %}true{% else %}false{% endif %}">
-                                <i class="bi bi-cash-coin"></i> <span class="sidebar-text">Finanzen</span>
-                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
-                            </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'eingangsrechnung' in request.path or 'kostenarten' in request.path %}show{% endif %}" id="finanzenMenu">
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'eingangsrechnung' in request.path %}active{% endif %}" href="{% url 'vermietung:eingangsrechnung_list' %}">
                                         <i class="bi bi-receipt"></i> <span class="sidebar-text">Eingangsrechnungen</span>
                                     </a>
                                 </li>
+                            </ul>
+                        </li>
+
+                        <!-- Finanzen Section -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#finanzenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'kostenarten' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-cash-coin"></i> <span class="sidebar-text">Finanzen</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                            </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'kostenarten' in request.path %}show{% endif %}" id="finanzenMenu">
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'kostenarten' in request.path %}active{% endif %}" href="{% url 'vermietung:kostenarten_list' %}">
                                         <i class="bi bi-tags"></i> <span class="sidebar-text">Kostenarten</span>

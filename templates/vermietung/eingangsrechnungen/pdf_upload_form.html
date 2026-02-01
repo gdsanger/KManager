@@ -1,0 +1,129 @@
+{% extends "vermietung/layouts/form_layout.html" %}
+
+{% block title %}Eingangsrechnung aus PDF erstellen - Domus{% endblock %}
+
+{% block page_title %}
+<i class="bi bi-file-earmark-pdf"></i> Eingangsrechnung aus PDF erstellen
+{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'vermietung:eingangsrechnung_list' %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info" role="alert">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>KI-gestützte PDF-Auswertung</strong><br>
+                    Die hochgeladene PDF-Rechnung wird automatisch durch künstliche Intelligenz analysiert. 
+                    Erkannte Felder werden vorbefüllt. Nicht erkannte Felder können Sie anschließend manuell ergänzen.
+                </div>
+
+                <form method="post" enctype="multipart/form-data" id="pdf-upload-form">
+                    {% csrf_token %}
+                    
+                    <div class="mb-4">
+                        <h5 class="mb-3"><i class="bi bi-building"></i> Mietobjekt auswählen</h5>
+                        <div class="mb-3">
+                            <label for="mietobjekt" class="form-label">Mietobjekt <span class="text-danger">*</span></label>
+                            <select class="form-select" id="mietobjekt" name="mietobjekt" required>
+                                <option value="">Bitte wählen...</option>
+                                {% for obj in mietobjekte %}
+                                <option value="{{ obj.pk }}">{{ obj.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Wählen Sie das Objekt aus, zu dem diese Eingangsrechnung gehört.</div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="mb-4">
+                        <h5 class="mb-3"><i class="bi bi-file-earmark-pdf"></i> PDF-Datei hochladen</h5>
+                        <div class="mb-3">
+                            <label for="pdf_file" class="form-label">PDF-Datei <span class="text-danger">*</span></label>
+                            <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
+                            <div class="form-text">Laden Sie die Eingangsrechnung als PDF-Datei hoch.</div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Upload Status -->
+                    <div id="upload-status" class="mb-3" style="display: none;">
+                        <div class="alert" role="alert">
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                                <div>
+                                    <strong id="status-title">PDF wird hochgeladen...</strong>
+                                    <div id="status-message" class="small"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'vermietung:eingangsrechnung_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submit-btn">
+                            <i class="bi bi-upload"></i> PDF hochladen und analysieren
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-lightbulb"></i> Hinweise</h6>
+                <ul class="small mb-0">
+                    <li>Unterstützte Formate: PDF</li>
+                    <li>Die KI extrahiert automatisch: Lieferant, Rechnungsdatum, Fälligkeit, Belegnummer, Betreff und Beträge</li>
+                    <li>Der Lieferant wird automatisch im System gesucht und zugeordnet</li>
+                    <li>Bei fehlgeschlagener Extraktion können Sie die Felder manuell ausfüllen</li>
+                    <li>Die PDF-Datei wird automatisch als Anhang zur Rechnung gespeichert</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('pdf-upload-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const uploadStatus = document.getElementById('upload-status');
+    const statusTitle = document.getElementById('status-title');
+    const statusMessage = document.getElementById('status-message');
+
+    form.addEventListener('submit', function(e) {
+        // Show upload status
+        uploadStatus.style.display = 'block';
+        uploadStatus.querySelector('.alert').className = 'alert alert-info';
+        statusTitle.textContent = 'PDF wird hochgeladen...';
+        statusMessage.textContent = 'Bitte warten Sie, während die Datei hochgeladen und analysiert wird.';
+        
+        // Disable submit button to prevent double submission
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Wird verarbeitet...';
+        
+        // Update status after a short delay to show extraction phase
+        setTimeout(function() {
+            if (!form.classList.contains('submitted')) {
+                statusTitle.textContent = 'KI-Extraktion läuft...';
+                statusMessage.textContent = 'Die Rechnungsdaten werden analysiert und extrahiert.';
+            }
+        }, 2000);
+    });
+});
+</script>
+{% endblock %}
