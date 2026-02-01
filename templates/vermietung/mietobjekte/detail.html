@@ -4,7 +4,9 @@
 
 {% block page_title %}
     Objekt: {{ mietobjekt.name }}
+    {% if mietobjekt.is_mietobjekt %}
     <span class="badge bg-secondary ms-2">Mietobjekt</span>
+    {% endif %}
 {% endblock %}
 
 {% block page_actions %}

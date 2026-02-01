@@ -112,7 +112,9 @@
                         <a href="{% url 'vermietung:mietobjekt_detail' objekt.pk %}" class="text-decoration-none">
                             <strong>{{ objekt.name }}</strong>
                         </a>
+                        {% if objekt.is_mietobjekt %}
                         <span class="badge bg-secondary ms-2">Mietobjekt</span>
+                        {% endif %}
                         {% if objekt.beschreibung %}
                         <br><small class="text-muted">{{ objekt.beschreibung|truncatewords:10 }}</small>
                         {% endif %}

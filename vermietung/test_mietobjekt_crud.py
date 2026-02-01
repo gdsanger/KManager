@@ -389,3 +389,54 @@ class MietObjektCRUDTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'is_mietobjekt')
         self.assertContains(response, 'Mietobjekt')
+    
+    def test_mietobjekt_list_shows_badge_when_is_mietobjekt_true(self):
+        """Test that list view shows Mietobjekt badge when is_mietobjekt is True."""
+        self.client.login(username='testuser', password='testpass123')
+        # Ensure objekt1 has is_mietobjekt=True
+        self.objekt1.is_mietobjekt = True
+        self.objekt1.save()
+        
+        response = self.client.get(reverse('vermietung:mietobjekt_list'))
+        self.assertEqual(response.status_code, 200)
+        # Check that badge appears for this object
+        self.assertContains(response, 'badge bg-secondary ms-2">Mietobjekt</span>')
+    
+    def test_mietobjekt_list_hides_badge_when_is_mietobjekt_false(self):
+        """Test that list view does not show Mietobjekt badge when is_mietobjekt is False."""
+        self.client.login(username='testuser', password='testpass123')
+        # Set is_mietobjekt to False for both objects
+        self.objekt1.is_mietobjekt = False
+        self.objekt1.save()
+        self.objekt2.is_mietobjekt = False
+        self.objekt2.save()
+        
+        response = self.client.get(reverse('vermietung:mietobjekt_list'))
+        self.assertEqual(response.status_code, 200)
+        # Check that badge does NOT appear
+        self.assertNotContains(response, 'badge bg-secondary ms-2">Mietobjekt</span>')
+    
+    def test_mietobjekt_detail_shows_badge_when_is_mietobjekt_true(self):
+        """Test that detail view shows Mietobjekt badge when is_mietobjekt is True."""
+        self.client.login(username='testuser', password='testpass123')
+        # Ensure objekt1 has is_mietobjekt=True
+        self.objekt1.is_mietobjekt = True
+        self.objekt1.save()
+        
+        response = self.client.get(reverse('vermietung:mietobjekt_detail', kwargs={'pk': self.objekt1.pk}))
+        self.assertEqual(response.status_code, 200)
+        # Check that badge appears in page title
+        self.assertContains(response, 'badge bg-secondary ms-2">Mietobjekt</span>')
+    
+    def test_mietobjekt_detail_hides_badge_when_is_mietobjekt_false(self):
+        """Test that detail view does not show Mietobjekt badge when is_mietobjekt is False."""
+        self.client.login(username='testuser', password='testpass123')
+        # Set is_mietobjekt to False
+        self.objekt1.is_mietobjekt = False
+        self.objekt1.save()
+        
+        response = self.client.get(reverse('vermietung:mietobjekt_detail', kwargs={'pk': self.objekt1.pk}))
+        self.assertEqual(response.status_code, 200)
+        # Check that badge does NOT appear in page title
+        self.assertNotContains(response, 'badge bg-secondary ms-2">Mietobjekt</span>')
+
