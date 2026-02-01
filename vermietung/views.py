@@ -12,6 +12,7 @@ from django.db.models import Q
 from datetime import timedelta, datetime, date
 import tempfile
 import os
+from django_tables2 import RequestConfig
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, 
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
@@ -27,6 +28,8 @@ from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
 from core.services.ai.invoice_extraction import InvoiceExtractionService
 from core.services.ai.supplier_matching import SupplierMatchingService
+from .tables import EingangsrechnungTable
+from .filters import EingangsrechnungFilter
 
 
 @login_required
@@ -2195,56 +2198,28 @@ def zaehlerstand_delete(request, pk):
 @vermietung_required
 def eingangsrechnung_list(request):
     """
-    List all incoming invoices with search, filter and pagination.
+    List all incoming invoices with django-tables2 and django-filter.
     """
-    # Get search query and filters
-    search_query = request.GET.get('q', '').strip()
-    status_filter = request.GET.get('status', '').strip()
-    mietobjekt_filter = request.GET.get('mietobjekt', '').strip()
-    
-    # Base queryset
-    rechnungen = Eingangsrechnung.objects.select_related(
+    # Base queryset with optimized select/prefetch
+    queryset = Eingangsrechnung.objects.select_related(
         'lieferant', 'mietobjekt'
     ).prefetch_related('aufteilungen')
     
-    # Apply search filter if query provided
-    if search_query:
-        rechnungen = rechnungen.filter(
-            Q(belegnummer__icontains=search_query) |
-            Q(betreff__icontains=search_query) |
-            Q(lieferant__name__icontains=search_query) |
-            Q(lieferant__firma__icontains=search_query) |
-            Q(referenznummer__icontains=search_query)
-        )
+    # Apply filters
+    filter_set = EingangsrechnungFilter(request.GET, queryset=queryset)
     
-    # Apply status filter
-    if status_filter:
-        rechnungen = rechnungen.filter(status=status_filter)
+    # Create table with filtered data
+    table = EingangsrechnungTable(filter_set.qs)
     
-    # Apply mietobjekt filter
-    if mietobjekt_filter:
-        rechnungen = rechnungen.filter(mietobjekt_id=mietobjekt_filter)
-    
-    # Order by date (newest first)
-    rechnungen = rechnungen.order_by('-belegdatum', '-erstellt_am')
-    
-    # Pagination
-    paginator = Paginator(rechnungen, 20)  # Show 20 invoices per page
-    page_number = request.GET.get('page', 1)
-    page_obj = paginator.get_page(page_number)
-    
-    # Get all mietobjekte for filter dropdown
-    mietobjekte = MietObjekt.objects.all().order_by('name')
+    # Configure pagination
+    RequestConfig(request, paginate={'per_page': 20}).configure(table)
     
     context = {
-        'page_obj': page_obj,
-        'search_query': search_query,
-        'status_filter': status_filter,
-        'mietobjekt_filter': mietobjekt_filter,
-        'mietobjekte': mietobjekte,
-        'status_choices': EINGANGSRECHNUNG_STATUS,
+        'table': table,
+        'filter': filter_set,
     }
     
+    return render(request, 'vermietung/eingangsrechnungen/list.html', context)
     return render(request, 'vermietung/eingangsrechnungen/list.html', context)
 
 

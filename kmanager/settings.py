@@ -50,6 +50,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Third party apps
+    'django_tables2',
+    'django_filters',
     # Project apps
     'core',
     'vermietung.apps.VermietungConfig',
