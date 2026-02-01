@@ -70,7 +70,7 @@ class MietObjektForm(forms.ModelForm):
             'breite': 'Breite (m)',
             'tiefe': 'Tiefe (m)',
             'standort': 'Standort *',
-            'mietpreis': 'Mietpreis (€) *',
+            'mietpreis': 'Mietpreis (€)',
             'price_per_sqm': '€/m²',
             'nebenkosten': 'Nebenkosten (€)',
             'kaution': 'Kaution (€)',
@@ -82,6 +82,7 @@ class MietObjektForm(forms.ModelForm):
             'parent': 'Übergeordnetes Mietobjekt',
         }
         help_texts = {
+            'mietpreis': 'Optional: Mietpreis für dieses Objekt. Kann leer gelassen werden für Hauptobjekte ohne eigenen Preis.',
             'price_per_sqm': 'Optional: Mietpreis pro Quadratmeter. Kann zur Berechnung des Gesamtmietpreises verwendet werden.',
             'kaution': 'Standard: 3x Mietpreis (wird automatisch vorausgefüllt)',
             'verfuegbare_einheiten': 'Anzahl der verfügbaren Einheiten (Standard: 1)',
