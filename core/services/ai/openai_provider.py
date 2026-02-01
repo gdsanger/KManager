@@ -148,7 +148,7 @@ class OpenAIProvider(BaseProvider):
             request_params["temperature"] = temperature
         
         if max_tokens is not None:
-            request_params["max_tokens"] = max_tokens
+            request_params["max_output_tokens"] = max_tokens
         
         # Add any additional parameters
         request_params.update(kwargs)
