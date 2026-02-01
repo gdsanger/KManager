@@ -6,6 +6,7 @@ This module provides functionality to extract invoice data from PDF files using 
 import base64
 import json
 import logging
+import io
 from typing import Optional, Dict, Any
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
@@ -14,6 +15,8 @@ from dataclasses import dataclass, asdict
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from pdf2image import convert_from_path
+from PIL import Image
 
 from core.models import AIJobsHistory
 from core.services.ai.router import AIRouter
@@ -148,27 +151,53 @@ Extract the data now:"""
         """Initialize the invoice extraction service."""
         self.router = AIRouter()
     
-    def _pdf_to_base64(self, pdf_path: str) -> str:
+    def _pdf_to_image_base64(self, pdf_path: str) -> tuple[str, str]:
         """
-        Convert PDF file to base64 string for AI processing.
+        Convert PDF file to image (PNG) and encode as base64 for AI processing.
+        
+        OpenAI's Vision API only accepts image MIME types (image/jpeg, image/png),
+        not PDFs. This method converts the first page of the PDF to a PNG image.
         
         Args:
             pdf_path: Path to PDF file
             
         Returns:
-            Base64-encoded PDF content
+            Tuple of (base64-encoded image content, MIME type)
             
         Raises:
             FileNotFoundError: If PDF file doesn't exist
+            Exception: If PDF conversion fails
         """
         path = Path(pdf_path)
         if not path.exists():
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
         
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
-        
-        return base64.b64encode(pdf_bytes).decode('utf-8')
+        try:
+            # Convert first page of PDF to image
+            # pdf2image returns a list of PIL Image objects, one per page
+            logger.debug(f"Converting PDF to image: {pdf_path}")
+            images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=200)
+            
+            if not images:
+                raise Exception("PDF conversion returned no images")
+            
+            # Use the first page
+            image = images[0]
+            
+            # Convert PIL Image to base64 PNG
+            buffer = io.BytesIO()
+            image.save(buffer, format='PNG')
+            buffer.seek(0)
+            image_bytes = buffer.read()
+            
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            logger.debug(f"PDF converted to image. Size: {len(image_bytes)} bytes, Base64 length: {len(image_base64)}")
+            
+            return image_base64, 'image/png'
+            
+        except Exception as e:
+            logger.error(f"Failed to convert PDF to image: {e}")
+            raise
     
     def extract_invoice_data(
         self,
@@ -194,11 +223,11 @@ Extract the data now:"""
         logger.info(f"Starting invoice extraction for PDF: {pdf_path}")
         
         try:
-            # Convert PDF to base64
-            pdf_base64 = self._pdf_to_base64(pdf_path)
+            # Convert PDF to image (OpenAI Vision API requires images, not PDFs)
+            image_base64, mime_type = self._pdf_to_image_base64(pdf_path)
             
             # Prepare message with image
-            # OpenAI vision API expects a specific format
+            # OpenAI vision API expects a specific format with image MIME types
             messages = [
                 {
                     "role": "user",
@@ -210,7 +239,7 @@ Extract the data now:"""
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:application/pdf;base64,{pdf_base64}"
+                                "url": f"data:{mime_type};base64,{image_base64}"
                             }
                         }
                     ]
