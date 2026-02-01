@@ -319,7 +319,7 @@ class InvoiceExtractionErrorHandlingTestCase(TestCase):
         service = InvoiceExtractionService()
         
         with self.assertRaises(FileNotFoundError):
-            service._pdf_to_image_base64("/nonexistent/path/to/invoice.pdf")
+            service._pdf_to_base64("/nonexistent/path/to/invoice.pdf")
     
     def test_missing_required_fields_in_dto(self):
         """Test DTO with missing required invoice fields"""
