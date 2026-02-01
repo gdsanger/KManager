@@ -18,7 +18,6 @@ class EingangsrechnungTable(tables.Table):
     
     belegnummer = tables.Column(
         verbose_name='Belegnummer',
-        linkify=True,
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
