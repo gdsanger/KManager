@@ -388,7 +388,7 @@ class MietObjekt(models.Model):
         For new MietObjekt instances, kaution is pre-filled with 3 × mietpreis.
         """
         # Only set default kaution if this is a new object (no pk yet) and kaution is not already set
-        if not self.pk and self.kaution is None:
+        if not self.pk and self.kaution is None and self.mietpreis is not None:
             self.kaution = self.mietpreis * 3
         super().save(*args, **kwargs)
     
