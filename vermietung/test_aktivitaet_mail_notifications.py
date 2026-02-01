@@ -732,15 +732,15 @@ class ActivityEmailCCTest(TestCase):
         self.assertTrue(mock_send_mail.called)
         call_args = mock_send_mail.call_args
         
-        # Verify To recipient (creator)
-        self.assertEqual(call_args[1]['to'], [self.creator.email])
+        # With new CC functionality, all recipients are in 'to' field (deduplicated)
+        to_emails = call_args[1]['to']
         
-        # Verify CC includes assignee
-        self.assertIn('cc', call_args[1])
-        self.assertIn(self.assignee.email, call_args[1]['cc'])
+        # Verify both creator and assignee are in recipients
+        self.assertIn(self.creator.email, to_emails)
+        self.assertIn(self.assignee.email, to_emails)
         
-        # Verify no duplicate
-        self.assertNotIn(self.assignee.email, call_args[1]['to'])
+        # Verify no duplicates
+        self.assertEqual(len(to_emails), len(set(to_emails)))
     
     @patch('vermietung.signals.send_mail')
     def test_completed_email_no_cc_when_assignee_is_creator(self, mock_send_mail):
@@ -765,11 +765,11 @@ class ActivityEmailCCTest(TestCase):
         self.assertTrue(mock_send_mail.called)
         call_args = mock_send_mail.call_args
         
-        # Verify To recipient
+        # Verify To recipient (same user should only appear once)
         self.assertEqual(call_args[1]['to'], [self.same_user.email])
         
-        # Verify CC is empty (no duplicate)
-        self.assertEqual(call_args[1]['cc'], [])
+        # With new CC functionality, no separate cc field is used
+        # All recipients are deduplicated in 'to' field
     
     @patch('vermietung.signals.send_mail')
     def test_completed_email_no_cc_when_no_assignee(self, mock_send_mail):
@@ -794,11 +794,10 @@ class ActivityEmailCCTest(TestCase):
         self.assertTrue(mock_send_mail.called)
         call_args = mock_send_mail.call_args
         
-        # Verify To recipient
+        # Verify To recipient (only creator, no assignee)
         self.assertEqual(call_args[1]['to'], [self.creator.email])
         
-        # Verify CC is empty (no assignee)
-        self.assertEqual(call_args[1]['cc'], [])
+        # With new CC functionality, no separate cc field is used
     
     @patch('vermietung.signals.send_mail')
     def test_completed_email_no_cc_when_assignee_has_no_email(self, mock_send_mail):
@@ -830,8 +829,7 @@ class ActivityEmailCCTest(TestCase):
         self.assertTrue(mock_send_mail.called)
         call_args = mock_send_mail.call_args
         
-        # Verify To recipient
+        # Verify To recipient (only creator, assignee has no email)
         self.assertEqual(call_args[1]['to'], [self.creator.email])
         
-        # Verify CC is empty (assignee has no email)
-        self.assertEqual(call_args[1]['cc'], [])
+        # With new CC functionality, no separate cc field is used

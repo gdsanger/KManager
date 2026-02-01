@@ -58,9 +58,20 @@
         {% endif %}
         
         {% if aktivitaet.assigned_supplier %}
-        <div>
+        <div class="mb-1">
             <i class="bi bi-truck"></i>
             <small>{{ aktivitaet.assigned_supplier.name }}</small>
+        </div>
+        {% endif %}
+        
+        {% if aktivitaet.cc_users.exists %}
+        <div>
+            <i class="bi bi-eye"></i>
+            <small title="Zur Kontrolle informieren">
+                {% for cc_user in aktivitaet.cc_users.all %}
+                    {{ cc_user.username }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </small>
         </div>
         {% endif %}
     </div>
