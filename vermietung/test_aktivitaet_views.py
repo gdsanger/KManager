@@ -491,3 +491,62 @@ class AktivitaetViewTest(TestCase):
         
         # Check that serien_id is the same
         self.assertEqual(new_aktivitaet.serien_id, series_aktivitaet.serien_id)
+    
+    def test_edit_view_shows_date_field_values(self):
+        """Test that date fields are properly pre-filled in edit view."""
+        # Create an activity with a due date
+        due_date = date.today() + timedelta(days=14)
+        aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Activity with Date',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL',
+            faellig_am=due_date
+        )
+        
+        # Get the edit view
+        url = reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that the form has the correct initial value for faellig_am
+        form = response.context['form']
+        self.assertEqual(form.initial.get('faellig_am') or form.instance.faellig_am, due_date)
+        
+        # Check that the rendered HTML contains the date in ISO format (YYYY-MM-DD)
+        # The HTML5 date input should have value="YYYY-MM-DD"
+        expected_date_str = due_date.strftime('%Y-%m-%d')
+        self.assertContains(response, f'value="{expected_date_str}"')
+    
+    def test_edit_view_preserves_date_when_not_changed(self):
+        """Test that saving without changing date preserves the original date."""
+        # Create an activity with a due date
+        due_date = date.today() + timedelta(days=21)
+        aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Date Preservation Test',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL',
+            faellig_am=due_date
+        )
+        
+        # Edit the activity but don't change the date
+        url = reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+        response = self.client.post(url, {
+            'titel': 'Date Preservation Test - Updated',
+            'status': 'IN_BEARBEITUNG',
+            'prioritaet': 'NORMAL',
+            'faellig_am': due_date.strftime('%Y-%m-%d'),  # Send date in ISO format
+            'vertrag': self.vertrag.pk,
+            'ersteller': self.user.pk,
+        })
+        
+        self.assertEqual(response.status_code, 302)
+        
+        # Check that date was preserved
+        aktivitaet.refresh_from_db()
+        self.assertEqual(aktivitaet.faellig_am, due_date)
+        self.assertEqual(aktivitaet.titel, 'Date Preservation Test - Updated')

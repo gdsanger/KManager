@@ -927,6 +927,11 @@ class AktivitaetForm(forms.ModelForm):
         
         super().__init__(*args, **kwargs)
         
+        # Fix date field formatting for HTML5 date input
+        # HTML5 date inputs require ISO format (YYYY-MM-DD)
+        self.fields['faellig_am'].widget.format = '%Y-%m-%d'
+        self.fields['faellig_am'].input_formats = ['%Y-%m-%d']
+        
         # Filter assigned_user to show all users
         self.fields['assigned_user'].queryset = User.objects.all().order_by('username')
         self.fields['assigned_user'].required = False
