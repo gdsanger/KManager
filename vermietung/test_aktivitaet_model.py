@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from datetime import date
 from decimal import Decimal
 from core.models import Adresse
-from vermietung.models import MietObjekt, Vertrag, Aktivitaet
+from vermietung.models import MietObjekt, Vertrag, Aktivitaet, AktivitaetsBereich
 
 User = get_user_model()
 
@@ -123,44 +123,46 @@ class AktivitaetModelTest(TestCase):
         self.assertIsNone(aktivitaet.vertrag)
         self.assertIsNone(aktivitaet.mietobjekt)
     
-    def test_aktivitaet_without_context_raises_error(self):
-        """Test that creating an activity without any context raises ValidationError."""
-        with self.assertRaises(ValidationError) as context:
-            aktivitaet = Aktivitaet(
-                titel='Aufgabe ohne Kontext',
-                beschreibung='Diese Aufgabe hat keinen Kontext'
-            )
-            aktivitaet.save()
+    def test_aktivitaet_without_context_is_allowed(self):
+        """Test that creating an activity without any context is now allowed (for private/personal tasks)."""
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Persönliche Aufgabe ohne Kontext',
+            beschreibung='Diese Aufgabe hat keinen Vermietungskontext',
+            ersteller=self.user
+        )
         
-        self.assertIn('Die Aktivität muss genau einem Kontext zugeordnet werden', 
-                      str(context.exception))
+        self.assertEqual(aktivitaet.titel, 'Persönliche Aufgabe ohne Kontext')
+        self.assertIsNone(aktivitaet.mietobjekt)
+        self.assertIsNone(aktivitaet.vertrag)
+        self.assertIsNone(aktivitaet.kunde)
+        self.assertEqual(aktivitaet.status, 'OFFEN')
     
-    def test_aktivitaet_with_multiple_contexts_raises_error(self):
-        """Test that creating an activity with multiple contexts raises ValidationError."""
-        with self.assertRaises(ValidationError) as context:
-            aktivitaet = Aktivitaet(
-                titel='Aufgabe mit mehreren Kontexten',
-                vertrag=self.vertrag,
-                mietobjekt=self.mietobjekt
-            )
-            aktivitaet.save()
+    def test_aktivitaet_with_multiple_contexts_is_allowed(self):
+        """Test that creating an activity with multiple contexts is now allowed."""
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Aufgabe mit mehreren Kontexten',
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            ersteller=self.user
+        )
         
-        self.assertIn('Die Aktivität kann nur einem einzigen Kontext zugeordnet werden', 
-                      str(context.exception))
+        self.assertEqual(aktivitaet.vertrag, self.vertrag)
+        self.assertEqual(aktivitaet.mietobjekt, self.mietobjekt)
+        self.assertIsNone(aktivitaet.kunde)
     
-    def test_aktivitaet_with_all_three_contexts_raises_error(self):
-        """Test that creating an activity with all three contexts raises ValidationError."""
-        with self.assertRaises(ValidationError) as context:
-            aktivitaet = Aktivitaet(
-                titel='Aufgabe mit allen Kontexten',
-                vertrag=self.vertrag,
-                mietobjekt=self.mietobjekt,
-                kunde=self.kunde
-            )
-            aktivitaet.save()
+    def test_aktivitaet_with_all_three_contexts_is_allowed(self):
+        """Test that creating an activity with all three contexts is now allowed."""
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Aufgabe mit allen Kontexten',
+            vertrag=self.vertrag,
+            mietobjekt=self.mietobjekt,
+            kunde=self.kunde,
+            ersteller=self.user
+        )
         
-        self.assertIn('Die Aktivität kann nur einem einzigen Kontext zugeordnet werden', 
-                      str(context.exception))
+        self.assertEqual(aktivitaet.vertrag, self.vertrag)
+        self.assertEqual(aktivitaet.mietobjekt, self.mietobjekt)
+        self.assertEqual(aktivitaet.kunde, self.kunde)
     
     def test_aktivitaet_with_only_assigned_user(self):
         """Test creating an activity with only assigned_user (internal assignment)."""
@@ -472,3 +474,119 @@ class AktivitaetModelTest(TestCase):
         self.assertEqual(activities.count(), 2)
         self.assertIn(aktivitaet1, activities)
         self.assertIn(aktivitaet2, activities)
+
+
+class AktivitaetsBereichTest(TestCase):
+    """Tests for the AktivitaetsBereich (Activity Category) model."""
+    
+    def setUp(self):
+        """Set up test data for all tests."""
+        # Create a test user
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+        
+        # Create some activity categories
+        self.bereich_privat = AktivitaetsBereich.objects.create(
+            name='Privat',
+            beschreibung='Private und persönliche Aufgaben'
+        )
+        
+        self.bereich_sport = AktivitaetsBereich.objects.create(
+            name='Sport',
+            beschreibung='Sport und Fitness'
+        )
+    
+    def test_create_bereich(self):
+        """Test creating a new activity category."""
+        bereich = AktivitaetsBereich.objects.create(
+            name='Finanzen',
+            beschreibung='Finanzielle Aufgaben'
+        )
+        
+        self.assertEqual(bereich.name, 'Finanzen')
+        self.assertEqual(bereich.beschreibung, 'Finanzielle Aufgaben')
+        self.assertIsNotNone(bereich.created_at)
+    
+    def test_bereich_str_representation(self):
+        """Test the string representation of AktivitaetsBereich."""
+        self.assertEqual(str(self.bereich_privat), 'Privat')
+        self.assertEqual(str(self.bereich_sport), 'Sport')
+    
+    def test_bereich_unique_name(self):
+        """Test that bereich names must be unique."""
+        with self.assertRaises(Exception):  # IntegrityError
+            AktivitaetsBereich.objects.create(
+                name='Privat',  # Duplicate name
+                beschreibung='Another private category'
+            )
+    
+    def test_aktivitaet_with_bereich(self):
+        """Test creating an activity with a category."""
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Joggen gehen',
+            bereich=self.bereich_sport,
+            ersteller=self.user
+        )
+        
+        self.assertEqual(aktivitaet.bereich, self.bereich_sport)
+        self.assertEqual(aktivitaet.titel, 'Joggen gehen')
+    
+    def test_aktivitaet_without_bereich(self):
+        """Test creating an activity without a category."""
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Aufgabe ohne Bereich',
+            ersteller=self.user
+        )
+        
+        self.assertIsNone(aktivitaet.bereich)
+    
+    def test_bereich_delete_sets_null(self):
+        """Test that deleting a bereich sets aktivitaet.bereich to NULL."""
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Sport-Aufgabe',
+            bereich=self.bereich_sport,
+            ersteller=self.user
+        )
+        
+        # Delete the bereich
+        self.bereich_sport.delete()
+        
+        # Refresh the aktivitaet from DB
+        aktivitaet.refresh_from_db()
+        
+        # bereich should now be NULL
+        self.assertIsNone(aktivitaet.bereich)
+    
+    def test_bereich_relationship(self):
+        """Test the reverse relationship from bereich to aktivitaeten."""
+        aktivitaet1 = Aktivitaet.objects.create(
+            titel='Private Aufgabe 1',
+            bereich=self.bereich_privat,
+            ersteller=self.user
+        )
+        
+        aktivitaet2 = Aktivitaet.objects.create(
+            titel='Private Aufgabe 2',
+            bereich=self.bereich_privat,
+            ersteller=self.user
+        )
+        
+        # Test reverse relationship
+        self.assertEqual(self.bereich_privat.aktivitaeten.count(), 2)
+        self.assertIn(aktivitaet1, self.bereich_privat.aktivitaeten.all())
+        self.assertIn(aktivitaet2, self.bereich_privat.aktivitaeten.all())
+    
+    def test_bereich_ordering(self):
+        """Test that bereiche are ordered by name."""
+        bereich_a = AktivitaetsBereich.objects.create(name='A-Bereich')
+        bereich_z = AktivitaetsBereich.objects.create(name='Z-Bereich')
+        
+        bereiche = list(AktivitaetsBereich.objects.all())
+        
+        # Should be ordered alphabetically
+        self.assertEqual(bereiche[0].name, 'A-Bereich')
+        self.assertTrue(bereiche[-1].name == 'Z-Bereich')
+
+

@@ -934,7 +934,7 @@ class AktivitaetForm(forms.ModelForm):
         
         # Filter ersteller to show all users
         self.fields['ersteller'].queryset = User.objects.all().order_by('username')
-        self.fields['ersteller'].required = True
+        self.fields['ersteller'].required = False
         
         # Pre-fill ersteller with current user for new activities
         if not self.instance.pk and self.current_user:

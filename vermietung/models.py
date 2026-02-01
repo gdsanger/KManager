@@ -2055,7 +2055,7 @@ class Aktivitaet(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        blank=False,
+        blank=True,
         related_name='aktivitaeten_erstellt',
         verbose_name="Ersteller",
         help_text="Benutzer, der diese Aktivität erstellt hat"
