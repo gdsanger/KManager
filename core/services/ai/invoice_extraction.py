@@ -7,7 +7,7 @@ import base64
 import json
 import logging
 import io
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
@@ -151,7 +151,7 @@ Extract the data now:"""
         """Initialize the invoice extraction service."""
         self.router = AIRouter()
     
-    def _pdf_to_image_base64(self, pdf_path: str) -> tuple[str, str]:
+    def _pdf_to_image_base64(self, pdf_path: str) -> Tuple[str, str]:
         """
         Convert PDF file to image (PNG) and encode as base64 for AI processing.
         
@@ -179,7 +179,7 @@ Extract the data now:"""
             images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=200)
             
             if not images:
-                raise Exception("PDF conversion returned no images")
+                raise ValueError("PDF conversion returned no images - file may be corrupted or empty")
             
             # Use the first page
             image = images[0]
