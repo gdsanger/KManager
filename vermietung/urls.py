@@ -104,6 +104,7 @@ urlpatterns = [
     path('eingangsrechnungen/<int:pk>/bearbeiten/', views.eingangsrechnung_edit, name='eingangsrechnung_edit'),
     path('eingangsrechnungen/<int:pk>/loeschen/', views.eingangsrechnung_delete, name='eingangsrechnung_delete'),
     path('eingangsrechnungen/<int:pk>/bezahlt/', views.eingangsrechnung_mark_paid, name='eingangsrechnung_mark_paid'),
+    path('eingangsrechnungen/<int:pk>/pdf/', views.eingangsrechnung_download_pdf, name='eingangsrechnung_download_pdf'),
     
     # Kostenarten (Cost Types) URLs
     path('kostenarten/', views.kostenarten_list, name='kostenarten_list'),

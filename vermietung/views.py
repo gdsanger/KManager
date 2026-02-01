@@ -10,8 +10,10 @@ from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
 from datetime import timedelta, datetime, date
+from decimal import Decimal
 import tempfile
 import os
+import logging
 from django_tables2 import RequestConfig
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, 
@@ -31,6 +33,8 @@ from core.services.ai.supplier_matching import SupplierMatchingService
 from .tables import EingangsrechnungTable
 from .filters import EingangsrechnungFilter
 
+
+logger = logging.getLogger(__name__)
 
 @login_required
 def download_dokument(request, dokument_id):
@@ -2237,9 +2241,13 @@ def eingangsrechnung_detail(request, pk):
         'kostenart1', 'kostenart2'
     ).all()
     
+    # Get PDF document if available
+    pdf_dokument = rechnung.dokumente.filter(mime_type='application/pdf').first()
+    
     context = {
         'rechnung': rechnung,
         'aufteilungen': aufteilungen,
+        'pdf_dokument': pdf_dokument,
     }
     
     return render(request, 'vermietung/eingangsrechnungen/detail.html', context)
@@ -2470,6 +2478,47 @@ def eingangsrechnung_create_from_pdf(request):
             )
             dokument.save()
             
+            # Create default position if no positions exist (Requirement A)
+            if rechnung.aufteilungen.count() == 0:
+                # Try to find "Allgemein" Kostenart, create if not exists
+                allgemein_kostenart, created = Kostenart.objects.get_or_create(
+                    name="Allgemein",
+                    parent=None,  # Main cost type
+                    defaults={'umsatzsteuer_satz': '19'}  # Default VAT rate
+                )
+                
+                if created:
+                    logger.info('Created "Allgemein" Kostenart automatically')
+                
+                # Prepare default position data
+                aufteilung_data = {
+                    'eingangsrechnung': rechnung,
+                    'kostenart1': allgemein_kostenart,
+                    'kostenart2': None,
+                }
+                
+                # Use extracted amounts if available, otherwise default to 0
+                netto = Decimal('0')
+                if invoice_data:
+                    try:
+                        validated_data = invoice_data.validate()
+                        if 'nettobetrag' in validated_data:
+                            netto = validated_data['nettobetrag']
+                    except Exception:
+                        pass  # Use default 0
+                
+                aufteilung_data['nettobetrag'] = netto
+                
+                # Create the default position
+                default_aufteilung = EingangsrechnungAufteilung(**aufteilung_data)
+                default_aufteilung.save()
+                
+                messages.info(
+                    request,
+                    'Standard-Position "Allgemein" wurde automatisch erstellt. '
+                    'Bitte Kostenaufteilung bei Bedarf anpassen.'
+                )
+            
             # Add warning if invoice number was not extracted
             if rechnung.belegnummer.startswith('UNBEKANNT-'):
                 messages.warning(
@@ -2599,6 +2648,51 @@ def eingangsrechnung_mark_paid(request, pk):
     }
     
     return render(request, 'vermietung/eingangsrechnungen/mark_paid.html', context)
+
+
+@vermietung_required
+def eingangsrechnung_download_pdf(request, pk):
+    """
+    Download the PDF file attached to an incoming invoice.
+    
+    This view is auth-protected and returns the PDF file if it exists.
+    Returns 404 if invoice or PDF doesn't exist.
+    
+    Args:
+        request: HTTP request
+        pk: Primary key of the Eingangsrechnung
+    
+    Returns:
+        FileResponse with PDF file or Http404
+    """
+    # Get invoice
+    rechnung = get_object_or_404(Eingangsrechnung, pk=pk)
+    
+    # Get the PDF document - there should be at most one PDF per invoice
+    # Get the first PDF document associated with this invoice
+    dokument = rechnung.dokumente.filter(
+        mime_type='application/pdf'
+    ).first()
+    
+    if not dokument:
+        raise Http404("Kein PDF-Dokument für diese Rechnung gefunden.")
+    
+    # Get absolute file path
+    file_path = dokument.get_absolute_path()
+    
+    # Check if file exists
+    if not file_path.exists():
+        raise Http404("PDF-Datei wurde nicht gefunden im Filesystem.")
+    
+    # Create response - FileResponse handles file opening/closing automatically
+    response = FileResponse(
+        file_path.open('rb'),
+        content_type='application/pdf',
+        as_attachment=True,
+        filename=dokument.original_filename
+    )
+    
+    return response
 
 
 # Kostenarten (Cost Types) CRUD Views

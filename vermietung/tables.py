@@ -64,6 +64,13 @@ class EingangsrechnungTable(tables.Table):
         yesno='✓,✗'
     )
     
+    pdf = tables.Column(
+        verbose_name='PDF',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-center'}}
+    )
+    
     aktionen = tables.Column(
         verbose_name='Aktionen',
         empty_values=(),
@@ -108,6 +115,24 @@ class EingangsrechnungTable(tables.Table):
         else:
             return format_html('<i class="bi bi-x-circle text-muted"></i>')
     
+    def render_pdf(self, record):
+        """Render PDF download link."""
+        # Check if invoice has a PDF document
+        has_pdf = record.dokumente.filter(mime_type='application/pdf').exists()
+        
+        if has_pdf:
+            pdf_url = reverse('vermietung:eingangsrechnung_download_pdf', args=[record.pk])
+            return format_html(
+                '<a href="{}" class="btn btn-sm btn-outline-danger" title="PDF herunterladen">'
+                '<i class="bi bi-file-earmark-pdf"></i></a>',
+                pdf_url
+            )
+        else:
+            return format_html(
+                '<span class="text-muted" title="Kein PDF vorhanden">'
+                '<i class="bi bi-file-earmark"></i></span>'
+            )
+    
     def render_aktionen(self, record):
         """Render action buttons."""
         detail_url = reverse('vermietung:eingangsrechnung_detail', args=[record.pk])
@@ -144,6 +169,7 @@ class EingangsrechnungTable(tables.Table):
             'status',
             'faelligkeit',
             'umlagefaehig',
+            'pdf',
             'aktionen'
         )
         attrs = {
