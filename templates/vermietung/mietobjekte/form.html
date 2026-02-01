@@ -111,12 +111,25 @@
                             {% endif %}
                         </div>
                         <div class="col-md-4 mb-3">
+                            <label for="{{ form.price_per_sqm.id_for_label }}" class="form-label">{{ form.price_per_sqm.label }}</label>
+                            {{ form.price_per_sqm }}
+                            {% if form.price_per_sqm.errors %}
+                            <div class="text-danger small">{{ form.price_per_sqm.errors }}</div>
+                            {% endif %}
+                            {% if form.price_per_sqm.help_text %}
+                            <div class="form-text">{{ form.price_per_sqm.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
                             <label for="{{ form.nebenkosten.id_for_label }}" class="form-label">{{ form.nebenkosten.label }}</label>
                             {{ form.nebenkosten }}
                             {% if form.nebenkosten.errors %}
                             <div class="text-danger small">{{ form.nebenkosten.errors }}</div>
                             {% endif %}
                         </div>
+                    </div>
+                    
+                    <div class="row">
                         <div class="col-md-4 mb-3">
                             <label for="{{ form.kaution.id_for_label }}" class="form-label">{{ form.kaution.label }}</label>
                             {{ form.kaution }}
@@ -243,4 +256,92 @@
         </div>
     </div>
 </div>
+
+<!-- Modal for Mietpreis calculation confirmation -->
+<div class="modal fade" id="confirmCalculationModal" tabindex="-1" aria-labelledby="confirmCalculationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmCalculationModalLabel">Mietpreis berechnen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Gesamtmiete aus €/m² und Fläche berechnen und übernehmen?</p>
+                <p class="text-muted small mb-0">
+                    <strong>Berechnung:</strong> <span id="calculationPreview"></span>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btnDeclineCalculation">Nein</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmCalculation">Ja, übernehmen</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const pricePerSqmInput = document.getElementById('id_price_per_sqm');
+    const mietpreisInput = document.getElementById('id_mietpreis');
+    const flächeInput = document.getElementById('id_fläche');
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmCalculationModal'));
+    const calculationPreview = document.getElementById('calculationPreview');
+    const btnConfirm = document.getElementById('btnConfirmCalculation');
+    const btnDecline = document.getElementById('btnDeclineCalculation');
+    
+    let pendingCalculatedPrice = null;
+    let formSubmitPending = false;
+    
+    // Store original form submit handler
+    const originalSubmit = form.onsubmit;
+    
+    form.addEventListener('submit', function(e) {
+        // Only intercept if we haven't already shown the modal
+        if (formSubmitPending) {
+            return true; // Allow form to submit
+        }
+        
+        const pricePerSqm = parseFloat(pricePerSqmInput.value);
+        const fläche = parseFloat(flächeInput.value);
+        
+        // Check if both values are set and valid
+        if (pricePerSqm && pricePerSqm > 0 && fläche && fläche > 0) {
+            e.preventDefault();
+            
+            // Calculate the new mietpreis
+            const calculatedPrice = (pricePerSqm * fläche).toFixed(2);
+            pendingCalculatedPrice = calculatedPrice;
+            
+            // Update preview text
+            calculationPreview.textContent = `${pricePerSqm} €/m² × ${fläche} m² = ${calculatedPrice} €`;
+            
+            // Show modal
+            confirmModal.show();
+        } else {
+            // No calculation needed, allow normal submit
+            return true;
+        }
+    });
+    
+    // Handle confirmation
+    btnConfirm.addEventListener('click', function() {
+        if (pendingCalculatedPrice !== null) {
+            mietpreisInput.value = pendingCalculatedPrice;
+        }
+        confirmModal.hide();
+        formSubmitPending = true;
+        form.submit();
+    });
+    
+    // Handle decline
+    btnDecline.addEventListener('click', function() {
+        confirmModal.hide();
+        formSubmitPending = true;
+        form.submit();
+    });
+});
+</script>
 {% endblock %}

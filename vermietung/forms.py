@@ -31,6 +31,7 @@ class MietObjektForm(forms.ModelForm):
             'tiefe',
             'standort',
             'mietpreis',
+            'price_per_sqm',
             'nebenkosten',
             'kaution',
             'verfuegbare_einheiten',
@@ -49,7 +50,8 @@ class MietObjektForm(forms.ModelForm):
             'breite': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'tiefe': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'standort': forms.Select(attrs={'class': 'form-select'}),
-            'mietpreis': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'mietpreis': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'id': 'id_mietpreis'}),
+            'price_per_sqm': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'id': 'id_price_per_sqm'}),
             'nebenkosten': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'kaution': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'verfuegbare_einheiten': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
@@ -69,6 +71,7 @@ class MietObjektForm(forms.ModelForm):
             'tiefe': 'Tiefe (m)',
             'standort': 'Standort *',
             'mietpreis': 'Mietpreis (€) *',
+            'price_per_sqm': '€/m²',
             'nebenkosten': 'Nebenkosten (€)',
             'kaution': 'Kaution (€)',
             'verfuegbare_einheiten': 'Verfügbare Einheiten',
@@ -79,6 +82,7 @@ class MietObjektForm(forms.ModelForm):
             'parent': 'Übergeordnetes Mietobjekt',
         }
         help_texts = {
+            'price_per_sqm': 'Optional: Mietpreis pro Quadratmeter. Kann zur Berechnung des Gesamtmietpreises verwendet werden.',
             'kaution': 'Standard: 3x Mietpreis (wird automatisch vorausgefüllt)',
             'verfuegbare_einheiten': 'Anzahl der verfügbaren Einheiten (Standard: 1)',
             'volumen': 'Optional: Volumen überschreiben (wird aus H×B×T berechnet)',
