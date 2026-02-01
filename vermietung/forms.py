@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from core.models import Adresse, Mandant, Kostenart
 from .models import (
     MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, 
-    Aktivitaet, VertragsObjekt, Zaehler, Zaehlerstand, OBJEKT_TYPE,
+    Aktivitaet, AktivitaetsBereich, VertragsObjekt, Zaehler, Zaehlerstand, OBJEKT_TYPE,
     Eingangsrechnung, EingangsrechnungAufteilung
 )
 User = get_user_model()
@@ -860,6 +860,7 @@ class AktivitaetForm(forms.ModelForm):
             'status',
             'prioritaet',
             'faellig_am',
+            'bereich',
             'assigned_user',
             'assigned_supplier',
             'ersteller',
@@ -875,6 +876,7 @@ class AktivitaetForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': 'form-select'}),
             'prioritaet': forms.Select(attrs={'class': 'form-select'}),
             'faellig_am': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'bereich': forms.Select(attrs={'class': 'form-select', 'id': 'id_bereich'}),
             'assigned_user': forms.Select(attrs={'class': 'form-select'}),
             'assigned_supplier': forms.Select(attrs={'class': 'form-select'}),
             'ersteller': forms.Select(attrs={'class': 'form-select'}),
@@ -890,6 +892,7 @@ class AktivitaetForm(forms.ModelForm):
             'status': 'Status *',
             'prioritaet': 'Priorität *',
             'faellig_am': 'Fällig am',
+            'bereich': 'Bereich',
             'assigned_user': 'Interner Verantwortlicher',
             'assigned_supplier': 'Lieferant',
             'ersteller': 'Ersteller',
@@ -900,12 +903,16 @@ class AktivitaetForm(forms.ModelForm):
             'kunde': 'Kunde',
         }
         help_texts = {
+            'bereich': 'Optional: Kategorie zur Organisation der Aktivität (z.B. "Finanzen", "Sport", "Privat")',
             'assigned_user': 'Optional: Interner Benutzer, der für diese Aktivität verantwortlich ist',
             'assigned_supplier': 'Optional: Externer Lieferant, dem die Aktivität zugewiesen ist',
             'faellig_am': 'Optional: Fälligkeitsdatum für diese Aktivität',
             'ersteller': 'Benutzer, der diese Aktivität erstellt hat',
             'ist_serie': 'Wiederkehrende Aktivität mit festem Intervall',
             'intervall_monate': 'Intervall in Monaten (1-12) für wiederkehrende Aktivitäten',
+            'mietobjekt': 'Optional: Mietobjekt-Kontext',
+            'vertrag': 'Optional: Vertrag-Kontext',
+            'kunde': 'Optional: Kunden-Kontext',
         }
     
     def __init__(self, *args, **kwargs):
@@ -928,7 +935,7 @@ class AktivitaetForm(forms.ModelForm):
         
         # Filter ersteller to show all users
         self.fields['ersteller'].queryset = User.objects.all().order_by('username')
-        self.fields['ersteller'].required = True
+        self.fields['ersteller'].required = False
         
         # Pre-fill ersteller with current user for new activities
         if not self.instance.pk and self.current_user:
@@ -939,6 +946,10 @@ class AktivitaetForm(forms.ModelForm):
             adressen_type='KUNDE'
         ).order_by('name')
         self.fields['kunde'].required = False
+        
+        # Configure bereich field - make it optional
+        self.fields['bereich'].queryset = AktivitaetsBereich.objects.all().order_by('name')
+        self.fields['bereich'].required = False
         
         # Make intervall_monate optional initially
         self.fields['intervall_monate'].required = False
@@ -966,7 +977,10 @@ class AktivitaetForm(forms.ModelForm):
             pass
     
     def clean(self):
-        """Ensure exactly one context is set."""
+        """
+        Validate the activity data.
+        Context fields are now all optional - no validation needed.
+        """
         cleaned_data = super().clean()
         
         # If context was provided in __init__, ensure it's set
@@ -974,20 +988,36 @@ class AktivitaetForm(forms.ModelForm):
             try:
                 if self.context_type == 'mietobjekt':
                     cleaned_data['mietobjekt'] = MietObjekt.objects.get(pk=self.context_id)
-                    cleaned_data['vertrag'] = None
-                    cleaned_data['kunde'] = None
                 elif self.context_type == 'vertrag':
                     cleaned_data['vertrag'] = Vertrag.objects.get(pk=self.context_id)
-                    cleaned_data['mietobjekt'] = None
-                    cleaned_data['kunde'] = None
                 elif self.context_type == 'kunde':
                     cleaned_data['kunde'] = Adresse.objects.get(pk=self.context_id)
-                    cleaned_data['mietobjekt'] = None
-                    cleaned_data['vertrag'] = None
             except (MietObjekt.DoesNotExist, Vertrag.DoesNotExist, Adresse.DoesNotExist):
                 raise ValidationError('Das angegebene Kontextobjekt existiert nicht.')
         
         return cleaned_data
+
+
+class AktivitaetsBereichForm(forms.ModelForm):
+    """
+    Form for creating/editing AktivitaetsBereich (activity categories/areas).
+    """
+    
+    class Meta:
+        model = AktivitaetsBereich
+        fields = ['name', 'beschreibung']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'beschreibung': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+        labels = {
+            'name': 'Name *',
+            'beschreibung': 'Beschreibung',
+        }
+        help_texts = {
+            'name': 'Name der Kategorie (z.B. "Privat", "Sport", "Finanzen")',
+            'beschreibung': 'Optionale Beschreibung der Kategorie',
+        }
 
 
 # Inline formset for managing VertragsObjekt in Vertrag forms

@@ -75,6 +75,7 @@
                         <th>Titel</th>
                         <th>Status</th>
                         <th>Priorität</th>
+                        <th>Bereich</th>
                         <th>Fällig am</th>
                         <th>Kontext</th>
                         {% if view_type == 'created' %}
@@ -119,6 +120,15 @@
                             <span class="badge bg-warning text-dark">Normal</span>
                             {% else %}
                             <span class="badge bg-secondary">Niedrig</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if aktivitaet.bereich %}
+                            <span class="badge bg-primary">
+                                <i class="bi bi-tag"></i> {{ aktivitaet.bereich.name }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">-</span>
                             {% endif %}
                         </td>
                         <td>

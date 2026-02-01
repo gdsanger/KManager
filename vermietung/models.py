@@ -1889,20 +1889,56 @@ AKTIVITAET_PRIORITAET = [
 ]
 
 
+class AktivitaetsBereich(models.Model):
+    """
+    Category/Area model for organizing activities.
+    Allows categorization of activities (e.g., 'Private', 'Sport', 'Finanzen').
+    """
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Name",
+        help_text="Name der Kategorie/des Bereichs"
+    )
+    
+    beschreibung = models.TextField(
+        blank=True,
+        verbose_name="Beschreibung",
+        help_text="Optionale Beschreibung der Kategorie"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am"
+    )
+    
+    class Meta:
+        verbose_name = "Aktivitäts-Bereich"
+        verbose_name_plural = "Aktivitäts-Bereiche"
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name
+
+
 class Aktivitaet(models.Model):
     """
     Task/Activity model for the Vermietung module.
     
-    Each activity is linked to exactly one context:
+    Context fields (all optional):
     - MietObjekt (rental object)
     - Vertrag (contract)
     - Kunde (customer address)
+    - Can have none, one, or multiple contexts
     
     Assignment is flexible and optional:
     - Can be assigned to internal user (assigned_user)
     - Can be assigned to external supplier (assigned_supplier)
     - Can be assigned to both
     - Can be unassigned
+    
+    Category (Bereich):
+    - Can be categorized using AktivitaetsBereich for organization
     """
     # Core fields
     titel = models.CharField(
@@ -1952,7 +1988,18 @@ class Aktivitaet(models.Model):
         help_text="Zeitpunkt der letzten Aktualisierung"
     )
     
-    # Context fields (exactly one must be set)
+    # Category field (optional)
+    bereich = models.ForeignKey(
+        'AktivitaetsBereich',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aktivitaeten',
+        verbose_name="Bereich",
+        help_text="Optional: Kategorie/Bereich dieser Aktivität"
+    )
+    
+    # Context fields (all optional)
     mietobjekt = models.ForeignKey(
         MietObjekt,
         on_delete=models.CASCADE,
@@ -2008,7 +2055,7 @@ class Aktivitaet(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        blank=False,
+        blank=True,
         related_name='aktivitaeten_erstellt',
         verbose_name="Ersteller",
         help_text="Benutzer, der diese Aktivität erstellt hat"
@@ -2057,6 +2104,7 @@ class Aktivitaet(models.Model):
             models.Index(fields=['ist_serie']),
             models.Index(fields=['serien_id']),
             models.Index(fields=['reminder_sent_at']),
+            models.Index(fields=['bereich']),
         ]
     
     def __str__(self):
@@ -2066,31 +2114,14 @@ class Aktivitaet(models.Model):
     def clean(self):
         """
         Validate the activity data:
-        1. Exactly one context must be set (mietobjekt, vertrag, or kunde)
+        1. Context fields are all optional (can have none, one, or multiple)
         2. If assigned_supplier is set, it must be of type LIEFERANT
         3. If ist_serie is True, intervall_monate must be set
         """
         super().clean()
         
-        # Check context constraint: exactly one must be set
-        context_fields = [
-            self.mietobjekt_id,
-            self.vertrag_id,
-            self.kunde_id
-        ]
-        set_contexts = [field for field in context_fields if field is not None]
-        
-        if len(set_contexts) == 0:
-            raise ValidationError(
-                'Die Aktivität muss genau einem Kontext zugeordnet werden '
-                '(Mietobjekt, Vertrag oder Kunde).'
-            )
-        
-        if len(set_contexts) > 1:
-            raise ValidationError(
-                'Die Aktivität kann nur einem einzigen Kontext zugeordnet werden '
-                '(Mietobjekt, Vertrag oder Kunde).'
-            )
+        # Note: Context fields (mietobjekt, vertrag, kunde) are now all optional
+        # Activities can exist without any context for personal/private tasks
         
         # Check assigned_supplier is of type LIEFERANT
         if self.assigned_supplier_id:

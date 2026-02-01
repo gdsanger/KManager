@@ -16,15 +16,15 @@ import os
 import logging
 from django_tables2 import RequestConfig
 from .models import (
-    Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, 
+    Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, AktivitaetsBereich,
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
     EINGANGSRECHNUNG_STATUS
 )
 from core.models import Adresse, Mandant, Kostenart
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
-    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, VertragsObjektFormSet,
-    ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet, KostenartForm
+    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, AktivitaetsBereichForm,
+    VertragsObjektFormSet, ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet, KostenartForm
 )
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
@@ -2874,3 +2874,133 @@ def kostenarten_delete(request, pk):
         messages.error(request, f'Fehler beim Löschen: {str(e)}')
     
     return redirect('vermietung:kostenarten_list')
+
+
+# ============================================================================
+# AktivitaetsBereich (Activity Category) Views
+# ============================================================================
+
+@vermietung_required
+def bereich_list(request):
+    """
+    Display a list of all activity categories.
+    """
+    bereiche = AktivitaetsBereich.objects.all().order_by('name')
+    
+    # Add aktivitaeten count to each bereich
+    for bereich in bereiche:
+        bereich.aktivitaeten_count = bereich.aktivitaeten.count()
+    
+    context = {
+        'bereiche': bereiche,
+    }
+    
+    return render(request, 'vermietung/bereich/list.html', context)
+
+
+@vermietung_required
+def bereich_create(request):
+    """
+    Create a new activity category.
+    """
+    if request.method == 'POST':
+        form = AktivitaetsBereichForm(request.POST)
+        if form.is_valid():
+            bereich = form.save()
+            messages.success(
+                request,
+                f'Bereich "{bereich.name}" wurde erfolgreich angelegt.'
+            )
+            return redirect('vermietung:bereich_list')
+    else:
+        form = AktivitaetsBereichForm()
+    
+    context = {
+        'form': form,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/bereich/form.html', context)
+
+
+@vermietung_required
+def bereich_edit(request, pk):
+    """
+    Edit an existing activity category.
+    """
+    bereich = get_object_or_404(AktivitaetsBereich, pk=pk)
+    
+    if request.method == 'POST':
+        form = AktivitaetsBereichForm(request.POST, instance=bereich)
+        if form.is_valid():
+            bereich = form.save()
+            messages.success(
+                request,
+                f'Bereich "{bereich.name}" wurde erfolgreich aktualisiert.'
+            )
+            return redirect('vermietung:bereich_list')
+    else:
+        form = AktivitaetsBereichForm(instance=bereich)
+    
+    context = {
+        'form': form,
+        'bereich': bereich,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/bereich/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST", "DELETE"])
+def bereich_delete(request, pk):
+    """
+    Delete an activity category.
+    Uses SET_NULL on delete, so activities will keep their data.
+    """
+    bereich = get_object_or_404(AktivitaetsBereich, pk=pk)
+    bereich_name = bereich.name
+    aktivitaeten_count = bereich.aktivitaeten.count()
+    
+    try:
+        bereich.delete()
+        if aktivitaeten_count > 0:
+            messages.success(
+                request,
+                f'Bereich "{bereich_name}" wurde gelöscht. '
+                f'{aktivitaeten_count} Aktivität(en) wurden automatisch auf "Kein Bereich" gesetzt.'
+            )
+        else:
+            messages.success(
+                request,
+                f'Bereich "{bereich_name}" wurde erfolgreich gelöscht.'
+            )
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen: {str(e)}')
+    
+    return redirect('vermietung:bereich_list')
+
+
+@vermietung_required
+def bereich_create_ajax(request):
+    """
+    AJAX endpoint to create a new category inline from the activity form.
+    Returns JSON with the new category ID and name.
+    """
+    if request.method == 'POST':
+        form = AktivitaetsBereichForm(request.POST)
+        if form.is_valid():
+            bereich = form.save()
+            return JsonResponse({
+                'success': True,
+                'id': bereich.id,
+                'name': bereich.name,
+                'message': f'Bereich "{bereich.name}" wurde erfolgreich angelegt.'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'errors': form.errors
+            }, status=400)
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=405)

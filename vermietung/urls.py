@@ -81,6 +81,13 @@ urlpatterns = [
     path('aktivitaeten/<int:pk>/zuweisen/', views.aktivitaet_assign, name='aktivitaet_assign'),
     path('aktivitaeten/<int:pk>/status/', views.aktivitaet_update_status, name='aktivitaet_update_status'),
     
+    # AktivitaetsBereich (Activity Category) URLs
+    path('bereiche/', views.bereich_list, name='bereich_list'),
+    path('bereiche/neu/', views.bereich_create, name='bereich_create'),
+    path('bereiche/<int:pk>/bearbeiten/', views.bereich_edit, name='bereich_edit'),
+    path('bereiche/<int:pk>/loeschen/', views.bereich_delete, name='bereich_delete'),
+    path('bereiche/ajax/neu/', views.bereich_create_ajax, name='bereich_create_ajax'),
+    
     # Contextual Aktivitaet creation URLs
     path('vertraege/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'vertrag'}, name='aktivitaet_create_from_vertrag'),
     path('mietobjekte/<int:context_id>/aktivitaet/neu/', views.aktivitaet_create, {'context_type': 'mietobjekt'}, name='aktivitaet_create_from_mietobjekt'),
