@@ -109,6 +109,9 @@
                             {% if form.mietpreis.errors %}
                             <div class="text-danger small">{{ form.mietpreis.errors }}</div>
                             {% endif %}
+                            {% if form.mietpreis.help_text %}
+                            <div class="form-text">{{ form.mietpreis.help_text }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="{{ form.price_per_sqm.id_for_label }}" class="form-label">{{ form.price_per_sqm.label }}</label>
