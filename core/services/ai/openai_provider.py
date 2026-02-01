@@ -79,3 +79,96 @@ class OpenAIProvider(BaseProvider):
             input_tokens=input_tokens,
             output_tokens=output_tokens
         )
+    
+    def process_pdf_with_responses_api(
+        self,
+        pdf_path: str,
+        prompt: str,
+        model_id: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> ProviderResponse:
+        """
+        Process PDF file using OpenAI Responses API with file upload.
+        
+        PDFs must be sent via Responses API using input_file, not chat/completions.
+        
+        Args:
+            pdf_path: Path to the PDF file
+            prompt: Text prompt for extraction
+            model_id: OpenAI model identifier
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            **kwargs: Additional OpenAI parameters
+            
+        Returns:
+            ProviderResponse with extracted text
+        """
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "OpenAI SDK not installed. Install with: pip install openai"
+            )
+        
+        # Initialize OpenAI client
+        client_kwargs = {"api_key": self.api_key}
+        if self.organization_id:
+            client_kwargs["organization"] = self.organization_id
+        
+        client = OpenAI(**client_kwargs)
+        
+        # Step 1: Upload PDF file to OpenAI
+        with open(pdf_path, 'rb') as f:
+            file_upload = client.files.create(
+                file=f,
+                purpose="user_data"
+            )
+        
+        # Step 2: Use Responses API with input_file
+        request_params = {
+            "model": model_id,
+            "input": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": prompt
+                    },
+                    {
+                        "type": "input_file",
+                        "file_id": file_upload.id
+                    }
+                ]
+            }]
+        }
+        
+        if temperature is not None:
+            request_params["temperature"] = temperature
+        
+        if max_tokens is not None:
+            request_params["max_tokens"] = max_tokens
+        
+        # Add any additional parameters
+        request_params.update(kwargs)
+        
+        # Make API call to Responses API
+        response = client.responses.create(**request_params)
+        
+        # Extract response data
+        text = response.output_text if hasattr(response, 'output_text') else ""
+        
+        # Extract token usage if available
+        input_tokens = None
+        output_tokens = None
+        if hasattr(response, 'usage'):
+            input_tokens = response.usage.prompt_tokens if hasattr(response.usage, 'prompt_tokens') else None
+            output_tokens = response.usage.completion_tokens if hasattr(response.usage, 'completion_tokens') else None
+        
+        return ProviderResponse(
+            text=text,
+            raw=response,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens
+        )

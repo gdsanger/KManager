@@ -295,3 +295,114 @@ class AIRouter:
             max_tokens=max_tokens,
             **kwargs
         )
+    
+    def process_pdf_with_responses_api(
+        self,
+        pdf_path: str,
+        prompt: str,
+        model_id: Optional[str] = None,
+        provider_type: Optional[str] = "OpenAI",
+        user: Optional[User] = None,
+        client_ip: Optional[str] = None,
+        agent: str = "core.ai",
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> AIResponse:
+        """
+        Process PDF file using OpenAI Responses API with file upload.
+        
+        PDFs must be sent via OpenAI Responses API using input_file,
+        not via chat/completions endpoint.
+        
+        Args:
+            pdf_path: Path to the PDF file
+            prompt: Text prompt for extraction
+            model_id: Optional specific model ID to use
+            provider_type: Provider type (defaults to OpenAI for Responses API)
+            user: User making the request
+            client_ip: Client IP address
+            agent: Agent identifier for logging
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            **kwargs: Additional provider-specific parameters
+            
+        Returns:
+            AIResponse with extracted text
+            
+        Raises:
+            ServiceNotConfigured: If no active model is found
+            ServiceDisabled: If selected provider/model is disabled
+        """
+        # Select provider and model
+        provider, model = self._select_model(provider_type, model_id)
+        
+        # Create job history record with Pending status
+        job = AIJobsHistory.objects.create(
+            agent=agent,
+            user=user,
+            provider=provider,
+            model=model,
+            status='Pending',
+            client_ip=client_ip
+        )
+        
+        start_time = time.time()
+        
+        try:
+            # Get provider instance
+            provider_instance = self._get_provider_instance(provider)
+            
+            # Make API call with PDF file
+            provider_response = provider_instance.process_pdf_with_responses_api(
+                pdf_path=pdf_path,
+                prompt=prompt,
+                model_id=model.model_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs
+            )
+            
+            # Calculate duration
+            duration_ms = int((time.time() - start_time) * 1000)
+            
+            # Calculate costs if tokens are available
+            costs = None
+            if provider_response.input_tokens is not None and provider_response.output_tokens is not None:
+                costs = calculate_cost(
+                    provider_response.input_tokens,
+                    provider_response.output_tokens,
+                    model.input_price_per_1m_tokens,
+                    model.output_price_per_1m_tokens
+                )
+            
+            # Update job with success
+            job.status = 'Completed'
+            job.input_tokens = provider_response.input_tokens
+            job.output_tokens = provider_response.output_tokens
+            job.costs = costs
+            job.duration_ms = duration_ms
+            job.save()
+            
+            # Return unified response
+            return AIResponse(
+                text=provider_response.text,
+                raw=provider_response.raw,
+                input_tokens=provider_response.input_tokens,
+                output_tokens=provider_response.output_tokens,
+                model=model.model_id,
+                provider=provider.provider_type
+            )
+            
+        except Exception as e:
+            # Calculate duration
+            duration_ms = int((time.time() - start_time) * 1000)
+            
+            # Update job with error
+            job.status = 'Error'
+            job.duration_ms = duration_ms
+            job.error_message = str(e)
+            job.save()
+            
+            # Re-raise the exception
+            raise

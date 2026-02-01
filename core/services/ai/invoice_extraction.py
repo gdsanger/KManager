@@ -148,28 +148,6 @@ Extract the data now:"""
         """Initialize the invoice extraction service."""
         self.router = AIRouter()
     
-    def _pdf_to_base64(self, pdf_path: str) -> str:
-        """
-        Convert PDF file to base64 string for AI processing.
-        
-        Args:
-            pdf_path: Path to PDF file
-            
-        Returns:
-            Base64-encoded PDF content
-            
-        Raises:
-            FileNotFoundError: If PDF file doesn't exist
-        """
-        path = Path(pdf_path)
-        if not path.exists():
-            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
-        
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
-        
-        return base64.b64encode(pdf_bytes).decode('utf-8')
-    
     def extract_invoice_data(
         self,
         pdf_path: str,
@@ -194,38 +172,20 @@ Extract the data now:"""
         logger.info(f"Starting invoice extraction for PDF: {pdf_path}")
         
         try:
-            # Convert PDF to base64
-            pdf_base64 = self._pdf_to_base64(pdf_path)
+            # Validate PDF exists
+            path = Path(pdf_path)
+            if not path.exists():
+                raise FileNotFoundError(f"PDF file not found: {pdf_path}")
             
-            # Prepare message with image
-            # OpenAI vision API expects a specific format
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": self.EXTRACTION_PROMPT
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:application/pdf;base64,{pdf_base64}"
-                            }
-                        }
-                    ]
-                }
-            ]
-            
-            # Call AI service
-            # Use vision-capable model (GPT-4 Vision or Gemini Pro Vision)
-            # The router will select the appropriate model
-            response = self.router.chat(
-                messages=messages,
+            # Use OpenAI Responses API with file upload
+            # PDFs must be sent via Responses API using input_file, not chat/completions
+            response = self.router.process_pdf_with_responses_api(
+                pdf_path=pdf_path,
+                prompt=self.EXTRACTION_PROMPT,
                 user=user,
                 client_ip=client_ip,
                 agent="core.ai.invoice_extraction",
-                temperature=0.0,  # Use deterministic output
+                temperature=0.0,
                 max_tokens=1000
             )
             
