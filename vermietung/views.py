@@ -2504,7 +2504,9 @@ def eingangsrechnung_create_from_pdf(request):
                         validated_data = invoice_data.validate()
                         if 'nettobetrag' in validated_data:
                             netto = validated_data['nettobetrag']
-                    except Exception:
+                    except Exception as e:
+                        # Log validation errors but continue with default value
+                        logger.warning(f"Failed to extract nettobetrag from AI data: {e}")
                         pass  # Use default 0
                 
                 aufteilung_data['nettobetrag'] = netto
@@ -2685,6 +2687,8 @@ def eingangsrechnung_download_pdf(request, pk):
         raise Http404("PDF-Datei wurde nicht gefunden im Filesystem.")
     
     # Create response - FileResponse handles file opening/closing automatically
+    # Using as_attachment=True forces download instead of inline display
+    # This prevents potential XSS attacks from malicious PDFs being rendered in browser
     response = FileResponse(
         file_path.open('rb'),
         content_type='application/pdf',

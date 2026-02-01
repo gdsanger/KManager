@@ -206,6 +206,44 @@ class EingangsrechnungDefaultPositionTestCase(TestCase):
 class EingangsrechnungPDFAccessTestCase(TestCase):
     """Test case for PDF access in UI"""
     
+    # Minimal valid PDF content for testing
+    PDF_CONTENT = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+>>
+endobj
+xref
+0 4
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+trailer
+<<
+/Size 4
+/Root 1 0 R
+>>
+startxref
+190
+%%EOF
+"""
+    
     def setUp(self):
         """Set up test data"""
         # Create user with vermietung access (staff user)
@@ -262,47 +300,9 @@ class EingangsrechnungPDFAccessTestCase(TestCase):
     
     def create_dummy_pdf(self):
         """Create a dummy PDF file for testing"""
-        # Create a minimal valid PDF
-        pdf_content = b"""%PDF-1.4
-1 0 obj
-<<
-/Type /Catalog
-/Pages 2 0 R
->>
-endobj
-2 0 obj
-<<
-/Type /Pages
-/Kids [3 0 R]
-/Count 1
->>
-endobj
-3 0 obj
-<<
-/Type /Page
-/Parent 2 0 R
-/MediaBox [0 0 612 792]
->>
-endobj
-xref
-0 4
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-trailer
-<<
-/Size 4
-/Root 1 0 R
->>
-startxref
-190
-%%EOF
-"""
-        
-        # Save to temp file
+        # Save class PDF_CONTENT to temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as f:
-            f.write(pdf_content)
+            f.write(self.PDF_CONTENT)
             self.temp_pdf_path = f.name
     
     def tearDown(self):
@@ -340,46 +340,9 @@ startxref
     def test_pdf_download_returns_file_when_pdf_exists(self):
         """Test that PDF download returns file when PDF exists"""
         # Create a SimpleUploadedFile (Django's file wrapper)
-        pdf_content = b"""%PDF-1.4
-1 0 obj
-<<
-/Type /Catalog
-/Pages 2 0 R
->>
-endobj
-2 0 obj
-<<
-/Type /Pages
-/Kids [3 0 R]
-/Count 1
->>
-endobj
-3 0 obj
-<<
-/Type /Page
-/Parent 2 0 R
-/MediaBox [0 0 612 792]
->>
-endobj
-xref
-0 4
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-trailer
-<<
-/Size 4
-/Root 1 0 R
->>
-startxref
-190
-%%EOF
-"""
-        
         pdf_file = SimpleUploadedFile(
             "test_invoice.pdf",
-            pdf_content,
+            self.PDF_CONTENT,
             content_type="application/pdf"
         )
         
@@ -394,7 +357,7 @@ startxref
         dokument = Dokument.objects.create(
             original_filename='test_invoice.pdf',
             storage_path=storage_path,
-            file_size=len(pdf_content),
+            file_size=len(self.PDF_CONTENT),
             mime_type='application/pdf',
             uploaded_by=self.user,
             eingangsrechnung=self.rechnung
@@ -412,46 +375,9 @@ startxref
     def test_detail_view_includes_pdf_context(self):
         """Test that detail view includes PDF in context when available"""
         # Create a SimpleUploadedFile
-        pdf_content = b"""%PDF-1.4
-1 0 obj
-<<
-/Type /Catalog
-/Pages 2 0 R
->>
-endobj
-2 0 obj
-<<
-/Type /Pages
-/Kids [3 0 R]
-/Count 1
->>
-endobj
-3 0 obj
-<<
-/Type /Page
-/Parent 2 0 R
-/MediaBox [0 0 612 792]
->>
-endobj
-xref
-0 4
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-trailer
-<<
-/Size 4
-/Root 1 0 R
->>
-startxref
-190
-%%EOF
-"""
-        
         pdf_file = SimpleUploadedFile(
             "test_invoice.pdf",
-            pdf_content,
+            self.PDF_CONTENT,
             content_type="application/pdf"
         )
         
@@ -464,7 +390,7 @@ startxref
         dokument = Dokument.objects.create(
             original_filename='test_invoice.pdf',
             storage_path=storage_path,
-            file_size=len(pdf_content),
+            file_size=len(self.PDF_CONTENT),
             mime_type='application/pdf',
             uploaded_by=self.user,
             eingangsrechnung=self.rechnung
