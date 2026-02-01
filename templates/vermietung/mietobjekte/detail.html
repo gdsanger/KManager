@@ -179,9 +179,15 @@
                     <div class="col-md-4 text-muted">Mietpreis:</div>
                     <div class="col-md-8"><strong>{{ mietobjekt.mietpreis }} €</strong></div>
                 </div>
+                {% if mietobjekt.price_per_sqm %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">€/m² (eingegeben):</div>
+                    <div class="col-md-8"><strong>{{ mietobjekt.price_per_sqm }} €/m²</strong></div>
+                </div>
+                {% endif %}
                 {% if mietobjekt.qm_mietpreis %}
                 <div class="row mb-2">
-                    <div class="col-md-4 text-muted">Preis pro m²:</div>
+                    <div class="col-md-4 text-muted">Berechneter Preis pro m²:</div>
                     <div class="col-md-8">{{ mietobjekt.qm_mietpreis }} €/m²</div>
                 </div>
                 {% endif %}
