@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.http import JsonResponse, Http404, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
@@ -2700,7 +2701,7 @@ def kostenarten_create(request):
         if form.is_valid():
             kostenart = form.save()
             messages.success(request, f'Kostenart "{kostenart.name}" wurde erfolgreich angelegt.')
-            return redirect('vermietung:kostenarten_list') + f'?selected={kostenart.pk}'
+            return redirect(reverse('vermietung:kostenarten_list') + f'?selected={kostenart.pk}')
     else:
         # Pre-fill parent if provided
         initial = {}
@@ -2729,7 +2730,7 @@ def kostenarten_edit(request, pk):
         if form.is_valid():
             kostenart = form.save()
             messages.success(request, f'Kostenart "{kostenart.name}" wurde erfolgreich aktualisiert.')
-            return redirect('vermietung:kostenarten_list') + f'?selected={kostenart.pk}'
+            return redirect(reverse('vermietung:kostenarten_list') + f'?selected={kostenart.pk}')
     else:
         form = KostenartForm(instance=kostenart)
     
@@ -2766,7 +2767,7 @@ def kostenarten_delete(request, pk):
             f'Kostenart "{kostenart_name}" wird in {usage_count} Eingangsrechnungen verwendet '
             f'und kann nicht gelöscht werden.'
         )
-        return redirect('vermietung:kostenarten_list') + f'?selected={pk}'
+        return redirect(reverse('vermietung:kostenarten_list') + f'?selected={pk}')
     
     # Check if has children (for Hauptkostenart)
     if kostenart.is_hauptkostenart() and kostenart.children.exists():
@@ -2783,7 +2784,7 @@ def kostenarten_delete(request, pk):
                 )
             except Kostenart.DoesNotExist:
                 messages.error(request, 'Ungültige neue Hauptkostenart ausgewählt.')
-                return redirect('vermietung:kostenarten_list') + f'?selected={pk}'
+                return redirect(reverse('vermietung:kostenarten_list') + f'?selected={pk}')
         else:
             # Show error: need to re-parent first
             messages.error(
@@ -2791,7 +2792,7 @@ def kostenarten_delete(request, pk):
                 f'Kostenart "{kostenart_name}" hat {kostenart.children.count()} Unterkostenarten. '
                 f'Bitte wählen Sie eine neue Hauptkostenart aus oder löschen Sie die Unterkostenarten zuerst.'
             )
-            return redirect('vermietung:kostenarten_list') + f'?selected={pk}'
+            return redirect(reverse('vermietung:kostenarten_list') + f'?selected={pk}')
     
     # Safe to delete
     try:
