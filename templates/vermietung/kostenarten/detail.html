@@ -1,0 +1,151 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{% block title %}{{ kostenart.name }} - Kostenarten - Domus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h2><i class="bi bi-tag"></i> {{ kostenart.name }}</h2>
+        </div>
+        <div class="col text-end">
+            <a href="{% url 'vermietung:kostenarten_list' %}?selected={{ kostenart.pk }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Zurück zur Liste
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Typ:</div>
+                        <div class="col-md-8">
+                            {% if kostenart.is_hauptkostenart %}
+                                <span class="badge bg-primary">Hauptkostenart (Kostenart 1)</span>
+                            {% else %}
+                                <span class="badge bg-success">Unterkostenart (Kostenart 2)</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Name:</div>
+                        <div class="col-md-8">{{ kostenart.name }}</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Umsatzsteuer-Satz:</div>
+                        <div class="col-md-8">{{ kostenart.get_umsatzsteuer_satz_display }}</div>
+                    </div>
+
+                    {% if not kostenart.is_hauptkostenart %}
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Hauptkostenart:</div>
+                        <div class="col-md-8">
+                            <a href="{% url 'vermietung:kostenarten_detail' kostenart.parent.pk %}">{{ kostenart.parent.name }}</a>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if kostenart.is_hauptkostenart %}
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Unterkostenarten:</div>
+                        <div class="col-md-8">
+                            {% if kostenart.children.all %}
+                                <ul class="list-unstyled mb-0">
+                                    {% for child in kostenart.children.all %}
+                                    <li class="mb-1">
+                                        <a href="{% url 'vermietung:kostenarten_detail' child.pk %}">{{ child.name }}</a>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <em class="text-muted">Keine Unterkostenarten</em>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card bg-dark mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-receipt"></i> Verwendung</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-muted">Eingangsrechnungen:</div>
+                        <div class="col-md-8">
+                            {{ usage_count }} 
+                            {% if usage_count == 1 %}
+                                Rechnung
+                            {% else %}
+                                Rechnungen
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if usage_count > 0 %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle"></i> Diese Kostenart wird in Eingangsrechnungen verwendet und kann nicht gelöscht werden.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <i class="bi bi-tools"></i> Aktionen
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'vermietung:kostenarten_edit' kostenart.pk %}" class="btn btn-warning">
+                            <i class="bi bi-pencil"></i> Bearbeiten
+                        </a>
+
+                        {% if can_delete %}
+                            {% if kostenart.is_hauptkostenart and kostenart.children.count > 0 %}
+                                <button type="button" class="btn btn-danger" disabled title="Hat Unterkostenarten">
+                                    <i class="bi bi-trash"></i> Löschen (nicht möglich)
+                                </button>
+                                <p class="small text-muted mb-0">
+                                    Diese Hauptkostenart hat Unterkostenarten und kann nicht direkt gelöscht werden. 
+                                    Verwenden Sie die Liste-Ansicht zum Umhängen der Unterkostenarten.
+                                </p>
+                            {% else %}
+                                <form method="post" action="{% url 'vermietung:kostenarten_delete' kostenart.pk %}" 
+                                      onsubmit="return confirm('Möchten Sie die Kostenart &quot;{{ kostenart.name }}&quot; wirklich löschen?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger w-100">
+                                        <i class="bi bi-trash"></i> Löschen
+                                    </button>
+                                </form>
+                            {% endif %}
+                        {% else %}
+                            <button type="button" class="btn btn-secondary" disabled title="Wird verwendet">
+                                <i class="bi bi-trash"></i> Löschen (nicht möglich)
+                            </button>
+                            <p class="small text-muted mb-0">
+                                Diese Kostenart wird in {{ usage_count }} Eingangsrechnung{{ usage_count|pluralize:"en" }} verwendet.
+                            </p>
+                        {% endif %}
+
+                        {% if kostenart.is_hauptkostenart %}
+                        <a href="{% url 'vermietung:kostenarten_create' %}?parent={{ kostenart.pk }}" class="btn btn-success">
+                            <i class="bi bi-plus-circle"></i> Neue Unterkostenart
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

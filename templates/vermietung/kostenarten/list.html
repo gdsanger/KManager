@@ -1,0 +1,244 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{% block title %}Kostenarten - Domus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h2><i class="bi bi-tags"></i> Kostenarten</h2>
+        </div>
+        <div class="col text-end">
+            <a href="{% url 'vermietung:kostenarten_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Neue Hauptkostenart (Kostenart 1)
+            </a>
+            {% if selected_kostenart and selected_kostenart.is_hauptkostenart %}
+            <a href="{% url 'vermietung:kostenarten_create' %}?parent={{ selected_kostenart.pk }}" class="btn btn-success">
+                <i class="bi bi-plus-circle"></i> Neue Unterkostenart (Kostenart 2)
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column: Tree View -->
+        <div class="col-md-4">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Kostenarten-Struktur</h5>
+                </div>
+                <div class="card-body" style="max-height: 70vh; overflow-y: auto;">
+                    {% if hauptkostenarten %}
+                        <ul class="list-unstyled">
+                            {% for hauptkostenart in hauptkostenarten %}
+                            <li class="mb-3">
+                                <div class="d-flex align-items-center {% if selected_kostenart and selected_kostenart.pk == hauptkostenart.pk %}bg-primary bg-opacity-25 rounded p-2{% endif %}">
+                                    <a href="?selected={{ hauptkostenart.pk }}" class="text-decoration-none flex-grow-1">
+                                        <i class="bi bi-folder"></i> <strong>{{ hauptkostenart.name }}</strong>
+                                        <small class="text-muted">({{ hauptkostenart.get_umsatzsteuer_satz_display }})</small>
+                                    </a>
+                                </div>
+                                {% if hauptkostenart.children.all %}
+                                <ul class="list-unstyled ms-4 mt-2">
+                                    {% for unterkostenart in hauptkostenart.children.all %}
+                                    <li class="mb-2">
+                                        <div class="d-flex align-items-center {% if selected_kostenart and selected_kostenart.pk == unterkostenart.pk %}bg-primary bg-opacity-25 rounded p-2{% endif %}">
+                                            <a href="?selected={{ unterkostenart.pk }}" class="text-decoration-none flex-grow-1">
+                                                <i class="bi bi-file-earmark"></i> {{ unterkostenart.name }}
+                                                <small class="text-muted">({{ unterkostenart.get_umsatzsteuer_satz_display }})</small>
+                                            </a>
+                                        </div>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted text-center">
+                            <i class="bi bi-inbox"></i><br>
+                            Keine Kostenarten vorhanden
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Detail/Edit View -->
+        <div class="col-md-8">
+            {% if selected_kostenart %}
+                <div class="card bg-dark">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-{% if selected_kostenart.is_hauptkostenart %}folder{% else %}file-earmark{% endif %}"></i>
+                            {{ selected_kostenart.name }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Basic Information -->
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Typ:</div>
+                            <div class="col-md-8">
+                                {% if selected_kostenart.is_hauptkostenart %}
+                                    <span class="badge bg-primary">Hauptkostenart (Kostenart 1)</span>
+                                {% else %}
+                                    <span class="badge bg-success">Unterkostenart (Kostenart 2)</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Name:</div>
+                            <div class="col-md-8">{{ selected_kostenart.name }}</div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Umsatzsteuer-Satz:</div>
+                            <div class="col-md-8">{{ selected_kostenart.get_umsatzsteuer_satz_display }}</div>
+                        </div>
+
+                        {% if not selected_kostenart.is_hauptkostenart %}
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Hauptkostenart:</div>
+                            <div class="col-md-8">
+                                <a href="?selected={{ selected_kostenart.parent.pk }}">{{ selected_kostenart.parent.name }}</a>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if selected_kostenart.is_hauptkostenart %}
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Unterkostenarten:</div>
+                            <div class="col-md-8">
+                                {% if selected_kostenart.children.all %}
+                                    <span class="badge bg-info">{{ selected_kostenart.children.count }}</span>
+                                {% else %}
+                                    <em class="text-muted">Keine Unterkostenarten</em>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Usage Information -->
+                        <hr>
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Verwendung:</div>
+                            <div class="col-md-8">
+                                {% if selected_kostenart.is_hauptkostenart %}
+                                    {{ selected_kostenart.aufteilungen_hauptkostenart.count }} Eingangsrechnungen
+                                {% else %}
+                                    {{ selected_kostenart.aufteilungen_unterkostenart.count }} Eingangsrechnungen
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <hr>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'vermietung:kostenarten_edit' selected_kostenart.pk %}" class="btn btn-warning">
+                                <i class="bi bi-pencil"></i> Bearbeiten
+                            </a>
+                            
+                            {% if selected_kostenart.is_hauptkostenart %}
+                                {% if selected_kostenart.aufteilungen_hauptkostenart.count == 0 %}
+                                    {% if selected_kostenart.children.count > 0 %}
+                                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#reparentModal">
+                                            <i class="bi bi-trash"></i> Löschen (Unterkostenarten umhängen)
+                                        </button>
+                                    {% else %}
+                                        <button type="button" class="btn btn-danger" 
+                                                onclick="confirmDelete('{{ selected_kostenart.name }}', '{% url 'vermietung:kostenarten_delete' selected_kostenart.pk %}')">
+                                            <i class="bi bi-trash"></i> Löschen
+                                        </button>
+                                    {% endif %}
+                                {% else %}
+                                    <button type="button" class="btn btn-secondary" disabled title="Wird in Eingangsrechnungen verwendet">
+                                        <i class="bi bi-trash"></i> Löschen (nicht möglich)
+                                    </button>
+                                {% endif %}
+                            {% else %}
+                                {% if selected_kostenart.aufteilungen_unterkostenart.count == 0 %}
+                                    <button type="button" class="btn btn-danger" 
+                                            onclick="confirmDelete('{{ selected_kostenart.name }}', '{% url 'vermietung:kostenarten_delete' selected_kostenart.pk %}')">
+                                        <i class="bi bi-trash"></i> Löschen
+                                    </button>
+                                {% else %}
+                                    <button type="button" class="btn btn-secondary" disabled title="Wird in Eingangsrechnungen verwendet">
+                                        <i class="bi bi-trash"></i> Löschen (nicht möglich)
+                                    </button>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Re-parent Modal for Hauptkostenart with children -->
+                {% if selected_kostenart.is_hauptkostenart and selected_kostenart.children.count > 0 %}
+                <div class="modal fade" id="reparentModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content bg-dark">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Unterkostenarten umhängen</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form method="post" action="{% url 'vermietung:kostenarten_delete' selected_kostenart.pk %}">
+                                {% csrf_token %}
+                                <div class="modal-body">
+                                    <p>Die Hauptkostenart "{{ selected_kostenart.name }}" hat {{ selected_kostenart.children.count }} Unterkostenart{{ selected_kostenart.children.count|pluralize:"en" }}:</p>
+                                    <ul>
+                                        {% for child in selected_kostenart.children.all %}
+                                        <li>{{ child.name }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    <p>Bitte wählen Sie eine neue Hauptkostenart aus, zu der diese Unterkostenarten verschoben werden sollen:</p>
+                                    <select name="new_parent" class="form-select" required>
+                                        <option value="">-- Hauptkostenart auswählen --</option>
+                                        {% for hk in hauptkostenarten %}
+                                            {% if hk.pk != selected_kostenart.pk %}
+                                            <option value="{{ hk.pk }}">{{ hk.name }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                                    <button type="submit" class="btn btn-danger">Umhängen und Löschen</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+            {% else %}
+                <div class="card bg-dark">
+                    <div class="card-body text-center text-muted">
+                        <i class="bi bi-info-circle" style="font-size: 3rem;"></i>
+                        <p class="mt-3">Wählen Sie eine Kostenart aus der Liste aus, um Details anzuzeigen.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmDelete(name, deleteUrl) {
+    if (confirm('Möchten Sie die Kostenart "' + name + '" wirklich löschen?')) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = deleteUrl;
+        
+        var csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrfmiddlewaretoken';
+        csrfToken.value = '{{ csrf_token }}';
+        form.appendChild(csrfToken);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

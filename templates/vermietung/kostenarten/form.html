@@ -1,0 +1,114 @@
+{% extends "vermietung/vermietung_base.html" %}
+
+{% block title %}{% if is_create %}Neue Kostenart{% else %}Kostenart bearbeiten{% endif %} - Domus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>
+                {% if is_create %}
+                    <i class="bi bi-plus-circle"></i> 
+                    {% if parent %}
+                        Neue Unterkostenart (Kostenart 2) unter "{{ parent.name }}"
+                    {% else %}
+                        Neue Hauptkostenart (Kostenart 1)
+                    {% endif %}
+                {% else %}
+                    <i class="bi bi-pencil"></i> Kostenart bearbeiten: {{ kostenart.name }}
+                {% endif %}
+            </h2>
+        </div>
+        <div class="col text-end">
+            <a href="{% url 'vermietung:kostenarten_list' %}{% if kostenart %}?selected={{ kostenart.pk }}{% elif parent %}?selected={{ parent.pk }}{% endif %}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Abbrechen
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card bg-dark">
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {{ form.non_field_errors }}
+                        </div>
+                        {% endif %}
+
+                        <h5 class="mb-3"><i class="bi bi-tag"></i> Kostenart-Daten</h5>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                            <div class="text-danger small">{{ form.name.errors }}</div>
+                            {% endif %}
+                            {% if form.name.help_text %}
+                            <div class="form-text">{{ form.name.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.parent.id_for_label }}" class="form-label">{{ form.parent.label }}</label>
+                            {{ form.parent }}
+                            {% if form.parent.errors %}
+                            <div class="text-danger small">{{ form.parent.errors }}</div>
+                            {% endif %}
+                            {% if form.parent.help_text %}
+                            <div class="form-text">{{ form.parent.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.umsatzsteuer_satz.id_for_label }}" class="form-label">{{ form.umsatzsteuer_satz.label }}</label>
+                            {{ form.umsatzsteuer_satz }}
+                            {% if form.umsatzsteuer_satz.errors %}
+                            <div class="text-danger small">{{ form.umsatzsteuer_satz.errors }}</div>
+                            {% endif %}
+                            {% if form.umsatzsteuer_satz.help_text %}
+                            <div class="form-text">{{ form.umsatzsteuer_satz.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Speichern
+                            </button>
+                            <a href="{% url 'vermietung:kostenarten_list' %}{% if kostenart %}?selected={{ kostenart.pk }}{% elif parent %}?selected={{ parent.pk }}{% endif %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar with help text -->
+        <div class="col-lg-4">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <i class="bi bi-info-circle"></i> Hinweise
+                </div>
+                <div class="card-body">
+                    <p class="small mb-2">
+                        <strong>Pflichtfelder:</strong> Felder mit einem Stern (*) sind Pflichtfelder und müssen ausgefüllt werden.
+                    </p>
+                    <p class="small mb-2">
+                        <strong>Hauptkostenart (Kostenart 1):</strong> Lassen Sie das Feld "Hauptkostenart" leer, um eine neue Hauptkostenart zu erstellen.
+                    </p>
+                    <p class="small mb-2">
+                        <strong>Unterkostenart (Kostenart 2):</strong> Wählen Sie eine Hauptkostenart aus, um eine Unterkostenart zu erstellen. Es ist nur eine Hierarchie-Ebene erlaubt.
+                    </p>
+                    <p class="small mb-0">
+                        <strong>Umsatzsteuer-Satz:</strong> Der Umsatzsteuer-Satz wird bei Eingangsrechnungen verwendet. Bei Unterkostenarten überschreibt dieser Satz den der Hauptkostenart.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
 from django.http import JsonResponse, Http404, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
@@ -16,11 +17,11 @@ from .models import (
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
     EINGANGSRECHNUNG_STATUS
 )
-from core.models import Adresse, Mandant
+from core.models import Adresse, Mandant, Kostenart
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, VertragsObjektFormSet,
-    ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet
+    ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet, KostenartForm
 )
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
@@ -2624,3 +2625,180 @@ def eingangsrechnung_mark_paid(request, pk):
     }
     
     return render(request, 'vermietung/eingangsrechnungen/mark_paid.html', context)
+
+
+# Kostenarten (Cost Types) CRUD Views
+
+@vermietung_required
+def kostenarten_list(request):
+    """
+    List all Kostenarten with hierarchical tree structure.
+    Master/Detail view: tree on left, detail/edit on right.
+    """
+    # Get all Hauptkostenarten with their children
+    hauptkostenarten = Kostenart.objects.filter(parent__isnull=True).prefetch_related('children').order_by('name')
+    
+    # Get selected kostenart (if any)
+    selected_id = request.GET.get('selected')
+    selected_kostenart = None
+    if selected_id:
+        try:
+            selected_kostenart = Kostenart.objects.get(pk=selected_id)
+        except Kostenart.DoesNotExist:
+            pass
+    
+    context = {
+        'hauptkostenarten': hauptkostenarten,
+        'selected_kostenart': selected_kostenart,
+    }
+    
+    return render(request, 'vermietung/kostenarten/list.html', context)
+
+
+@vermietung_required
+def kostenarten_detail(request, pk):
+    """
+    Show details of a specific Kostenart.
+    """
+    kostenart = get_object_or_404(Kostenart, pk=pk)
+    
+    # Get usage information
+    from .models import EingangsrechnungAufteilung
+    usage_count = 0
+    if kostenart.is_hauptkostenart():
+        # Count usage in Eingangsrechnungen (kostenart1)
+        usage_count = EingangsrechnungAufteilung.objects.filter(kostenart1=kostenart).count()
+    else:
+        # Count usage in Eingangsrechnungen (kostenart2)
+        usage_count = EingangsrechnungAufteilung.objects.filter(kostenart2=kostenart).count()
+    
+    context = {
+        'kostenart': kostenart,
+        'usage_count': usage_count,
+        'can_delete': usage_count == 0,
+    }
+    
+    return render(request, 'vermietung/kostenarten/detail.html', context)
+
+
+@vermietung_required
+def kostenarten_create(request):
+    """
+    Create a new Kostenart (Hauptkostenart or Unterkostenart).
+    """
+    # Get parent_id from query params if creating Unterkostenart
+    parent_id = request.GET.get('parent')
+    parent = None
+    if parent_id:
+        try:
+            parent = Kostenart.objects.get(pk=parent_id, parent__isnull=True)
+        except Kostenart.DoesNotExist:
+            messages.error(request, 'Ungültige Hauptkostenart ausgewählt.')
+            return redirect('vermietung:kostenarten_list')
+    
+    if request.method == 'POST':
+        form = KostenartForm(request.POST)
+        if form.is_valid():
+            kostenart = form.save()
+            messages.success(request, f'Kostenart "{kostenart.name}" wurde erfolgreich angelegt.')
+            return redirect(reverse('vermietung:kostenarten_list') + f'?selected={kostenart.pk}')
+    else:
+        # Pre-fill parent if provided
+        initial = {}
+        if parent:
+            initial['parent'] = parent.pk
+        form = KostenartForm(initial=initial)
+    
+    context = {
+        'form': form,
+        'is_create': True,
+        'parent': parent,
+    }
+    
+    return render(request, 'vermietung/kostenarten/form.html', context)
+
+
+@vermietung_required
+def kostenarten_edit(request, pk):
+    """
+    Edit an existing Kostenart.
+    """
+    kostenart = get_object_or_404(Kostenart, pk=pk)
+    
+    if request.method == 'POST':
+        form = KostenartForm(request.POST, instance=kostenart)
+        if form.is_valid():
+            kostenart = form.save()
+            messages.success(request, f'Kostenart "{kostenart.name}" wurde erfolgreich aktualisiert.')
+            return redirect(reverse('vermietung:kostenarten_list') + f'?selected={kostenart.pk}')
+    else:
+        form = KostenartForm(instance=kostenart)
+    
+    context = {
+        'form': form,
+        'kostenart': kostenart,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/kostenarten/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def kostenarten_delete(request, pk):
+    """
+    Delete a Kostenart with usage check and re-parenting support.
+    """
+    kostenart = get_object_or_404(Kostenart, pk=pk)
+    kostenart_name = kostenart.name
+    
+    # Import at function level to avoid circular imports
+    from .models import EingangsrechnungAufteilung
+    
+    # Check if used in Eingangsrechnungen
+    if kostenart.is_hauptkostenart():
+        usage_count = EingangsrechnungAufteilung.objects.filter(kostenart1=kostenart).count()
+    else:
+        usage_count = EingangsrechnungAufteilung.objects.filter(kostenart2=kostenart).count()
+    
+    if usage_count > 0:
+        messages.error(
+            request,
+            f'Kostenart "{kostenart_name}" wird in {usage_count} Eingangsrechnungen verwendet '
+            f'und kann nicht gelöscht werden.'
+        )
+        return redirect(reverse('vermietung:kostenarten_list') + f'?selected={pk}')
+    
+    # Check if has children (for Hauptkostenart)
+    if kostenart.is_hauptkostenart() and kostenart.children.exists():
+        # Re-parent functionality
+        new_parent_id = request.POST.get('new_parent')
+        if new_parent_id:
+            try:
+                new_parent = Kostenart.objects.get(pk=new_parent_id, parent__isnull=True)
+                # Re-assign all children to new parent
+                kostenart.children.update(parent=new_parent)
+                messages.success(
+                    request,
+                    f'{kostenart.children.count()} Unterkostenarten wurden zu "{new_parent.name}" verschoben.'
+                )
+            except Kostenart.DoesNotExist:
+                messages.error(request, 'Ungültige neue Hauptkostenart ausgewählt.')
+                return redirect(reverse('vermietung:kostenarten_list') + f'?selected={pk}')
+        else:
+            # Show error: need to re-parent first
+            messages.error(
+                request,
+                f'Kostenart "{kostenart_name}" hat {kostenart.children.count()} Unterkostenarten. '
+                f'Bitte wählen Sie eine neue Hauptkostenart aus oder löschen Sie die Unterkostenarten zuerst.'
+            )
+            return redirect(reverse('vermietung:kostenarten_list') + f'?selected={pk}')
+    
+    # Safe to delete
+    try:
+        kostenart.delete()
+        messages.success(request, f'Kostenart "{kostenart_name}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen: {str(e)}')
+    
+    return redirect('vermietung:kostenarten_list')
