@@ -71,7 +71,7 @@ class MietObjekt(models.Model):
     breite = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     tiefe = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     standort = models.ForeignKey(Adresse, on_delete=models.CASCADE)
-    mietpreis = models.DecimalField(max_digits=10, decimal_places=2)
+    mietpreis = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     price_per_sqm = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -135,9 +135,9 @@ class MietObjekt(models.Model):
         """
         Berechnet den qm-Mietpreis (mietpreis / fläche).
         Rundet auf 2 Nachkommastellen.
-        Gibt None zurück wenn fläche fehlt oder 0 ist.
+        Gibt None zurück wenn fläche fehlt oder 0 ist, oder wenn mietpreis None ist.
         """
-        if not self.fläche or self.fläche == 0:
+        if not self.fläche or self.fläche == 0 or self.mietpreis is None:
             return None
         # Perform division and ensure result is Decimal
         result = Decimal(self.mietpreis) / Decimal(self.fläche)

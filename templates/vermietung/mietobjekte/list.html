@@ -132,9 +132,13 @@
                         {% endif %}
                     </td>
                     <td>
-                        {{ objekt.mietpreis }} €
-                        {% if objekt.qm_mietpreis %}
-                        <br><small class="text-muted">{{ objekt.qm_mietpreis }} €/m²</small>
+                        {% if objekt.mietpreis %}
+                            {{ objekt.mietpreis }} €
+                            {% if objekt.qm_mietpreis %}
+                            <br><small class="text-muted">{{ objekt.qm_mietpreis }} €/m²</small>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">—</span>
                         {% endif %}
                     </td>
                     <td>
