@@ -71,7 +71,7 @@ class MietObjekt(models.Model):
     breite = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     tiefe = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     standort = models.ForeignKey(Adresse, on_delete=models.CASCADE)
-    mietpreis = models.DecimalField(max_digits=10, decimal_places=2)
+    mietpreis = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     nebenkosten = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     kaution = models.DecimalField(
         max_digits=10,
@@ -126,9 +126,9 @@ class MietObjekt(models.Model):
         """
         Berechnet den qm-Mietpreis (mietpreis / fläche).
         Rundet auf 2 Nachkommastellen.
-        Gibt None zurück wenn fläche fehlt oder 0 ist.
+        Gibt None zurück wenn mietpreis oder fläche fehlt oder 0 ist.
         """
-        if not self.fläche or self.fläche == 0:
+        if not self.mietpreis or not self.fläche or self.fläche == 0:
             return None
         # Perform division and ensure result is Decimal
         result = Decimal(self.mietpreis) / Decimal(self.fläche)
@@ -379,7 +379,7 @@ class MietObjekt(models.Model):
         For new MietObjekt instances, kaution is pre-filled with 3 × mietpreis.
         """
         # Only set default kaution if this is a new object (no pk yet) and kaution is not already set
-        if not self.pk and self.kaution is None:
+        if not self.pk and self.kaution is None and self.mietpreis:
             self.kaution = self.mietpreis * 3
         super().save(*args, **kwargs)
     

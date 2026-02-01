@@ -390,7 +390,7 @@ const manualTotalSection = document.getElementById('manual-total-section');
 // Get mietobjekt price data for auto-filling
 const mietobjektPreise = {
     {% for obj in formset.form.base_fields.mietobjekt.queryset %}
-    {{ obj.pk }}: {{ obj.mietpreis|unlocalize }}{% if not forloop.last %},{% endif %}
+    {{ obj.pk }}: {% if obj.mietpreis %}{{ obj.mietpreis|unlocalize }}{% else %}null{% endif %}{% if not forloop.last %},{% endif %}
     {% endfor %}
 };
 

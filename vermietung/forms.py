@@ -68,7 +68,7 @@ class MietObjektForm(forms.ModelForm):
             'breite': 'Breite (m)',
             'tiefe': 'Tiefe (m)',
             'standort': 'Standort *',
-            'mietpreis': 'Mietpreis (€) *',
+            'mietpreis': 'Mietpreis (€)',
             'nebenkosten': 'Nebenkosten (€)',
             'kaution': 'Kaution (€)',
             'verfuegbare_einheiten': 'Verfügbare Einheiten',

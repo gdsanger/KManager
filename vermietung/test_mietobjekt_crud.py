@@ -439,4 +439,126 @@ class MietObjektCRUDTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         # Check that badge does NOT appear in page title
         self.assertNotContains(response, 'badge bg-secondary ms-2">Mietobjekt</span>')
+    
+    # Tests for optional mietpreis (issue #219)
+    def test_mietobjekt_create_without_price(self):
+        """Test TC1: Create mietobjekt without price - should save successfully."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        data = {
+            'name': 'Katzensteinstr. 2 Komplett',
+            'type': 'GEBAEUDE',
+            'beschreibung': 'Hauptobjekt ohne eigenen Mietpreis',
+            'standort': self.standort1.id,
+            'verfuegbare_einheiten': '1',
+            'verfuegbar': True,
+            'is_mietobjekt': True
+        }
+        response = self.client.post(reverse('vermietung:mietobjekt_create'), data)
+        self.assertEqual(response.status_code, 302)  # Redirect after success
+        
+        # Check that object was created without price
+        new_objekt = MietObjekt.objects.get(name='Katzensteinstr. 2 Komplett')
+        self.assertIsNone(new_objekt.mietpreis)
+        self.assertEqual(new_objekt.name, 'Katzensteinstr. 2 Komplett')
+    
+    def test_mietobjekt_create_with_price(self):
+        """Test TC2: Create mietobjekt with price - should save successfully with correct price."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        data = {
+            'name': 'Einliegerwohnung',
+            'type': 'RAUM',
+            'beschreibung': 'Wohnung mit eigenem Preis',
+            'standort': self.standort1.id,
+            'mietpreis': '850.50',
+            'verfuegbare_einheiten': '1',
+            'verfuegbar': True,
+            'is_mietobjekt': True
+        }
+        response = self.client.post(reverse('vermietung:mietobjekt_create'), data)
+        self.assertEqual(response.status_code, 302)  # Redirect after success
+        
+        # Check that object was created with price
+        new_objekt = MietObjekt.objects.get(name='Einliegerwohnung')
+        self.assertEqual(new_objekt.mietpreis, Decimal('850.50'))
+    
+    def test_mietobjekt_without_price_displays_correctly(self):
+        """Test TC3: Display mietobjekt without price - should show without errors."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Create object without price
+        objekt = MietObjekt.objects.create(
+            name='Objekt ohne Preis',
+            type='RAUM',
+            beschreibung='Test',
+            standort=self.standort1,
+            mietpreis=None,
+            verfuegbar=True
+        )
+        
+        # Test detail view
+        response = self.client.get(reverse('vermietung:mietobjekt_detail', kwargs={'pk': objekt.pk}))
+        self.assertEqual(response.status_code, 200)
+        # Should not crash and should show dash
+        self.assertContains(response, '—')
+        
+        # Test list view
+        response = self.client.get(reverse('vermietung:mietobjekt_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Objekt ohne Preis')
+    
+    def test_mietobjekt_remove_price(self):
+        """Test TC4: Remove price from existing mietobjekt - should save successfully with NULL."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Verify object has price initially
+        self.assertIsNotNone(self.objekt1.mietpreis)
+        
+        # Update to remove price (empty string)
+        data = {
+            'name': self.objekt1.name,
+            'type': self.objekt1.type,
+            'beschreibung': self.objekt1.beschreibung,
+            'fläche': str(self.objekt1.fläche),
+            'standort': self.objekt1.standort.id,
+            'mietpreis': '',  # Empty string should save as NULL
+            'nebenkosten': str(self.objekt1.nebenkosten),
+            'verfuegbare_einheiten': '1',
+            'verfuegbar': True,
+            'is_mietobjekt': True
+        }
+        response = self.client.post(reverse('vermietung:mietobjekt_edit', kwargs={'pk': self.objekt1.pk}), data)
+        self.assertEqual(response.status_code, 302)  # Redirect after success
+        
+        # Check that price was removed
+        self.objekt1.refresh_from_db()
+        self.assertIsNone(self.objekt1.mietpreis)
+    
+    def test_qm_mietpreis_with_null_price(self):
+        """Test that qm_mietpreis returns None when mietpreis is NULL."""
+        objekt = MietObjekt.objects.create(
+            name='Test Objekt',
+            type='RAUM',
+            beschreibung='Test',
+            standort=self.standort1,
+            fläche=Decimal('50.00'),
+            mietpreis=None,  # No price
+            verfuegbar=True
+        )
+        self.assertIsNone(objekt.qm_mietpreis)
+    
+    def test_kaution_not_set_when_mietpreis_is_null(self):
+        """Test that kaution is not auto-calculated when mietpreis is NULL on creation."""
+        objekt = MietObjekt.objects.create(
+            name='Test Objekt',
+            type='RAUM',
+            beschreibung='Test',
+            standort=self.standort1,
+            mietpreis=None,
+            verfuegbar=True
+        )
+        # Kaution should not be set (should be None)
+        self.assertIsNone(objekt.kaution)
+
 

@@ -177,7 +177,7 @@
             <div class="card-body">
                 <div class="row mb-2">
                     <div class="col-md-4 text-muted">Mietpreis:</div>
-                    <div class="col-md-8"><strong>{{ mietobjekt.mietpreis }} €</strong></div>
+                    <div class="col-md-8"><strong>{% if mietobjekt.mietpreis %}{{ mietobjekt.mietpreis }} €{% else %}—{% endif %}</strong></div>
                 </div>
                 {% if mietobjekt.qm_mietpreis %}
                 <div class="row mb-2">
