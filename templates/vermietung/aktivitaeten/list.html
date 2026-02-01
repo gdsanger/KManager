@@ -170,7 +170,13 @@
                                 {% if aktivitaet.assigned_supplier %}
                                     <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.name }}
                                 {% endif %}
-                                {% if not aktivitaet.assigned_user and not aktivitaet.assigned_supplier %}
+                                {% if aktivitaet.cc_users.exists %}
+                                    <br><i class="bi bi-eye"></i> 
+                                    {% for cc_user in aktivitaet.cc_users.all %}
+                                        {{ cc_user.username }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                                {% if not aktivitaet.assigned_user and not aktivitaet.assigned_supplier and not aktivitaet.cc_users.exists %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             {% else %}
