@@ -121,6 +121,36 @@
 
                     <hr class="my-4">
 
+                    <!-- Section 2b: Kategorisierung -->
+                    <h5 class="mb-3"><i class="bi bi-tags"></i> Kategorisierung</h5>
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="{{ form.bereich.id_for_label }}" class="form-label">
+                                {{ form.bereich.label }}
+                            </label>
+                            <div class="input-group">
+                                {{ form.bereich }}
+                                <button type="button" 
+                                        class="btn btn-outline-primary" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#bereichCreateModal"
+                                        title="Neuen Bereich anlegen">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                            </div>
+                            {% if form.bereich.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.bereich.errors }}
+                            </div>
+                            {% endif %}
+                            {% if form.bereich.help_text %}
+                            <div class="form-text">{{ form.bereich.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
                     <!-- Section 3: Zuständigkeit (Assignment) -->
                     <h5 class="mb-3"><i class="bi bi-people"></i> Zuständigkeit</h5>
                     <div class="row">
@@ -362,6 +392,42 @@
     </div>
 </div>
 
+<!-- Modal for creating new Bereich inline -->
+<div class="modal fade" id="bereichCreateModal" tabindex="-1" aria-labelledby="bereichCreateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bereichCreateModalLabel">
+                    <i class="bi bi-plus-circle"></i> Neuer Aktivitäts-Bereich
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="bereichCreateForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="bereich_name" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="bereich_name" name="name" required>
+                        <div class="form-text">Name der Kategorie (z.B. "Privat", "Sport", "Finanzen")</div>
+                        <div id="bereich_name_error" class="invalid-feedback"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bereich_beschreibung" class="form-label">Beschreibung</label>
+                        <textarea class="form-control" id="bereich_beschreibung" name="beschreibung" rows="3"></textarea>
+                        <div class="form-text">Optionale Beschreibung der Kategorie</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="bereichCreateSubmit">
+                    <i class="bi bi-save"></i> Speichern
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Handle series checkbox - enable/disable intervall_monate field
@@ -441,6 +507,80 @@ document.addEventListener('DOMContentLoaded', function() {
         updateContextFields(initialField);
     }
     {% endif %}
+    
+    // Handle inline Bereich creation
+    const bereichCreateSubmit = document.getElementById('bereichCreateSubmit');
+    const bereichSelect = document.getElementById('id_bereich');
+    const bereichModal = new bootstrap.Modal(document.getElementById('bereichCreateModal'));
+    
+    if (bereichCreateSubmit) {
+        bereichCreateSubmit.addEventListener('click', function() {
+            const form = document.getElementById('bereichCreateForm');
+            const formData = new FormData(form);
+            
+            // Disable submit button during request
+            bereichCreateSubmit.disabled = true;
+            bereichCreateSubmit.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Speichern...';
+            
+            fetch('{% url "vermietung:bereich_create_ajax" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Add new option to select
+                    const newOption = new Option(data.name, data.id, true, true);
+                    bereichSelect.add(newOption);
+                    
+                    // Close modal and reset form
+                    bereichModal.hide();
+                    form.reset();
+                    
+                    // Show success message (optional)
+                    if (data.message) {
+                        // You can add a toast notification here if you have one
+                        console.log(data.message);
+                    }
+                } else {
+                    // Show errors
+                    if (data.errors && data.errors.name) {
+                        const nameInput = document.getElementById('bereich_name');
+                        const nameError = document.getElementById('bereich_name_error');
+                        nameInput.classList.add('is-invalid');
+                        nameError.textContent = data.errors.name.join(', ');
+                        nameError.style.display = 'block';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Erstellen des Bereichs. Bitte versuchen Sie es erneut.');
+            })
+            .finally(() => {
+                // Re-enable submit button
+                bereichCreateSubmit.disabled = false;
+                bereichCreateSubmit.innerHTML = '<i class="bi bi-save"></i> Speichern';
+            });
+        });
+    }
+    
+    // Reset modal form when closed
+    const bereichCreateModalEl = document.getElementById('bereichCreateModal');
+    if (bereichCreateModalEl) {
+        bereichCreateModalEl.addEventListener('hidden.bs.modal', function () {
+            const form = document.getElementById('bereichCreateForm');
+            form.reset();
+            // Clear validation errors
+            const nameInput = document.getElementById('bereich_name');
+            const nameError = document.getElementById('bereich_name_error');
+            nameInput.classList.remove('is-invalid');
+            nameError.style.display = 'none';
+        });
+    }
 });
 </script>
 {% endblock %}
