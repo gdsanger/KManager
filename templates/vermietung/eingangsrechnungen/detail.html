@@ -241,6 +241,36 @@
                 </div>
             </div>
         </div>
+
+        <!-- PDF Dokument -->
+        {% if pdf_dokument %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-pdf text-danger"></i> PDF Dokument</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <p class="mb-2">
+                            <strong>Dateiname:</strong> {{ pdf_dokument.original_filename }}
+                        </p>
+                        <p class="mb-2 text-muted small">
+                            <i class="bi bi-info-circle"></i> Hochgeladen: {{ pdf_dokument.uploaded_at|date:"d.m.Y H:i" }}
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <a href="{% url 'vermietung:eingangsrechnung_download_pdf' rechnung.pk %}" 
+                           class="btn btn-danger w-100" 
+                           target="_blank">
+                            <i class="bi bi-download"></i> PDF herunterladen
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
