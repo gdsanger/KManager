@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, Aktivitaet,
+    MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, Aktivitaet, AktivitaetsBereich,
     OBJEKT_TYPE, VERTRAG_STATUS, DOKUMENT_ENTITY_TYPES, AKTIVITAET_STATUS, AKTIVITAET_PRIORITAET,
     Eingangsrechnung, EingangsrechnungAufteilung
 )
@@ -342,6 +342,22 @@ class DokumentAdmin(admin.ModelAdmin):
     file_size_display.short_description = 'Größe'
 
 
+@admin.register(AktivitaetsBereich)
+class AktivitaetsBereichAdmin(admin.ModelAdmin):
+    """
+    Admin interface for AktivitaetsBereich (activity categories/areas).
+    """
+    list_display = ('name', 'beschreibung', 'created_at', 'get_aktivitaeten_count')
+    search_fields = ('name', 'beschreibung')
+    readonly_fields = ('created_at',)
+    ordering = ('name',)
+    
+    def get_aktivitaeten_count(self, obj):
+        """Get count of activities in this category."""
+        return obj.aktivitaeten.count()
+    get_aktivitaeten_count.short_description = 'Anzahl Aktivitäten'
+
+
 class AktivitaetAdminForm(forms.ModelForm):
     """
     Custom form for Aktivitaet admin to restrict selections and provide validation.
@@ -364,6 +380,7 @@ class AktivitaetAdmin(admin.ModelAdmin):
     list_display = (
         'titel',
         'get_context_type',
+        'bereich',
         'status',
         'prioritaet',
         'faellig_am',
@@ -374,23 +391,24 @@ class AktivitaetAdmin(admin.ModelAdmin):
     search_fields = (
         'titel',
         'beschreibung',
+        'bereich__name',
         'mietobjekt__name',
         'vertrag__vertragsnummer',
         'kunde__name',
         'assigned_user__username',
         'assigned_supplier__name'
     )
-    list_filter = ('status', 'prioritaet', 'faellig_am', 'created_at')
+    list_filter = ('status', 'prioritaet', 'bereich', 'faellig_am', 'created_at')
     readonly_fields = ('created_at', 'updated_at')
     date_hierarchy = 'faellig_am'
     
     fieldsets = (
         ('Aufgabendetails', {
-            'fields': ('titel', 'beschreibung', 'status', 'prioritaet', 'faellig_am')
+            'fields': ('titel', 'beschreibung', 'status', 'prioritaet', 'faellig_am', 'bereich')
         }),
-        ('Kontext (genau einer muss gesetzt sein)', {
+        ('Kontext (optional)', {
             'fields': ('mietobjekt', 'vertrag', 'kunde'),
-            'description': 'Wählen Sie genau einen Kontext aus, dem diese Aktivität zugeordnet werden soll.'
+            'description': 'Optional: Wählen Sie einen oder mehrere Kontexte aus. Aktivitäten ohne Kontext sind für private/persönliche Aufgaben erlaubt.'
         }),
         ('Zuweisung (optional)', {
             'fields': ('assigned_user', 'assigned_supplier'),
@@ -408,6 +426,7 @@ class AktivitaetAdmin(admin.ModelAdmin):
             'mietobjekt',
             'vertrag',
             'kunde',
+            'bereich',
             'assigned_user',
             'assigned_supplier'
         )
