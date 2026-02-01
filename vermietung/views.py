@@ -2220,7 +2220,6 @@ def eingangsrechnung_list(request):
     }
     
     return render(request, 'vermietung/eingangsrechnungen/list.html', context)
-    return render(request, 'vermietung/eingangsrechnungen/list.html', context)
 
 
 @vermietung_required
