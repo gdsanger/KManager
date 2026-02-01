@@ -5,7 +5,7 @@ Forms for the Vermietung (Rental Management) area.
 from django import forms
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
-from core.models import Adresse, Mandant
+from core.models import Adresse, Mandant, Kostenart
 from .models import (
     MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, 
     Aktivitaet, VertragsObjekt, Zaehler, Zaehlerstand, OBJEKT_TYPE,
@@ -1181,3 +1181,36 @@ EingangsrechnungAufteilungFormSet = forms.inlineformset_factory(
     validate_min=True,
     can_delete=True,
 )
+
+
+class KostenartForm(forms.ModelForm):
+    """
+    Form for creating/editing Kostenart (cost types).
+    Supports both Hauptkostenart (parent=None) and Unterkostenart (with parent).
+    """
+    
+    class Meta:
+        model = Kostenart
+        fields = ['name', 'parent', 'umsatzsteuer_satz']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'parent': forms.Select(attrs={'class': 'form-select'}),
+            'umsatzsteuer_satz': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {
+            'name': 'Name *',
+            'parent': 'Hauptkostenart',
+            'umsatzsteuer_satz': 'Umsatzsteuer-Satz',
+        }
+        help_texts = {
+            'name': 'Name der Kostenart',
+            'parent': 'Leer lassen für Hauptkostenart, oder Hauptkostenart auswählen für Unterkostenart',
+            'umsatzsteuer_satz': 'Umsatzsteuer-Satz für diese Kostenart',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter parent to only show Hauptkostenarten (no parent)
+        self.fields['parent'].queryset = Kostenart.objects.filter(parent__isnull=True).order_by('name')
+        # Make parent optional
+        self.fields['parent'].required = False
