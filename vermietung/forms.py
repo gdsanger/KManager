@@ -1185,6 +1185,15 @@ class EingangsrechnungForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Filter lieferant to only show suppliers
         self.fields['lieferant'].queryset = Adresse.objects.filter(adressen_type='LIEFERANT')
+        
+        # Fix date field formatting for HTML5 date input
+        # HTML5 date inputs require ISO format (YYYY-MM-DD)
+        date_fields = ['belegdatum', 'faelligkeit', 'leistungszeitraum_von', 
+                       'leistungszeitraum_bis', 'zahlungsdatum']
+        for field_name in date_fields:
+            if field_name in self.fields:
+                self.fields[field_name].widget.format = '%Y-%m-%d'
+                self.fields[field_name].input_formats = ['%Y-%m-%d']
 
 
 class EingangsrechnungAufteilungForm(forms.ModelForm):
