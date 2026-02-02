@@ -212,6 +212,7 @@ def kunde_detail(request, pk):
         'kunde': kunde,
         'dokumente_page_obj': dokumente_page_obj,
         'aktivitaeten_page_obj': aktivitaeten_page_obj,
+        'aktivitaet_create_url': reverse('vermietung:aktivitaet_create_from_kunde', args=[kunde.pk]),
     }
     
     return render(request, 'vermietung/kunden/detail.html', context)
