@@ -15,6 +15,12 @@ ADRESSEN_TYPES = [
     ('STANDORT', 'Standort'),
     ('SONSTIGES', 'Sonstiges'),
 ]
+KONTAKT_TYPES = [
+    ('TELEFON', 'Telefon'),
+    ('MOBIL', 'Mobil'),
+    ('TELEFAX', 'Telefax'),
+    ('EMAIL', 'E-Mail'),
+]
 
 # Create your models here.
 class Adresse(models.Model):
@@ -37,6 +43,62 @@ class Adresse(models.Model):
 
     def __str__(self):
         return f"{self.full_name()}, {self.strasse}, {self.plz} {self.ort}, {self.land}"
+
+
+class AdresseKontakt(models.Model):
+    """Contact information for an address (multiple contacts per address)"""
+    adresse = models.ForeignKey(
+        Adresse,
+        on_delete=models.CASCADE,
+        related_name='kontakte',
+        verbose_name="Adresse"
+    )
+    type = models.CharField(
+        max_length=20,
+        choices=KONTAKT_TYPES,
+        verbose_name="Kontakttyp"
+    )
+    name = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Name"
+    )
+    position = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Position"
+    )
+    kontakt = models.CharField(
+        max_length=200,
+        verbose_name="Kontakt"
+    )
+    
+    class Meta:
+        verbose_name = "Adresse Kontakt"
+        verbose_name_plural = "Adresse Kontakte"
+        ordering = ['type', 'name']
+        indexes = [
+            models.Index(fields=['adresse']),
+            models.Index(fields=['adresse', 'type']),
+        ]
+    
+    def __str__(self):
+        if self.name:
+            return f"{self.get_type_display()}: {self.name} ({self.kontakt})"
+        return f"{self.get_type_display()}: {self.kontakt}"
+    
+    def clean(self):
+        """Validate email format for EMAIL type"""
+        super().clean()
+        if self.type == 'EMAIL' and self.kontakt:
+            # Use Django's EmailValidator
+            from django.core.validators import validate_email
+            try:
+                validate_email(self.kontakt)
+            except ValidationError:
+                raise ValidationError({
+                    'kontakt': 'Bitte geben Sie eine gültige E-Mail-Adresse ein.'
+                })
 
 
 class SmtpSettings(models.Model):

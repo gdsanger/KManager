@@ -118,6 +118,13 @@
     </div>
 </div>
 
+<!-- Contacts Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        {% include "vermietung/kontakte/_kontakte_list.html" with adresse=lieferant %}
+    </div>
+</div>
+
 <!-- Related Documents Section -->
 <div class="row mt-4">
     <div class="col-12">
@@ -247,7 +254,14 @@
 {% block extra_js %}
 <script>
 function confirmDelete() {
-    if (confirm('Möchten Sie den Lieferanten "{{ lieferant.full_name }}" wirklich löschen?')) {
+    var kontakteCount = {{ lieferant.kontakte.count }};
+    var message = 'Möchten Sie den Lieferanten "{{ lieferant.full_name }}" wirklich löschen?';
+    
+    if (kontakteCount > 0) {
+        message += '\n\nACHTUNG: Es ' + (kontakteCount === 1 ? 'ist 1 Kontakt' : 'sind ' + kontakteCount + ' Kontakte') + ' mit diesem Lieferanten verknüpft, ' + (kontakteCount === 1 ? 'der' : 'die') + ' ebenfalls gelöscht ' + (kontakteCount === 1 ? 'wird' : 'werden') + '.';
+    }
+    
+    if (confirm(message)) {
         document.getElementById('deleteForm').submit();
     }
 }

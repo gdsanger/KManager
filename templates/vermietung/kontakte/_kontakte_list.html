@@ -1,0 +1,83 @@
+<!-- Contacts List (Kontakte) -->
+<div class="card mb-3">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-person-lines-fill"></i> Kontakte</h5>
+            <a href="{% url 'vermietung:kontakt_create' adresse.pk %}" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-lg"></i> Kontakt hinzufügen
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if adresse.kontakte.all %}
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">Typ</th>
+                        <th>Name</th>
+                        <th>Position</th>
+                        <th>Kontakt</th>
+                        <th class="text-end" style="width: 100px;">Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for kontakt in adresse.kontakte.all %}
+                    <tr>
+                        <td>
+                            {% if kontakt.type == 'TELEFON' %}
+                            <i class="bi bi-telephone-fill" title="Telefon"></i>
+                            {% elif kontakt.type == 'MOBIL' %}
+                            <i class="bi bi-phone-fill" title="Mobil"></i>
+                            {% elif kontakt.type == 'TELEFAX' %}
+                            <i class="bi bi-printer-fill" title="Telefax"></i>
+                            {% elif kontakt.type == 'EMAIL' %}
+                            <i class="bi bi-envelope-fill" title="E-Mail"></i>
+                            {% endif %}
+                        </td>
+                        <td>{{ kontakt.name|default:"-" }}</td>
+                        <td>{{ kontakt.position|default:"-" }}</td>
+                        <td>
+                            {% if kontakt.type == 'EMAIL' %}
+                            <a href="mailto:{{ kontakt.kontakt }}">{{ kontakt.kontakt }}</a>
+                            {% elif kontakt.type == 'TELEFON' or kontakt.type == 'MOBIL' %}
+                            <a href="tel:{{ kontakt.kontakt }}">{{ kontakt.kontakt }}</a>
+                            {% else %}
+                            {{ kontakt.kontakt }}
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'vermietung:kontakt_edit' kontakt.pk %}" class="btn btn-sm btn-outline-warning" title="Bearbeiten">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDeleteKontakt({{ kontakt.pk }}, '{{ kontakt|escapejs }}')" title="Löschen">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-0">
+            <i class="bi bi-inbox"></i> Keine Kontakte vorhanden
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Hidden form for contact deletion -->
+<form id="deleteKontaktForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+</form>
+
+<script>
+function confirmDeleteKontakt(kontaktId, kontaktName) {
+    if (confirm('Möchten Sie den Kontakt "' + kontaktName + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+        var form = document.getElementById('deleteKontaktForm');
+        form.action = "{% url 'vermietung:kontakt_delete' 0 %}".replace('/0/', '/' + kontaktId + '/');
+        form.submit();
+    }
+}
+</script>

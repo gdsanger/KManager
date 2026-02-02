@@ -46,6 +46,11 @@ urlpatterns = [
     path('adressen/<int:pk>/bearbeiten/', views.adresse_edit, name='adresse_edit'),
     path('adressen/<int:pk>/loeschen/', views.adresse_delete, name='adresse_delete'),
     
+    # Kontakt (Contact) URLs - for any address type
+    path('adressen/<int:adresse_pk>/kontakte/neu/', views.kontakt_create, name='kontakt_create'),
+    path('kontakte/<int:pk>/bearbeiten/', views.kontakt_edit, name='kontakt_edit'),
+    path('kontakte/<int:pk>/loeschen/', views.kontakt_delete, name='kontakt_delete'),
+    
     # MietObjekt (Rental Object) URLs
     path('mietobjekte/', views.mietobjekt_list, name='mietobjekt_list'),
     path('mietobjekte/neu/', views.mietobjekt_create, name='mietobjekt_create'),

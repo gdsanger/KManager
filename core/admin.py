@@ -5,7 +5,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib import messages
 from django.conf import settings
 from core.models import (
-    Adresse, SmtpSettings, MailTemplate, Mandant, Kostenart,
+    Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, Kostenart,
     AIProvider, AIModel, AIJobsHistory, ReportDocument
 )
 from core.mailing.service import send_mail, MailServiceError
@@ -14,11 +14,21 @@ import string
 
 
 # Register your models here.
+class AdresseKontaktInline(admin.TabularInline):
+    """Inline admin for contacts (Kontakte)"""
+    model = AdresseKontakt
+    extra = 1
+    fields = ['type', 'name', 'position', 'kontakt']
+    verbose_name = "Kontakt"
+    verbose_name_plural = "Kontakte"
+
+
 @admin.register(Adresse)
 class AdressenAdmin(admin.ModelAdmin):
     list_display = ('full_name', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email')
     search_fields = ('firma', 'name', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email')
     list_filter = ('adressen_type', 'land')
+    inlines = [AdresseKontaktInline]
 
 
 class MailTemplateAdminForm(forms.ModelForm):
