@@ -1,0 +1,90 @@
+<!-- 
+    Reusable Detail Tabs Component with localStorage Persistence
+    
+    Required context variables:
+    - tabs: list of dicts with keys: 'id', 'label', 'icon', 'template_path', 'show_condition' (optional)
+    
+    Example usage:
+    {% include "vermietung/includes/_detail_tabs.html" with tabs=detail_tabs %}
+-->
+<div class="row mt-4">
+    <div class="col-12">
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs" id="detailTabs" role="tablist">
+            {% for tab in tabs %}
+            {% if tab.show_condition|default:True %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link{% if forloop.first %} active{% endif %}" 
+                        id="{{ tab.id }}-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#{{ tab.id }}" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="{{ tab.id }}"
+                        aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+                        data-tab-id="{{ tab.id }}">
+                    <i class="bi bi-{{ tab.icon }}"></i> {{ tab.label }}
+                </button>
+            </li>
+            {% endif %}
+            {% endfor %}
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content card" id="detailTabsContent">
+            {% for tab in tabs %}
+            {% if tab.show_condition|default:True %}
+            <div class="tab-pane fade{% if forloop.first %} show active{% endif %}" 
+                 id="{{ tab.id }}" 
+                 role="tabpanel" 
+                 aria-labelledby="{{ tab.id }}-tab">
+                <div class="card-body">
+                    {% include tab.template_path %}
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Get the current pathname for localStorage key
+    const pathname = window.location.pathname;
+    const storageKey = `kmgr:detailTabs:${pathname}`;
+    
+    // Get all tab buttons
+    const tabButtons = document.querySelectorAll('#detailTabs button[data-bs-toggle="tab"]');
+    const tabButtonsArray = Array.from(tabButtons);
+    
+    // Restore the last active tab from localStorage
+    function restoreActiveTab() {
+        const savedTabId = localStorage.getItem(storageKey);
+        
+        if (savedTabId) {
+            // Find the button with the saved tab ID
+            const savedButton = tabButtonsArray.find(btn => btn.getAttribute('data-tab-id') === savedTabId);
+            
+            if (savedButton) {
+                // Activate the saved tab
+                const tab = new bootstrap.Tab(savedButton);
+                tab.show();
+            }
+            // If saved tab doesn't exist, the default (first) tab is already active
+        }
+        // If no saved tab, the default (first) tab is already active
+    }
+    
+    // Save the active tab to localStorage when a tab is clicked
+    tabButtons.forEach(button => {
+        button.addEventListener('shown.bs.tab', function(event) {
+            const tabId = event.target.getAttribute('data-tab-id');
+            localStorage.setItem(storageKey, tabId);
+        });
+    });
+    
+    // Restore the active tab when the page loads
+    document.addEventListener('DOMContentLoaded', restoreActiveTab);
+})();
+</script>

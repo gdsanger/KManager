@@ -118,93 +118,87 @@
     </div>
 </div>
 
-<!-- Contacts Section -->
+<!-- Detail Tabs Section -->
+{% with adresse=lieferant entity_type_label="diesen Lieferanten" %}
 <div class="row mt-4">
     <div class="col-12">
-        {% include "vermietung/kontakte/_kontakte_list.html" with adresse=lieferant %}
-    </div>
-</div>
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs" id="detailTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" 
+                        id="kontakte-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#kontakte" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="kontakte"
+                        aria-selected="true"
+                        data-tab-id="kontakte">
+                    <i class="bi bi-person-lines-fill"></i> Kontakte
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" 
+                        id="dokumente-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#dokumente" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="dokumente"
+                        aria-selected="false"
+                        data-tab-id="dokumente">
+                    <i class="bi bi-file-earmark-text"></i> Dokumente
+                </button>
+            </li>
+            {% if lieferant.bemerkung %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" 
+                        id="bemerkung-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#bemerkung" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="bemerkung"
+                        aria-selected="false"
+                        data-tab-id="bemerkung">
+                    <i class="bi bi-chat-left-text"></i> Bemerkung
+                </button>
+            </li>
+            {% endif %}
+        </ul>
 
-<!-- Related Documents Section -->
-<div class="row mt-4">
-    <div class="col-12">
-        <h4 class="mb-3">Dokumente</h4>
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Dokumente für diesen Lieferanten</h6>
-                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
-                        <i class="bi bi-upload"></i> Dokument hochladen
-                    </button>
+        <!-- Tab Content -->
+        <div class="tab-content card" id="detailTabsContent">
+            <div class="tab-pane fade show active" 
+                 id="kontakte" 
+                 role="tabpanel" 
+                 aria-labelledby="kontakte-tab">
+                <div class="card-body">
+                    {% include "vermietung/kontakte/_tab_content.html" %}
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Dateiname</th>
-                                <th>Hochgeladen am</th>
-                                <th>Hochgeladen von</th>
-                                <th>Größe</th>
-                                <th class="text-end">Aktionen</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for dokument in dokumente_page_obj %}
-                            <tr>
-                                <td>
-                                    {{ dokument.original_filename }}
-                                    {% if dokument.beschreibung %}
-                                    <br><small class="text-muted">{{ dokument.beschreibung|truncatewords:10 }}</small>
-                                    {% endif %}
-                                </td>
-                                <td>{{ dokument.uploaded_at|date:"d.m.Y H:i" }}</td>
-                                <td>{{ dokument.uploaded_by.username|default:"-" }}</td>
-                                <td>{{ dokument.file_size|filesizeformat }}</td>
-                                <td class="text-end">
-                                    <a href="{% url 'vermietung:dokument_download' dokument.pk %}" class="btn btn-sm btn-outline-info" title="Herunterladen">
-                                        <i class="bi bi-download"></i>
-                                    </a>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDeleteDokument({{ dokument.pk }}, '{{ dokument.original_filename|escapejs }}')" title="Löschen">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted">
-                                    <i class="bi bi-inbox"></i> Keine Dokumente vorhanden
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                
-                {% if dokumente_page_obj.has_other_pages %}
-                <nav aria-label="Dokumente Pagination" class="mt-3">
-                    <ul class="pagination pagination-sm justify-content-center">
-                        {% if dokumente_page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?dokumente_page={{ dokumente_page_obj.previous_page_number }}">Zurück</a>
-                        </li>
-                        {% endif %}
-                        
-                        <li class="page-item disabled">
-                            <span class="page-link">Seite {{ dokumente_page_obj.number }} von {{ dokumente_page_obj.paginator.num_pages }}</span>
-                        </li>
-                        
-                        {% if dokumente_page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?dokumente_page={{ dokumente_page_obj.next_page_number }}">Weiter</a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-                {% endif %}
             </div>
+            <div class="tab-pane fade" 
+                 id="dokumente" 
+                 role="tabpanel" 
+                 aria-labelledby="dokumente-tab">
+                <div class="card-body">
+                    {% include "vermietung/dokumente/_tab_content.html" %}
+                </div>
+            </div>
+            {% if lieferant.bemerkung %}
+            <div class="tab-pane fade" 
+                 id="bemerkung" 
+                 role="tabpanel" 
+                 aria-labelledby="bemerkung-tab">
+                <div class="card-body">
+                    {% include "vermietung/bemerkungen/_tab_content.html" %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
+{% endwith %}
 
 <!-- Document Upload Modal -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
@@ -249,10 +243,45 @@
 <form id="deleteDokumentForm" method="post" action="" style="display: none;">
     {% csrf_token %}
 </form>
+
+<form id="deleteKontaktForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+</form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// Tab localStorage persistence
+(function() {
+    const pathname = window.location.pathname;
+    const storageKey = `kmgr:detailTabs:${pathname}`;
+    
+    const tabButtons = document.querySelectorAll('#detailTabs button[data-bs-toggle="tab"]');
+    const tabButtonsArray = Array.from(tabButtons);
+    
+    function restoreActiveTab() {
+        const savedTabId = localStorage.getItem(storageKey);
+        
+        if (savedTabId) {
+            const savedButton = tabButtonsArray.find(btn => btn.getAttribute('data-tab-id') === savedTabId);
+            
+            if (savedButton) {
+                const tab = new bootstrap.Tab(savedButton);
+                tab.show();
+            }
+        }
+    }
+    
+    tabButtons.forEach(button => {
+        button.addEventListener('shown.bs.tab', function(event) {
+            const tabId = event.target.getAttribute('data-tab-id');
+            localStorage.setItem(storageKey, tabId);
+        });
+    });
+    
+    document.addEventListener('DOMContentLoaded', restoreActiveTab);
+})();
+
 function confirmDelete() {
     var kontakteCount = {{ lieferant.kontakte.count }};
     var message = 'Möchten Sie den Lieferanten "{{ lieferant.full_name }}" wirklich löschen?';
@@ -270,6 +299,14 @@ function confirmDeleteDokument(dokumentId, filename) {
     if (confirm('Möchten Sie das Dokument "' + filename + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
         var form = document.getElementById('deleteDokumentForm');
         form.action = "{% url 'vermietung:dokument_delete' 0 %}".replace('/0/', '/' + dokumentId + '/');
+        form.submit();
+    }
+}
+
+function confirmDeleteKontakt(kontaktId, kontaktName) {
+    if (confirm('Möchten Sie den Kontakt "' + kontaktName + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+        var form = document.getElementById('deleteKontaktForm');
+        form.action = "{% url 'vermietung:kontakt_delete' 0 %}".replace('/0/', '/' + kontaktId + '/');
         form.submit();
     }
 }
