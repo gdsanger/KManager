@@ -89,16 +89,6 @@
             </div>
         </div>
 
-        {% if kunde.bemerkung %}
-        <div class="card mb-3">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-chat-left-text"></i> Bemerkung</h5>
-            </div>
-            <div class="card-body">
-                <p class="mb-0">{{ kunde.bemerkung }}</p>
-            </div>
-        </div>
-        {% endif %}
     </div>
 
     <div class="col-lg-4">
@@ -140,213 +130,110 @@
     </div>
 </div>
 
-<!-- Contacts Section -->
+<!-- Detail Tabs Section -->
+{% with adresse=kunde entity_type_label="diesen Kunden" create_url=aktivitaet_create_url %}
 <div class="row mt-4">
     <div class="col-12">
-        {% include "vermietung/kontakte/_kontakte_list.html" with adresse=kunde %}
-    </div>
-</div>
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs" id="detailTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" 
+                        id="kontakte-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#kontakte" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="kontakte"
+                        aria-selected="true"
+                        data-tab-id="kontakte">
+                    <i class="bi bi-person-lines-fill"></i> Kontakte
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" 
+                        id="aktivitaeten-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#aktivitaeten" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="aktivitaeten"
+                        aria-selected="false"
+                        data-tab-id="aktivitaeten">
+                    <i class="bi bi-list-task"></i> Aktivitäten
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" 
+                        id="dokumente-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#dokumente" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="dokumente"
+                        aria-selected="false"
+                        data-tab-id="dokumente">
+                    <i class="bi bi-file-earmark-text"></i> Dokumente
+                </button>
+            </li>
+            {% if kunde.bemerkung %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" 
+                        id="bemerkung-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#bemerkung" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="bemerkung"
+                        aria-selected="false"
+                        data-tab-id="bemerkung">
+                    <i class="bi bi-chat-left-text"></i> Bemerkung
+                </button>
+            </li>
+            {% endif %}
+        </ul>
 
-<!-- Related Documents Section -->
-<div class="row mt-4">
-    <div class="col-12">
-        <h4 class="mb-3">Aktivitäten</h4>
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Aktivitäten für diesen Kunden</h6>
-                    <a href="{% url 'vermietung:aktivitaet_create_from_kunde' kunde.pk %}" class="btn btn-sm btn-primary">
-                        <i class="bi bi-plus-circle"></i> Neue Aktivität
-                    </a>
+        <!-- Tab Content -->
+        <div class="tab-content card" id="detailTabsContent">
+            <div class="tab-pane fade show active" 
+                 id="kontakte" 
+                 role="tabpanel" 
+                 aria-labelledby="kontakte-tab">
+                <div class="card-body">
+                    {% include "vermietung/kontakte/_tab_content.html" %}
                 </div>
-                {% if aktivitaeten_page_obj %}
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Titel</th>
-                                <th>Status</th>
-                                <th>Priorität</th>
-                                <th>Fällig am</th>
-                                <th>Verantwortlich</th>
-                                <th class="text-end">Aktionen</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for aktivitaet in aktivitaeten_page_obj %}
-                            <tr>
-                                <td>
-                                    <strong>{{ aktivitaet.titel }}</strong>
-                                    {% if aktivitaet.beschreibung %}
-                                    <br><small class="text-muted">{{ aktivitaet.beschreibung|truncatewords:10 }}</small>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if aktivitaet.status == 'OFFEN' %}
-                                        <span class="badge bg-info">Offen</span>
-                                    {% elif aktivitaet.status == 'IN_BEARBEITUNG' %}
-                                        <span class="badge bg-warning text-dark">In Bearb.</span>
-                                    {% elif aktivitaet.status == 'ERLEDIGT' %}
-                                        <span class="badge bg-success">Erledigt</span>
-                                    {% else %}
-                                        <span class="badge bg-danger">Abgebr.</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if aktivitaet.prioritaet == 'HOCH' %}
-                                        <span class="badge bg-danger">Hoch</span>
-                                    {% elif aktivitaet.prioritaet == 'NORMAL' %}
-                                        <span class="badge bg-warning text-dark">Normal</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Niedrig</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if aktivitaet.faellig_am %}
-                                        {{ aktivitaet.faellig_am|date:"d.m.Y" }}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <small>
-                                    {% if aktivitaet.assigned_user %}
-                                        <i class="bi bi-person-badge"></i> {{ aktivitaet.assigned_user.username }}
-                                    {% endif %}
-                                    {% if aktivitaet.assigned_supplier %}
-                                        <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.name }}
-                                    {% endif %}
-                                    {% if not aktivitaet.assigned_user and not aktivitaet.assigned_supplier %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                    </small>
-                                </td>
-                                <td class="text-end">
-                                    <a href="{% url 'vermietung:aktivitaet_edit' aktivitaet.pk %}" class="btn btn-sm btn-outline-warning" title="Bearbeiten">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="6" class="text-center text-muted">
-                                    <i class="bi bi-inbox"></i> Keine Aktivitäten vorhanden
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                
-                {% if aktivitaeten_page_obj.has_other_pages %}
-                <nav aria-label="Aktivitäten Pagination" class="mt-3">
-                    <ul class="pagination pagination-sm justify-content-center">
-                        {% if aktivitaeten_page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?aktivitaeten_page={{ aktivitaeten_page_obj.previous_page_number }}">Zurück</a>
-                        </li>
-                        {% endif %}
-                        
-                        <li class="page-item disabled">
-                            <span class="page-link">Seite {{ aktivitaeten_page_obj.number }} von {{ aktivitaeten_page_obj.paginator.num_pages }}</span>
-                        </li>
-                        
-                        {% if aktivitaeten_page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?aktivitaeten_page={{ aktivitaeten_page_obj.next_page_number }}">Weiter</a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-                {% endif %}
-                {% else %}
-                <p class="text-muted text-center my-4">Keine Aktivitäten vorhanden.</p>
-                {% endif %}
             </div>
+            <div class="tab-pane fade" 
+                 id="aktivitaeten" 
+                 role="tabpanel" 
+                 aria-labelledby="aktivitaeten-tab">
+                <div class="card-body">
+                    {% with create_url=aktivitaet_create_url %}
+                    {% include "vermietung/aktivitaeten/_tab_content.html" %}
+                    {% endwith %}
+                </div>
+            </div>
+            <div class="tab-pane fade" 
+                 id="dokumente" 
+                 role="tabpanel" 
+                 aria-labelledby="dokumente-tab">
+                <div class="card-body">
+                    {% include "vermietung/dokumente/_tab_content.html" %}
+                </div>
+            </div>
+            {% if kunde.bemerkung %}
+            <div class="tab-pane fade" 
+                 id="bemerkung" 
+                 role="tabpanel" 
+                 aria-labelledby="bemerkung-tab">
+                <div class="card-body">
+                    {% include "vermietung/bemerkungen/_tab_content.html" %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
-
-<!-- Related Documents Section -->
-<div class="row mt-4">
-    <div class="col-12">
-        <h4 class="mb-3">Dokumente</h4>
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Dokumente für diesen Kunden</h6>
-                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
-                        <i class="bi bi-upload"></i> Dokument hochladen
-                    </button>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Dateiname</th>
-                                <th>Hochgeladen am</th>
-                                <th>Hochgeladen von</th>
-                                <th>Größe</th>
-                                <th class="text-end">Aktionen</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for dokument in dokumente_page_obj %}
-                            <tr>
-                                <td>
-                                    {{ dokument.original_filename }}
-                                    {% if dokument.beschreibung %}
-                                    <br><small class="text-muted">{{ dokument.beschreibung|truncatewords:10 }}</small>
-                                    {% endif %}
-                                </td>
-                                <td>{{ dokument.uploaded_at|date:"d.m.Y H:i" }}</td>
-                                <td>{{ dokument.uploaded_by.username|default:"-" }}</td>
-                                <td>{{ dokument.file_size|filesizeformat }}</td>
-                                <td class="text-end">
-                                    <a href="{% url 'vermietung:dokument_download' dokument.pk %}" class="btn btn-sm btn-outline-info" title="Herunterladen">
-                                        <i class="bi bi-download"></i>
-                                    </a>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmDeleteDokument({{ dokument.pk }}, '{{ dokument.original_filename|escapejs }}')" title="Löschen">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted">
-                                    <i class="bi bi-inbox"></i> Keine Dokumente vorhanden
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                
-                {% if dokumente_page_obj.has_other_pages %}
-                <nav aria-label="Dokumente Pagination" class="mt-3">
-                    <ul class="pagination pagination-sm justify-content-center">
-                        {% if dokumente_page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?dokumente_page={{ dokumente_page_obj.previous_page_number }}">Zurück</a>
-                        </li>
-                        {% endif %}
-                        
-                        <li class="page-item disabled">
-                            <span class="page-link">Seite {{ dokumente_page_obj.number }} von {{ dokumente_page_obj.paginator.num_pages }}</span>
-                        </li>
-                        
-                        {% if dokumente_page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?dokumente_page={{ dokumente_page_obj.next_page_number }}">Weiter</a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
+{% endwith %}
 
 <!-- Document Upload Modal -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
@@ -391,10 +278,45 @@
 <form id="deleteDokumentForm" method="post" action="" style="display: none;">
     {% csrf_token %}
 </form>
+
+<form id="deleteKontaktForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+</form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// Tab localStorage persistence
+(function() {
+    const pathname = window.location.pathname;
+    const storageKey = `kmgr:detailTabs:${pathname}`;
+    
+    const tabButtons = document.querySelectorAll('#detailTabs button[data-bs-toggle="tab"]');
+    const tabButtonsArray = Array.from(tabButtons);
+    
+    function restoreActiveTab() {
+        const savedTabId = localStorage.getItem(storageKey);
+        
+        if (savedTabId) {
+            const savedButton = tabButtonsArray.find(btn => btn.getAttribute('data-tab-id') === savedTabId);
+            
+            if (savedButton) {
+                const tab = new bootstrap.Tab(savedButton);
+                tab.show();
+            }
+        }
+    }
+    
+    tabButtons.forEach(button => {
+        button.addEventListener('shown.bs.tab', function(event) {
+            const tabId = event.target.getAttribute('data-tab-id');
+            localStorage.setItem(storageKey, tabId);
+        });
+    });
+    
+    document.addEventListener('DOMContentLoaded', restoreActiveTab);
+})();
+
 function confirmDelete() {
     var kontakteCount = {{ kunde.kontakte.count }};
     var message = 'Möchten Sie den Kunden "{{ kunde.full_name }}" wirklich löschen?';
@@ -412,6 +334,14 @@ function confirmDeleteDokument(dokumentId, filename) {
     if (confirm('Möchten Sie das Dokument "' + filename + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
         var form = document.getElementById('deleteDokumentForm');
         form.action = "{% url 'vermietung:dokument_delete' 0 %}".replace('/0/', '/' + dokumentId + '/');
+        form.submit();
+    }
+}
+
+function confirmDeleteKontakt(kontaktId, kontaktName) {
+    if (confirm('Möchten Sie den Kontakt "' + kontaktName + '" wirklich löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.')) {
+        var form = document.getElementById('deleteKontaktForm');
+        form.action = "{% url 'vermietung:kontakt_delete' 0 %}".replace('/0/', '/' + kontaktId + '/');
         form.submit();
     }
 }
