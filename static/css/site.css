@@ -325,50 +325,39 @@ a:hover {
     top: 56px; /* Height of navbar */
     bottom: 0;
     left: 0;
-    z-index: 100;
+    z-index: 1040;
     padding: 0;
     box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
     background-color: var(--bg-darker) !important;
     overflow-y: auto;
-    width: 16.666667%; /* col-md-3 */
-    transition: width 0.3s ease, transform 0.3s ease;
+    transition: transform 0.3s ease;
 }
 
-/* Collapsed Sidebar State */
-.sidebar.collapsed {
-    width: 70px;
+/* Mobile: Sidebar off-canvas (hidden by default) */
+@media (max-width: 767.98px) {
+    .sidebar {
+        width: 280px;
+        transform: translateX(-100%);
+        box-shadow: none;
+    }
+    
+    .sidebar.show {
+        transform: translateX(0);
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+    }
 }
 
-.sidebar.collapsed .sidebar-text {
-    display: none;
-}
-
-.sidebar.collapsed .nav-link {
-    justify-content: center;
-    padding: 0.75rem 0.5rem;
-}
-
-.sidebar.collapsed .nav-link i {
-    margin-right: 0;
-}
-
-.sidebar.collapsed .nav-category {
-    justify-content: center;
-}
-
-.sidebar.collapsed .nav-sub-item {
-    display: none;
-}
-
-.sidebar.collapsed .sidebar-heading {
-    overflow: hidden;
-    text-align: center;
-}
-
-/* Main content adjustment for collapsed sidebar */
+/* Desktop: Fixed sidebar with proper grid alignment */
 @media (min-width: 768px) {
-    main.col-md-9.ms-sm-auto.col-lg-10 {
-        transition: margin-left 0.3s ease, width 0.3s ease;
+    .sidebar {
+        width: 25%; /* col-md-3 */
+        transform: none;
+    }
+}
+
+@media (min-width: 992px) {
+    .sidebar {
+        width: 16.666667%; /* col-lg-2 */
     }
 }
 
@@ -461,6 +450,24 @@ a:hover {
 @media (min-width: 768px) {
     .sidebar {
         display: block !important;
+    }
+}
+
+/* Mobile overlay backdrop */
+@media (max-width: 767.98px) {
+    .sidebar-backdrop {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1035;
+        display: none;
+    }
+    
+    .sidebar-backdrop.show {
+        display: block;
     }
 }
 

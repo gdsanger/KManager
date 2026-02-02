@@ -71,6 +71,18 @@
 
     <div class="container-fluid">
         <div class="row">
+            <!-- Mobile Menu Toggle Button (visible only on mobile) -->
+            <button class="btn btn-primary d-md-none position-fixed" id="mobileMenuToggle" 
+                    style="top: 70px; left: 15px; z-index: 1050;" 
+                    type="button" 
+                    aria-label="Menü öffnen"
+                    aria-expanded="false">
+                <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+            </button>
+            
+            <!-- Mobile Backdrop -->
+            <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+            
             <!-- Sidebar Navigation -->
             <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar" id="sidebarMenu">
                 <div class="position-sticky pt-3">
@@ -346,41 +358,104 @@
         // Sidebar Toggle Functionality
         const sidebar = document.getElementById('sidebarMenu');
         const sidebarToggle = document.getElementById('sidebarToggle');
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebarBackdrop = document.getElementById('sidebarBackdrop');
         const mainContent = document.querySelector('main.col-md-9');
-        const SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed';
         
-        // Load saved state from localStorage
-        const isCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
-        if (isCollapsed && sidebar) {
-            sidebar.classList.add('collapsed');
-            if (mainContent) {
-                mainContent.style.marginLeft = '70px';
-                mainContent.style.width = 'calc(100% - 70px)';
+        // Check if we're on mobile
+        function isMobile() {
+            return window.innerWidth < 768;
+        }
+        
+        // Toggle sidebar for mobile
+        function toggleMobileSidebar(show) {
+            if (!sidebar || !sidebarBackdrop) return;
+            
+            if (show) {
+                sidebar.classList.add('show');
+                sidebarBackdrop.classList.add('show');
+                document.body.style.overflow = 'hidden'; // Prevent scroll on body
+                
+                // Update ARIA attributes for accessibility
+                if (mobileMenuToggle) {
+                    mobileMenuToggle.setAttribute('aria-expanded', 'true');
+                    mobileMenuToggle.setAttribute('aria-label', 'Menü schließen');
+                }
+                
+                // Focus first menu item for keyboard navigation
+                const firstLink = sidebar.querySelector('.nav-link');
+                if (firstLink) {
+                    firstLink.focus();
+                }
+            } else {
+                sidebar.classList.remove('show');
+                sidebarBackdrop.classList.remove('show');
+                document.body.style.overflow = '';
+                
+                // Update ARIA attributes
+                if (mobileMenuToggle) {
+                    mobileMenuToggle.setAttribute('aria-expanded', 'false');
+                    mobileMenuToggle.setAttribute('aria-label', 'Menü öffnen');
+                    
+                    // Return focus to menu button
+                    mobileMenuToggle.focus();
+                }
             }
         }
         
-        // Toggle sidebar on button click
+        // Mobile menu toggle button click
+        if (mobileMenuToggle) {
+            mobileMenuToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                const isOpen = sidebar && sidebar.classList.contains('show');
+                toggleMobileSidebar(!isOpen);
+            });
+        }
+        
+        // Close button in sidebar (only on mobile)
         if (sidebarToggle && sidebar) {
             sidebarToggle.addEventListener('click', function(e) {
                 e.preventDefault();
-                sidebar.classList.toggle('collapsed');
-                
-                // Adjust main content
-                if (mainContent) {
-                    if (sidebar.classList.contains('collapsed')) {
-                        mainContent.style.marginLeft = '70px';
-                        mainContent.style.width = 'calc(100% - 70px)';
-                    } else {
-                        mainContent.style.marginLeft = '';
-                        mainContent.style.width = '';
-                    }
+                if (isMobile()) {
+                    toggleMobileSidebar(false);
                 }
-                
-                // Save state to localStorage
-                const collapsed = sidebar.classList.contains('collapsed');
-                localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed);
             });
         }
+        
+        // Close sidebar when clicking backdrop
+        if (sidebarBackdrop) {
+            sidebarBackdrop.addEventListener('click', function() {
+                toggleMobileSidebar(false);
+            });
+        }
+        
+        // Close sidebar when clicking any nav link on mobile
+        const navLinks = sidebar ? sidebar.querySelectorAll('.nav-link') : [];
+        navLinks.forEach(function(link) {
+            link.addEventListener('click', function() {
+                if (isMobile()) {
+                    toggleMobileSidebar(false);
+                }
+            });
+        });
+        
+        // Handle window resize - close mobile menu if resizing to desktop
+        let resizeTimer;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function() {
+                if (!isMobile() && sidebar && sidebar.classList.contains('show')) {
+                    toggleMobileSidebar(false);
+                }
+            }, 250);
+        });
+        
+        // Handle ESC key to close mobile sidebar
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && isMobile() && sidebar && sidebar.classList.contains('show')) {
+                toggleMobileSidebar(false);
+            }
+        });
 
         // Menu Group Expansion Persistence
         const NAV_EXPANDED_MENU_GROUP_IDS_KEY = 'nav.expandedMenuGroupIds';
