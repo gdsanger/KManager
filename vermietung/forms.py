@@ -5,7 +5,7 @@ Forms for the Vermietung (Rental Management) area.
 from django import forms
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
-from core.models import Adresse, Mandant, Kostenart
+from core.models import Adresse, AdresseKontakt, Mandant, Kostenart
 from .models import (
     MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, MietObjektBild, 
     Aktivitaet, AktivitaetsBereich, VertragsObjekt, Zaehler, Zaehlerstand, OBJEKT_TYPE,
@@ -338,6 +338,35 @@ class AdresseForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class AdresseKontaktForm(forms.ModelForm):
+    """
+    Form for creating/editing contacts (Kontakte) for an address.
+    Includes validation for email format when type is EMAIL.
+    """
+    
+    class Meta:
+        model = AdresseKontakt
+        fields = ['type', 'name', 'position', 'kontakt']
+        widgets = {
+            'type': forms.Select(attrs={'class': 'form-select'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'position': forms.TextInput(attrs={'class': 'form-control'}),
+            'kontakt': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'type': 'Kontakttyp *',
+            'name': 'Name (optional)',
+            'position': 'Position (optional)',
+            'kontakt': 'Kontakt *',
+        }
+        help_texts = {
+            'type': 'Wählen Sie den Typ des Kontakts',
+            'name': 'Name der Kontaktperson',
+            'position': 'Position oder Funktion der Kontaktperson',
+            'kontakt': 'Telefonnummer oder E-Mail-Adresse',
+        }
 
 
 class VertragsObjektForm(forms.ModelForm):

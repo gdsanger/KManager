@@ -20,9 +20,9 @@ from .models import (
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
     EINGANGSRECHNUNG_STATUS
 )
-from core.models import Adresse, Mandant, Kostenart
+from core.models import Adresse, AdresseKontakt, Mandant, Kostenart
 from .forms import (
-    AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, MietObjektForm, VertragForm, VertragEndForm, 
+    AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, AdresseKontaktForm, MietObjektForm, VertragForm, VertragEndForm, 
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, AktivitaetsBereichForm,
     VertragsObjektFormSet, ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet, KostenartForm
 )
@@ -3004,3 +3004,122 @@ def bereich_create_ajax(request):
             }, status=400)
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=405)
+
+
+# ============================================================================
+# Adresse Kontakt CRUD Views
+# ============================================================================
+
+@vermietung_required
+def kontakt_create(request, adresse_pk):
+    """
+    Create a new contact for an address.
+    """
+    adresse = get_object_or_404(Adresse, pk=adresse_pk)
+    
+    if request.method == 'POST':
+        form = AdresseKontaktForm(request.POST)
+        if form.is_valid():
+            kontakt = form.save(commit=False)
+            kontakt.adresse = adresse
+            try:
+                kontakt.full_clean()  # Run model validation
+                kontakt.save()
+                messages.success(request, f'Kontakt "{kontakt}" wurde erfolgreich angelegt.')
+                
+                # Determine redirect URL based on address type
+                if adresse.adressen_type == 'KUNDE':
+                    return redirect('vermietung:kunde_detail', pk=adresse.pk)
+                elif adresse.adressen_type == 'LIEFERANT':
+                    return redirect('vermietung:lieferant_detail', pk=adresse.pk)
+                elif adresse.adressen_type == 'STANDORT':
+                    return redirect('vermietung:standort_detail', pk=adresse.pk)
+                else:
+                    return redirect('vermietung:adresse_detail', pk=adresse.pk)
+            except ValidationError as e:
+                # Add validation errors to form
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = AdresseKontaktForm()
+    
+    context = {
+        'form': form,
+        'adresse': adresse,
+        'is_create': True,
+    }
+    
+    return render(request, 'vermietung/kontakte/form.html', context)
+
+
+@vermietung_required
+def kontakt_edit(request, pk):
+    """
+    Edit an existing contact.
+    """
+    kontakt = get_object_or_404(AdresseKontakt, pk=pk)
+    adresse = kontakt.adresse
+    
+    if request.method == 'POST':
+        form = AdresseKontaktForm(request.POST, instance=kontakt)
+        if form.is_valid():
+            try:
+                kontakt = form.save(commit=False)
+                kontakt.full_clean()  # Run model validation
+                kontakt.save()
+                messages.success(request, f'Kontakt "{kontakt}" wurde erfolgreich aktualisiert.')
+                
+                # Determine redirect URL based on address type
+                if adresse.adressen_type == 'KUNDE':
+                    return redirect('vermietung:kunde_detail', pk=adresse.pk)
+                elif adresse.adressen_type == 'LIEFERANT':
+                    return redirect('vermietung:lieferant_detail', pk=adresse.pk)
+                elif adresse.adressen_type == 'STANDORT':
+                    return redirect('vermietung:standort_detail', pk=adresse.pk)
+                else:
+                    return redirect('vermietung:adresse_detail', pk=adresse.pk)
+            except ValidationError as e:
+                # Add validation errors to form
+                for field, errors in e.message_dict.items():
+                    for error in errors:
+                        form.add_error(field, error)
+    else:
+        form = AdresseKontaktForm(instance=kontakt)
+    
+    context = {
+        'form': form,
+        'kontakt': kontakt,
+        'adresse': adresse,
+        'is_create': False,
+    }
+    
+    return render(request, 'vermietung/kontakte/form.html', context)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def kontakt_delete(request, pk):
+    """
+    Delete a contact.
+    """
+    kontakt = get_object_or_404(AdresseKontakt, pk=pk)
+    adresse = kontakt.adresse
+    kontakt_str = str(kontakt)
+    
+    try:
+        kontakt.delete()
+        messages.success(request, f'Kontakt "{kontakt_str}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen des Kontakts: {str(e)}')
+    
+    # Determine redirect URL based on address type
+    if adresse.adressen_type == 'KUNDE':
+        return redirect('vermietung:kunde_detail', pk=adresse.pk)
+    elif adresse.adressen_type == 'LIEFERANT':
+        return redirect('vermietung:lieferant_detail', pk=adresse.pk)
+    elif adresse.adressen_type == 'STANDORT':
+        return redirect('vermietung:standort_detail', pk=adresse.pk)
+    else:
+        return redirect('vermietung:adresse_detail', pk=adresse.pk)
+
