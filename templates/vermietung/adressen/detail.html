@@ -269,7 +269,12 @@
         });
     });
     
-    document.addEventListener('DOMContentLoaded', restoreActiveTab);
+    // Restore active tab - handle case where DOM is already loaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', restoreActiveTab);
+    } else {
+        restoreActiveTab();
+    }
 })();
 
 function confirmDelete() {
