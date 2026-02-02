@@ -95,14 +95,7 @@
         {% endif %}
 
         <!-- Contacts Section -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h4 class="mb-0">Kontakte</h4>
-            </div>
-            <div class="card-body p-0">
-                {% include "vermietung/kontakte/_kontakte_list.html" with adresse=standort %}
-            </div>
-        </div>
+        {% include "vermietung/kontakte/_kontakte_list.html" with adresse=standort %}
 
         <!-- Objekte at this location -->
         <div class="card">
