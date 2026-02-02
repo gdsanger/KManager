@@ -74,7 +74,9 @@
             <!-- Mobile Menu Toggle Button (visible only on mobile) -->
             <button class="btn btn-primary d-md-none position-fixed" id="mobileMenuToggle" 
                     style="top: 70px; left: 15px; z-index: 1050;" 
-                    type="button" aria-label="Menü öffnen">
+                    type="button" 
+                    aria-label="Menü öffnen"
+                    aria-expanded="false">
                 <i class="bi bi-list" style="font-size: 1.5rem;"></i>
             </button>
             
@@ -373,10 +375,31 @@
                 sidebar.classList.add('show');
                 sidebarBackdrop.classList.add('show');
                 document.body.style.overflow = 'hidden'; // Prevent scroll on body
+                
+                // Update ARIA attributes for accessibility
+                if (mobileMenuToggle) {
+                    mobileMenuToggle.setAttribute('aria-expanded', 'true');
+                    mobileMenuToggle.setAttribute('aria-label', 'Menü schließen');
+                }
+                
+                // Focus first menu item for keyboard navigation
+                const firstLink = sidebar.querySelector('.nav-link');
+                if (firstLink) {
+                    firstLink.focus();
+                }
             } else {
                 sidebar.classList.remove('show');
                 sidebarBackdrop.classList.remove('show');
                 document.body.style.overflow = '';
+                
+                // Update ARIA attributes
+                if (mobileMenuToggle) {
+                    mobileMenuToggle.setAttribute('aria-expanded', 'false');
+                    mobileMenuToggle.setAttribute('aria-label', 'Menü öffnen');
+                    
+                    // Return focus to menu button
+                    mobileMenuToggle.focus();
+                }
             }
         }
         
@@ -384,15 +407,15 @@
         if (mobileMenuToggle) {
             mobileMenuToggle.addEventListener('click', function(e) {
                 e.preventDefault();
-                toggleMobileSidebar(true);
+                const isOpen = sidebar && sidebar.classList.contains('show');
+                toggleMobileSidebar(!isOpen);
             });
         }
         
-        // Desktop sidebar toggle (no longer used, but keeping for potential future use)
+        // Close button in sidebar (only on mobile)
         if (sidebarToggle && sidebar) {
             sidebarToggle.addEventListener('click', function(e) {
                 e.preventDefault();
-                // Only hide on mobile
                 if (isMobile()) {
                     toggleMobileSidebar(false);
                 }
@@ -421,10 +444,17 @@
         window.addEventListener('resize', function() {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function() {
-                if (!isMobile()) {
+                if (!isMobile() && sidebar && sidebar.classList.contains('show')) {
                     toggleMobileSidebar(false);
                 }
             }, 250);
+        });
+        
+        // Handle ESC key to close mobile sidebar
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && isMobile() && sidebar && sidebar.classList.contains('show')) {
+                toggleMobileSidebar(false);
+            }
         });
 
         // Menu Group Expansion Persistence
