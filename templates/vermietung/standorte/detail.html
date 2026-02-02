@@ -94,6 +94,16 @@
         </div>
         {% endif %}
 
+        <!-- Contacts Section -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4 class="mb-0">Kontakte</h4>
+            </div>
+            <div class="card-body p-0">
+                {% include "vermietung/kontakte/_kontakte_list.html" with adresse=standort %}
+            </div>
+        </div>
+
         <!-- Objekte at this location -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -226,7 +236,14 @@
 {% block extra_js %}
 <script>
 function confirmDelete() {
-    if (confirm('Möchten Sie den Standort "{{ standort.name }}" wirklich löschen?\n\nHinweis: Der Standort kann nur gelöscht werden, wenn keine Objekte mehr zugeordnet sind.')) {
+    var kontakteCount = {{ standort.kontakte.count }};
+    var message = 'Möchten Sie den Standort "{{ standort.name }}" wirklich löschen?\n\nHinweis: Der Standort kann nur gelöscht werden, wenn keine Objekte mehr zugeordnet sind.';
+    
+    if (kontakteCount > 0) {
+        message += '\n\nACHTUNG: Es ' + (kontakteCount === 1 ? 'ist 1 Kontakt' : 'sind ' + kontakteCount + ' Kontakte') + ' mit diesem Standort verknüpft, ' + (kontakteCount === 1 ? 'der' : 'die') + ' ebenfalls gelöscht ' + (kontakteCount === 1 ? 'wird' : 'werden') + '.';
+    }
+    
+    if (confirm(message)) {
         // Create a form and submit it
         var form = document.createElement('form');
         form.method = 'POST';
