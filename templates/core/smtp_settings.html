@@ -1,21 +1,11 @@
-{% extends "base.html" %}
+{% extends "core/core_base.html" %}
 
 {% block title %}SMTP Einstellungen - Domus{% endblock %}
 
-{% block content %}
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-envelope-gear"></i> SMTP Einstellungen</h2>
-    </div>
+{% block page_title %}SMTP Einstellungen{% endblock %}
 
-    {% if messages %}
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
-    {% endif %}
+{% block content %}
+<div class="container-fluid">
 
     <div class="row">
         <div class="col-lg-8">
