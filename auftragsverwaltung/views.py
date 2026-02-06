@@ -313,15 +313,6 @@ def document_create(request, doc_key):
         document.save()
         
         # Log activity
-        ActivityStreamService.log(
-            company=company,
-            domain='ORDER',
-            entity_type='SalesDocument',
-            entity_id=document.pk,
-            action='created',
-            description=f'Dokument {document.number} erstellt',
-            user=request.user
-        )
         
         # Redirect to detail view
         return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
@@ -428,15 +419,6 @@ def document_update(request, doc_key, pk):
     DocumentCalculationService.recalculate(document, persist=True)
     
     # Log activity
-    ActivityStreamService.log(
-        company=document.company,
-        domain='ORDER',
-        entity_type='SalesDocument',
-        entity_id=document.pk,
-        action='updated',
-        description=f'Dokument {document.number} aktualisiert',
-        user=request.user
-    )
     
     # Redirect to detail view
     return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
@@ -828,6 +810,517 @@ def contract_list(request):
     }
     
     return render(request, 'auftragsverwaltung/contracts/list.html', context)
+
+
+@login_required
+def contract_detail(request, pk):
+    """
+    Detail view for a contract
+    
+    Shows contract header, lines, totals preview, and run history.
+    Provides edit capabilities for all contract fields.
+    
+    Args:
+        pk: Primary key of the contract
+    """
+    contract = get_object_or_404(Contract, pk=pk)
+    
+    # Get company (for now, first available)
+    company = Mandant.objects.first()
+    
+    # Get all available customers, payment terms, tax rates, and document types
+    customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
+    payment_terms = PaymentTerm.objects.all().order_by('name')
+    tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
+    companies = Mandant.objects.all().order_by('name')
+    document_types = DocumentType.objects.filter(is_active=True).order_by('key')
+    kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
+    
+    # Get contract lines (ordered by position_no)
+    lines = contract.lines.select_related('item', 'tax_rate', 'cost_type_1', 'cost_type_2').order_by('position_no')
+    
+    # Get contract runs (execution history)
+    runs = contract.runs.select_related('document').order_by('-run_date')[:50]  # Last 50 runs
+    
+    # Get max position number for new lines
+    max_position = lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
+    
+    context = {
+        'contract': contract,
+        'lines': lines,
+        'runs': runs,
+        'customers': customers,
+        'payment_terms': payment_terms,
+        'tax_rates': tax_rates,
+        'companies': companies,
+        'document_types': document_types,
+        'kostenarten1': kostenarten1,
+        'max_position': max_position,
+        'is_create': False,
+    }
+    
+    return render(request, 'auftragsverwaltung/contracts/detail.html', context)
+
+
+@login_required
+def contract_create(request):
+    """
+    Create a new contract
+    
+    GET: Show empty form for creating a new contract
+    POST: Create the contract and redirect to detail view
+    """
+    company = Mandant.objects.first()
+    
+    if request.method == 'POST':
+        # Get company from form
+        company_id = request.POST.get('company_id')
+        if company_id:
+            company = get_object_or_404(Mandant, pk=company_id)
+        else:
+            company = Mandant.objects.first()
+        
+        # Create new contract from POST data
+        contract = Contract(
+            company=company,
+            is_active=True,
+        )
+        
+        # Set fields from form
+        contract.name = request.POST.get('name', '')
+        contract.reference = request.POST.get('reference', '')
+        contract.currency = request.POST.get('currency', 'EUR')
+        contract.interval = request.POST.get('interval', 'MONTHLY')
+        
+        # Set customer if provided
+        customer_id = request.POST.get('customer_id')
+        if customer_id:
+            contract.customer = get_object_or_404(Adresse, pk=customer_id)
+        
+        # Set document type if provided
+        document_type_id = request.POST.get('document_type_id')
+        if document_type_id:
+            contract.document_type = get_object_or_404(DocumentType, pk=document_type_id)
+        
+        # Set payment term if provided
+        payment_term_id = request.POST.get('payment_term_id')
+        if payment_term_id:
+            contract.payment_term = get_object_or_404(PaymentTerm, pk=payment_term_id)
+        
+        # Set dates
+        start_date_str = request.POST.get('start_date')
+        if start_date_str:
+            contract.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        
+        end_date_str = request.POST.get('end_date')
+        if end_date_str:
+            contract.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        
+        next_run_date_str = request.POST.get('next_run_date')
+        if next_run_date_str:
+            contract.next_run_date = datetime.strptime(next_run_date_str, '%Y-%m-%d').date()
+        
+        # Set is_active flag
+        contract.is_active = request.POST.get('is_active') == 'on'
+        
+        # Save the contract
+        contract.save()
+        
+        # Log activity
+        
+        # Redirect to detail view
+        return redirect('auftragsverwaltung:contract_detail', pk=contract.pk)
+    
+    # GET: Show empty form
+    customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
+    payment_terms = PaymentTerm.objects.all().order_by('name')
+    tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
+    companies = Mandant.objects.all().order_by('name')
+    document_types = DocumentType.objects.filter(is_active=True).order_by('key')
+    kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')
+    
+    context = {
+        'contract': None,
+        'lines': [],
+        'runs': [],
+        'customers': customers,
+        'payment_terms': payment_terms,
+        'tax_rates': tax_rates,
+        'companies': companies,
+        'document_types': document_types,
+        'kostenarten1': kostenarten1,
+        'max_position': 0,
+        'is_create': True,
+    }
+    
+    return render(request, 'auftragsverwaltung/contracts/detail.html', context)
+
+
+@login_required
+def contract_update(request, pk):
+    """
+    Update an existing contract
+    
+    POST: Update contract fields and redirect to detail view
+    
+    Args:
+        pk: Primary key of the contract
+    """
+    contract = get_object_or_404(Contract, pk=pk)
+    
+    # Update fields from form
+    contract.name = request.POST.get('name', '')
+    contract.reference = request.POST.get('reference', '')
+    contract.currency = request.POST.get('currency', 'EUR')
+    contract.interval = request.POST.get('interval', 'MONTHLY')
+    
+    # Update customer if provided
+    customer_id = request.POST.get('customer_id')
+    if customer_id:
+        contract.customer = get_object_or_404(Adresse, pk=customer_id)
+    
+    # Update document type if provided
+    document_type_id = request.POST.get('document_type_id')
+    if document_type_id:
+        contract.document_type = get_object_or_404(DocumentType, pk=document_type_id)
+    
+    # Update payment term if provided
+    payment_term_id = request.POST.get('payment_term_id')
+    if payment_term_id:
+        contract.payment_term = get_object_or_404(PaymentTerm, pk=payment_term_id)
+    else:
+        contract.payment_term = None
+    
+    # Update dates
+    start_date_str = request.POST.get('start_date')
+    if start_date_str:
+        contract.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    
+    end_date_str = request.POST.get('end_date')
+    if end_date_str:
+        contract.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    else:
+        contract.end_date = None
+    
+    next_run_date_str = request.POST.get('next_run_date')
+    if next_run_date_str:
+        contract.next_run_date = datetime.strptime(next_run_date_str, '%Y-%m-%d').date()
+    
+    # Update is_active flag
+    contract.is_active = request.POST.get('is_active') == 'on'
+    
+    # Save the contract
+    contract.save()
+    
+    # Log activity
+    
+    # Redirect to detail view
+    return redirect('auftragsverwaltung:contract_detail', pk=contract.pk)
+
+
+# ============================================================================
+# Contract AJAX Endpoints
+# ============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_contract_add_line(request, pk):
+    """
+    AJAX endpoint to add a new line to a contract
+    
+    POST parameters (JSON):
+        - item_id: Item/Article ID (optional for manual lines)
+        - quantity: Quantity
+        - description: Description (required for manual lines)
+        - unit_price_net: Unit price (required for manual lines)
+        - tax_rate_id: Tax rate ID (required)
+        - cost_type_1_id: Cost type 1 ID (optional)
+        - cost_type_2_id: Cost type 2 ID (optional)
+        - is_discountable: Whether the line is discountable (default: True)
+    
+    Returns:
+        JSON: {success, line_id, line_data, preview_totals}
+    """
+    try:
+        contract = get_object_or_404(Contract, pk=pk)
+        
+        # Parse JSON body
+        data = json.loads(request.body)
+        
+        item_id = data.get('item_id')
+        quantity = Decimal(data.get('quantity', '1.0'))
+        description = data.get('description', '')
+        unit_price_net = data.get('unit_price_net')
+        tax_rate_id = data.get('tax_rate_id')
+        cost_type_1_id = data.get('cost_type_1_id')
+        cost_type_2_id = data.get('cost_type_2_id')
+        is_discountable = data.get('is_discountable', True)
+        
+        # Determine line data based on whether item is provided
+        if item_id:
+            # Article-based line
+            item = get_object_or_404(Item, pk=item_id)
+            
+            # Use item data
+            if not description:
+                description = f"{item.short_text_1}\n{item.long_text}" if item.long_text else item.short_text_1
+            if not unit_price_net:
+                unit_price_net = item.net_price
+            
+            # Use item's tax rate if not provided
+            if not tax_rate_id and item.tax_rate:
+                tax_rate_id = item.tax_rate.pk
+            
+            # Use item's cost types if not provided
+            if not cost_type_1_id and item.kostenart1:
+                cost_type_1_id = item.kostenart1.pk
+            if not cost_type_2_id and item.kostenart2:
+                cost_type_2_id = item.kostenart2.pk
+            
+            is_discountable = item.is_discountable
+        else:
+            # Manual line - ensure required fields are present
+            if not description:
+                return JsonResponse({'error': 'Beschreibung ist erforderlich'}, status=400)
+            if not unit_price_net:
+                return JsonResponse({'error': 'Netto-Stückpreis ist erforderlich'}, status=400)
+        
+        # Ensure tax rate is provided
+        if not tax_rate_id:
+            return JsonResponse({'error': 'Steuersatz ist erforderlich'}, status=400)
+        
+        # Get tax rate
+        tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
+        
+        # Get next position number
+        max_position = contract.lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
+        position_no = max_position + 1
+        
+        # Create new contract line
+        line = ContractLine.objects.create(
+            contract=contract,
+            item_id=item_id if item_id else None,
+            position_no=position_no,
+            description=description,
+            quantity=quantity,
+            unit_price_net=Decimal(unit_price_net),
+            tax_rate=tax_rate,
+            cost_type_1_id=normalize_foreign_key_id(cost_type_1_id),
+            cost_type_2_id=normalize_foreign_key_id(cost_type_2_id),
+            is_discountable=is_discountable,
+        )
+        
+        # Calculate preview totals
+        preview_totals = _calculate_contract_preview_totals(contract)
+        
+        # Log activity
+        
+        # Return success with line data
+        return JsonResponse({
+            'success': True,
+            'line': {
+                'id': line.pk,
+                'position_no': line.position_no,
+                'description': line.description,
+                'quantity': str(line.quantity),
+                'unit_price_net': str(line.unit_price_net),
+                'tax_rate_id': line.tax_rate.pk,
+                'tax_rate_code': line.tax_rate.code,
+                'tax_rate_rate': str(line.tax_rate.rate),
+                'cost_type_1_id': line.cost_type_1.pk if line.cost_type_1 else None,
+                'cost_type_2_id': line.cost_type_2.pk if line.cost_type_2 else None,
+                'is_discountable': line.is_discountable,
+                'item_id': line.item.pk if line.item else None,
+            },
+            'preview_totals': preview_totals,
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_contract_update_line(request, pk, line_id):
+    """
+    AJAX endpoint to update an existing contract line
+    
+    POST parameters (JSON):
+        - quantity: New quantity
+        - unit_price_net: New unit price
+        - description: New description
+        - tax_rate_id: New tax rate ID
+        - cost_type_1_id: New cost type 1 ID
+        - cost_type_2_id: New cost type 2 ID
+        - is_discountable: Whether the line is discountable
+    
+    Returns:
+        JSON: {success, line_data, preview_totals}
+    """
+    try:
+        contract = get_object_or_404(Contract, pk=pk)
+        line = get_object_or_404(ContractLine, pk=line_id, contract=contract)
+        
+        # Parse JSON body
+        data = json.loads(request.body)
+        
+        # Update fields
+        if 'quantity' in data:
+            line.quantity = Decimal(data['quantity'])
+        if 'unit_price_net' in data:
+            line.unit_price_net = Decimal(data['unit_price_net'])
+        if 'description' in data:
+            line.description = data['description']
+        if 'tax_rate_id' in data:
+            line.tax_rate = get_object_or_404(TaxRate, pk=data['tax_rate_id'])
+        if 'is_discountable' in data:
+            line.is_discountable = data['is_discountable']
+        if 'cost_type_1_id' in data:
+            line.cost_type_1_id = normalize_foreign_key_id(data['cost_type_1_id'])
+        if 'cost_type_2_id' in data:
+            line.cost_type_2_id = normalize_foreign_key_id(data['cost_type_2_id'])
+        
+        line.save()
+        
+        # Calculate preview totals
+        preview_totals = _calculate_contract_preview_totals(contract)
+        
+        # Log activity
+        
+        # Return updated line data
+        return JsonResponse({
+            'success': True,
+            'line': {
+                'id': line.pk,
+                'quantity': str(line.quantity),
+                'unit_price_net': str(line.unit_price_net),
+                'description': line.description,
+                'tax_rate_id': line.tax_rate.pk,
+                'tax_rate_code': line.tax_rate.code,
+                'tax_rate_rate': str(line.tax_rate.rate),
+                'cost_type_1_id': line.cost_type_1.pk if line.cost_type_1 else None,
+                'cost_type_2_id': line.cost_type_2.pk if line.cost_type_2 else None,
+                'is_discountable': line.is_discountable,
+            },
+            'preview_totals': preview_totals,
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_contract_delete_line(request, pk, line_id):
+    """
+    AJAX endpoint to delete a contract line
+    
+    Returns:
+        JSON: {success, preview_totals}
+    """
+    try:
+        contract = get_object_or_404(Contract, pk=pk)
+        line = get_object_or_404(ContractLine, pk=line_id, contract=contract)
+        
+        line_desc = line.description[:50]
+        line.delete()
+        
+        # Calculate preview totals
+        preview_totals = _calculate_contract_preview_totals(contract)
+        
+        # Log activity
+        
+        return JsonResponse({
+            'success': True,
+            'preview_totals': preview_totals,
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_contract_calculate_next_run_date(request, pk):
+    """
+    AJAX endpoint to calculate the next run date based on interval and start date
+    
+    GET parameters:
+        - interval: Interval (MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL)
+        - start_date: Start date (YYYY-MM-DD)
+        - current_next_run_date: Current next run date (YYYY-MM-DD, optional)
+    
+    Returns:
+        JSON: {success, next_run_date}
+    """
+    try:
+        contract = get_object_or_404(Contract, pk=pk)
+        
+        interval = request.GET.get('interval', contract.interval)
+        start_date_str = request.GET.get('start_date')
+        current_next_run_date_str = request.GET.get('current_next_run_date')
+        
+        # Parse start date
+        if start_date_str:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        else:
+            start_date = contract.start_date
+        
+        # Determine base date for calculation
+        if current_next_run_date_str:
+            base_date = datetime.strptime(current_next_run_date_str, '%Y-%m-%d').date()
+        else:
+            base_date = start_date
+        
+        # Calculate next run date based on interval
+        if interval == 'MONTHLY':
+            next_run_date = base_date + relativedelta(months=1)
+        elif interval == 'QUARTERLY':
+            next_run_date = base_date + relativedelta(months=3)
+        elif interval == 'SEMI_ANNUAL':
+            next_run_date = base_date + relativedelta(months=6)
+        elif interval == 'ANNUAL':
+            next_run_date = base_date + relativedelta(years=1)
+        else:
+            return JsonResponse({'error': 'Ungültiges Intervall'}, status=400)
+        
+        return JsonResponse({
+            'success': True,
+            'next_run_date': next_run_date.strftime('%Y-%m-%d'),
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def _calculate_contract_preview_totals(contract):
+    """
+    Calculate preview totals for a contract based on its lines
+    
+    Args:
+        contract: Contract instance
+    
+    Returns:
+        dict: Preview totals (total_net, total_tax, total_gross)
+    """
+    lines = contract.lines.select_related('tax_rate').all()
+    
+    total_net = Decimal('0.00')
+    total_tax = Decimal('0.00')
+    
+    for line in lines:
+        # Calculate line total (net)
+        line_total_net = (line.quantity * line.unit_price_net).quantize(Decimal('0.01'))
+        
+        # Calculate line tax (rate is already decimal, e.g. 0.19 for 19%)
+        line_tax = (line_total_net * line.tax_rate.rate).quantize(Decimal('0.01'))
+        
+        total_net += line_total_net
+        total_tax += line_tax
+    
+    total_gross = total_net + total_tax
+    
+    return {
+        'total_net': str(total_net),
+        'total_tax': str(total_tax),
+        'total_gross': str(total_gross),
+    }
 
 
 # ============================================================================

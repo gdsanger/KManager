@@ -1,0 +1,964 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load static %}
+
+{% block title %}
+{% if is_create %}Neuer Vertrag{% else %}{{ contract.name }}{% endif %} - Domus
+{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+Neuer Vertrag
+{% else %}
+Vertrag: {{ contract.name }}
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    {% if not is_create %}
+    <button type="button" class="btn btn-primary" id="saveButton">
+        <i class="bi bi-save"></i> Speichern
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="window.location='{% url 'auftragsverwaltung:contract_list' %}'">
+        <i class="bi bi-x"></i> Abbrechen
+    </button>
+    {% else %}
+    <button type="button" class="btn btn-primary" id="createButton">
+        <i class="bi bi-plus-circle"></i> Erstellen
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="window.location='{% url 'auftragsverwaltung:contract_list' %}'">
+        <i class="bi bi-x"></i> Abbrechen
+    </button>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .contract-detail-container {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    
+    @media (max-width: 992px) {
+        .contract-detail-container {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .contract-header {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .contract-lines {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+    }
+    
+    .contract-totals {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+        position: sticky;
+        top: 80px;
+        max-height: calc(100vh - 100px);
+        overflow-y: auto;
+    }
+    
+    .contract-runs {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .line-item {
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 10px;
+        position: relative;
+    }
+    
+    .line-item:hover {
+        border-color: var(--bs-primary);
+    }
+    
+    .line-number {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: var(--bs-primary);
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.9em;
+    }
+    
+    .line-content {
+        padding-left: 45px;
+    }
+    
+    .line-actions {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    
+    .totals-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+    
+    .totals-row.total {
+        font-weight: bold;
+        font-size: 1.2em;
+        border-top: 2px solid var(--bs-border-color);
+        border-bottom: 2px solid var(--bs-border-color);
+        margin-top: 10px;
+    }
+    
+    .unsaved-indicator {
+        color: #ffc107;
+        margin-left: 10px;
+        display: none;
+    }
+    
+    .unsaved-indicator.show {
+        display: inline;
+    }
+    
+    .article-search-result {
+        padding: 10px;
+        border-bottom: 1px solid var(--bs-border-color);
+        cursor: pointer;
+    }
+    
+    .article-search-result:hover {
+        background: var(--bs-secondary-bg);
+    }
+    
+    .form-label-sm {
+        font-size: 0.75rem;
+        margin-bottom: 0.25rem;
+        display: block;
+        font-weight: 500;
+    }
+    
+    .run-status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+    
+    .run-status-SUCCESS {
+        background-color: #198754;
+        color: white;
+    }
+    
+    .run-status-FAILED {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .run-status-SKIPPED {
+        background-color: #6c757d;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<form id="contractForm" method="POST" action="{% if is_create %}{% url 'auftragsverwaltung:contract_create' %}{% else %}{% url 'auftragsverwaltung:contract_update' contract.pk %}{% endif %}">
+    {% csrf_token %}
+    
+    <div class="contract-detail-container">
+        <!-- Left Column: Header + Lines + Run History -->
+        <div>
+            <!-- Contract Header -->
+            <div class="contract-header">
+                <h5 class="mb-3">
+                    <i class="bi bi-file-text"></i> Stammdaten
+                    <span class="unsaved-indicator" id="unsavedIndicator">
+                        <i class="bi bi-exclamation-circle"></i> Nicht gespeichert
+                    </span>
+                </h5>
+                
+                <div class="row g-3">
+                    <!-- Company (dropdown) -->
+                    <div class="col-md-6">
+                        <label class="form-label">Mandant <span class="text-danger">*</span></label>
+                        <select class="form-select" name="company_id" id="companySelect" required {% if not is_create %}disabled{% endif %}>
+                            {% for c in companies %}
+                            <option value="{{ c.pk }}" {% if contract and contract.company.pk == c.pk %}selected{% elif not contract and forloop.first %}selected{% endif %}>
+                                {{ c.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if not is_create %}
+                        <input type="hidden" name="company_id" value="{{ contract.company.pk }}">
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Active Status -->
+                    <div class="col-md-6">
+                        <label class="form-label">Status</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="isActiveSwitch" name="is_active" 
+                                   {% if is_create or contract.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="isActiveSwitch">
+                                Aktiv
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Name (required, prominent) -->
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">Vertragsname <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-lg" name="name" 
+                               value="{% if contract %}{{ contract.name }}{% endif %}" 
+                               placeholder="z.B. Monatliche Büromiete" required>
+                    </div>
+                    
+                    <!-- Customer -->
+                    <div class="col-md-6">
+                        <label class="form-label">Kunde <span class="text-danger">*</span></label>
+                        <select class="form-select" name="customer_id" id="customerSelect" required>
+                            <option value="">-- Bitte wählen --</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.pk }}" 
+                                    {% if contract and contract.customer and contract.customer.pk == customer.pk %}selected{% endif %}>
+                                {{ customer.full_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Document Type -->
+                    <div class="col-md-6">
+                        <label class="form-label">Dokumenttyp <span class="text-danger">*</span></label>
+                        <select class="form-select" name="document_type_id" id="documentTypeSelect" required>
+                            <option value="">-- Bitte wählen --</option>
+                            {% for dt in document_types %}
+                            <option value="{{ dt.pk }}" 
+                                    {% if contract and contract.document_type and contract.document_type.pk == dt.pk %}selected{% endif %}>
+                                {{ dt.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Payment Term -->
+                    <div class="col-md-6">
+                        <label class="form-label">Zahlungsbedingung</label>
+                        <select class="form-select" name="payment_term_id" id="paymentTermSelect">
+                            <option value="">-- Keine --</option>
+                            {% for pt in payment_terms %}
+                            <option value="{{ pt.pk }}" 
+                                    {% if contract and contract.payment_term and contract.payment_term.pk == pt.pk %}selected{% endif %}>
+                                {{ pt.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Currency -->
+                    <div class="col-md-3">
+                        <label class="form-label">Währung</label>
+                        <select class="form-select" name="currency">
+                            <option value="EUR" {% if not contract or contract.currency == 'EUR' %}selected{% endif %}>EUR</option>
+                            <option value="USD" {% if contract and contract.currency == 'USD' %}selected{% endif %}>USD</option>
+                            <option value="CHF" {% if contract and contract.currency == 'CHF' %}selected{% endif %}>CHF</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Interval -->
+                    <div class="col-md-3">
+                        <label class="form-label">Intervall <span class="text-danger">*</span></label>
+                        <select class="form-select" name="interval" id="intervalSelect" required>
+                            <option value="MONTHLY" {% if not contract or contract.interval == 'MONTHLY' %}selected{% endif %}>Monatlich</option>
+                            <option value="QUARTERLY" {% if contract and contract.interval == 'QUARTERLY' %}selected{% endif %}>Quartalsweise</option>
+                            <option value="SEMI_ANNUAL" {% if contract and contract.interval == 'SEMI_ANNUAL' %}selected{% endif %}>Halbjährlich</option>
+                            <option value="ANNUAL" {% if contract and contract.interval == 'ANNUAL' %}selected{% endif %}>Jährlich</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Start Date -->
+                    <div class="col-md-4">
+                        <label class="form-label">Startdatum <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" name="start_date" id="startDateInput"
+                               value="{% if contract %}{{ contract.start_date|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}" required>
+                    </div>
+                    
+                    <!-- End Date -->
+                    <div class="col-md-4">
+                        <label class="form-label">Enddatum</label>
+                        <input type="date" class="form-control" name="end_date" id="endDateInput"
+                               value="{% if contract and contract.end_date %}{{ contract.end_date|date:'Y-m-d' }}{% endif %}">
+                        <small class="text-muted">Optional - unbefristet wenn leer</small>
+                    </div>
+                    
+                    <!-- Next Run Date -->
+                    <div class="col-md-4">
+                        <label class="form-label">Nächste Ausführung <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="date" class="form-control" name="next_run_date" id="nextRunDateInput"
+                                   value="{% if contract %}{{ contract.next_run_date|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}" required>
+                            {% if not is_create %}
+                            <button type="button" class="btn btn-outline-secondary" id="calculateNextRunBtn" title="Nächsten Termin berechnen">
+                                <i class="bi bi-calculator"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Last Run Date (read-only) -->
+                    {% if not is_create %}
+                    <div class="col-md-4">
+                        <label class="form-label">Letzte Ausführung</label>
+                        <input type="text" class="form-control" 
+                               value="{% if contract.last_run_date %}{{ contract.last_run_date|date:'d.m.Y' }}{% else %}Noch nie{% endif %}" readonly>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Reference -->
+                    <div class="col-md-{% if is_create %}12{% else %}8{% endif %}">
+                        <label class="form-label">Referenz</label>
+                        <input type="text" class="form-control" name="reference" 
+                               value="{% if contract %}{{ contract.reference }}{% endif %}" 
+                               placeholder="Externe Referenz (optional)">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Contract Lines -->
+            <div class="contract-lines">
+                <h5 class="mb-3">
+                    <i class="bi bi-list-ul"></i> Positionen
+                    {% if not is_create %}
+                    <button type="button" class="btn btn-sm btn-primary float-end" id="addLineButton">
+                        <i class="bi bi-plus"></i> Position hinzufügen
+                    </button>
+                    {% endif %}
+                </h5>
+                
+                <div id="linesContainer">
+                    {% if contract and lines %}
+                        {% for line in lines %}
+                        <div class="line-item" data-line-id="{{ line.pk }}">
+                            <div class="line-number">{{ line.position_no }}</div>
+                            <div class="line-actions">
+                                <button type="button" class="btn btn-sm btn-outline-danger delete-line-btn" data-line-id="{{ line.pk }}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            <div class="line-content">
+                                <div class="row g-2">
+                                    <div class="col-md-12">
+                                        <textarea class="form-control form-control-sm line-description" rows="2" 
+                                                  placeholder="Beschreibung">{{ line.description }}</textarea>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label-sm">Menge</label>
+                                        <input type="number" class="form-control form-control-sm line-quantity" 
+                                               value="{{ line.quantity }}" step="0.0001" min="0" placeholder="Menge">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label-sm">Einzelpreis (netto)</label>
+                                        <input type="number" class="form-control form-control-sm line-unit-price" 
+                                               value="{{ line.unit_price_net }}" step="0.01" min="0" placeholder="Preis">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label-sm">Steuersatz</label>
+                                        <select class="form-select form-select-sm line-tax-rate">
+                                            {% for tr in tax_rates %}
+                                            <option value="{{ tr.pk }}" data-rate="{{ tr.rate }}" {% if line.tax_rate.pk == tr.pk %}selected{% endif %}>
+                                                {{ tr.code }} ({{ tr.rate }}%)
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label-sm">Rabattfähig</label>
+                                        <div class="form-check form-switch mt-1">
+                                            <input class="form-check-input line-is-discountable" type="checkbox" 
+                                                   {% if line.is_discountable %}checked{% endif %}>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label-sm">Kostenart 1</label>
+                                        <select class="form-select form-select-sm line-cost-type-1" data-line-id="{{ line.pk }}">
+                                            <option value="">-- Keine --</option>
+                                            {% for k in kostenarten1 %}
+                                            <option value="{{ k.pk }}" {% if line.cost_type_1 and line.cost_type_1.pk == k.pk %}selected{% endif %}>
+                                                {{ k.name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label-sm">Kostenart 2</label>
+                                        <select class="form-select form-select-sm line-cost-type-2" data-line-id="{{ line.pk }}">
+                                            <option value="">-- Keine --</option>
+                                            {% if line.cost_type_1 %}
+                                                {% for k in line.cost_type_1.children.all %}
+                                                <option value="{{ k.pk }}" {% if line.cost_type_2 and line.cost_type_2.pk == k.pk %}selected{% endif %}>
+                                                    {{ k.name }}
+                                                </option>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted text-center py-4">
+                            <i class="bi bi-inbox"></i><br>
+                            Noch keine Positionen vorhanden.<br>
+                            {% if not is_create %}Klicken Sie auf "Position hinzufügen", um zu beginnen.{% else %}Speichern Sie zunächst den Vertrag.{% endif %}
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Run History (only for existing contracts) -->
+            {% if not is_create %}
+            <div class="contract-runs">
+                <h5 class="mb-3">
+                    <i class="bi bi-clock-history"></i> Ausführungs-Historie
+                </h5>
+                
+                {% if runs %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Datum</th>
+                                <th>Status</th>
+                                <th>Dokument</th>
+                                <th>Nachricht</th>
+                                <th>Erstellt</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for run in runs %}
+                            <tr>
+                                <td>{{ run.run_date|date:'d.m.Y' }}</td>
+                                <td>
+                                    <span class="run-status-badge run-status-{{ run.status }}">
+                                        {{ run.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if run.document %}
+                                    <a href="{% url 'auftragsverwaltung:document_detail' run.document.document_type.key run.document.pk %}">
+                                        {{ run.document.number }}
+                                    </a>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if run.message %}
+                                    <span class="text-muted small">{{ run.message|truncatewords:10 }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted small">{{ run.created_at|date:'d.m.Y H:i' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">
+                    <i class="bi bi-inbox"></i><br>
+                    Noch keine Ausführungen vorhanden.
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Right Column: Preview Totals (sticky) -->
+        <div>
+            <div class="contract-totals">
+                <h5 class="mb-3"><i class="bi bi-calculator"></i> Vorschau Summen</h5>
+                
+                <div class="totals-row">
+                    <span>Netto:</span>
+                    <span id="previewTotalNet">0,00 €</span>
+                </div>
+                <div class="totals-row">
+                    <span>MwSt.:</span>
+                    <span id="previewTotalTax">0,00 €</span>
+                </div>
+                <div class="totals-row total">
+                    <span>Brutto:</span>
+                    <span id="previewTotalGross">0,00 €</span>
+                </div>
+                
+                <hr>
+                
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> Diese Summen sind eine Vorschau der wiederkehrenden Abrechnung.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Add Line Modal -->
+<div class="modal fade" id="addLineModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Position hinzufügen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Article Search -->
+                <div class="mb-3">
+                    <label class="form-label">Artikel suchen</label>
+                    <input type="text" class="form-control" id="articleSearchInput" placeholder="Artikelnummer oder Beschreibung...">
+                    <div id="articleSearchResults" class="mt-2" style="max-height: 200px; overflow-y: auto;"></div>
+                </div>
+                
+                <hr>
+                
+                <!-- Manual Entry -->
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label class="form-label">Beschreibung <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="newLineDescription" rows="2" required></textarea>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Menge <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="newLineQuantity" value="1.0000" step="0.0001" min="0" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Einzelpreis <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="newLineUnitPrice" value="0.00" step="0.01" min="0" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Steuersatz <span class="text-danger">*</span></label>
+                        <select class="form-select" id="newLineTaxRate" required>
+                            {% for tr in tax_rates %}
+                            <option value="{{ tr.pk }}" data-rate="{{ tr.rate }}">{{ tr.code }} ({{ tr.rate }}%)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Rabattfähig</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="newLineDiscountable" checked>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Kostenart 1</label>
+                        <select class="form-select" id="newLineCostType1">
+                            <option value="">-- Keine --</option>
+                            {% for k in kostenarten1 %}
+                            <option value="{{ k.pk }}">{{ k.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Kostenart 2</label>
+                        <select class="form-select" id="newLineCostType2">
+                            <option value="">-- Keine --</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="confirmAddLineBtn">Hinzufügen</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Unsaved Changes Modal -->
+<div class="modal fade" id="unsavedChangesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nicht gespeicherte Änderungen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sie haben nicht gespeicherte Änderungen. Möchten Sie diese speichern?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="discardChangesBtn">Verwerfen</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="saveChangesBtn">Speichern</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let hasUnsavedChanges = false;
+    let pendingNavigation = null;
+    
+    // Track changes
+    $('#contractForm input, #contractForm select, #contractForm textarea').on('change', function() {
+        hasUnsavedChanges = true;
+        $('#unsavedIndicator').addClass('show');
+    });
+    
+    // Save button
+    $('#saveButton, #createButton').on('click', function() {
+        $('#contractForm').submit();
+    });
+    
+    // Calculate next run date button
+    $('#calculateNextRunBtn').on('click', function() {
+        const interval = $('#intervalSelect').val();
+        const startDate = $('#startDateInput').val();
+        const currentNextRunDate = $('#nextRunDateInput').val();
+        
+        $.ajax({
+            url: '{% if not is_create %}{% url "auftragsverwaltung:ajax_contract_calculate_next_run_date" contract.pk %}{% endif %}',
+            method: 'GET',
+            data: {
+                interval: interval,
+                start_date: startDate,
+                current_next_run_date: currentNextRunDate
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#nextRunDateInput').val(response.next_run_date);
+                    hasUnsavedChanges = true;
+                    $('#unsavedIndicator').addClass('show');
+                }
+            },
+            error: function(xhr) {
+                alert('Fehler beim Berechnen des nächsten Ausführungsdatums: ' + xhr.responseJSON.error);
+            }
+        });
+    });
+    
+    // Auto-suggest next_run_date on interval or start_date change
+    $('#intervalSelect, #startDateInput').on('change', function() {
+        const startDate = $('#startDateInput').val();
+        if (startDate && {% if is_create %}true{% else %}false{% endif %}) {
+            $('#nextRunDateInput').val(startDate);
+        }
+    });
+    
+    {% if not is_create %}
+    // Live calculation
+    function calculatePreview() {
+        let totalNet = 0;
+        let totalTax = 0;
+        
+        $('.line-item').each(function() {
+            const quantity = parseFloat($(this).find('.line-quantity').val()) || 0;
+            const unitPrice = parseFloat($(this).find('.line-unit-price').val()) || 0;
+            const taxRatePercent = parseFloat($(this).find('.line-tax-rate option:selected').data('rate')) || 0;
+            
+            const lineNet = quantity * unitPrice;
+            const lineTax = lineNet * (taxRatePercent / 100);
+            
+            totalNet += lineNet;
+            totalTax += lineTax;
+        });
+        
+        const totalGross = totalNet + totalTax;
+        
+        $('#previewTotalNet').text(totalNet.toFixed(2).replace('.', ',') + ' €');
+        $('#previewTotalTax').text(totalTax.toFixed(2).replace('.', ',') + ' €');
+        $('#previewTotalGross').text(totalGross.toFixed(2).replace('.', ',') + ' €');
+    }
+    
+    // Initial calculation
+    calculatePreview();
+    
+    // Add line button
+    $('#addLineButton').on('click', function() {
+        $('#addLineModal').modal('show');
+        $('#articleSearchInput').val('');
+        $('#articleSearchResults').empty();
+        $('#newLineDescription').val('');
+        $('#newLineQuantity').val('1.0000');
+        $('#newLineUnitPrice').val('0.00');
+        $('#newLineDiscountable').prop('checked', true);
+        $('#newLineCostType1').val('');
+        $('#newLineCostType2').html('<option value="">-- Keine --</option>');
+    });
+    
+    // Article search
+    let searchTimeout;
+    $('#articleSearchInput').on('keyup', function() {
+        clearTimeout(searchTimeout);
+        const query = $(this).val();
+        
+        if (query.length < 2) {
+            $('#articleSearchResults').empty();
+            return;
+        }
+        
+        searchTimeout = setTimeout(function() {
+            $.ajax({
+                url: '{% url "auftragsverwaltung:ajax_search_articles" %}',
+                method: 'GET',
+                data: { q: query },
+                success: function(response) {
+                    $('#articleSearchResults').empty();
+                    if (response.items && response.items.length > 0) {
+                        response.items.forEach(function(item) {
+                            const resultDiv = $('<div class="article-search-result"></div>')
+                                .html(`<strong>${item.article_number}</strong> - ${item.short_text_1}<br><small class="text-muted">${item.net_price} € (${item.tax_rate_code})</small>`)
+                                .data('item', item)
+                                .on('click', function() {
+                                    const selectedItem = $(this).data('item');
+                                    $('#newLineDescription').val(selectedItem.short_text_1);
+                                    $('#newLineQuantity').val('1.0000');
+                                    $('#newLineUnitPrice').val(selectedItem.net_price);
+                                    $('#newLineTaxRate').val(selectedItem.tax_rate_id);
+                                    $('#newLineDiscountable').prop('checked', selectedItem.is_discountable);
+                                    if (selectedItem.kostenart1_id) {
+                                        $('#newLineCostType1').val(selectedItem.kostenart1_id);
+                                        updateCostType2Options(selectedItem.kostenart1_id, selectedItem.kostenart2_id);
+                                    }
+                                    $('#articleSearchResults').empty();
+                                    $('#articleSearchInput').val('');
+                                });
+                            $('#articleSearchResults').append(resultDiv);
+                        });
+                    } else {
+                        $('#articleSearchResults').html('<div class="text-muted p-2">Keine Artikel gefunden</div>');
+                    }
+                }
+            });
+        }, 300);
+    });
+    
+    // Cost Type 1 change handler (for new line modal)
+    $('#newLineCostType1').on('change', function() {
+        const costType1Id = $(this).val();
+        updateCostType2Options(costType1Id);
+    });
+    
+    function updateCostType2Options(costType1Id, selectedCostType2Id = null) {
+        if (!costType1Id) {
+            $('#newLineCostType2').html('<option value="">-- Keine --</option>');
+            return;
+        }
+        
+        $.ajax({
+            url: '{% url "auftragsverwaltung:ajax_get_kostenart2_options" %}',
+            method: 'GET',
+            data: { kostenart1_id: costType1Id },
+            success: function(response) {
+                let options = '<option value="">-- Keine --</option>';
+                response.forEach(function(kostenart) {
+                    const selected = kostenart.id == selectedCostType2Id ? 'selected' : '';
+                    options += `<option value="${kostenart.id}" ${selected}>${kostenart.name}</option>`;
+                });
+                $('#newLineCostType2').html(options);
+            }
+        });
+    }
+    
+    // Confirm add line
+    $('#confirmAddLineBtn').on('click', function() {
+        const description = $('#newLineDescription').val();
+        const quantity = $('#newLineQuantity').val();
+        const unitPrice = $('#newLineUnitPrice').val();
+        const taxRateId = $('#newLineTaxRate').val();
+        const isDiscountable = $('#newLineDiscountable').is(':checked');
+        const costType1Id = $('#newLineCostType1').val() || null;
+        const costType2Id = $('#newLineCostType2').val() || null;
+        
+        if (!description || !quantity || !unitPrice || !taxRateId) {
+            alert('Bitte füllen Sie alle Pflichtfelder aus.');
+            return;
+        }
+        
+        $.ajax({
+            url: '{% url "auftragsverwaltung:ajax_contract_add_line" contract.pk %}',
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            contentType: 'application/json',
+            data: JSON.stringify({
+                description: description,
+                quantity: quantity,
+                unit_price_net: unitPrice,
+                tax_rate_id: taxRateId,
+                is_discountable: isDiscountable,
+                cost_type_1_id: costType1Id,
+                cost_type_2_id: costType2Id
+            }),
+            success: function(response) {
+                if (response.success) {
+                    location.reload();  // Reload to show new line
+                }
+            },
+            error: function(xhr) {
+                alert('Fehler beim Hinzufügen der Position: ' + xhr.responseJSON.error);
+            }
+        });
+    });
+    
+    // Delete line
+    $(document).on('click', '.delete-line-btn', function() {
+        if (!confirm('Position wirklich löschen?')) {
+            return;
+        }
+        
+        const lineId = $(this).data('line-id');
+        
+        $.ajax({
+            url: '{% url "auftragsverwaltung:ajax_contract_delete_line" contract.pk 0 %}'.replace('/0/', `/${lineId}/`),
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            success: function(response) {
+                if (response.success) {
+                    location.reload();  // Reload to update lines
+                }
+            },
+            error: function(xhr) {
+                alert('Fehler beim Löschen der Position: ' + xhr.responseJSON.error);
+            }
+        });
+    });
+    
+    // Update line on change
+    $(document).on('change', '.line-description, .line-quantity, .line-unit-price, .line-tax-rate, .line-is-discountable, .line-cost-type-1, .line-cost-type-2', function() {
+        const lineItem = $(this).closest('.line-item');
+        const lineId = lineItem.data('line-id');
+        
+        const description = lineItem.find('.line-description').val();
+        const quantity = lineItem.find('.line-quantity').val();
+        const unitPrice = lineItem.find('.line-unit-price').val();
+        const taxRateId = lineItem.find('.line-tax-rate').val();
+        const isDiscountable = lineItem.find('.line-is-discountable').is(':checked');
+        const costType1Id = lineItem.find('.line-cost-type-1').val() || null;
+        const costType2Id = lineItem.find('.line-cost-type-2').val() || null;
+        
+        $.ajax({
+            url: '{% url "auftragsverwaltung:ajax_contract_update_line" contract.pk 0 %}'.replace('/0/', `/${lineId}/`),
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            contentType: 'application/json',
+            data: JSON.stringify({
+                description: description,
+                quantity: quantity,
+                unit_price_net: unitPrice,
+                tax_rate_id: taxRateId,
+                is_discountable: isDiscountable,
+                cost_type_1_id: costType1Id,
+                cost_type_2_id: costType2Id
+            }),
+            success: function(response) {
+                if (response.success && response.preview_totals) {
+                    $('#previewTotalNet').text(parseFloat(response.preview_totals.total_net).toFixed(2).replace('.', ',') + ' €');
+                    $('#previewTotalTax').text(parseFloat(response.preview_totals.total_tax).toFixed(2).replace('.', ',') + ' €');
+                    $('#previewTotalGross').text(parseFloat(response.preview_totals.total_gross).toFixed(2).replace('.', ',') + ' €');
+                }
+            }
+        });
+        
+        calculatePreview();
+    });
+    
+    // Update Cost Type 2 options when Cost Type 1 changes (for existing lines)
+    $(document).on('change', '.line-cost-type-1', function() {
+        const lineItem = $(this).closest('.line-item');
+        const lineId = lineItem.data('line-id');
+        const costType1Id = $(this).val();
+        const costType2Select = lineItem.find('.line-cost-type-2');
+        
+        if (!costType1Id) {
+            costType2Select.html('<option value="">-- Keine --</option>');
+            return;
+        }
+        
+        $.ajax({
+            url: '{% url "auftragsverwaltung:ajax_get_kostenart2_options" %}',
+            method: 'GET',
+            data: { kostenart1_id: costType1Id },
+            success: function(response) {
+                let options = '<option value="">-- Keine --</option>';
+                response.forEach(function(kostenart) {
+                    options += `<option value="${kostenart.id}">${kostenart.name}</option>`;
+                });
+                costType2Select.html(options);
+            }
+        });
+    });
+    {% endif %}
+    
+    // Unsaved changes guard
+    $(window).on('beforeunload', function() {
+        if (hasUnsavedChanges) {
+            return 'Sie haben nicht gespeicherte Änderungen. Möchten Sie die Seite wirklich verlassen?';
+        }
+    });
+    
+    // Intercept navigation
+    $('a').on('click', function(e) {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            pendingNavigation = $(this).attr('href');
+            $('#unsavedChangesModal').modal('show');
+        }
+    });
+    
+    // Modal button handlers
+    $('#saveChangesBtn').on('click', function() {
+        $('#contractForm').submit();
+    });
+    
+    $('#discardChangesBtn').on('click', function() {
+        hasUnsavedChanges = false;
+        if (pendingNavigation) {
+            window.location.href = pendingNavigation;
+        }
+    });
+    
+    // Reset unsaved changes on successful save
+    $('#contractForm').on('submit', function() {
+        hasUnsavedChanges = false;
+    });
+});
+</script>
+{% endblock %}
