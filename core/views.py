@@ -6,8 +6,11 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
-from core.models import SmtpSettings, MailTemplate, Mandant
-from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm
+from django_tables2 import RequestConfig
+from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup
+from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm
+from core.tables import ItemTable
+from core.filters import ItemFilter
 
 
 def home(request):
@@ -247,4 +250,158 @@ def support_portal(request):
     }
     
     return render(request, 'core/support_portal.html', context)
+
+
+# Item Management Views
+@login_required
+def item_management(request):
+    """
+    Combined view for item management with tree, list, and detail view.
+    
+    This is a single-page view that shows:
+    - Left: Item group tree (Hauptgruppe/Untergruppe)
+    - Right top: Filtered item list (django-tables2 + django-filter)
+    - Right bottom: Detail form for selected item
+    """
+    # Get all item groups for tree
+    main_groups = ItemGroup.objects.filter(
+        group_type='MAIN', is_active=True
+    ).prefetch_related('children').order_by('code')
+    
+    # Base queryset for items
+    queryset = Item.objects.select_related(
+        'item_group', 'tax_rate', 'cost_type_1', 'cost_type_2'
+    )
+    
+    # Get group filter from URL
+    group_id = request.GET.get('group', '')
+    if group_id:
+        try:
+            group = ItemGroup.objects.get(pk=group_id)
+            # Filter by selected group - if it's a main group, show all items in subgroups
+            if group.group_type == 'MAIN':
+                queryset = queryset.filter(item_group__parent=group)
+            else:
+                queryset = queryset.filter(item_group=group)
+        except (ItemGroup.DoesNotExist, ValueError):
+            pass
+    
+    # Apply filters
+    filter_set = ItemFilter(request.GET, queryset=queryset)
+    
+    # Create table with filtered data
+    table = ItemTable(filter_set.qs)
+    table.request = request  # Pass request to table for URL generation
+    
+    # Configure pagination
+    RequestConfig(request, paginate={'per_page': 20}).configure(table)
+    
+    # Get selected item for detail view
+    selected_item = None
+    selected_id = request.GET.get('selected', '')
+    if selected_id:
+        try:
+            selected_item = Item.objects.select_related(
+                'item_group', 'tax_rate', 'cost_type_1', 'cost_type_2'
+            ).get(pk=selected_id)
+        except (Item.DoesNotExist, ValueError):
+            pass
+    
+    # Create form for selected item or new item
+    form = None
+    if selected_item:
+        form = ItemForm(instance=selected_item)
+    
+    context = {
+        'main_groups': main_groups,
+        'table': table,
+        'filter': filter_set,
+        'form': form,
+        'selected_item': selected_item,
+        'selected_group_id': group_id,
+    }
+    
+    return render(request, 'core/item_management.html', context)
+
+
+@login_required
+def item_save(request):
+    """
+    Handle item save (create or update).
+    Supports 'next' parameter for redirect after save.
+    """
+    if request.method != 'POST':
+        return redirect('item_management')
+    
+    # Get item ID if updating
+    item_id = request.POST.get('item_id', '')
+    item = None
+    if item_id:
+        try:
+            item = Item.objects.get(pk=item_id)
+        except (Item.DoesNotExist, ValueError):
+            pass
+    
+    # Create or update form
+    if item:
+        form = ItemForm(request.POST, instance=item)
+    else:
+        form = ItemForm(request.POST)
+    
+    if form.is_valid():
+        saved_item = form.save()
+        messages.success(request, f'Artikel "{saved_item.article_no}" erfolgreich gespeichert.')
+        
+        # Check for next parameter (for save & switch)
+        next_url = request.POST.get('next', '')
+        if next_url:
+            return redirect(next_url)
+        
+        # Otherwise redirect back to management view with saved item selected
+        return redirect(f'/items/?selected={saved_item.pk}')
+    else:
+        # Form has errors - redirect back with errors
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(request, f'{field}: {error}')
+        
+        # Redirect back to the item or new form
+        if item:
+            return redirect(f'/items/?selected={item.pk}')
+        else:
+            return redirect('item_management')
+
+
+@login_required
+def item_create_new(request):
+    """Show empty form to create a new item"""
+    main_groups = ItemGroup.objects.filter(
+        group_type='MAIN', is_active=True
+    ).prefetch_related('children').order_by('code')
+    
+    queryset = Item.objects.select_related(
+        'item_group', 'tax_rate', 'cost_type_1', 'cost_type_2'
+    )
+    
+    # Apply filters from URL
+    filter_set = ItemFilter(request.GET, queryset=queryset)
+    
+    # Create table
+    table = ItemTable(filter_set.qs)
+    table.request = request
+    RequestConfig(request, paginate={'per_page': 20}).configure(table)
+    
+    # Empty form for new item
+    form = ItemForm()
+    
+    context = {
+        'main_groups': main_groups,
+        'table': table,
+        'filter': filter_set,
+        'form': form,
+        'selected_item': None,
+        'is_new': True,
+    }
+    
+    return render(request, 'core/item_management.html', context)
 

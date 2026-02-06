@@ -27,4 +27,9 @@ urlpatterns = [
     
     # Customer Support Portal
     path('support-portal/', views.support_portal, name='support_portal'),
+    
+    # Item Management
+    path('items/', views.item_management, name='item_management'),
+    path('items/save/', views.item_save, name='item_save'),
+    path('items/new/', views.item_create_new, name='item_create_new'),
 ]
