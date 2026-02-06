@@ -1154,7 +1154,7 @@ def ajax_contract_add_line(request, pk):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
-        description_preview = line.description[:100] if line.description and len(line.description) <= 100 else (line.description[:97] + '...' if line.description else None)
+        description_preview = (line.description[:97] + '...' if len(line.description) > 100 else line.description) if line.description else None
         ActivityStreamService.add(
             company=contract.company,
             domain='ORDER',
@@ -1236,7 +1236,7 @@ def ajax_contract_update_line(request, pk, line_id):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
-        description_preview = line.description[:100] if line.description and len(line.description) <= 100 else (line.description[:97] + '...' if line.description else None)
+        description_preview = (line.description[:97] + '...' if len(line.description) > 100 else line.description) if line.description else None
         ActivityStreamService.add(
             company=contract.company,
             domain='ORDER',
