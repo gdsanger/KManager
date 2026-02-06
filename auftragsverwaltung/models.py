@@ -57,7 +57,7 @@ class DocumentType(models.Model):
         verbose_name_plural = "Dokumenttypen"
         ordering = ['key']
         indexes = [
-            models.Index(fields=['key'], name='doctype_key_idx'),
+            # Note: 'key' field already has an index due to unique=True
             models.Index(fields=['is_active'], name='doctype_is_active_idx'),
         ]
         constraints = [
@@ -72,23 +72,28 @@ class DocumentType(models.Model):
         return f"{self.key}: {self.name} ({self.prefix})"
     
     def clean(self):
-        """Validate document type data"""
+        """Validate document type data
+        
+        Note: While Django's CharField enforces non-null values by default,
+        we explicitly check for whitespace-only values which would otherwise
+        pass Django's default validation.
+        """
         super().clean()
         
-        # Validate key: must not be empty
-        if not self.key or not self.key.strip():
+        # Validate key: must not be empty or whitespace-only
+        if self.key and not self.key.strip():
             raise ValidationError({
-                'key': 'Der Key darf nicht leer sein.'
+                'key': 'Der Key darf nicht nur aus Leerzeichen bestehen.'
             })
         
-        # Validate name: must not be empty
-        if not self.name or not self.name.strip():
+        # Validate name: must not be empty or whitespace-only
+        if self.name and not self.name.strip():
             raise ValidationError({
-                'name': 'Der Name darf nicht leer sein.'
+                'name': 'Der Name darf nicht nur aus Leerzeichen bestehen.'
             })
         
-        # Validate prefix: must not be empty
-        if not self.prefix or not self.prefix.strip():
+        # Validate prefix: must not be empty or whitespace-only
+        if self.prefix and not self.prefix.strip():
             raise ValidationError({
-                'prefix': 'Das Präfix darf nicht leer sein.'
+                'prefix': 'Das Präfix darf nicht nur aus Leerzeichen bestehen.'
             })
