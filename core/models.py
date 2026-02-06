@@ -946,6 +946,15 @@ class Item(models.Model):
         related_name='items_cost_type_2',
         verbose_name="Kostenart 2"
     )
+    item_group = models.ForeignKey(
+        ItemGroup,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='items',
+        verbose_name="Warengruppe",
+        help_text="Optional: Zuordnung zu einer Unterwarengruppe (SUB)"
+    )
     
     # Classification
     item_type = models.CharField(
@@ -1015,3 +1024,11 @@ class Item(models.Model):
             raise ValidationError({
                 'purchase_price': 'Der Einkaufspreis darf nicht negativ sein.'
             })
+        
+        # Validate item_group: if set, must be a SUB (has parent), not a MAIN (parent is NULL)
+        if self.item_group is not None:
+            if self.item_group.parent is None:
+                raise ValidationError({
+                    'item_group': 'Ein Artikel kann nur einer Unterwarengruppe (SUB) zugeordnet werden, '
+                                  'nicht einer Hauptwarengruppe (MAIN). Bitte wählen Sie eine Unterwarengruppe.'
+                })
