@@ -2,6 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.utils import timezone
+from decimal import Decimal
 
 ANREDEN = [
     ('HERR', 'Herr'),
@@ -234,9 +235,9 @@ class TaxRate(models.Model):
         ]
     
     def __str__(self):
-        # Format rate as percentage with 2 decimal places
-        percentage = float(self.rate) * 100
-        return f"{self.code}: {self.name} ({percentage:.2f}%)"
+        # Format rate as percentage with 2 decimal places using Decimal for precision
+        percentage = (self.rate * Decimal('100')).quantize(Decimal('0.01'))
+        return f"{self.code}: {self.name} ({percentage}%)"
     
     def clean(self):
         """Validate tax rate data"""
