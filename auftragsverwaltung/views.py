@@ -710,10 +710,13 @@ def ajax_get_kostenart2_options(request):
     AJAX endpoint to get Kostenart2 options based on selected Kostenart1
     
     GET parameters:
-        - kostenart1_id: Parent Kostenart ID
+        - kostenart1_id: Parent Kostenart ID (optional)
     
     Returns:
         JSON: List of child Kostenart options
+        
+    Note: If kostenart1_id is not provided or empty, returns an empty list
+    (as Kostenart2 requires Kostenart1 to be selected first for cascading dropdown).
     """
     try:
         kostenart1_id = request.GET.get('kostenart1_id')

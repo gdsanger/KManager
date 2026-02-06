@@ -214,6 +214,10 @@ Neues {{ document_type.name }}
                             </option>
                             {% endfor %}
                         </select>
+                        {% if not is_create %}
+                        {# Hidden input to ensure company_id is submitted when dropdown is disabled #}
+                        <input type="hidden" name="company_id" value="{{ company.pk }}">
+                        {% endif %}
                     </div>
                     
                     <!-- Document Type (read-only) -->
@@ -811,6 +815,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add line from article
     function addLineFromArticle(article) {
         {% if document %}
+        // Close modal immediately to prevent user interaction during AJAX call
+        const articleModal = bootstrap.Modal.getInstance(document.getElementById('articleSearchModal'));
+        if (articleModal) {
+            articleModal.hide();
+        }
+        articleSearchInput.value = '';
+        articleSearchResults.innerHTML = '';
+        
         fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
             method: 'POST',
             headers: {
@@ -828,10 +840,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Close modal and reload page
-                bootstrap.Modal.getInstance(document.getElementById('articleSearchModal')).hide();
-                articleSearchInput.value = '';
-                articleSearchResults.innerHTML = '';
+                // Reload page to show new line
                 location.reload();
             } else if (data.error) {
                 alert('Fehler: ' + data.error);
