@@ -1,14 +1,23 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
-from datetime import datetime, timedelta
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django_tables2 import RequestConfig
+import json
 
-from .models import SalesDocument, DocumentType
+from .models import SalesDocument, DocumentType, SalesDocumentLine
 from .tables import SalesDocumentTable
 from .filters import SalesDocumentFilter
-from core.models import Mandant
+from .services import (
+    DocumentCalculationService,
+    TaxDeterminationService,
+    PaymentTermTextService,
+    get_next_number
+)
+from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate
 from core.services.activity_stream import ActivityStreamService
 
 
@@ -150,3 +159,475 @@ def document_list(request, doc_key):
     }
     
     return render(request, 'auftragsverwaltung/documents/list.html', context)
+
+
+@login_required
+def document_detail(request, doc_key, pk):
+    """
+    Detail view for a sales document
+    
+    Shows document header, lines, totals, and text sections.
+    Provides edit capabilities for all document fields.
+    
+    Args:
+        doc_key: Document type key (e.g., 'quote', 'invoice')
+        pk: Primary key of the document
+    """
+    document = get_object_or_404(SalesDocument, pk=pk)
+    document_type = get_object_or_404(DocumentType, key=doc_key, is_active=True)
+    
+    # Verify document belongs to the correct type
+    if document.document_type != document_type:
+        return redirect('auftragsverwaltung:document_list', doc_key=doc_key)
+    
+    # Get company (for now, first available)
+    company = Mandant.objects.first()
+    
+    # Get all available customers, payment terms, and tax rates
+    customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
+    payment_terms = PaymentTerm.objects.all().order_by('name')
+    tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
+    
+    # Get document lines (ordered by position_no)
+    lines = document.lines.select_related('item', 'tax_rate').order_by('position_no')
+    
+    context = {
+        'document': document,
+        'document_type': document_type,
+        'doc_key': doc_key,
+        'company': company,
+        'customers': customers,
+        'payment_terms': payment_terms,
+        'tax_rates': tax_rates,
+        'lines': lines,
+    }
+    
+    return render(request, 'auftragsverwaltung/documents/detail.html', context)
+
+
+@login_required
+def document_create(request, doc_key):
+    """
+    Create a new sales document
+    
+    GET: Show empty form for creating a new document
+    POST: Create the document and redirect to detail view
+    
+    Args:
+        doc_key: Document type key (e.g., 'quote', 'invoice')
+    """
+    document_type = get_object_or_404(DocumentType, key=doc_key, is_active=True)
+    company = Mandant.objects.first()
+    
+    if request.method == 'POST':
+        # Create new document from POST data
+        document = SalesDocument(
+            company=company,
+            document_type=document_type,
+            status='DRAFT',
+        )
+        
+        # Set fields from form
+        document.subject = request.POST.get('subject', '')
+        document.reference_number = request.POST.get('reference_number', '')
+        document.header_text = request.POST.get('header_text', '')
+        document.footer_text = request.POST.get('footer_text', '')
+        document.notes_internal = request.POST.get('notes_internal', '')
+        document.notes_public = request.POST.get('notes_public', '')
+        
+        # Set customer if provided
+        customer_id = request.POST.get('customer_id')
+        if customer_id:
+            document.customer = get_object_or_404(Adresse, pk=customer_id)
+        
+        # Set issue_date (default to today if not provided)
+        issue_date_str = request.POST.get('issue_date')
+        if issue_date_str:
+            document.issue_date = datetime.strptime(issue_date_str, '%Y-%m-%d').date()
+        else:
+            document.issue_date = date.today()
+        
+        # Set payment_term if provided
+        payment_term_id = request.POST.get('payment_term_id')
+        if payment_term_id:
+            document.payment_term = get_object_or_404(PaymentTerm, pk=payment_term_id)
+            # Auto-calculate due_date and payment_term_text
+            document.due_date = PaymentTermTextService.calculate_due_date(
+                document.payment_term,
+                document.issue_date
+            )
+            document.payment_term_text = PaymentTermTextService.generate_payment_term_text(
+                document.payment_term,
+                document.issue_date
+            )
+        
+        # Generate document number
+        document.number = get_next_number(company, document_type)
+        
+        # Save document
+        document.save()
+        
+        # Log activity
+        ActivityStreamService.log(
+            company=company,
+            domain='ORDER',
+            entity_type='SalesDocument',
+            entity_id=document.pk,
+            action='created',
+            description=f'Dokument {document.number} erstellt',
+            user=request.user
+        )
+        
+        # Redirect to detail view
+        return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
+    
+    # GET: Show empty form
+    customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
+    payment_terms = PaymentTerm.objects.all().order_by('name')
+    
+    context = {
+        'document_type': document_type,
+        'doc_key': doc_key,
+        'company': company,
+        'customers': customers,
+        'payment_terms': payment_terms,
+        'is_create': True,
+    }
+    
+    return render(request, 'auftragsverwaltung/documents/detail.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def document_update(request, doc_key, pk):
+    """
+    Update an existing sales document
+    
+    POST: Update document fields and redirect to detail view
+    
+    Args:
+        doc_key: Document type key
+        pk: Primary key of the document
+    """
+    document = get_object_or_404(SalesDocument, pk=pk)
+    document_type = get_object_or_404(DocumentType, key=doc_key, is_active=True)
+    
+    # Verify document belongs to the correct type
+    if document.document_type != document_type:
+        return redirect('auftragsverwaltung:document_list', doc_key=doc_key)
+    
+    # Update fields from form
+    document.subject = request.POST.get('subject', '')
+    document.reference_number = request.POST.get('reference_number', '')
+    document.header_text = request.POST.get('header_text', '')
+    document.footer_text = request.POST.get('footer_text', '')
+    document.notes_internal = request.POST.get('notes_internal', '')
+    document.notes_public = request.POST.get('notes_public', '')
+    document.status = request.POST.get('status', 'DRAFT')
+    
+    # Update customer if provided
+    customer_id = request.POST.get('customer_id')
+    if customer_id:
+        document.customer = get_object_or_404(Adresse, pk=customer_id)
+    else:
+        document.customer = None
+    
+    # Update issue_date
+    issue_date_str = request.POST.get('issue_date')
+    if issue_date_str:
+        document.issue_date = datetime.strptime(issue_date_str, '%Y-%m-%d').date()
+    
+    # Update payment_term if provided
+    payment_term_id = request.POST.get('payment_term_id')
+    if payment_term_id:
+        document.payment_term = get_object_or_404(PaymentTerm, pk=payment_term_id)
+        # Auto-calculate due_date and payment_term_text
+        document.due_date = PaymentTermTextService.calculate_due_date(
+            document.payment_term,
+            document.issue_date
+        )
+        document.payment_term_text = PaymentTermTextService.generate_payment_term_text(
+            document.payment_term,
+            document.issue_date
+        )
+    else:
+        document.payment_term = None
+        document.due_date = None
+        document.payment_term_text = ''
+    
+    # Save document
+    document.save()
+    
+    # Recalculate totals
+    DocumentCalculationService.recalculate(document, persist=True)
+    
+    # Log activity
+    ActivityStreamService.log(
+        company=document.company,
+        domain='ORDER',
+        entity_type='SalesDocument',
+        entity_id=document.pk,
+        action='updated',
+        description=f'Dokument {document.number} aktualisiert',
+        user=request.user
+    )
+    
+    # Redirect to detail view
+    return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_calculate_payment_term(request):
+    """
+    AJAX endpoint to calculate due_date and payment_term_text
+    
+    POST parameters:
+        - payment_term_id: Payment term ID
+        - issue_date: Issue date (YYYY-MM-DD)
+    
+    Returns:
+        JSON: {due_date, payment_term_text}
+    """
+    try:
+        payment_term_id = request.POST.get('payment_term_id')
+        issue_date_str = request.POST.get('issue_date')
+        
+        if not payment_term_id or not issue_date_str:
+            return JsonResponse({'error': 'Missing parameters'}, status=400)
+        
+        payment_term = get_object_or_404(PaymentTerm, pk=payment_term_id)
+        issue_date = datetime.strptime(issue_date_str, '%Y-%m-%d').date()
+        
+        due_date = PaymentTermTextService.calculate_due_date(payment_term, issue_date)
+        payment_term_text = PaymentTermTextService.generate_payment_term_text(payment_term, issue_date)
+        
+        return JsonResponse({
+            'due_date': due_date.strftime('%Y-%m-%d'),
+            'due_date_formatted': due_date.strftime('%d.%m.%Y'),
+            'payment_term_text': payment_term_text,
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_search_articles(request):
+    """
+    AJAX endpoint for article search (full-text)
+    
+    GET parameters:
+        - q: Search query
+    
+    Returns:
+        JSON: List of matching articles with details
+    """
+    try:
+        query = request.GET.get('q', '').strip()
+        
+        if not query or len(query) < 2:
+            return JsonResponse({'articles': []})
+        
+        # Full-text search across article fields
+        articles = Item.objects.filter(
+            Q(article_no__icontains=query) |
+            Q(short_text_1__icontains=query) |
+            Q(short_text_2__icontains=query) |
+            Q(long_text__icontains=query),
+            is_active=True
+        ).select_related('tax_rate', 'cost_type_1', 'cost_type_2', 'item_group')[:20]
+        
+        # Format results
+        results = []
+        for article in articles:
+            results.append({
+                'id': article.pk,
+                'article_no': article.article_no,
+                'short_text_1': article.short_text_1,
+                'short_text_2': article.short_text_2,
+                'long_text': article.long_text,
+                'net_price': str(article.net_price),
+                'tax_rate_id': article.tax_rate.pk,
+                'tax_rate_code': article.tax_rate.code,
+                'tax_rate': str(article.tax_rate.rate),
+                'is_discountable': article.is_discountable,
+                'cost_type_1_id': article.cost_type_1.pk if article.cost_type_1 else None,
+                'cost_type_2_id': article.cost_type_2.pk if article.cost_type_2 else None,
+            })
+        
+        return JsonResponse({'articles': results})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_add_line(request, doc_key, pk):
+    """
+    AJAX endpoint to add a new line to a document
+    
+    POST parameters (JSON):
+        - item_id: Item/Article ID
+        - quantity: Quantity
+        - description: Description (optional, will be filled from item)
+        - unit_price_net: Unit price (optional, will be filled from item)
+        - tax_rate_id: Tax rate ID (optional, will be filled from item)
+        - line_type: Line type (NORMAL, OPTIONAL, ALTERNATIVE)
+    
+    Returns:
+        JSON: {success, line_id, line_data}
+    """
+    try:
+        document = get_object_or_404(SalesDocument, pk=pk)
+        
+        # Parse JSON body
+        data = json.loads(request.body)
+        
+        item_id = data.get('item_id')
+        quantity = Decimal(data.get('quantity', '1.0'))
+        line_type = data.get('line_type', 'NORMAL')
+        
+        # Get item
+        item = get_object_or_404(Item, pk=item_id)
+        
+        # Determine tax rate (using TaxDeterminationService)
+        tax_rate = TaxDeterminationService.determine_tax_rate(
+            customer=document.customer,
+            item_tax_rate=item.tax_rate
+        )
+        
+        # Get next position number
+        max_position = document.lines.aggregate(max_pos=Sum('position_no'))['max_pos'] or 0
+        position_no = max_position + 1
+        
+        # Create line
+        line = SalesDocumentLine.objects.create(
+            document=document,
+            item=item,
+            tax_rate=tax_rate,
+            position_no=position_no,
+            line_type=line_type,
+            is_selected=True if line_type == 'NORMAL' else data.get('is_selected', False),
+            description=f"{item.short_text_1}\n{item.long_text}" if item.long_text else item.short_text_1,
+            quantity=quantity,
+            unit_price_net=item.net_price,
+            is_discountable=item.is_discountable,
+        )
+        
+        # Recalculate document totals
+        DocumentCalculationService.recalculate(document, persist=True)
+        
+        # Return line data
+        return JsonResponse({
+            'success': True,
+            'line_id': line.pk,
+            'line': {
+                'id': line.pk,
+                'position_no': line.position_no,
+                'description': line.description,
+                'quantity': str(line.quantity),
+                'unit_price_net': str(line.unit_price_net),
+                'tax_rate': str(line.tax_rate.rate),
+                'line_net': str(line.line_net),
+                'line_tax': str(line.line_tax),
+                'line_gross': str(line.line_gross),
+            },
+            'totals': {
+                'total_net': str(document.total_net),
+                'total_tax': str(document.total_tax),
+                'total_gross': str(document.total_gross),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_update_line(request, doc_key, pk, line_id):
+    """
+    AJAX endpoint to update an existing line
+    
+    POST parameters (JSON):
+        - quantity: New quantity
+        - unit_price_net: New unit price
+        - description: New description
+    
+    Returns:
+        JSON: {success, line_data, totals}
+    """
+    try:
+        document = get_object_or_404(SalesDocument, pk=pk)
+        line = get_object_or_404(SalesDocumentLine, pk=line_id, document=document)
+        
+        # Parse JSON body
+        data = json.loads(request.body)
+        
+        # Update fields
+        if 'quantity' in data:
+            line.quantity = Decimal(data['quantity'])
+        if 'unit_price_net' in data:
+            line.unit_price_net = Decimal(data['unit_price_net'])
+        if 'description' in data:
+            line.description = data['description']
+        if 'tax_rate_id' in data:
+            line.tax_rate = get_object_or_404(TaxRate, pk=data['tax_rate_id'])
+        if 'is_selected' in data:
+            line.is_selected = data['is_selected']
+        
+        line.save()
+        
+        # Recalculate document totals
+        DocumentCalculationService.recalculate(document, persist=True)
+        
+        # Return updated line data
+        return JsonResponse({
+            'success': True,
+            'line': {
+                'id': line.pk,
+                'quantity': str(line.quantity),
+                'unit_price_net': str(line.unit_price_net),
+                'description': line.description,
+                'line_net': str(line.line_net),
+                'line_tax': str(line.line_tax),
+                'line_gross': str(line.line_gross),
+            },
+            'totals': {
+                'total_net': str(document.total_net),
+                'total_tax': str(document.total_tax),
+                'total_gross': str(document.total_gross),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_delete_line(request, doc_key, pk, line_id):
+    """
+    AJAX endpoint to delete a line
+    
+    Returns:
+        JSON: {success, totals}
+    """
+    try:
+        document = get_object_or_404(SalesDocument, pk=pk)
+        line = get_object_or_404(SalesDocumentLine, pk=line_id, document=document)
+        
+        line.delete()
+        
+        # Recalculate document totals
+        DocumentCalculationService.recalculate(document, persist=True)
+        
+        return JsonResponse({
+            'success': True,
+            'totals': {
+                'total_net': str(document.total_net),
+                'total_tax': str(document.total_tax),
+                'total_gross': str(document.total_gross),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

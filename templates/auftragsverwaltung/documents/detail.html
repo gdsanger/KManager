@@ -1,0 +1,665 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load static %}
+
+{% block title %}
+{% if is_create %}Neues {{ document_type.name }}{% else %}{{ document.number }}{% endif %} - Domus
+{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+Neues {{ document_type.name }}
+{% else %}
+{{ document_type.name }}: {{ document.number }}
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    {% if not is_create %}
+    <button type="button" class="btn btn-primary" id="saveButton">
+        <i class="bi bi-save"></i> Speichern
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="window.location='{% url 'auftragsverwaltung:document_list' doc_key %}'">
+        <i class="bi bi-x"></i> Abbrechen
+    </button>
+    {% else %}
+    <button type="button" class="btn btn-primary" id="createButton">
+        <i class="bi bi-plus-circle"></i> Erstellen
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="window.location='{% url 'auftragsverwaltung:document_list' doc_key %}'">
+        <i class="bi bi-x"></i> Abbrechen
+    </button>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .document-detail-container {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    
+    @media (max-width: 992px) {
+        .document-detail-container {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .document-header {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .document-lines {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+    }
+    
+    .document-totals {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+        position: sticky;
+        top: 80px;
+        max-height: calc(100vh - 100px);
+        overflow-y: auto;
+    }
+    
+    .document-texts {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .line-item {
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 10px;
+        position: relative;
+    }
+    
+    .line-item:hover {
+        border-color: var(--bs-primary);
+    }
+    
+    .line-number {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: var(--bs-primary);
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.9em;
+    }
+    
+    .line-content {
+        padding-left: 45px;
+    }
+    
+    .line-actions {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    
+    .totals-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+    
+    .totals-row.total {
+        font-weight: bold;
+        font-size: 1.2em;
+        border-top: 2px solid var(--bs-border-color);
+        border-bottom: 2px solid var(--bs-border-color);
+        margin-top: 10px;
+    }
+    
+    .status-badge {
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: 600;
+    }
+    
+    .status-DRAFT {
+        background-color: #6c757d;
+        color: white;
+    }
+    
+    .status-SENT {
+        background-color: #0d6efd;
+        color: white;
+    }
+    
+    .status-PAID {
+        background-color: #198754;
+        color: white;
+    }
+    
+    .unsaved-indicator {
+        color: #ffc107;
+        margin-left: 10px;
+        display: none;
+    }
+    
+    .unsaved-indicator.show {
+        display: inline;
+    }
+    
+    .article-search-result {
+        padding: 10px;
+        border-bottom: 1px solid var(--bs-border-color);
+        cursor: pointer;
+    }
+    
+    .article-search-result:hover {
+        background: var(--bs-secondary-bg);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<form id="documentForm" method="POST" action="{% if is_create %}{% url 'auftragsverwaltung:document_create' doc_key %}{% else %}{% url 'auftragsverwaltung:document_update' doc_key document.pk %}{% endif %}">
+    {% csrf_token %}
+    
+    <div class="document-detail-container">
+        <!-- Left Column: Header + Lines + Texts -->
+        <div>
+            <!-- Document Header -->
+            <div class="document-header">
+                <h5 class="mb-3">
+                    <i class="bi bi-file-text"></i> Kopfdaten
+                    <span class="unsaved-indicator" id="unsavedIndicator">
+                        <i class="bi bi-exclamation-circle"></i> Nicht gespeichert
+                    </span>
+                </h5>
+                
+                <div class="row g-3">
+                    <!-- Company (read-only) -->
+                    <div class="col-md-6">
+                        <label class="form-label">Mandant</label>
+                        <input type="text" class="form-control" value="{{ company.name }}" readonly>
+                    </div>
+                    
+                    <!-- Document Type (read-only) -->
+                    <div class="col-md-3">
+                        <label class="form-label">Dokumenttyp</label>
+                        <input type="text" class="form-control" value="{{ document_type.name }}" readonly>
+                    </div>
+                    
+                    <!-- Document Number (read-only for existing) -->
+                    <div class="col-md-3">
+                        <label class="form-label">Nummer</label>
+                        <input type="text" class="form-control" value="{% if document %}{{ document.number }}{% else %}(wird generiert){% endif %}" readonly>
+                    </div>
+                    
+                    <!-- Subject (required, prominent) -->
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">Betreff <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-lg" name="subject" 
+                               value="{% if document %}{{ document.subject }}{% endif %}" 
+                               placeholder="Betreff oder Kurzbeschreibung" required>
+                    </div>
+                    
+                    <!-- Customer -->
+                    <div class="col-md-6">
+                        <label class="form-label">Kunde</label>
+                        <select class="form-select" name="customer_id" id="customerSelect">
+                            <option value="">-- Bitte wählen --</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.pk }}" 
+                                    {% if document and document.customer and document.customer.pk == customer.pk %}selected{% endif %}>
+                                {{ customer.full_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Issue Date -->
+                    <div class="col-md-3">
+                        <label class="form-label">Belegdatum</label>
+                        <input type="date" class="form-control" name="issue_date" id="issueDateInput"
+                               value="{% if document %}{{ document.issue_date|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}">
+                    </div>
+                    
+                    <!-- Status -->
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status">
+                            {% for code, label in document.STATUS_CHOICES %}
+                            <option value="{{ code }}" {% if document and document.status == code %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Payment Term -->
+                    <div class="col-md-6">
+                        <label class="form-label">Zahlungsbedingung</label>
+                        <select class="form-select" name="payment_term_id" id="paymentTermSelect">
+                            <option value="">-- Keine --</option>
+                            {% for pt in payment_terms %}
+                            <option value="{{ pt.pk }}" 
+                                    {% if document and document.payment_term and document.payment_term.pk == pt.pk %}selected{% endif %}>
+                                {{ pt.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Due Date (auto-calculated) -->
+                    <div class="col-md-3">
+                        <label class="form-label">Fälligkeitsdatum</label>
+                        <input type="date" class="form-control" name="due_date" id="dueDateInput"
+                               value="{% if document and document.due_date %}{{ document.due_date|date:'Y-m-d' }}{% endif %}" readonly>
+                    </div>
+                    
+                    <!-- Reference Number -->
+                    <div class="col-md-3">
+                        <label class="form-label">Referenznummer</label>
+                        <input type="text" class="form-control" name="reference_number" 
+                               value="{% if document %}{{ document.reference_number }}{% endif %}" 
+                               placeholder="z.B. Bestellnummer">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Document Lines -->
+            <div class="document-lines">
+                <h5 class="mb-3">
+                    <i class="bi bi-list-ul"></i> Positionen
+                    <button type="button" class="btn btn-sm btn-primary float-end" id="addLineButton">
+                        <i class="bi bi-plus"></i> Position hinzufügen
+                    </button>
+                </h5>
+                
+                <div id="linesContainer">
+                    {% if document and lines %}
+                        {% for line in lines %}
+                        <div class="line-item" data-line-id="{{ line.pk }}">
+                            <div class="line-number">{{ line.position_no }}</div>
+                            <div class="line-actions">
+                                <button type="button" class="btn btn-sm btn-outline-danger delete-line-btn" data-line-id="{{ line.pk }}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            <div class="line-content">
+                                <div class="row g-2">
+                                    <div class="col-md-12">
+                                        <textarea class="form-control form-control-sm line-description" rows="2" 
+                                                  placeholder="Beschreibung">{{ line.description }}</textarea>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="number" class="form-control form-control-sm line-quantity" 
+                                               value="{{ line.quantity }}" step="0.01" min="0" placeholder="Menge">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="number" class="form-control form-control-sm line-unit-price" 
+                                               value="{{ line.unit_price_net }}" step="0.01" min="0" placeholder="Preis">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <span class="form-control form-control-sm text-end line-net">{{ line.line_net|floatformat:2 }} €</span>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <span class="form-control form-control-sm text-end line-tax">{{ line.line_tax|floatformat:2 }} €</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <span class="form-control form-control-sm text-end fw-bold line-gross">{{ line.line_gross|floatformat:2 }} €</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted text-center py-4">
+                            <i class="bi bi-inbox"></i><br>
+                            Noch keine Positionen vorhanden.<br>
+                            Klicken Sie auf "Position hinzufügen", um zu beginnen.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Document Texts (Header/Footer) -->
+            <div class="document-texts">
+                <ul class="nav nav-tabs" id="textTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="header-tab" data-bs-toggle="tab" data-bs-target="#header-content" type="button" role="tab">
+                            Kopftext
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="footer-tab" data-bs-toggle="tab" data-bs-target="#footer-content" type="button" role="tab">
+                            Fußtext
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes-content" type="button" role="tab">
+                            Notizen
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3" id="textTabsContent">
+                    <div class="tab-pane fade show active" id="header-content" role="tabpanel">
+                        <textarea class="form-control" name="header_text" rows="4" 
+                                  placeholder="Kopftext des Dokuments">{% if document %}{{ document.header_text }}{% endif %}</textarea>
+                    </div>
+                    <div class="tab-pane fade" id="footer-content" role="tabpanel">
+                        <textarea class="form-control" name="footer_text" rows="4" 
+                                  placeholder="Fußtext des Dokuments">{% if document %}{{ document.footer_text }}{% endif %}</textarea>
+                    </div>
+                    <div class="tab-pane fade" id="notes-content" role="tabpanel">
+                        <label class="form-label">Interne Notizen</label>
+                        <textarea class="form-control mb-2" name="notes_internal" rows="3" 
+                                  placeholder="Interne Notizen (nicht für Kunden sichtbar)">{% if document %}{{ document.notes_internal }}{% endif %}</textarea>
+                        <label class="form-label">Öffentliche Notizen</label>
+                        <textarea class="form-control" name="notes_public" rows="3" 
+                                  placeholder="Öffentliche Notizen (auf Beleg sichtbar)">{% if document %}{{ document.notes_public }}{% endif %}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column: Totals (Sticky) -->
+        <div>
+            <div class="document-totals">
+                <h5 class="mb-3"><i class="bi bi-calculator"></i> Summen</h5>
+                
+                <div class="totals-row">
+                    <span>Netto:</span>
+                    <span id="totalNet">{% if document %}{{ document.total_net|floatformat:2 }}{% else %}0,00{% endif %} €</span>
+                </div>
+                <div class="totals-row">
+                    <span>Steuer:</span>
+                    <span id="totalTax">{% if document %}{{ document.total_tax|floatformat:2 }}{% else %}0,00{% endif %} €</span>
+                </div>
+                <div class="totals-row total">
+                    <span>Brutto:</span>
+                    <span id="totalGross">{% if document %}{{ document.total_gross|floatformat:2 }}{% else %}0,00{% endif %} €</span>
+                </div>
+                
+                <hr class="my-4">
+                
+                <h6 class="mb-3">Zahlungsbedingungen</h6>
+                <div id="paymentTermTextDisplay" class="small text-muted">
+                    {% if document and document.payment_term_text %}
+                        {{ document.payment_term_text }}
+                    {% else %}
+                        <i>Keine Zahlungsbedingungen festgelegt</i>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Article Search Modal -->
+<div class="modal fade" id="articleSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Artikel suchen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="articleSearchInput" 
+                           placeholder="Artikelnummer, Beschreibung, etc. eingeben...">
+                </div>
+                <div id="articleSearchResults"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let isDirty = false;
+    const unsavedIndicator = document.getElementById('unsavedIndicator');
+    
+    // Mark form as dirty on any change
+    document.querySelectorAll('input, textarea, select').forEach(el => {
+        el.addEventListener('change', function() {
+            isDirty = true;
+            unsavedIndicator.classList.add('show');
+        });
+    });
+    
+    // Save button handler
+    const saveButton = document.getElementById('saveButton');
+    if (saveButton) {
+        saveButton.addEventListener('click', function() {
+            document.getElementById('documentForm').submit();
+        });
+    }
+    
+    // Create button handler
+    const createButton = document.getElementById('createButton');
+    if (createButton) {
+        createButton.addEventListener('click', function() {
+            document.getElementById('documentForm').submit();
+        });
+    }
+    
+    // Unsaved changes warning
+    window.addEventListener('beforeunload', function(e) {
+        if (isDirty) {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        }
+    });
+    
+    // Payment term auto-calculation
+    const paymentTermSelect = document.getElementById('paymentTermSelect');
+    const issueDateInput = document.getElementById('issueDateInput');
+    const dueDateInput = document.getElementById('dueDateInput');
+    const paymentTermTextDisplay = document.getElementById('paymentTermTextDisplay');
+    
+    function updatePaymentTerm() {
+        const paymentTermId = paymentTermSelect.value;
+        const issueDate = issueDateInput.value;
+        
+        if (!paymentTermId || !issueDate) {
+            dueDateInput.value = '';
+            paymentTermTextDisplay.innerHTML = '<i>Keine Zahlungsbedingungen festgelegt</i>';
+            return;
+        }
+        
+        fetch('{% url "auftragsverwaltung:ajax_calculate_payment_term" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: `payment_term_id=${paymentTermId}&issue_date=${issueDate}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.due_date) {
+                dueDateInput.value = data.due_date;
+                paymentTermTextDisplay.textContent = data.payment_term_text;
+                isDirty = true;
+                unsavedIndicator.classList.add('show');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+    
+    paymentTermSelect.addEventListener('change', updatePaymentTerm);
+    issueDateInput.addEventListener('change', updatePaymentTerm);
+    
+    // Add line button
+    const addLineButton = document.getElementById('addLineButton');
+    if (addLineButton) {
+        addLineButton.addEventListener('click', function() {
+            const modal = new bootstrap.Modal(document.getElementById('articleSearchModal'));
+            modal.show();
+        });
+    }
+    
+    // Article search
+    const articleSearchInput = document.getElementById('articleSearchInput');
+    const articleSearchResults = document.getElementById('articleSearchResults');
+    let searchTimeout;
+    
+    articleSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            articleSearchResults.innerHTML = '';
+            return;
+        }
+        
+        searchTimeout = setTimeout(function() {
+            fetch(`{% url "auftragsverwaltung:ajax_search_articles" %}?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.articles && data.articles.length > 0) {
+                    let html = '';
+                    data.articles.forEach(article => {
+                        html += `
+                            <div class="article-search-result" data-article-id="${article.id}" 
+                                 data-article='${JSON.stringify(article)}'>
+                                <strong>${article.article_no}</strong> - ${article.short_text_1}<br>
+                                <small class="text-muted">Preis: ${article.net_price} € (${article.tax_rate_code})</small>
+                            </div>
+                        `;
+                    });
+                    articleSearchResults.innerHTML = html;
+                    
+                    // Add click handlers
+                    document.querySelectorAll('.article-search-result').forEach(el => {
+                        el.addEventListener('click', function() {
+                            const article = JSON.parse(this.dataset.article);
+                            addLineFromArticle(article);
+                            bootstrap.Modal.getInstance(document.getElementById('articleSearchModal')).hide();
+                            articleSearchInput.value = '';
+                            articleSearchResults.innerHTML = '';
+                        });
+                    });
+                } else {
+                    articleSearchResults.innerHTML = '<p class="text-muted">Keine Artikel gefunden</p>';
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }, 300);
+    });
+    
+    // Add line from article
+    function addLineFromArticle(article) {
+        {% if document %}
+        fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                item_id: article.id,
+                quantity: 1.0,
+                line_type: 'NORMAL'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload page to show new line
+                location.reload();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+        {% endif %}
+    }
+    
+    // Delete line buttons
+    document.querySelectorAll('.delete-line-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Position wirklich löschen?')) return;
+            
+            const lineId = this.dataset.lineId;
+            {% if document %}
+            fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            })
+            .catch(error => console.error('Error:', error));
+            {% endif %}
+        });
+    });
+    
+    // Live calculation on line changes
+    document.querySelectorAll('.line-quantity, .line-unit-price').forEach(input => {
+        input.addEventListener('change', function() {
+            const lineItem = this.closest('.line-item');
+            const lineId = lineItem.dataset.lineId;
+            const quantity = lineItem.querySelector('.line-quantity').value;
+            const unitPrice = lineItem.querySelector('.line-unit-price').value;
+            
+            {% if document %}
+            fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/update/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    quantity: quantity,
+                    unit_price_net: unitPrice
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update line totals
+                    lineItem.querySelector('.line-net').textContent = `${parseFloat(data.line.line_net).toFixed(2)} €`;
+                    lineItem.querySelector('.line-tax').textContent = `${parseFloat(data.line.line_tax).toFixed(2)} €`;
+                    lineItem.querySelector('.line-gross').textContent = `${parseFloat(data.line.line_gross).toFixed(2)} €`;
+                    
+                    // Update document totals
+                    document.getElementById('totalNet').textContent = `${parseFloat(data.totals.total_net).toFixed(2)} €`;
+                    document.getElementById('totalTax').textContent = `${parseFloat(data.totals.total_tax).toFixed(2)} €`;
+                    document.getElementById('totalGross').textContent = `${parseFloat(data.totals.total_gross).toFixed(2)} €`;
+                }
+            })
+            .catch(error => console.error('Error:', error));
+            {% endif %}
+        });
+    });
+});
+</script>
+{% endblock %}
