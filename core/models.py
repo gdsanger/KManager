@@ -714,3 +714,49 @@ class ReportDocument(models.Model):
     
     def __str__(self):
         return f"{self.report_key} - {self.object_type}:{self.object_id} ({self.created_at})"
+
+
+class Item(models.Model):
+    """
+    Item entity (Artikel/Leistung) - stub for SalesDocumentLine FK reference
+    
+    This is a minimal stub implementation to support SalesDocumentLine.
+    Full implementation will be done in a separate issue.
+    """
+    name = models.CharField(
+        max_length=200,
+        verbose_name="Name",
+        help_text="Bezeichnung des Artikels/der Leistung"
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Beschreibung",
+        help_text="Detaillierte Beschreibung"
+    )
+    unit_price_net = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Netto-Stückpreis",
+        help_text="Standardpreis netto"
+    )
+    tax_rate = models.ForeignKey(
+        TaxRate,
+        on_delete=models.PROTECT,
+        related_name='items',
+        verbose_name="Steuersatz"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktiv",
+        help_text="Gibt an, ob dieser Artikel aktiv ist"
+    )
+    
+    class Meta:
+        verbose_name = "Artikel/Leistung"
+        verbose_name_plural = "Artikel/Leistungen"
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.name

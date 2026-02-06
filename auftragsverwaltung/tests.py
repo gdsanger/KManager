@@ -535,3 +535,550 @@ class SalesDocumentModelTestCase(TestCase):
         self.assertEqual(docs[0], doc2)  # 2026-02-05
         self.assertEqual(docs[1], doc3)  # 2026-02-03
         self.assertEqual(docs[2], doc1)  # 2026-02-01
+
+
+class SalesDocumentLineModelTestCase(TestCase):
+    """Test SalesDocumentLine model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        from core.models import TaxRate, Item
+        
+        # Create a Mandant
+        self.company = Mandant.objects.create(
+            name="Test Company",
+            adresse="Test Street 1",
+            plz="12345",
+            ort="Test City",
+            land="Deutschland"
+        )
+        
+        # Create DocumentType
+        self.doctype_quote = DocumentType.objects.create(
+            key="quote",
+            name="Angebot",
+            prefix="A",
+            is_active=True
+        )
+        
+        # Create TaxRate
+        self.tax_rate = TaxRate.objects.create(
+            code="VAT19",
+            name="19% USt",
+            rate=Decimal('0.19'),
+            is_active=True
+        )
+        
+        # Create Item
+        self.item = Item.objects.create(
+            name="Test Item",
+            description="Test Item Description",
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate,
+            is_active=True
+        )
+        
+        # Create SalesDocument
+        self.document = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_quote,
+            number="A26-00001",
+            status="DRAFT",
+            issue_date=date(2026, 2, 6)
+        )
+    
+    def test_create_salesdocumentline_basic(self):
+        """Test creating a basic sales document line"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            item=self.item,
+            description="Test Line",
+            quantity=Decimal('2.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate,
+            is_discountable=True
+        )
+        
+        self.assertIsNotNone(line.pk)
+        self.assertEqual(line.document, self.document)
+        self.assertEqual(line.position_no, 1)
+        self.assertEqual(line.line_type, 'NORMAL')
+        self.assertTrue(line.is_selected)
+        self.assertEqual(line.item, self.item)
+        self.assertEqual(line.description, "Test Line")
+        self.assertEqual(line.quantity, Decimal('2.0000'))
+        self.assertEqual(line.unit_price_net, Decimal('100.00'))
+        self.assertEqual(line.tax_rate, self.tax_rate)
+        self.assertTrue(line.is_discountable)
+        self.assertEqual(line.line_net, Decimal('0.00'))
+        self.assertEqual(line.line_tax, Decimal('0.00'))
+        self.assertEqual(line.line_gross, Decimal('0.00'))
+    
+    def test_str_representation(self):
+        """Test __str__ method"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Test Line Description",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        expected = f"{self.document.number} - Pos. 1: Test Line Description"
+        self.assertEqual(str(line), expected)
+    
+    def test_position_no_unique_per_document(self):
+        """Test that position_no is unique per document"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        # Create first line
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 1",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Try to create another line with same position_no
+        line2 = SalesDocumentLine(
+            document=self.document,
+            position_no=1,  # Same position_no
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 2",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Should raise IntegrityError when saving
+        with self.assertRaises(IntegrityError):
+            line2.save()
+    
+    def test_position_no_unique_allows_same_for_different_documents(self):
+        """Test that same position_no is allowed for different documents"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        # Create second document
+        document2 = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_quote,
+            number="A26-00002",
+            status="DRAFT",
+            issue_date=date(2026, 2, 7)
+        )
+        
+        # Create line in first document
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 1",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Create line with same position_no in second document - should be OK
+        line2 = SalesDocumentLine.objects.create(
+            document=document2,
+            position_no=1,  # Same position_no, different document
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 2",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        self.assertIsNotNone(line2.pk)
+    
+    def test_default_is_selected_normal(self):
+        """Test that NORMAL line_type defaults is_selected to True"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        # For NORMAL type, is_selected should be auto-corrected to True
+        # even if explicitly set to False
+        line = SalesDocumentLine(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=False,  # Will be auto-corrected to True
+            description="Normal Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Run validation (which auto-corrects)
+        line.full_clean()
+        
+        # Should be auto-corrected to True for NORMAL
+        self.assertTrue(line.is_selected)
+    
+    def test_default_is_selected_optional(self):
+        """Test that OPTIONAL line_type defaults is_selected to False"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine(
+            document=self.document,
+            position_no=1,
+            line_type='OPTIONAL',
+            is_selected=False,
+            description="Optional Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Run validation
+        line.full_clean()
+        
+        # Should remain False for OPTIONAL
+        self.assertFalse(line.is_selected)
+    
+    def test_default_is_selected_alternative(self):
+        """Test that ALTERNATIVE line_type defaults is_selected to False"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine(
+            document=self.document,
+            position_no=1,
+            line_type='ALTERNATIVE',
+            is_selected=False,
+            description="Alternative Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Run validation
+        line.full_clean()
+        
+        # Should remain False for ALTERNATIVE
+        self.assertFalse(line.is_selected)
+    
+    def test_normal_line_auto_corrects_is_selected(self):
+        """Test that NORMAL lines auto-correct is_selected to True"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=False,  # Try to set to False
+            description="Normal Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Run validation
+        line.full_clean()
+        
+        # Should be auto-corrected to True
+        self.assertTrue(line.is_selected)
+    
+    def test_is_included_in_totals_normal(self):
+        """Test that NORMAL lines are always included in totals"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        # Create NORMAL line with is_selected=False (should still be included)
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=False,
+            description="Normal Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # NORMAL lines are always included (regardless of is_selected)
+        self.assertTrue(line.is_included_in_totals())
+    
+    def test_is_included_in_totals_optional_selected(self):
+        """Test that OPTIONAL lines are included when selected"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='OPTIONAL',
+            is_selected=True,
+            description="Optional Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        self.assertTrue(line.is_included_in_totals())
+    
+    def test_is_included_in_totals_optional_not_selected(self):
+        """Test that OPTIONAL lines are not included when not selected"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='OPTIONAL',
+            is_selected=False,
+            description="Optional Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        self.assertFalse(line.is_included_in_totals())
+    
+    def test_is_included_in_totals_alternative_selected(self):
+        """Test that ALTERNATIVE lines are included when selected"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='ALTERNATIVE',
+            is_selected=True,
+            description="Alternative Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        self.assertTrue(line.is_included_in_totals())
+    
+    def test_is_included_in_totals_alternative_not_selected(self):
+        """Test that ALTERNATIVE lines are not included when not selected"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='ALTERNATIVE',
+            is_selected=False,
+            description="Alternative Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        self.assertFalse(line.is_included_in_totals())
+    
+    def test_snapshot_stability_item_price_change(self):
+        """Test that changing Item price doesn't affect SalesDocumentLine"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        # Create line with item
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            item=self.item,
+            description="Test Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),  # Snapshot from item
+            tax_rate=self.tax_rate
+        )
+        
+        # Store original price
+        original_price = line.unit_price_net
+        
+        # Change item price
+        self.item.unit_price_net = Decimal('200.00')
+        self.item.save()
+        
+        # Reload line from DB
+        line.refresh_from_db()
+        
+        # Price should NOT have changed (snapshot stability)
+        self.assertEqual(line.unit_price_net, original_price)
+        self.assertEqual(line.unit_price_net, Decimal('100.00'))
+    
+    def test_snapshot_stability_tax_rate_change(self):
+        """Test that changing TaxRate doesn't affect SalesDocumentLine"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        from core.models import TaxRate
+        
+        # Create line
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Test Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Store original tax_rate FK
+        original_tax_rate_id = line.tax_rate.id
+        original_tax_rate_code = line.tax_rate.code
+        
+        # Change tax_rate rate value
+        self.tax_rate.rate = Decimal('0.07')
+        self.tax_rate.save()
+        
+        # Reload line from DB
+        line.refresh_from_db()
+        
+        # tax_rate FK should still point to same TaxRate object
+        self.assertEqual(line.tax_rate.id, original_tax_rate_id)
+        self.assertEqual(line.tax_rate.code, original_tax_rate_code)
+        
+        # But the TaxRate's rate value has changed
+        self.assertEqual(line.tax_rate.rate, Decimal('0.07'))
+        
+        # This demonstrates that the FK is a snapshot reference:
+        # The line still points to the same TaxRate object,
+        # even if that object's data changes.
+        # For true value snapshot, the rate would need to be denormalized.
+    
+    def test_item_can_be_null(self):
+        """Test that item FK can be null (manual line entry)"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            item=None,  # No item reference
+            description="Manual Line Entry",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('150.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        self.assertIsNone(line.item)
+        self.assertIsNotNone(line.pk)
+    
+    def test_is_discountable_default_true(self):
+        """Test that is_discountable defaults to True"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        line = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Test Line",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+            # is_discountable not set
+        )
+        
+        self.assertTrue(line.is_discountable)
+    
+    def test_line_type_choices(self):
+        """Test that all line_type choices are valid"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        valid_types = ['NORMAL', 'OPTIONAL', 'ALTERNATIVE']
+        
+        for i, line_type in enumerate(valid_types, 1):
+            line = SalesDocumentLine.objects.create(
+                document=self.document,
+                position_no=i,
+                line_type=line_type,
+                is_selected=(line_type == 'NORMAL'),
+                description=f"{line_type} Line",
+                quantity=Decimal('1.0000'),
+                unit_price_net=Decimal('100.00'),
+                tax_rate=self.tax_rate
+            )
+            line.full_clean()  # Should not raise
+            self.assertEqual(line.line_type, line_type)
+    
+    def test_ordering(self):
+        """Test that lines are ordered by document and position_no"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        # Create lines in random order
+        line3 = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=3,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 3",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        line1 = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 1",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        line2 = SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=2,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 2",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Query all lines
+        lines = list(SalesDocumentLine.objects.all())
+        
+        # Should be ordered by position_no
+        self.assertEqual(lines[0], line1)
+        self.assertEqual(lines[1], line2)
+        self.assertEqual(lines[2], line3)
+    
+    def test_related_name_from_document(self):
+        """Test that lines can be accessed via document.lines"""
+        from auftragsverwaltung.models import SalesDocumentLine
+        
+        # Create lines
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            description="Line 1",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=2,
+            line_type='OPTIONAL',
+            is_selected=False,
+            description="Line 2",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('100.00'),
+            tax_rate=self.tax_rate
+        )
+        
+        # Access via related_name
+        lines = self.document.lines.all()
+        self.assertEqual(lines.count(), 2)

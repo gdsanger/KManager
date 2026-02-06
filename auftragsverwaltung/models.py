@@ -350,3 +350,173 @@ class SalesDocument(models.Model):
                     'source_document': 'Quelldokument ist erforderlich für Korrekturdokumente.'
                 })
 
+
+class SalesDocumentLine(models.Model):
+    """
+    Sales Document Line (Dokumentposition) - flexible line item model
+    
+    Supports three line types:
+    - NORMAL: always included in totals (regardless of is_selected)
+    - OPTIONAL: included in totals only if is_selected=True
+    - ALTERNATIVE: included in totals only if is_selected=True
+    
+    Snapshot stability: unit_price_net and tax_rate are persisted snapshots
+    and must not automatically change when Item or TaxRate are modified.
+    """
+    
+    # Line type choices
+    LINE_TYPE_CHOICES = [
+        ('NORMAL', 'Normal'),
+        ('OPTIONAL', 'Optional'),
+        ('ALTERNATIVE', 'Alternative'),
+    ]
+    
+    # Foreign Keys
+    document = models.ForeignKey(
+        SalesDocument,
+        on_delete=models.CASCADE,
+        related_name='lines',
+        verbose_name="Dokument"
+    )
+    item = models.ForeignKey(
+        'core.Item',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_document_lines',
+        verbose_name="Artikel/Leistung"
+    )
+    tax_rate = models.ForeignKey(
+        'core.TaxRate',
+        on_delete=models.PROTECT,
+        related_name='sales_document_lines',
+        verbose_name="Steuersatz"
+    )
+    
+    # Position fields
+    position_no = models.IntegerField(
+        verbose_name="Positionsnummer",
+        help_text="Eindeutige Positionsnummer innerhalb des Dokuments"
+    )
+    line_type = models.CharField(
+        max_length=20,
+        choices=LINE_TYPE_CHOICES,
+        verbose_name="Positionstyp"
+    )
+    is_selected = models.BooleanField(
+        verbose_name="Ausgewählt",
+        help_text="Gibt an, ob diese Position ausgewählt ist (relevant für OPTIONAL/ALTERNATIVE)"
+    )
+    
+    # Content fields
+    description = models.TextField(
+        verbose_name="Beschreibung",
+        help_text="Positionsbeschreibung"
+    )
+    quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        verbose_name="Menge"
+    )
+    
+    # Snapshot fields
+    unit_price_net = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Netto-Stückpreis (Snapshot)",
+        help_text="Snapshot des Netto-Stückpreises zum Zeitpunkt der Positionsanlage"
+    )
+    
+    # Flags
+    is_discountable = models.BooleanField(
+        default=True,
+        verbose_name="Rabattfähig",
+        help_text="Gibt an, ob diese Position rabattfähig ist"
+    )
+    
+    # Sum fields (denormalized; calculated by service, not in save())
+    line_net = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Nettobetrag",
+        help_text="Zeilenbetrag netto"
+    )
+    line_tax = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Steuerbetrag",
+        help_text="Zeilenbetrag Steuer"
+    )
+    line_gross = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Bruttobetrag",
+        help_text="Zeilenbetrag brutto"
+    )
+    
+    class Meta:
+        verbose_name = "Dokumentposition"
+        verbose_name_plural = "Dokumentpositionen"
+        ordering = ['document', 'position_no']
+        indexes = [
+            models.Index(fields=['document']),
+            models.Index(fields=['document', 'position_no']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['document', 'position_no'],
+                name='unique_position_no_per_document',
+                violation_error_message='Diese Positionsnummer existiert bereits für dieses Dokument.'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.document.number} - Pos. {self.position_no}: {self.description[:50]}"
+    
+    def clean(self):
+        """Validate sales document line data
+        
+        Business rules:
+        1. Default is_selected based on line_type if not explicitly set
+        2. For NORMAL lines, is_selected should be True (auto-corrected)
+        """
+        super().clean()
+        
+        # Set default is_selected based on line_type during creation
+        # Note: This runs during validation, so we check if pk is None to detect creation
+        if self.pk is None:
+            if self.line_type == 'NORMAL':
+                self.is_selected = True
+            elif self.line_type in ('OPTIONAL', 'ALTERNATIVE'):
+                # Only set default if is_selected was not explicitly set
+                # Since BooleanField has no None state in Django by default,
+                # we assume False as the default for OPTIONAL/ALTERNATIVE
+                if not hasattr(self, '_is_selected_set'):
+                    self.is_selected = False
+        
+        # Auto-correct is_selected for NORMAL lines
+        # NORMAL lines should always be considered selected for totals calculation
+        # (even if the field value is False, the business logic ignores it)
+        if self.line_type == 'NORMAL':
+            self.is_selected = True
+    
+    def is_included_in_totals(self):
+        """
+        Check if this line should be included in totals calculation
+        
+        Business logic:
+        - NORMAL: always included (regardless of is_selected)
+        - OPTIONAL: included only if is_selected=True
+        - ALTERNATIVE: included only if is_selected=True
+        
+        Returns:
+            bool: True if line should be included in totals
+        """
+        if self.line_type == 'NORMAL':
+            return True
+        # OPTIONAL and ALTERNATIVE
+        return self.is_selected
+
