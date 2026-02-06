@@ -1,6 +1,8 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from decimal import Decimal
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
 
 
 class DocumentType(models.Model):
@@ -619,4 +621,376 @@ class SalesDocumentLine(models.Model):
             return True
         # OPTIONAL and ALTERNATIVE
         return self.is_selected
+
+
+class Contract(models.Model):
+    """
+    Contract (Vertrag) - recurring billing contract model
+    
+    Defines recurring invoices/payments for rentals, service contracts, maintenance, etc.
+    Each contract periodically generates invoice drafts and maintains a traceable run history.
+    
+    Scope: Tenant-specific (company FK required)
+    """
+    
+    # Interval choices
+    INTERVAL_CHOICES = [
+        ('MONTHLY', 'Monatlich'),
+        ('QUARTERLY', 'Quartalsweise'),
+        ('SEMI_ANNUAL', 'Halbjährlich'),
+        ('ANNUAL', 'Jährlich'),
+    ]
+    
+    # Mandatory Foreign Keys
+    company = models.ForeignKey(
+        'core.Mandant',
+        on_delete=models.PROTECT,
+        related_name='contracts',
+        verbose_name="Mandant"
+    )
+    customer = models.ForeignKey(
+        'core.Adresse',
+        on_delete=models.PROTECT,
+        related_name='contracts',
+        verbose_name="Kunde",
+        help_text="Kunde oder Adresse für diesen Vertrag"
+    )
+    document_type = models.ForeignKey(
+        DocumentType,
+        on_delete=models.PROTECT,
+        related_name='contracts',
+        verbose_name="Dokumenttyp",
+        help_text="Dokumenttyp für die generierten Rechnungen (Standard: Rechnungstyp)"
+    )
+    payment_term = models.ForeignKey(
+        'core.PaymentTerm',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='contracts',
+        verbose_name="Zahlungsbedingung",
+        help_text="Zahlungsbedingung (Standard via Company)"
+    )
+    
+    # Basic Fields
+    name = models.CharField(
+        max_length=200,
+        verbose_name="Vertragsname",
+        help_text="Bezeichnung des Vertrags"
+    )
+    currency = models.CharField(
+        max_length=3,
+        default='EUR',
+        verbose_name="Währung",
+        help_text="Währung (z.B. EUR)"
+    )
+    interval = models.CharField(
+        max_length=20,
+        choices=INTERVAL_CHOICES,
+        verbose_name="Abrechnungsintervall",
+        help_text="Intervall für wiederkehrende Abrechnung"
+    )
+    
+    # Date Fields
+    start_date = models.DateField(
+        verbose_name="Startdatum",
+        help_text="Vertragsbeginn"
+    )
+    end_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Enddatum",
+        help_text="Vertragsende (optional, unbefristet wenn leer)"
+    )
+    next_run_date = models.DateField(
+        verbose_name="Nächstes Ausführungsdatum",
+        help_text="Datum der nächsten Rechnungserzeugung"
+    )
+    last_run_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Letztes Ausführungsdatum",
+        help_text="Datum der letzten Rechnungserzeugung"
+    )
+    
+    # Flags
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktiv",
+        help_text="Gibt an, ob dieser Vertrag aktiv ist"
+    )
+    
+    # Optional Fields (MVP optional)
+    auto_finalize = models.BooleanField(
+        default=False,
+        verbose_name="Automatisch finalisieren",
+        help_text="Soll die Rechnung automatisch finalisiert werden?"
+    )
+    auto_send = models.BooleanField(
+        default=False,
+        verbose_name="Automatisch versenden",
+        help_text="Soll die Rechnung automatisch versendet werden?"
+    )
+    reference = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Referenz",
+        help_text="Externe Referenz oder Vertragsnummer"
+    )
+    
+    class Meta:
+        verbose_name = "Vertrag"
+        verbose_name_plural = "Verträge"
+        ordering = ['company', 'name']
+        indexes = [
+            models.Index(fields=['company', 'is_active']),
+            models.Index(fields=['next_run_date']),
+            models.Index(fields=['company', 'customer']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.company.name})"
+    
+    def clean(self):
+        """Validate contract data
+        
+        Business rules:
+        1. end_date (if set) must be >= start_date
+        2. next_run_date must be >= start_date
+        """
+        super().clean()
+        
+        # Validation 1: end_date >= start_date
+        if self.end_date and self.start_date:
+            if self.end_date < self.start_date:
+                raise ValidationError({
+                    'end_date': 'Das Enddatum darf nicht vor dem Startdatum liegen.'
+                })
+        
+        # Validation 2: next_run_date >= start_date
+        if self.next_run_date and self.start_date:
+            if self.next_run_date < self.start_date:
+                raise ValidationError({
+                    'next_run_date': 'Das nächste Ausführungsdatum darf nicht vor dem Startdatum liegen.'
+                })
+    
+    def is_contract_active(self):
+        """
+        Check if contract is active
+        
+        A contract is active if:
+        - is_active == True
+        - and (no end_date or today <= end_date)
+        
+        Returns:
+            bool: True if contract is active
+        """
+        if not self.is_active:
+            return False
+        
+        if self.end_date:
+            return date.today() <= self.end_date
+        
+        return True
+    
+    def advance_next_run_date(self):
+        """
+        Advance next_run_date based on interval
+        
+        Date-Advance Rules (MVP):
+        - MONTHLY: same day next month, if day doesn't exist -> last day of month
+        - QUARTERLY: same day 3 months later, if day doesn't exist -> last day of month
+        - SEMI_ANNUAL: same day 6 months later, if day doesn't exist -> last day of month
+        - ANNUAL: same day next year, if day doesn't exist -> last day of month
+        
+        Returns:
+            date: New next_run_date
+        """
+        if self.interval == 'MONTHLY':
+            new_date = self.next_run_date + relativedelta(months=1)
+        elif self.interval == 'QUARTERLY':
+            new_date = self.next_run_date + relativedelta(months=3)
+        elif self.interval == 'SEMI_ANNUAL':
+            new_date = self.next_run_date + relativedelta(months=6)
+        elif self.interval == 'ANNUAL':
+            new_date = self.next_run_date + relativedelta(years=1)
+        else:
+            raise ValueError(f"Unknown interval: {self.interval}")
+        
+        return new_date
+
+
+class ContractLine(models.Model):
+    """
+    Contract Line (Vertragsposition) - position template for contracts
+    
+    Defines line items that will be copied to SalesDocumentLine when generating invoices.
+    Values are stored as snapshots and copied during invoice creation.
+    
+    Scope: Contract-specific
+    """
+    
+    # Foreign Keys
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.CASCADE,
+        related_name='lines',
+        verbose_name="Vertrag"
+    )
+    item = models.ForeignKey(
+        'core.Item',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='contract_lines',
+        verbose_name="Artikel/Leistung"
+    )
+    tax_rate = models.ForeignKey(
+        'core.TaxRate',
+        on_delete=models.PROTECT,
+        related_name='contract_lines',
+        verbose_name="Steuersatz"
+    )
+    cost_type_1 = models.ForeignKey(
+        'core.Kostenart',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='contract_lines_cost_type_1',
+        verbose_name="Kostenart 1"
+    )
+    cost_type_2 = models.ForeignKey(
+        'core.Kostenart',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='contract_lines_cost_type_2',
+        verbose_name="Kostenart 2"
+    )
+    
+    # Position Fields
+    position_no = models.IntegerField(
+        verbose_name="Positionsnummer",
+        help_text="Positionsnummer innerhalb des Vertrags"
+    )
+    description = models.TextField(
+        verbose_name="Beschreibung",
+        help_text="Positionsbeschreibung"
+    )
+    quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        verbose_name="Menge"
+    )
+    unit_price_net = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Netto-Stückpreis",
+        help_text="Netto-Stückpreis (Snapshot)"
+    )
+    
+    # Flags
+    is_discountable = models.BooleanField(
+        default=True,
+        verbose_name="Rabattfähig",
+        help_text="Gibt an, ob diese Position rabattfähig ist"
+    )
+    
+    class Meta:
+        verbose_name = "Vertragsposition"
+        verbose_name_plural = "Vertragspositionen"
+        ordering = ['contract', 'position_no']
+        indexes = [
+            models.Index(fields=['contract']),
+            models.Index(fields=['contract', 'position_no']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['contract', 'position_no'],
+                name='unique_position_no_per_contract',
+                violation_error_message='Diese Positionsnummer existiert bereits für diesen Vertrag.'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.contract.name} - Pos. {self.position_no}: {self.description[:50]}"
+
+
+class ContractRun(models.Model):
+    """
+    Contract Run (Vertragsausführung) - execution history and audit trail
+    
+    Logs each contract execution (success/failed/skipped) and links to generated document.
+    Ensures no duplicate runs per contract and date.
+    
+    Scope: Contract-specific
+    """
+    
+    # Status choices
+    STATUS_CHOICES = [
+        ('SUCCESS', 'Erfolgreich'),
+        ('FAILED', 'Fehlgeschlagen'),
+        ('SKIPPED', 'Übersprungen'),
+    ]
+    
+    # Foreign Keys
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.PROTECT,
+        related_name='runs',
+        verbose_name="Vertrag"
+    )
+    document = models.ForeignKey(
+        SalesDocument,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contract_runs',
+        verbose_name="Dokument",
+        help_text="Generiertes Verkaufsdokument"
+    )
+    
+    # Run Fields
+    run_date = models.DateField(
+        verbose_name="Ausführungsdatum",
+        help_text="Datum der Vertragsausführung"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        verbose_name="Status"
+    )
+    message = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Nachricht",
+        help_text="Fehlermeldung oder Statusnachricht"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am"
+    )
+    
+    class Meta:
+        verbose_name = "Vertragsausführung"
+        verbose_name_plural = "Vertragsausführungen"
+        ordering = ['-run_date', '-created_at']
+        indexes = [
+            models.Index(fields=['contract']),
+            models.Index(fields=['contract', 'run_date']),
+            models.Index(fields=['-run_date']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['contract', 'run_date'],
+                name='unique_contract_run_per_contract_date',
+                violation_error_message='Es existiert bereits eine Ausführung für diesen Vertrag und dieses Datum.'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.contract.name} - {self.run_date} ({self.get_status_display()})"
 

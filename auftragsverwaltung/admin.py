@@ -1,6 +1,15 @@
 from django.contrib import admin
 from django.contrib import messages
-from auftragsverwaltung.models import DocumentType, NumberRange, SalesDocument, SalesDocumentLine, SalesDocumentSource
+from auftragsverwaltung.models import (
+    DocumentType,
+    NumberRange,
+    SalesDocument,
+    SalesDocumentLine,
+    SalesDocumentSource,
+    Contract,
+    ContractLine,
+    ContractRun,
+)
 from auftragsverwaltung.services import DocumentCalculationService
 
 
@@ -266,3 +275,172 @@ class SalesDocumentSourceAdmin(admin.ModelAdmin):
         """Show company of target document"""
         return obj.target_document.company.name
     target_company.short_description = "Mandant"
+
+
+class ContractLineInline(admin.TabularInline):
+    """Inline admin for ContractLine"""
+    model = ContractLine
+    extra = 1
+    fields = (
+        'position_no',
+        'item',
+        'description',
+        'quantity',
+        'unit_price_net',
+        'tax_rate',
+        'cost_type_1',
+        'cost_type_2',
+        'is_discountable',
+    )
+    ordering = ('position_no',)
+
+
+@admin.register(Contract)
+class ContractAdmin(admin.ModelAdmin):
+    """Admin interface for Contract"""
+    list_display = (
+        'name',
+        'company',
+        'customer',
+        'interval',
+        'start_date',
+        'end_date',
+        'next_run_date',
+        'is_active',
+        'is_contract_active',
+    )
+    list_filter = (
+        'company',
+        'interval',
+        'is_active',
+        'start_date',
+        'next_run_date',
+    )
+    search_fields = (
+        'name',
+        'reference',
+        'company__name',
+        'customer__name',
+        'customer__firma',
+    )
+    ordering = ('company', 'name')
+    date_hierarchy = 'start_date'
+    inlines = [ContractLineInline]
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('company', 'name', 'customer', 'reference')
+        }),
+        ('Abrechnungskonfiguration', {
+            'fields': ('document_type', 'payment_term', 'currency', 'interval')
+        }),
+        ('Zeitraum', {
+            'fields': ('start_date', 'end_date', 'next_run_date', 'last_run_date')
+        }),
+        ('Status & Automatisierung', {
+            'fields': ('is_active', 'auto_finalize', 'auto_send')
+        }),
+    )
+    
+    readonly_fields = ('last_run_date',)
+    
+    def is_contract_active(self, obj):
+        """Show if contract is currently active (considering end_date)"""
+        return obj.is_contract_active()
+    is_contract_active.boolean = True
+    is_contract_active.short_description = "Effektiv aktiv"
+
+
+@admin.register(ContractLine)
+class ContractLineAdmin(admin.ModelAdmin):
+    """Admin interface for ContractLine"""
+    list_display = (
+        'contract',
+        'position_no',
+        'description_short',
+        'quantity',
+        'unit_price_net',
+        'tax_rate',
+        'is_discountable',
+    )
+    list_filter = (
+        'contract__company',
+        'is_discountable',
+    )
+    search_fields = (
+        'contract__name',
+        'description',
+        'item__article_no',
+        'item__short_text_1',
+    )
+    ordering = ('contract', 'position_no')
+    
+    fieldsets = (
+        ('Zuordnung', {
+            'fields': ('contract', 'position_no')
+        }),
+        ('Inhalt', {
+            'fields': ('item', 'description', 'quantity', 'unit_price_net')
+        }),
+        ('Steuer & Kostenarten', {
+            'fields': ('tax_rate', 'cost_type_1', 'cost_type_2')
+        }),
+        ('Flags', {
+            'fields': ('is_discountable',)
+        }),
+    )
+    
+    def description_short(self, obj):
+        """Show shortened description"""
+        if len(obj.description) > 50:
+            return f"{obj.description[:50]}..."
+        return obj.description
+    description_short.short_description = "Beschreibung"
+
+
+@admin.register(ContractRun)
+class ContractRunAdmin(admin.ModelAdmin):
+    """Admin interface for ContractRun"""
+    list_display = (
+        'contract',
+        'run_date',
+        'status',
+        'document',
+        'created_at',
+        'message_short',
+    )
+    list_filter = (
+        'status',
+        'contract__company',
+        'run_date',
+        'created_at',
+    )
+    search_fields = (
+        'contract__name',
+        'document__number',
+        'message',
+    )
+    ordering = ('-run_date', '-created_at')
+    date_hierarchy = 'run_date'
+    
+    fieldsets = (
+        ('Vertragsausführung', {
+            'fields': ('contract', 'run_date', 'status')
+        }),
+        ('Ergebnis', {
+            'fields': ('document', 'message')
+        }),
+        ('Metadaten', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at',)
+    
+    def message_short(self, obj):
+        """Show shortened message"""
+        if obj.message and len(obj.message) > 50:
+            return f"{obj.message[:50]}..."
+        return obj.message or ""
+    message_short.short_description = "Nachricht"
