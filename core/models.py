@@ -780,34 +780,98 @@ class ReportDocument(models.Model):
 
 class Item(models.Model):
     """
-    Item entity (Artikel/Leistung) - stub for SalesDocumentLine FK reference
+    Item entity (Artikel/Leistung) - Global Article Master Data
     
-    This is a minimal stub implementation to support SalesDocumentLine.
-    Full implementation will be done in a separate issue.
+    Central master data source for articles/services to be reused in sales document lines.
+    When an item is selected in a document line, relevant values are copied as a snapshot
+    to the line, ensuring that existing documents remain historically stable.
+    
+    Out of Scope: Inventory management, price tiers, variants, price change history
     """
-    name = models.CharField(
-        max_length=200,
-        verbose_name="Name",
-        help_text="Bezeichnung des Artikels/der Leistung"
+    
+    # Item type choices
+    ITEM_TYPE_CHOICES = [
+        ('MATERIAL', 'Material'),
+        ('SERVICE', 'Dienstleistung'),
+    ]
+    
+    # Core identification
+    article_no = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Artikelnummer",
+        help_text="Eindeutige Artikelnummer (global)"
     )
-    description = models.TextField(
+    
+    # Text fields
+    short_text_1 = models.CharField(
+        max_length=200,
+        verbose_name="Kurztext 1",
+        help_text="Primärer Kurztext"
+    )
+    short_text_2 = models.CharField(
+        max_length=200,
         blank=True,
         default="",
-        verbose_name="Beschreibung",
+        verbose_name="Kurztext 2",
+        help_text="Optionaler zweiter Kurztext"
+    )
+    long_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Langtext",
         help_text="Detaillierte Beschreibung"
     )
-    unit_price_net = models.DecimalField(
+    
+    # Pricing
+    net_price = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=Decimal('0.00'),
-        verbose_name="Netto-Stückpreis",
-        help_text="Standardpreis netto"
+        verbose_name="Verkaufspreis netto",
+        help_text="Netto-Verkaufspreis"
     )
+    purchase_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Einkaufspreis netto",
+        help_text="Netto-Einkaufspreis"
+    )
+    
+    # Foreign Keys
     tax_rate = models.ForeignKey(
         TaxRate,
         on_delete=models.PROTECT,
         related_name='items',
         verbose_name="Steuersatz"
+    )
+    cost_type_1 = models.ForeignKey(
+        Kostenart,
+        on_delete=models.PROTECT,
+        related_name='items_cost_type_1',
+        verbose_name="Kostenart 1"
+    )
+    cost_type_2 = models.ForeignKey(
+        Kostenart,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='items_cost_type_2',
+        verbose_name="Kostenart 2"
+    )
+    
+    # Classification
+    item_type = models.CharField(
+        max_length=20,
+        choices=ITEM_TYPE_CHOICES,
+        verbose_name="Artikeltyp",
+        help_text="Klassifizierung: Material oder Dienstleistung"
+    )
+    
+    # Flags
+    is_discountable = models.BooleanField(
+        default=True,
+        verbose_name="Rabattfähig",
+        help_text="Gibt an, ob dieser Artikel rabattfähig ist"
     )
     is_active = models.BooleanField(
         default=True,
@@ -818,7 +882,48 @@ class Item(models.Model):
     class Meta:
         verbose_name = "Artikel/Leistung"
         verbose_name_plural = "Artikel/Leistungen"
-        ordering = ['name']
+        ordering = ['article_no']
+        indexes = [
+            models.Index(fields=['article_no']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['item_type']),
+        ]
+        constraints = [
+            # Ensure article_no is globally unique
+            models.UniqueConstraint(
+                fields=['article_no'],
+                name='item_article_no_unique',
+                violation_error_message='Ein Artikel mit dieser Artikelnummer existiert bereits.'
+            ),
+            # Ensure net_price is non-negative
+            models.CheckConstraint(
+                check=models.Q(net_price__gte=0),
+                name='item_net_price_non_negative',
+                violation_error_message='Der Verkaufspreis darf nicht negativ sein.'
+            ),
+            # Ensure purchase_price is non-negative
+            models.CheckConstraint(
+                check=models.Q(purchase_price__gte=0),
+                name='item_purchase_price_non_negative',
+                violation_error_message='Der Einkaufspreis darf nicht negativ sein.'
+            ),
+        ]
     
     def __str__(self):
-        return self.name
+        return f"{self.article_no}: {self.short_text_1}"
+    
+    def clean(self):
+        """Validate item data"""
+        super().clean()
+        
+        # Validate net_price >= 0
+        if self.net_price is not None and self.net_price < 0:
+            raise ValidationError({
+                'net_price': 'Der Verkaufspreis darf nicht negativ sein.'
+            })
+        
+        # Validate purchase_price >= 0
+        if self.purchase_price is not None and self.purchase_price < 0:
+            raise ValidationError({
+                'purchase_price': 'Der Einkaufspreis darf nicht negativ sein.'
+            })

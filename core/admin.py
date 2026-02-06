@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.conf import settings
 from core.models import (
     Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, PaymentTerm, TaxRate, Kostenart,
-    AIProvider, AIModel, AIJobsHistory, ReportDocument
+    AIProvider, AIModel, AIJobsHistory, ReportDocument, Item
 )
 from core.mailing.service import send_mail, MailServiceError
 import secrets
@@ -445,3 +445,39 @@ class ReportDocumentAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         """Make reports read-only after creation"""
         return False
+
+
+@admin.register(Item)
+class ItemAdmin(admin.ModelAdmin):
+    """Admin interface for Item (Article Master Data) with CRUD functionality"""
+    list_display = ('article_no', 'short_text_1', 'item_type', 'net_price', 'tax_rate', 'is_discountable', 'is_active')
+    list_filter = ('item_type', 'is_active', 'is_discountable', 'tax_rate')
+    search_fields = ('article_no', 'short_text_1', 'short_text_2', 'long_text')
+    ordering = ('article_no',)
+    
+    fieldsets = (
+        ('Identifikation', {
+            'fields': ('article_no', 'item_type', 'is_active')
+        }),
+        ('Texte', {
+            'fields': ('short_text_1', 'short_text_2', 'long_text')
+        }),
+        ('Preise', {
+            'fields': ('net_price', 'purchase_price', 'tax_rate')
+        }),
+        ('Kostenarten', {
+            'fields': ('cost_type_1', 'cost_type_2')
+        }),
+        ('Eigenschaften', {
+            'fields': ('is_discountable',)
+        }),
+    )
+    
+    def has_delete_permission(self, request, obj=None):
+        """
+        Allow deletion if no sales document lines reference this item.
+        Otherwise, recommend deactivation via is_active.
+        """
+        if obj and obj.sales_document_lines.exists():
+            return False
+        return True
