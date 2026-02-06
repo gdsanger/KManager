@@ -25,10 +25,7 @@ def auftragsverwaltung_home(request):
     """
     # Get the default company (for now, we'll use the first available)
     # In a multi-tenant setup, this would be based on the user's company
-    try:
-        company = Mandant.objects.first()
-    except Mandant.DoesNotExist:
-        company = None
+    company = Mandant.objects.first()
     
     # Initialize KPIs
     kpi_open_documents = 0

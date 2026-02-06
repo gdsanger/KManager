@@ -14,7 +14,7 @@ class SalesDocumentFilter(django_filters.FilterSet):
         label='Suche',
         widget=django_filters.widgets.forms.TextInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Suche nach Nummer, Betreff, Kunde...'
+            'placeholder': 'Suche nach Nummer, Betreff, Notizen...'
         })
     )
     

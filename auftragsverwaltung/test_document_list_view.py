@@ -34,33 +34,10 @@ class SalesDocumentListViewTestCase(TestCase):
             ust_id_nr='DE123456789'
         )
         
-        # Create document types
-        self.doc_type_quote = DocumentType.objects.create(
-            key='quote',
-            name='Angebot',
-            prefix='AN',
-            is_invoice=False,
-            is_correction=False,
-            requires_due_date=False
-        )
-        
-        self.doc_type_invoice = DocumentType.objects.create(
-            key='invoice',
-            name='Rechnung',
-            prefix='R',
-            is_invoice=True,
-            is_correction=False,
-            requires_due_date=True
-        )
-        
-        self.doc_type_delivery = DocumentType.objects.create(
-            key='delivery',
-            name='Lieferschein',
-            prefix='LS',
-            is_invoice=False,
-            is_correction=False,
-            requires_due_date=False
-        )
+        # Get document types (created by migration)
+        self.doc_type_quote = DocumentType.objects.get(key='quote')
+        self.doc_type_invoice = DocumentType.objects.get(key='invoice')
+        self.doc_type_delivery = DocumentType.objects.get(key='delivery')
         
         # Create test sales documents
         self.doc1 = SalesDocument.objects.create(
