@@ -40,12 +40,22 @@ def apply_item_snapshot(line, item):
         None - modifies line in-place (does NOT save to database)
         
     Example:
-        >>> from auftragsverwaltung.models import SalesDocumentLine
+        >>> from auftragsverwaltung.models import SalesDocument, SalesDocumentLine
         >>> from core.models import Item
         >>> from auftragsverwaltung.services.item_snapshot import apply_item_snapshot
         >>> 
         >>> item = Item.objects.get(article_no="ART-001")
-        >>> line = SalesDocumentLine(document=doc, position_no=1, ...)
+        >>> document = SalesDocument.objects.get(number="R26-00001")
+        >>> line = SalesDocumentLine(
+        ...     document=document, 
+        ...     position_no=1, 
+        ...     line_type="NORMAL",
+        ...     is_selected=True,
+        ...     description="Item description",
+        ...     quantity=Decimal("1.0000"),
+        ...     unit_price_net=Decimal("0.00"),
+        ...     tax_rate=some_tax_rate
+        ... )
         >>> line.item = item
         >>> apply_item_snapshot(line, item)
         >>> line.save()  # Caller is responsible for saving
