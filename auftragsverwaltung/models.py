@@ -243,6 +243,39 @@ class SalesDocument(models.Model):
         verbose_name="Bezahlt am",
         help_text="Zeitpunkt der Zahlung"
     )
+    reference_number = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        verbose_name="Referenznummer",
+        help_text="Externe Referenznummer (z.B. Bestellnummer des Kunden)"
+    )
+    subject = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Betreff",
+        help_text="Betreff oder Kurzbeschreibung des Dokuments"
+    )
+    header_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Kopfzeile",
+        help_text="Freitext für die Kopfzeile des Dokuments"
+    )
+
+    footer_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Fußzeile",
+        help_text="Freitext für die Fußzeile des Dokuments"
+    )
+    payment_term_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Zahlungsbedingungstext",
+        help_text="Freitext für die Zahlungsbedingungen (z.B. 'Zahlbar innerhalb von 14 Tagen ohne Abzug')"
+    )
     
     # Relationships
     payment_term = models.ForeignKey(

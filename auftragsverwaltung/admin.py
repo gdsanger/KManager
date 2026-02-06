@@ -83,6 +83,11 @@ class SalesDocumentAdmin(admin.ModelAdmin):
         'company',
         'document_type',
         'status',
+        'subject',
+        'reference_number',
+        'header_text',
+        'footer_text',
+        'payment_term_text',
         'issue_date',
         'due_date',
         'total_net',
@@ -102,6 +107,8 @@ class SalesDocumentAdmin(admin.ModelAdmin):
         'document_type__name',
         'document_type__key',
         'notes_internal',
+        'subject',
+        'reference_number',
         'notes_public'
     )
     ordering = ('-issue_date', '-id')
@@ -110,7 +117,7 @@ class SalesDocumentAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Grunddaten', {
-            'fields': ('company', 'document_type', 'number', 'status')
+            'fields': ('company', 'document_type', 'number', 'status', 'subject', 'reference_number')
         }),
         ('Datumsangaben', {
             'fields': ('issue_date', 'due_date', 'paid_at')
