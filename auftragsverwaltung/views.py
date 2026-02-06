@@ -212,6 +212,19 @@ def document_detail(request, doc_key, pk):
     # Get document lines (ordered by position_no)
     lines = document.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2').order_by('position_no')
     
+    # Get available text templates for this company
+    header_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['HEADER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
+    footer_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['FOOTER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
     context = {
         'document': document,
         'document_type': document_type,
@@ -223,6 +236,8 @@ def document_detail(request, doc_key, pk):
         'tax_rates': tax_rates,
         'kostenarten1': kostenarten1,
         'lines': lines,
+        'header_templates': header_templates,
+        'footer_templates': footer_templates,
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
@@ -318,6 +333,19 @@ def document_create(request, doc_key):
     tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
     
+    # Get available text templates for this company
+    header_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['HEADER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
+    footer_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['FOOTER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
     context = {
         'document_type': document_type,
         'doc_key': doc_key,
@@ -328,6 +356,8 @@ def document_create(request, doc_key):
         'tax_rates': tax_rates,
         'kostenarten1': kostenarten1,
         'is_create': True,
+        'header_templates': header_templates,
+        'footer_templates': footer_templates,
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
