@@ -263,65 +263,88 @@ def item_management(request):
     - Right top: Filtered item list (django-tables2 + django-filter)
     - Right bottom: Detail form for selected item
     """
-    # Get all item groups for tree
-    main_groups = ItemGroup.objects.filter(
-        group_type='MAIN', is_active=True
-    ).prefetch_related('children').order_by('code')
+    try:
+        # Get all item groups for tree
+        main_groups = ItemGroup.objects.filter(
+            group_type='MAIN', is_active=True
+        ).prefetch_related('children').order_by('code')
+        
+        # Base queryset for items
+        queryset = Item.objects.select_related(
+            'item_group', 'cost_type_1', 'cost_type_2'
+        )
+        
+        # Get group filter from URL
+        group_id = request.GET.get('group', '')
+        if group_id:
+            try:
+                group = ItemGroup.objects.get(pk=group_id)
+                # Filter by selected group - if it's a main group, show all items in subgroups
+                if group.group_type == 'MAIN':
+                    queryset = queryset.filter(item_group__parent=group)
+                else:
+                    queryset = queryset.filter(item_group=group)
+            except (ItemGroup.DoesNotExist, ValueError):
+                pass
+        
+        # Apply filters
+        filter_set = ItemFilter(request.GET, queryset=queryset)
+        
+        # Create table with filtered data
+        table = ItemTable(filter_set.qs)
+        table.request = request  # Pass request to table for URL generation
+        
+        # Configure pagination
+        RequestConfig(request, paginate={'per_page': 20}).configure(table)
+        
+        # Get selected item for detail view
+        selected_item = None
+        selected_id = request.GET.get('selected', '')
+        if selected_id:
+            try:
+                selected_item = Item.objects.select_related(
+                    'item_group', 'cost_type_1', 'cost_type_2'
+                ).get(pk=selected_id)
+            except (Item.DoesNotExist, ValueError):
+                pass
+            except Exception as e:
+                # Handle database errors (e.g., corrupted decimal fields in test data)
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error loading item {selected_id}: {e}")
+                messages.warning(request, f'Fehler beim Laden des Artikels. Bitte überprüfen Sie die Stammdaten.')
+        
+        # Create form for selected item or new item
+        form = None
+        if selected_item:
+            try:
+                form = ItemForm(instance=selected_item)
+            except Exception as e:
+                # Handle form creation errors
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error creating form for item {selected_item.pk}: {e}")
+                messages.warning(request, f'Formular kann nicht geladen werden. Bitte kontaktieren Sie den Administrator.')
+                selected_item = None  # Don't show broken form
+        
+        context = {
+            'main_groups': main_groups,
+            'table': table,
+            'filter': filter_set,
+            'form': form,
+            'selected_item': selected_item,
+            'selected_group_id': group_id,
+        }
+        
+        return render(request, 'core/item_management.html', context)
     
-    # Base queryset for items
-    queryset = Item.objects.select_related(
-        'item_group', 'cost_type_1', 'cost_type_2'
-    )
-    
-    # Get group filter from URL
-    group_id = request.GET.get('group', '')
-    if group_id:
-        try:
-            group = ItemGroup.objects.get(pk=group_id)
-            # Filter by selected group - if it's a main group, show all items in subgroups
-            if group.group_type == 'MAIN':
-                queryset = queryset.filter(item_group__parent=group)
-            else:
-                queryset = queryset.filter(item_group=group)
-        except (ItemGroup.DoesNotExist, ValueError):
-            pass
-    
-    # Apply filters
-    filter_set = ItemFilter(request.GET, queryset=queryset)
-    
-    # Create table with filtered data
-    table = ItemTable(filter_set.qs)
-    table.request = request  # Pass request to table for URL generation
-    
-    # Configure pagination
-    RequestConfig(request, paginate={'per_page': 20}).configure(table)
-    
-    # Get selected item for detail view
-    selected_item = None
-    selected_id = request.GET.get('selected', '')
-    if selected_id:
-        try:
-            selected_item = Item.objects.select_related(
-                'item_group', 'cost_type_1', 'cost_type_2'
-            ).get(pk=selected_id)
-        except (Item.DoesNotExist, ValueError):
-            pass
-    
-    # Create form for selected item or new item
-    form = None
-    if selected_item:
-        form = ItemForm(instance=selected_item)
-    
-    context = {
-        'main_groups': main_groups,
-        'table': table,
-        'filter': filter_set,
-        'form': form,
-        'selected_item': selected_item,
-        'selected_group_id': group_id,
-    }
-    
-    return render(request, 'core/item_management.html', context)
+    except Exception as e:
+        # Catch-all for database issues with legacy test data
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in item_management view: {e}", exc_info=True)
+        messages.error(request, 'Fehler beim Laden der Artikelverwaltung. Dies kann an beschädigten Test-Daten liegen. Bitte verwenden Sie das Django Admin-Interface oder kontaktieren Sie den Administrator.')
+        return redirect('home')
 
 
 @login_required
