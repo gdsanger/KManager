@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'core',
     'vermietung.apps.VermietungConfig',
     'auftragsverwaltung.apps.AuftragsverwaltungConfig',
+    'finanzen.apps.FinanzenConfig',
 ]
 
 MIDDLEWARE = [
