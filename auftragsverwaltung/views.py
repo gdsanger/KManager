@@ -8,7 +8,7 @@ from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
 
-from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, TextTemplate
+from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, TextTemplate
 from .tables import SalesDocumentTable, ContractTable, TextTemplateTable
 from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter
 from .services import (
@@ -313,6 +313,16 @@ def document_create(request, doc_key):
         document.save()
         
         # Log activity
+        ActivityStreamService.add(
+            company=company,
+            domain='ORDER',
+            activity_type='DOCUMENT_CREATED',
+            title=f'{document_type.name} erstellt: {document.number}',
+            description=f'Betreff: {document.subject}' if document.subject else None,
+            target_url=f'/auftragsverwaltung/documents/{doc_key}/{document.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
         
         # Redirect to detail view
         return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
@@ -419,6 +429,16 @@ def document_update(request, doc_key, pk):
     DocumentCalculationService.recalculate(document, persist=True)
     
     # Log activity
+    ActivityStreamService.add(
+        company=document.company,
+        domain='ORDER',
+        activity_type='DOCUMENT_UPDATED',
+        title=f'{document.document_type.name} aktualisiert: {document.number}',
+        description=f'Betreff: {document.subject}' if document.subject else None,
+        target_url=f'/auftragsverwaltung/documents/{doc_key}/{document.pk}/',
+        actor=request.user,
+        severity='INFO'
+    )
     
     # Redirect to detail view
     return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
@@ -927,6 +947,16 @@ def contract_create(request):
         contract.save()
         
         # Log activity
+        ActivityStreamService.add(
+            company=company,
+            domain='ORDER',
+            activity_type='CONTRACT_CREATED',
+            title=f'Vertrag erstellt: {contract.contract_number}',
+            description=f'Kunde: {contract.customer.name}' if contract.customer else None,
+            target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
         
         # Redirect to detail view
         return redirect('auftragsverwaltung:contract_detail', pk=contract.pk)
@@ -1013,6 +1043,16 @@ def contract_update(request, pk):
     contract.save()
     
     # Log activity
+    ActivityStreamService.add(
+        company=contract.company,
+        domain='ORDER',
+        activity_type='CONTRACT_UPDATED',
+        title=f'Vertrag aktualisiert: {contract.contract_number}',
+        description=f'Kunde: {contract.customer.name}' if contract.customer else None,
+        target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+        actor=request.user,
+        severity='INFO'
+    )
     
     # Redirect to detail view
     return redirect('auftragsverwaltung:contract_detail', pk=contract.pk)
@@ -1114,6 +1154,16 @@ def ajax_contract_add_line(request, pk):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
+        ActivityStreamService.add(
+            company=contract.company,
+            domain='ORDER',
+            activity_type='CONTRACT_LINE_ADDED',
+            title=f'Vertragsposition hinzugefügt: {contract.contract_number}',
+            description=f'Position: {line.description[:100]}' if line.description else None,
+            target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
         
         # Return success with line data
         return JsonResponse({
@@ -1185,6 +1235,16 @@ def ajax_contract_update_line(request, pk, line_id):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
+        ActivityStreamService.add(
+            company=contract.company,
+            domain='ORDER',
+            activity_type='CONTRACT_LINE_UPDATED',
+            title=f'Vertragsposition aktualisiert: {contract.contract_number}',
+            description=f'Position: {line.description[:100]}' if line.description else None,
+            target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
         
         # Return updated line data
         return JsonResponse({
@@ -1227,6 +1287,16 @@ def ajax_contract_delete_line(request, pk, line_id):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
+        ActivityStreamService.add(
+            company=contract.company,
+            domain='ORDER',
+            activity_type='CONTRACT_LINE_DELETED',
+            title=f'Vertragsposition gelöscht: {contract.contract_number}',
+            description=f'Position: {line_desc}' if line_desc else None,
+            target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
         
         return JsonResponse({
             'success': True,
