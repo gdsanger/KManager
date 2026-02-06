@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.conf import settings
 from core.models import (
     Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, PaymentTerm, TaxRate, Kostenart,
-    AIProvider, AIModel, AIJobsHistory, ReportDocument, Item
+    AIProvider, AIModel, AIJobsHistory, ReportDocument, Item, ItemGroup
 )
 from core.mailing.service import send_mail, MailServiceError
 import secrets
@@ -238,6 +238,51 @@ class KostenartAdmin(admin.ModelAdmin):
         return obj.is_hauptkostenart()
     is_hauptkostenart.boolean = True
     is_hauptkostenart.short_description = "Hauptkostenart"
+
+
+class UnterwarengruppeInline(admin.TabularInline):
+    """Inline admin for sub item groups (Unterwarengruppen)"""
+    model = ItemGroup
+    fk_name = 'parent'
+    extra = 1
+    fields = ['code', 'name', 'is_active', 'description']
+    verbose_name = "Unterwarengruppe"
+    verbose_name_plural = "Unterwarengruppen"
+
+
+@admin.register(ItemGroup)
+class ItemGroupAdmin(admin.ModelAdmin):
+    """Admin interface for ItemGroup with CRUD functionality"""
+    list_display = ('code', 'name', 'group_type', 'parent', 'is_active')
+    list_filter = ('group_type', 'is_active')
+    search_fields = ('code', 'name')
+    ordering = ('code',)
+    inlines = [UnterwarengruppeInline]
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('code', 'name', 'group_type', 'is_active')
+        }),
+        ('Hierarchie', {
+            'fields': ('parent',),
+            'description': 'Nur für Unterwarengruppen (SUB): Übergeordnete Hauptwarengruppe'
+        }),
+        ('Zusatzinformationen', {
+            'fields': ('description',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Only show Hauptwarengruppen (MAIN) in main list"""
+        qs = super().get_queryset(request)
+        return qs.filter(group_type='MAIN')
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of MAIN ItemGroup if it has children"""
+        if obj and obj.group_type == 'MAIN' and obj.children.exists():
+            return False
+        return True
 
 
 # Custom User Admin with password reset action

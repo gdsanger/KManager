@@ -778,6 +778,94 @@ class ReportDocument(models.Model):
         return f"{self.report_key} - {self.object_type}:{self.object_id} ({self.created_at})"
 
 
+class ItemGroup(models.Model):
+    """Item Groups (Warengruppen) with flat 2-level hierarchy
+    
+    Global item groups for structured classification of items with exactly
+    one flat hierarchy:
+    - MAIN (Hauptwarengruppe) → SUB (Unterwarengruppe)
+    
+    Item groups are global (not company-specific) and serve for structuring,
+    filtering, and reporting.
+    """
+    GROUP_TYPES = [
+        ('MAIN', 'Hauptwarengruppe'),
+        ('SUB', 'Unterwarengruppe'),
+    ]
+    
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name="Code",
+        help_text="Eindeutiger Code für die Warengruppe"
+    )
+    name = models.CharField(
+        max_length=200,
+        verbose_name="Name",
+        help_text="Bezeichnung der Warengruppe"
+    )
+    group_type = models.CharField(
+        max_length=10,
+        choices=GROUP_TYPES,
+        verbose_name="Gruppentyp",
+        help_text="Typ der Warengruppe (Haupt- oder Untergruppe)"
+    )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name="Hauptwarengruppe",
+        help_text="Übergeordnete Hauptwarengruppe (nur bei Untergruppen)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktiv",
+        help_text="Gibt an, ob diese Warengruppe aktiv ist"
+    )
+    description = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Beschreibung",
+        help_text="Optional: Beschreibung der Warengruppe"
+    )
+    
+    class Meta:
+        verbose_name = "Warengruppe"
+        verbose_name_plural = "Warengruppen"
+        ordering = ['code']
+    
+    def __str__(self):
+        if self.parent:
+            return f"{self.parent.code} > {self.code}: {self.name}"
+        return f"{self.code}: {self.name}"
+    
+    def clean(self):
+        """Validate item group hierarchy rules"""
+        super().clean()
+        
+        # Rule 1: MAIN must not have a parent
+        if self.group_type == 'MAIN' and self.parent is not None:
+            raise ValidationError({
+                'parent': 'Eine Hauptwarengruppe (MAIN) darf keine übergeordnete Gruppe haben.'
+            })
+        
+        # Rule 2: SUB must have a parent
+        if self.group_type == 'SUB' and self.parent is None:
+            raise ValidationError({
+                'parent': 'Eine Unterwarengruppe (SUB) muss eine übergeordnete Hauptwarengruppe haben.'
+            })
+        
+        # Rule 3: SUB's parent must be MAIN (no deeper hierarchy)
+        if self.group_type == 'SUB' and self.parent is not None:
+            if self.parent.group_type != 'MAIN':
+                raise ValidationError({
+                    'parent': 'Eine Unterwarengruppe (SUB) kann nur einer Hauptwarengruppe (MAIN) zugeordnet werden. '
+                             'Tiefere Hierarchieebenen sind nicht erlaubt.'
+                })
+
+
 class Item(models.Model):
     """
     Item entity (Artikel/Leistung) - Global Article Master Data
