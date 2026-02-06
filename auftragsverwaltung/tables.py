@@ -50,10 +50,12 @@ class SalesDocumentTable(tables.Table):
     )
     
     def render_number(self, value, record):
-        """Render number as a link to detail view (when available)."""
-        # For MVP, just return the number as text
-        # TODO: Add detail view link when detail view is implemented
-        return format_html('<span class="text-decoration-none">{}</span>', value)
+        """Render number as a link to detail view."""
+        url = reverse('auftragsverwaltung:document_detail', kwargs={
+            'doc_key': record.document_type.key,
+            'pk': record.pk
+        })
+        return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
     
     def render_total_gross(self, value):
         """Render total_gross with currency."""
@@ -79,15 +81,16 @@ class SalesDocumentTable(tables.Table):
     
     def render_aktionen(self, record):
         """Render action buttons."""
-        # For MVP, minimal actions
-        # TODO: Add detail, edit, delete URLs when those views are implemented
+        detail_url = reverse('auftragsverwaltung:document_detail', kwargs={
+            'doc_key': record.document_type.key,
+            'pk': record.pk
+        })
         return format_html(
             '<div class="btn-group btn-group-sm" role="group">'
-            '<button type="button" class="btn btn-outline-info" title="Details" disabled>'
-            '<i class="bi bi-eye"></i></button>'
-            '<button type="button" class="btn btn-outline-warning" title="Bearbeiten" disabled>'
-            '<i class="bi bi-pencil"></i></button>'
-            '</div>'
+            '<a href="{}" class="btn btn-outline-info" title="Details">'
+            '<i class="bi bi-eye"></i></a>'
+            '</div>',
+            detail_url
         )
     
     class Meta:
