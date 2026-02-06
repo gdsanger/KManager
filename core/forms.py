@@ -5,7 +5,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
-from core.models import SmtpSettings, MailTemplate, Mandant
+from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart
 
 
 class SmtpSettingsForm(forms.ModelForm):
@@ -164,4 +164,53 @@ class MandantForm(forms.ModelForm):
             'iban': 'IBAN',
             'bic': 'BIC',
             'kontoinhaber': 'Kontoinhaber',
+        }
+
+
+class ItemForm(forms.ModelForm):
+    """Form for Item (Article/Service) entity"""
+    
+    class Meta:
+        model = Item
+        fields = [
+            'article_no', 'short_text_1', 'short_text_2', 'long_text',
+            'net_price', 'purchase_price', 'tax_rate', 'cost_type_1', 'cost_type_2',
+            'item_group', 'item_type', 'is_discountable', 'is_active'
+        ]
+        widgets = {
+            'article_no': forms.TextInput(attrs={'class': 'form-control'}),
+            'short_text_1': forms.TextInput(attrs={'class': 'form-control'}),
+            'short_text_2': forms.TextInput(attrs={'class': 'form-control'}),
+            'long_text': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'net_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'tax_rate': forms.Select(attrs={'class': 'form-select'}),
+            'cost_type_1': forms.Select(attrs={'class': 'form-select'}),
+            'cost_type_2': forms.Select(attrs={'class': 'form-select'}),
+            'item_group': forms.Select(attrs={'class': 'form-select'}),
+            'item_type': forms.Select(attrs={'class': 'form-select'}),
+            'is_discountable': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        labels = {
+            'article_no': 'Artikelnummer *',
+            'short_text_1': 'Kurztext 1 *',
+            'short_text_2': 'Kurztext 2',
+            'long_text': 'Langtext',
+            'net_price': 'Verkaufspreis netto *',
+            'purchase_price': 'Einkaufspreis netto *',
+            'tax_rate': 'Steuersatz *',
+            'cost_type_1': 'Kostenart 1 *',
+            'cost_type_2': 'Kostenart 2',
+            'item_group': 'Warengruppe',
+            'item_type': 'Artikeltyp *',
+            'is_discountable': 'Rabattfähig',
+            'is_active': 'Aktiv',
+        }
+        help_texts = {
+            'article_no': 'Eindeutige Artikelnummer',
+            'short_text_1': 'Primärer Kurztext',
+            'short_text_2': 'Optionaler zweiter Kurztext',
+            'long_text': 'Detaillierte Beschreibung',
+            'item_group': 'Optional: Zuordnung zu einer Warengruppe',
         }

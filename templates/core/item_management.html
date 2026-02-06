@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% load django_tables2 %}
+
+{% block title %}Artikelverwaltung - Domus{% endblock %}
+
+{% block extra_css %}
+<style>
+.item-management-container {
+    height: calc(100vh - 120px);
+    overflow: hidden;
+}
+
+.tree-panel {
+    height: 100%;
+    overflow-y: auto;
+    border-right: 1px solid #495057;
+    padding-right: 15px;
+}
+
+.content-panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.list-section {
+    flex: 0 0 50%;
+    overflow-y: auto;
+    border-bottom: 1px solid #495057;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+}
+
+.detail-section {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.group-tree {
+    list-style: none;
+    padding-left: 0;
+}
+
+.group-tree li {
+    margin-bottom: 5px;
+}
+
+.group-tree .main-group {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.group-tree .sub-group {
+    padding-left: 20px;
+    font-size: 0.9em;
+}
+
+.group-link {
+    display: block;
+    padding: 5px 10px;
+    color: #adb5bd;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.group-link:hover {
+    background-color: #495057;
+    color: #fff;
+}
+
+.group-link.active {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+.form-dirty-indicator {
+    display: none;
+    color: #ffc107;
+    font-size: 0.9em;
+    margin-left: 10px;
+}
+
+.form-dirty .form-dirty-indicator {
+    display: inline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Page Header -->
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <h2>
+                <i class="bi bi-box-seam"></i> Artikelverwaltung
+                <span class="form-dirty-indicator" id="dirtyIndicator">
+                    <i class="bi bi-exclamation-triangle"></i> Ungespeicherte Änderungen
+                </span>
+            </h2>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row item-management-container">
+        <!-- Left Panel: Item Group Tree -->
+        <div class="col-md-3 tree-panel">
+            <h5 class="mb-3">Warengruppen</h5>
+            <ul class="group-tree">
+                <li>
+                    <a href="{% url 'item_management' %}" 
+                       class="group-link navigation-link {% if not selected_group_id %}active{% endif %}"
+                       data-target-url="{% url 'item_management' %}">
+                        <i class="bi bi-house"></i> Alle Artikel
+                    </a>
+                </li>
+                {% for main_group in main_groups %}
+                <li class="main-group">
+                    <a href="?group={{ main_group.pk }}" 
+                       class="group-link navigation-link {% if selected_group_id == main_group.pk|stringformat:'s' %}active{% endif %}"
+                       data-target-url="?group={{ main_group.pk }}">
+                        <i class="bi bi-folder"></i> {{ main_group.name }}
+                    </a>
+                    {% if main_group.children.all %}
+                    <ul class="group-tree sub-group">
+                        {% for sub_group in main_group.children.all %}
+                        <li>
+                            <a href="?group={{ sub_group.pk }}" 
+                               class="group-link navigation-link {% if selected_group_id == sub_group.pk|stringformat:'s' %}active{% endif %}"
+                               data-target-url="?group={{ sub_group.pk }}">
+                                <i class="bi bi-folder-fill"></i> {{ sub_group.name }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Right Panel: List + Detail -->
+        <div class="col-md-9 content-panel">
+            <!-- List Section -->
+            <div class="list-section">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5>Artikelliste</h5>
+                    <button type="button" class="btn btn-success btn-sm navigation-link" 
+                            data-target-url="{% url 'item_create_new' %}">
+                        <i class="bi bi-plus-circle"></i> Neuer Artikel
+                    </button>
+                </div>
+
+                <!-- Filters -->
+                <form method="get" action="{% url 'item_management' %}" id="filterForm">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                {{ filter.form.q }}
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            {{ filter.form.item_type }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ filter.form.is_active }}
+                        </div>
+                        <div class="col-md-2">
+                            <div class="btn-group btn-group-sm w-100" role="group">
+                                <button type="submit" class="btn btn-outline-secondary">
+                                    <i class="bi bi-funnel"></i> Filter
+                                </button>
+                                {% if request.GET %}
+                                <a href="{% url 'item_management' %}" class="btn btn-outline-secondary" title="Filter zurücksetzen">
+                                    <i class="bi bi-x"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Table -->
+                <div class="table-responsive">
+                    {% render_table table %}
+                </div>
+                
+                <div class="text-end mt-2">
+                    <span class="text-muted">{{ table.paginator.count }} Artikel</span>
+                </div>
+            </div>
+
+            <!-- Detail Section -->
+            <div class="detail-section">
+                {% if form %}
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            {% if selected_item %}
+                            <i class="bi bi-pencil"></i> Artikel bearbeiten: {{ selected_item.article_no }}
+                            {% else %}
+                            <i class="bi bi-plus-circle"></i> Neuer Artikel
+                            {% endif %}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'item_save' %}" id="itemForm">
+                            {% csrf_token %}
+                            {% if selected_item %}
+                            <input type="hidden" name="item_id" value="{{ selected_item.pk }}">
+                            {% endif %}
+                            <input type="hidden" name="next" id="nextUrl" value="">
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.article_no.id_for_label }}" class="form-label">{{ form.article_no.label }}</label>
+                                        {{ form.article_no }}
+                                        {% if form.article_no.errors %}
+                                        <div class="text-danger">{{ form.article_no.errors }}</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.short_text_1.id_for_label }}" class="form-label">{{ form.short_text_1.label }}</label>
+                                        {{ form.short_text_1 }}
+                                        {% if form.short_text_1.errors %}
+                                        <div class="text-danger">{{ form.short_text_1.errors }}</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.short_text_2.id_for_label }}" class="form-label">{{ form.short_text_2.label }}</label>
+                                        {{ form.short_text_2 }}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.long_text.id_for_label }}" class="form-label">{{ form.long_text.label }}</label>
+                                        {{ form.long_text }}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.item_type.id_for_label }}" class="form-label">{{ form.item_type.label }}</label>
+                                        {{ form.item_type }}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.item_group.id_for_label }}" class="form-label">{{ form.item_group.label }}</label>
+                                        {{ form.item_group }}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.net_price.id_for_label }}" class="form-label">{{ form.net_price.label }}</label>
+                                        <div class="input-group">
+                                            {{ form.net_price }}
+                                            <span class="input-group-text">€</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.purchase_price.id_for_label }}" class="form-label">{{ form.purchase_price.label }}</label>
+                                        <div class="input-group">
+                                            {{ form.purchase_price }}
+                                            <span class="input-group-text">€</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.tax_rate.id_for_label }}" class="form-label">{{ form.tax_rate.label }}</label>
+                                        {{ form.tax_rate }}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.cost_type_1.id_for_label }}" class="form-label">{{ form.cost_type_1.label }}</label>
+                                        {{ form.cost_type_1 }}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.cost_type_2.id_for_label }}" class="form-label">{{ form.cost_type_2.label }}</label>
+                                        {{ form.cost_type_2 }}
+                                    </div>
+
+                                    <div class="mb-3 form-check">
+                                        {{ form.is_discountable }}
+                                        <label for="{{ form.is_discountable.id_for_label }}" class="form-check-label">{{ form.is_discountable.label }}</label>
+                                    </div>
+
+                                    <div class="mb-3 form-check">
+                                        {{ form.is_active }}
+                                        <label for="{{ form.is_active.id_for_label }}" class="form-check-label">{{ form.is_active.label }}</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Speichern
+                                </button>
+                                {% if selected_item %}
+                                <a href="{% url 'item_management' %}" class="btn btn-secondary navigation-link" data-target-url="{% url 'item_management' %}">
+                                    <i class="bi bi-x"></i> Abbrechen
+                                </a>
+                                {% endif %}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Wählen Sie einen Artikel aus der Liste oder erstellen Sie einen neuen Artikel.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Unsaved Changes Modal -->
+<div class="modal fade" id="unsavedChangesModal" tabindex="-1" aria-labelledby="unsavedChangesModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="unsavedChangesModalLabel">
+                    <i class="bi bi-exclamation-triangle text-warning"></i> Ungespeicherte Änderungen
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sie haben ungespeicherte Änderungen. Was möchten Sie tun?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Abbrechen
+                </button>
+                <button type="button" class="btn btn-danger" id="discardChanges">
+                    <i class="bi bi-trash"></i> Verwerfen & Wechseln
+                </button>
+                <button type="button" class="btn btn-success" id="saveAndSwitch">
+                    <i class="bi bi-save"></i> Speichern & Wechseln
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let formDirty = false;
+    let pendingNavigationUrl = null;
+    const form = document.getElementById('itemForm');
+    const modal = new bootstrap.Modal(document.getElementById('unsavedChangesModal'));
+    const dirtyIndicator = document.getElementById('dirtyIndicator');
+
+    // Track form changes
+    if (form) {
+        const formInputs = form.querySelectorAll('input, select, textarea');
+        formInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                formDirty = true;
+                form.classList.add('form-dirty');
+            });
+            // Also track typing in text fields
+            if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+                input.addEventListener('input', function() {
+                    formDirty = true;
+                    form.classList.add('form-dirty');
+                });
+            }
+        });
+
+        // Reset dirty flag on successful save
+        form.addEventListener('submit', function() {
+            formDirty = false;
+            form.classList.remove('form-dirty');
+        });
+    }
+
+    // Intercept navigation clicks
+    document.querySelectorAll('.navigation-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (formDirty) {
+                e.preventDefault();
+                pendingNavigationUrl = this.getAttribute('data-target-url') || this.getAttribute('href');
+                modal.show();
+            }
+        });
+    });
+
+    // Handle "Discard & Switch"
+    document.getElementById('discardChanges').addEventListener('click', function() {
+        formDirty = false;
+        if (form) {
+            form.classList.remove('form-dirty');
+        }
+        modal.hide();
+        if (pendingNavigationUrl) {
+            window.location.href = pendingNavigationUrl;
+        }
+    });
+
+    // Handle "Save & Switch"
+    document.getElementById('saveAndSwitch').addEventListener('click', function() {
+        if (form && pendingNavigationUrl) {
+            document.getElementById('nextUrl').value = pendingNavigationUrl;
+            form.submit();
+        }
+    });
+
+    // Intercept item links in table
+    document.querySelectorAll('.item-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (formDirty) {
+                e.preventDefault();
+                pendingNavigationUrl = this.getAttribute('href');
+                modal.show();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
