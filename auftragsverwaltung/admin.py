@@ -1,5 +1,7 @@
 from django.contrib import admin
+from django.contrib import messages
 from auftragsverwaltung.models import DocumentType, NumberRange, SalesDocument, SalesDocumentLine
+from auftragsverwaltung.services import DocumentCalculationService
 
 
 class SalesDocumentLineInline(admin.TabularInline):
@@ -123,6 +125,47 @@ class SalesDocumentAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ()
+    actions = ['recalculate_totals']
+    
+    def recalculate_totals(self, request, queryset):
+        """
+        Admin action to recalculate totals for selected documents
+        
+        This action calls DocumentCalculationService.recalculate() with persist=True
+        for each selected document and provides feedback on success/failure.
+        """
+        success_count = 0
+        error_count = 0
+        
+        for document in queryset:
+            try:
+                DocumentCalculationService.recalculate(document, persist=True)
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                self.message_user(
+                    request,
+                    f"Fehler beim Berechnen von {document.number}: {str(e)}",
+                    level=messages.ERROR
+                )
+        
+        # Success message
+        if success_count > 0:
+            self.message_user(
+                request,
+                f"Summen für {success_count} Dokument(e) erfolgreich neu berechnet.",
+                level=messages.SUCCESS
+            )
+        
+        # Summary if there were errors
+        if error_count > 0:
+            self.message_user(
+                request,
+                f"{error_count} Dokument(e) konnten nicht berechnet werden.",
+                level=messages.WARNING
+            )
+    
+    recalculate_totals.short_description = "Summen neu berechnen"
     
     def get_readonly_fields(self, request, obj=None):
         """Make payment_term_snapshot readonly by default"""
