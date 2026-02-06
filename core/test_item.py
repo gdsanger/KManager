@@ -204,6 +204,87 @@ class ItemModelTestCase(TestCase):
         )
         
         self.assertEqual(str(item), "ART-007: Test Article")
+    
+    def test_item_group_null_valid(self):
+        """Test that item_group can be NULL - should be valid"""
+        from core.models import ItemGroup
+        
+        item = Item.objects.create(
+            article_no="ART-IG-001",
+            short_text_1="Item without group",
+            net_price=Decimal("100.00"),
+            purchase_price=Decimal("50.00"),
+            tax_rate=self.tax_rate,
+            cost_type_1=self.cost_type_1,
+            item_type="MATERIAL",
+            item_group=None
+        )
+        item.full_clean()  # Should not raise
+        
+        self.assertIsNone(item.item_group)
+    
+    def test_item_group_sub_valid(self):
+        """Test that assigning a SUB item group (parent != NULL) is valid"""
+        from core.models import ItemGroup
+        
+        # Create MAIN and SUB item groups
+        main_group = ItemGroup.objects.create(
+            code="MAIN-TEST",
+            name="Test Main Group",
+            group_type="MAIN"
+        )
+        sub_group = ItemGroup.objects.create(
+            code="SUB-TEST",
+            name="Test Sub Group",
+            group_type="SUB",
+            parent=main_group
+        )
+        
+        # Create item with SUB group
+        item = Item.objects.create(
+            article_no="ART-IG-002",
+            short_text_1="Item with sub group",
+            net_price=Decimal("100.00"),
+            purchase_price=Decimal("50.00"),
+            tax_rate=self.tax_rate,
+            cost_type_1=self.cost_type_1,
+            item_type="MATERIAL",
+            item_group=sub_group
+        )
+        item.full_clean()  # Should not raise
+        
+        self.assertEqual(item.item_group, sub_group)
+        self.assertEqual(item.item_group.parent, main_group)
+    
+    def test_item_group_main_invalid(self):
+        """Test that assigning a MAIN item group (parent == NULL) is invalid"""
+        from core.models import ItemGroup
+        
+        # Create MAIN item group
+        main_group = ItemGroup.objects.create(
+            code="MAIN-TEST2",
+            name="Test Main Group 2",
+            group_type="MAIN"
+        )
+        
+        # Try to create item with MAIN group - should fail validation
+        item = Item(
+            article_no="ART-IG-003",
+            short_text_1="Item with main group",
+            net_price=Decimal("100.00"),
+            purchase_price=Decimal("50.00"),
+            tax_rate=self.tax_rate,
+            cost_type_1=self.cost_type_1,
+            item_type="MATERIAL",
+            item_group=main_group
+        )
+        
+        with self.assertRaises(ValidationError) as context:
+            item.clean()
+        
+        self.assertIn('item_group', context.exception.message_dict)
+        self.assertIn('Unterwarengruppe (SUB)', str(context.exception))
+        self.assertIn('Hauptwarengruppe (MAIN)', str(context.exception))
 
 
 class ItemSnapshotServiceTestCase(TestCase):
