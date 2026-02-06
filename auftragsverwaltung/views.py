@@ -894,7 +894,11 @@ def texttemplate_create(request):
         type = request.POST.get('type', '').strip()
         content = request.POST.get('content', '').strip()
         is_active = request.POST.get('is_active') == 'on'
-        sort_order = int(request.POST.get('sort_order', '0'))
+        
+        try:
+            sort_order = int(request.POST.get('sort_order', '0'))
+        except (ValueError, TypeError):
+            sort_order = 0
         
         # Create text template
         template = TextTemplate.objects.create(
@@ -931,7 +935,11 @@ def texttemplate_update(request, pk):
         template.type = request.POST.get('type', '').strip()
         template.content = request.POST.get('content', '').strip()
         template.is_active = request.POST.get('is_active') == 'on'
-        template.sort_order = int(request.POST.get('sort_order', '0'))
+        
+        try:
+            template.sort_order = int(request.POST.get('sort_order', '0'))
+        except (ValueError, TypeError):
+            template.sort_order = 0
         
         template.save()
         
@@ -965,64 +973,3 @@ def texttemplate_delete(request, pk):
     
     return render(request, 'auftragsverwaltung/texttemplates/delete_confirm.html', context)
 
-
-@login_required
-@require_http_methods(["POST"])
-def ajax_apply_texttemplate(request):
-    """
-    AJAX endpoint to apply a text template to a sales document.
-    
-    Copies the template content to the document's header_text or footer_text field.
-    
-    Args (POST):
-        document_id: ID of the sales document
-        template_id: ID of the text template
-        field: 'header_text' or 'footer_text'
-    
-    Returns:
-        JsonResponse with success status and content
-    """
-    try:
-        document_id = request.POST.get('document_id')
-        template_id = request.POST.get('template_id')
-        field = request.POST.get('field')
-        
-        # Validate input
-        if not all([document_id, template_id, field]):
-            return JsonResponse({
-                'success': False,
-                'error': 'Fehlende Parameter'
-            }, status=400)
-        
-        if field not in ['header_text', 'footer_text']:
-            return JsonResponse({
-                'success': False,
-                'error': 'Ungültiges Feld'
-            }, status=400)
-        
-        # Get document and template
-        document = get_object_or_404(SalesDocument, pk=document_id)
-        template = get_object_or_404(TextTemplate, pk=template_id)
-        
-        # Verify company match
-        if document.company != template.company:
-            return JsonResponse({
-                'success': False,
-                'error': 'Textbaustein gehört nicht zum selben Mandanten'
-            }, status=403)
-        
-        # Copy content to document field
-        setattr(document, field, template.content)
-        document.save()
-        
-        return JsonResponse({
-            'success': True,
-            'content': template.content,
-            'message': f'Textbaustein erfolgreich übernommen'
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)

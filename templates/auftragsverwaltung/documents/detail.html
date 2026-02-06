@@ -1069,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', function() {
         applyHeaderTemplateBtn.addEventListener('click', function() {
             const selectedOption = headerTemplateSelect.options[headerTemplateSelect.selectedIndex];
             if (!selectedOption || !selectedOption.value) {
-                alert('Bitte wählen Sie einen Textbaustein aus.');
+                showToast('Bitte wählen Sie einen Textbaustein aus.', 'error');
                 return;
             }
             
@@ -1105,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', function() {
         applyFooterTemplateBtn.addEventListener('click', function() {
             const selectedOption = footerTemplateSelect.options[footerTemplateSelect.selectedIndex];
             if (!selectedOption || !selectedOption.value) {
-                alert('Bitte wählen Sie einen Textbaustein aus.');
+                showToast('Bitte wählen Sie einen Textbaustein aus.', 'error');
                 return;
             }
             
