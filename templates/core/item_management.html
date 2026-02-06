@@ -3,7 +3,12 @@
 
 {% block title %}Artikelverwaltung - Domus{% endblock %}
 
-{% block page_title %}Artikelverwaltung{% endblock %}
+{% block page_title %}
+<i class="bi bi-box-seam"></i> Artikelverwaltung
+<span class="form-dirty-indicator" id="dirtyIndicator">
+    <i class="bi bi-exclamation-triangle"></i> Ungespeicherte Änderungen
+</span>
+{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -87,20 +92,6 @@
     display: inline;
 }
 </style>
-{% endblock %}
-
-{% block page_header %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">
-        <i class="bi bi-box-seam"></i> Artikelverwaltung
-        <span class="form-dirty-indicator" id="dirtyIndicator">
-            <i class="bi bi-exclamation-triangle"></i> Ungespeicherte Änderungen
-        </span>
-    </h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        {% block page_actions %}{% endblock %}
-    </div>
-</div>
 {% endblock %}
 
 {% block content %}
