@@ -427,3 +427,44 @@ class ActivityStreamServiceTestCase(TestCase):
         self.assertEqual(activities[2].activity_type, 'ACTIVITY_2')
         self.assertEqual(activities[3].activity_type, 'ACTIVITY_1')
         self.assertEqual(activities[4].activity_type, 'ACTIVITY_0')
+    
+    def test_log_alias(self):
+        """Test that log() method works as an alias to add()"""
+        # Test minimal parameters
+        activity = ActivityStreamService.log(
+            company=self.company1,
+            domain='ORDER',
+            activity_type='DOCUMENT_CREATED',
+            title='Document created via log method',
+            target_url='/auftragsverwaltung/documents/999'
+        )
+        
+        self.assertIsInstance(activity, Activity)
+        self.assertEqual(activity.company, self.company1)
+        self.assertEqual(activity.domain, 'ORDER')
+        self.assertEqual(activity.activity_type, 'DOCUMENT_CREATED')
+        self.assertEqual(activity.title, 'Document created via log method')
+        self.assertEqual(activity.target_url, '/auftragsverwaltung/documents/999')
+        self.assertEqual(activity.severity, 'INFO')
+        
+        # Test with all parameters
+        activity2 = ActivityStreamService.log(
+            company=self.company2,
+            domain='FINANCE',
+            activity_type='PAYMENT_LOGGED',
+            title='Payment logged via log method',
+            target_url='/finance/payments/777',
+            description='Payment details',
+            actor=self.user,
+            severity='WARNING'
+        )
+        
+        self.assertIsInstance(activity2, Activity)
+        self.assertEqual(activity2.company, self.company2)
+        self.assertEqual(activity2.domain, 'FINANCE')
+        self.assertEqual(activity2.activity_type, 'PAYMENT_LOGGED')
+        self.assertEqual(activity2.title, 'Payment logged via log method')
+        self.assertEqual(activity2.target_url, '/finance/payments/777')
+        self.assertEqual(activity2.description, 'Payment details')
+        self.assertEqual(activity2.actor, self.user)
+        self.assertEqual(activity2.severity, 'WARNING')
