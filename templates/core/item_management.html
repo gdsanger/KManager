@@ -1,7 +1,9 @@
-{% extends "base.html" %}
+{% extends "core/core_base.html" %}
 {% load django_tables2 %}
 
 {% block title %}Artikelverwaltung - Domus{% endblock %}
+
+{% block page_title %}Artikelverwaltung{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -87,20 +89,22 @@
 </style>
 {% endblock %}
 
-{% block content %}
-<div class="container-fluid mt-4">
-    <!-- Page Header -->
-    <div class="row mb-3">
-        <div class="col-md-12">
-            <h2>
-                <i class="bi bi-box-seam"></i> Artikelverwaltung
-                <span class="form-dirty-indicator" id="dirtyIndicator">
-                    <i class="bi bi-exclamation-triangle"></i> Ungespeicherte Änderungen
-                </span>
-            </h2>
-        </div>
+{% block page_header %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-box-seam"></i> Artikelverwaltung
+        <span class="form-dirty-indicator" id="dirtyIndicator">
+            <i class="bi bi-exclamation-triangle"></i> Ungespeicherte Änderungen
+        </span>
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        {% block page_actions %}{% endblock %}
     </div>
+</div>
+{% endblock %}
 
+{% block content %}
+<div class="container-fluid">
     <!-- Main Content -->
     <div class="row item-management-container">
         <!-- Left Panel: Item Group Tree -->

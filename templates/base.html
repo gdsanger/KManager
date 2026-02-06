@@ -52,6 +52,11 @@
                     </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
+                            <a class="nav-link {% if 'items' in request.path or 'mailtemplate' in request.path or 'smtp' in request.path or 'mandant' in request.path %}active{% endif %}" href="{% url 'item_management' %}">
+                                <i class="bi bi-gear"></i> Verwaltung
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
                                 <i class="bi bi-headset"></i> Support Portal
                             </a>

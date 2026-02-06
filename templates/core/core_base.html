@@ -1,0 +1,357 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="de" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Verwaltung - Domus{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/webp" href="{% static 'images/logo.webp' %}">
+    
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/site.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'home' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Domus ist die lateinische Übersetzung für Haus, Besitz, Heim, Anwesen">
+                <img src="{% static 'images/logo.webp' %}" alt="Domus Logo" width="30" height="30" class="d-inline-block align-text-top me-2">
+                <span class="fw-bold">Domus v1.0</span>
+                
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'home' %}">
+                            <i class="bi bi-house-door"></i> Home
+                        </a>
+                    </li>
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'vermietung' in request.path %}active{% endif %}" href="{% url 'vermietung:home' %}">
+                                <i class="bi bi-building"></i> Gebäude
+                            </a>
+                        </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'home' %}">
+                            <i class="bi bi-cash-coin"></i> Finanzen
+                        </a>
+                    </li>
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link active" href="{% url 'item_management' %}">
+                                <i class="bi bi-gear"></i> Verwaltung
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
+                                <i class="bi bi-headset"></i> Support Portal
+                            </a>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="mailDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-envelope"></i> E-Mail
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="mailDropdown">
+                                <li><a class="dropdown-item" href="{% url 'mailtemplate_list' %}">
+                                    <i class="bi bi-file-earmark-text"></i> Templates
+                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'smtp_settings' %}">
+                                    <i class="bi bi-envelope-gear"></i> SMTP Einstellungen
+                                </a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-person-circle"></i> {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{% url 'profile' %}">
+                                    <i class="bi bi-person-badge"></i> Profil
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                    <i class="bi bi-box-arrow-right"></i> Abmelden
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'login' %}active{% endif %}" href="{% url 'login' %}">
+                                <i class="bi bi-box-arrow-in-right"></i> Anmelden
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Mobile Menu Toggle Button (visible only on mobile) -->
+            <button class="btn btn-primary d-md-none position-fixed" id="mobileMenuToggle" 
+                    style="top: 70px; left: 15px; z-index: 1050;" 
+                    type="button" 
+                    aria-label="Menü öffnen"
+                    aria-expanded="false">
+                <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+            </button>
+            
+            <!-- Mobile Backdrop -->
+            <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+            
+            <!-- Sidebar Navigation -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar" id="sidebarMenu">
+                <div class="position-sticky pt-3">
+                    <!-- Hamburger Toggle Button -->
+                    <div class="d-flex justify-content-between align-items-center px-3 mb-3">
+                        <h6 class="sidebar-heading text-muted mb-0 sidebar-text">
+                            <span>VERWALTUNG</span>
+                        </h6>
+                        <button class="btn btn-link text-light p-0" id="sidebarToggle" type="button" aria-label="Seitenleiste umschalten">
+                            <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+                        </button>
+                    </div>
+                    
+                    <ul class="nav flex-column">
+                        <!-- Dashboard -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">
+                                <i class="bi bi-speedometer2"></i> <span class="sidebar-text">Dashboard</span>
+                            </a>
+                        </li>
+                        
+                        <!-- Artikelverwaltung -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'item_management' or 'items' in request.path %}active{% endif %}" href="{% url 'item_management' %}">
+                                <i class="bi bi-box-seam"></i> <span class="sidebar-text">Artikelverwaltung</span>
+                            </a>
+                        </li>
+
+                        <!-- Einstellungen Section -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#einstellungenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'mailtemplate' in request.path or 'smtp' in request.path or 'mandant' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-gear"></i> <span class="sidebar-text">Einstellungen</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                            </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'mailtemplate' in request.path or 'smtp' in request.path or 'mandant' in request.path %}show{% endif %}" id="einstellungenMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'mailtemplate' in request.path %}active{% endif %}" href="{% url 'mailtemplate_list' %}">
+                                        <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">E-Mail Templates</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'smtp_settings' %}active{% endif %}" href="{% url 'smtp_settings' %}">
+                                        <i class="bi bi-envelope-gear"></i> <span class="sidebar-text">SMTP-Einstellungen</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'mandant' in request.path %}active{% endif %}" href="{% url 'mandant_list' %}">
+                                        <i class="bi bi-building-gear"></i> <span class="sidebar-text">Mandanten</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+
+                        <!-- Support Link -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
+                                <i class="bi bi-headset"></i> <span class="sidebar-text">Support</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <!-- Breadcrumb (optional) -->
+                {% block breadcrumb %}{% endblock %}
+
+                <!-- Flash Messages -->
+                {% if messages %}
+                    <div class="mt-3">
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {% if message.tags == 'success' %}
+                                    <i class="bi bi-check-circle-fill"></i>
+                                {% elif message.tags == 'error' or message.tags == 'danger' %}
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                {% elif message.tags == 'warning' %}
+                                    <i class="bi bi-exclamation-circle-fill"></i>
+                                {% elif message.tags == 'info' %}
+                                    <i class="bi bi-info-circle-fill"></i>
+                                {% endif %}
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Page Header -->
+                {% block page_header %}
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">{% block page_title %}Verwaltung{% endblock %}</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        {% block page_actions %}{% endblock %}
+                    </div>
+                </div>
+                {% endblock %}
+
+                <!-- Main Content Area -->
+                <div class="content-area">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-0">
+                        <strong>Domus</strong> - Immobilien, Besitz, Finanzen
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="mb-0">
+                        &copy; {% now "Y" %} Domus
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5.3 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
+    
+    <!-- Initialize Bootstrap tooltips -->
+    <script>
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    </script>
+
+    <!-- Sidebar Toggle Functionality -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebar = document.getElementById('sidebarMenu');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+        
+        // Check if we're on mobile
+        function isMobile() {
+            return window.innerWidth < 768;
+        }
+        
+        // Toggle sidebar for mobile
+        function toggleMobileSidebar(show) {
+            if (!sidebar || !sidebarBackdrop) return;
+            
+            if (show) {
+                sidebar.classList.add('show');
+                sidebarBackdrop.classList.add('show');
+                document.body.style.overflow = 'hidden';
+                
+                if (mobileMenuToggle) {
+                    mobileMenuToggle.setAttribute('aria-expanded', 'true');
+                    mobileMenuToggle.setAttribute('aria-label', 'Menü schließen');
+                }
+                
+                const firstLink = sidebar.querySelector('.nav-link');
+                if (firstLink) {
+                    firstLink.focus();
+                }
+            } else {
+                sidebar.classList.remove('show');
+                sidebarBackdrop.classList.remove('show');
+                document.body.style.overflow = '';
+                
+                if (mobileMenuToggle) {
+                    mobileMenuToggle.setAttribute('aria-expanded', 'false');
+                    mobileMenuToggle.setAttribute('aria-label', 'Menü öffnen');
+                    mobileMenuToggle.focus();
+                }
+            }
+        }
+        
+        // Mobile menu toggle button click
+        if (mobileMenuToggle) {
+            mobileMenuToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                const isOpen = sidebar && sidebar.classList.contains('show');
+                toggleMobileSidebar(!isOpen);
+            });
+        }
+        
+        // Close button in sidebar (only on mobile)
+        if (sidebarToggle && sidebar) {
+            sidebarToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (isMobile()) {
+                    toggleMobileSidebar(false);
+                }
+            });
+        }
+        
+        // Close sidebar when clicking backdrop
+        if (sidebarBackdrop) {
+            sidebarBackdrop.addEventListener('click', function() {
+                toggleMobileSidebar(false);
+            });
+        }
+        
+        // Close sidebar when clicking any nav link on mobile
+        const navLinks = sidebar ? sidebar.querySelectorAll('.nav-link') : [];
+        navLinks.forEach(function(link) {
+            link.addEventListener('click', function() {
+                if (isMobile()) {
+                    toggleMobileSidebar(false);
+                }
+            });
+        });
+        
+        // Handle window resize
+        let resizeTimer;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function() {
+                if (!isMobile() && sidebar && sidebar.classList.contains('show')) {
+                    toggleMobileSidebar(false);
+                }
+            }, 250);
+        });
+        
+        // Handle ESC key to close sidebar on mobile
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && isMobile() && sidebar && sidebar.classList.contains('show')) {
+                toggleMobileSidebar(false);
+            }
+        });
+    });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
