@@ -199,12 +199,6 @@ class PaymentTerm(models.Model):
     Central management of payment terms including discount (Skonto) and net payment terms.
     Each company can have multiple payment terms with one default.
     """
-    company = models.ForeignKey(
-        Mandant,
-        on_delete=models.PROTECT,
-        related_name='payment_terms',
-        verbose_name="Mandant"
-    )
     name = models.CharField(
         max_length=200,
         verbose_name="Name",
@@ -237,18 +231,18 @@ class PaymentTerm(models.Model):
     class Meta:
         verbose_name = "Zahlungsbedingung"
         verbose_name_plural = "Zahlungsbedingungen"
-        ordering = ['company', 'name']
+        ordering = ['name']
         indexes = [
-            models.Index(fields=['company']),
-            models.Index(fields=['company', 'is_default']),
+        
+            models.Index(fields=['is_default']),
         ]
         constraints = [
-            # Ensure only one default per company
+            # Ensure only one default
             models.UniqueConstraint(
-                fields=['company'],
+                fields=['is_default'],               
                 condition=models.Q(is_default=True),
-                name='unique_default_payment_term_per_company',
-                violation_error_message='Es kann nur eine Standard-Zahlungsbedingung pro Mandant existieren.'
+                name='unique_default_payment_term',
+                violation_error_message='Es kann nur eine Standard-Zahlungsbedingung existieren.'
             )
         ]
     
@@ -290,14 +284,13 @@ class PaymentTerm(models.Model):
         if self.is_default:
             # Deactivate any existing default for this company
             PaymentTerm.objects.filter(
-                company=self.company,
                 is_default=True
             ).exclude(pk=self.pk).update(is_default=False)
         
         super().save(*args, **kwargs)
     
     @classmethod
-    def get_default(cls, company):
+    def get_default(cls):
         """Get the default payment term for a company
         
         Args:
@@ -307,7 +300,7 @@ class PaymentTerm(models.Model):
             PaymentTerm instance or None if no default exists
         """
         try:
-            return cls.objects.get(company=company, is_default=True)
+            return cls.objects.get(is_default=True)
         except cls.DoesNotExist:
             return None
     

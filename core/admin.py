@@ -122,14 +122,14 @@ class MandantAdmin(admin.ModelAdmin):
 @admin.register(PaymentTerm)
 class PaymentTermAdmin(admin.ModelAdmin):
     """Admin interface for PaymentTerm with CRUD functionality"""
-    list_display = ('name', 'company', 'discount_info', 'net_days', 'is_default')
-    list_filter = ('company', 'is_default')
-    search_fields = ('name', 'company__name')
-    ordering = ('company', 'name')
+    list_display = ('name', 'discount_info', 'net_days', 'is_default')
+    list_filter = ('is_default',)
+    search_fields = ('name',)
+    ordering = ('name',)
     
     fieldsets = (
         ('Grunddaten', {
-            'fields': ('company', 'name', 'is_default')
+            'fields': ('name', 'is_default')
         }),
         ('Zahlungskonditionen', {
             'fields': ('net_days', 'discount_days', 'discount_rate'),
