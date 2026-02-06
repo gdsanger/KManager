@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from decimal import Decimal
 
 
 class DocumentType(models.Model):
@@ -168,4 +169,184 @@ class NumberRange(models.Model):
     
     def __str__(self):
         return f"{self.company.name} - {self.document_type.name} ({self.reset_policy})"
+
+
+class SalesDocument(models.Model):
+    """
+    Sales Document (Verkaufsbeleg) - central persistent document model
+    
+    Represents all sales-related documents (e.g., quotes, invoices, delivery notes)
+    in a unified, extensible structure. Each document belongs to a company and has
+    a specific document type that controls behavior via flags.
+    
+    Scope: Tenant-specific (company FK required)
+    
+    Out of Scope:
+    - Workflow/Transitions/State-Machine
+    - Calculation logic for total fields
+    """
+    
+    # Status choices (MVP - code-based, lightweight)
+    STATUS_CHOICES = [
+        ('DRAFT', 'Entwurf'),
+        ('SENT', 'Versendet'),
+        ('ACCEPTED', 'Akzeptiert'),
+        ('REJECTED', 'Abgelehnt'),
+        ('CANCELLED', 'Storniert'),
+        ('OPEN', 'Offen'),
+        ('PAID', 'Bezahlt'),
+        ('OVERDUE', 'Überfällig'),
+    ]
+    
+    # Mandatory Foreign Keys (DB: NOT NULL)
+    company = models.ForeignKey(
+        'core.Mandant',
+        on_delete=models.PROTECT,
+        related_name='sales_documents',
+        verbose_name="Mandant"
+    )
+    document_type = models.ForeignKey(
+        DocumentType,
+        on_delete=models.PROTECT,
+        related_name='sales_documents',
+        verbose_name="Dokumenttyp"
+    )
+    
+    # Central Fields
+    number = models.CharField(
+        max_length=32,
+        db_index=True,
+        verbose_name="Nummer",
+        help_text="Dokumentnummer (z.B. R26-00001)"
+    )
+    status = models.CharField(
+        max_length=32,
+        choices=STATUS_CHOICES,
+        db_index=True,
+        verbose_name="Status"
+    )
+    issue_date = models.DateField(
+        verbose_name="Belegdatum",
+        help_text="Datum der Belegausstellung"
+    )
+    due_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Fälligkeitsdatum",
+        help_text="Fälligkeitsdatum (erforderlich bei Dokumenttypen mit requires_due_date=True)"
+    )
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Bezahlt am",
+        help_text="Zeitpunkt der Zahlung"
+    )
+    
+    # Relationships
+    payment_term = models.ForeignKey(
+        'core.PaymentTerm',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_documents',
+        verbose_name="Zahlungsbedingung"
+    )
+    source_document = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='derived_documents',
+        verbose_name="Quelldokument",
+        help_text="Referenz auf das ursprüngliche Dokument (erforderlich bei is_correction=True)"
+    )
+    
+    # Snapshots
+    payment_term_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Zahlungsbedingung-Snapshot",
+        help_text="JSON-Snapshot der Zahlungsbedingung zum Zeitpunkt der Belegausstellung"
+    )
+    
+    # Total Fields (denormalized; no calculation in this issue)
+    total_net = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Nettobetrag",
+        help_text="Gesamtbetrag netto"
+    )
+    total_tax = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Steuerbetrag",
+        help_text="Gesamtbetrag Steuer"
+    )
+    total_gross = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Bruttobetrag",
+        help_text="Gesamtbetrag brutto"
+    )
+    
+    # Meta fields
+    notes_internal = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Interne Notizen",
+        help_text="Interne Notizen (nicht für Kunden sichtbar)"
+    )
+    notes_public = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Öffentliche Notizen",
+        help_text="Öffentliche Notizen (auf Beleg sichtbar)"
+    )
+    
+    class Meta:
+        verbose_name = "Verkaufsbeleg"
+        verbose_name_plural = "Verkaufsbelege"
+        ordering = ['-issue_date', '-id']
+        indexes = [
+            models.Index(fields=['company', 'document_type']),
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['-issue_date']),
+        ]
+        constraints = [
+            # Unique constraint: number is unique per (company, document_type)
+            models.UniqueConstraint(
+                fields=['company', 'document_type', 'number'],
+                name='unique_salesdocument_number_per_company_doctype',
+                violation_error_message='Diese Nummer existiert bereits für diesen Mandanten und Dokumenttyp.'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.number} ({self.company.name})"
+    
+    def clean(self):
+        """Validate sales document data
+        
+        Business rules:
+        1. If document_type.requires_due_date == True, then due_date is required
+        2. If document_type.is_correction == True, then source_document is required
+        """
+        super().clean()
+        
+        # Validation 1: requires_due_date => due_date required
+        if self.document_type and self.document_type.requires_due_date:
+            if not self.due_date:
+                raise ValidationError({
+                    'due_date': 'Fälligkeitsdatum ist erforderlich für diesen Dokumenttyp.'
+                })
+        
+        # Validation 2: is_correction => source_document required
+        if self.document_type and self.document_type.is_correction:
+            if not self.source_document:
+                raise ValidationError({
+                    'source_document': 'Quelldokument ist erforderlich für Korrekturdokumente.'
+                })
 
