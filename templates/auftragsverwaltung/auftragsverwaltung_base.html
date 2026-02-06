@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+/* Sidebar Navigation Styles */
+.sidebar {
+    position: fixed;
+    top: 56px; /* Account for navbar height */
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    padding: 48px 0 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.7);
+    padding: 0.75rem 1rem;
+    border-left: 3px solid transparent;
+}
+
+.sidebar .nav-link:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-link.active {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-left-color: #0d6efd;
+}
+
+.sidebar .nav-link i {
+    margin-right: 0.5rem;
+}
+
+.sidebar-heading {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.nav-category {
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.nav-sub-item {
+    font-size: 0.9rem;
+    padding-left: 2.5rem !important;
+}
+
+.nav-section {
+    margin-top: 0.5rem;
+}
+
+/* Mobile sidebar toggle */
+.sidebar-toggle {
+    display: none;
+}
+
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 280px;
+        height: 100vh;
+        transition: left 0.3s ease-in-out;
+        z-index: 1050;
+        padding-top: 56px;
+    }
+    
+    .sidebar.show {
+        left: 0;
+    }
+    
+    .sidebar-toggle {
+        display: block;
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+    }
+    
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1040;
+    }
+    
+    .sidebar-backdrop.show {
+        display: block;
+    }
+}
+
+/* Ensure sidebar text is visible */
+.sidebar-text {
+    display: inline;
+}
+
+@media (max-width: 991.98px) {
+    .sidebar {
+        width: 240px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block navbar %}
+    {% include "base_navbar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Mobile Toggle Button -->
+        <button class="btn btn-dark sidebar-toggle" id="mobileSidebarToggle" type="button" aria-label="Menü öffnen">
+            <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+        </button>
+        
+        <!-- Mobile Backdrop -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+        
+        <!-- Sidebar Navigation -->
+        <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar" id="sidebarMenu">
+            <div class="position-sticky pt-3">
+                <!-- Hamburger Toggle Button -->
+                <div class="d-flex justify-content-between align-items-center px-3 mb-3">
+                    <h6 class="sidebar-heading text-muted mb-0 sidebar-text">
+                        <span>AUFTRAGSVERWALTUNG MENÜ</span>
+                    </h6>
+                    <button class="btn btn-link text-light p-0" id="sidebarToggle" type="button" aria-label="Seitenleiste umschalten">
+                        <i class="bi bi-list" style="font-size: 1.5rem;"></i>
+                    </button>
+                </div>
+                
+                <ul class="nav flex-column">
+                    <!-- Dashboard -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'auftragsverwaltung:home' %}">
+                            <i class="bi bi-speedometer2"></i> <span class="sidebar-text">Dashboard</span>
+                        </a>
+                    </li>
+                    
+                    <!-- Adressen Section -->
+                    <li class="nav-item nav-section">
+                        <a class="nav-link nav-category" href="#adressenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}true{% else %}false{% endif %}">
+                            <i class="bi bi-person-vcard"></i> <span class="sidebar-text">Adressen</span>
+                            <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                        </a>
+                        <ul class="collapse nav flex-column ms-3 {% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}show{% endif %}" id="adressenMenu">
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item {% if 'adressen' in request.path %}active{% endif %}" href="{% url 'vermietung:adresse_list' %}">
+                                    <i class="bi bi-signpost"></i> <span class="sidebar-text">Adressen</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item {% if 'kunde' in request.path %}active{% endif %}" href="{% url 'vermietung:kunde_list' %}">
+                                    <i class="bi bi-people"></i> <span class="sidebar-text">Kunden</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item {% if 'lieferant' in request.path %}active{% endif %}" href="{% url 'vermietung:lieferant_list' %}">
+                                    <i class="bi bi-truck"></i> <span class="sidebar-text">Lieferanten</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <!-- Aktivitäten Section -->
+                    <li class="nav-item nav-section">
+                        <a class="nav-link nav-category" href="#aktivitaetenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'aktivitaet' in request.path %}true{% else %}false{% endif %}">
+                            <i class="bi bi-list-check"></i> <span class="sidebar-text">Aktivitäten</span>
+                            <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                        </a>
+                        <ul class="collapse nav flex-column ms-3 {% if 'aktivitaet' in request.path %}show{% endif %}" id="aktivitaetenMenu">
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_kanban' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_kanban' %}">
+                                    <i class="bi bi-kanban"></i> <span class="sidebar-text">Kanban</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_list' %}">
+                                    <i class="bi bi-list-ul"></i> <span class="sidebar-text">Alle Aktivitäten</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_assigned_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_assigned_list' %}">
+                                    <i class="bi bi-person-check"></i> <span class="sidebar-text">Meine zugewiesenen</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_created_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_created_list' %}">
+                                    <i class="bi bi-pencil-square"></i> <span class="sidebar-text">Meine erstellten</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <!-- Auftragsverwaltung Section (Placeholder) -->
+                    <li class="nav-item nav-section">
+                        <a class="nav-link nav-category" href="#auftragsverwaltungMenu" data-bs-toggle="collapse" aria-expanded="false">
+                            <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Auftragsverwaltung</span>
+                            <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                        </a>
+                        <ul class="collapse nav flex-column ms-3" id="auftragsverwaltungMenu">
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item" href="#">
+                                    <i class="bi bi-file-earmark-richtext"></i> <span class="sidebar-text">Angebote</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item" href="#">
+                                    <i class="bi bi-cart-check"></i> <span class="sidebar-text">Aufträge</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item" href="#">
+                                    <i class="bi bi-receipt"></i> <span class="sidebar-text">Rechnungen</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item" href="#">
+                                    <i class="bi bi-truck"></i> <span class="sidebar-text">Lieferscheine</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item" href="#">
+                                    <i class="bi bi-arrow-counterclockwise"></i> <span class="sidebar-text">Gutschriften</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link nav-sub-item" href="#">
+                                    <i class="bi bi-file-text"></i> <span class="sidebar-text">Verträge</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <!-- Support Section -->
+                    <li class="nav-item mt-3">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
+                            <i class="bi bi-question-circle"></i> <span class="sidebar-text">Support</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        
+        <!-- Main content -->
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">
+                    {% block page_title %}Auftragsverwaltung{% endblock %}
+                </h1>
+            </div>
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+            
+            {% block content %}
+            {% endblock %}
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Mobile sidebar toggle
+    document.addEventListener('DOMContentLoaded', function() {
+        const mobileSidebarToggle = document.getElementById('mobileSidebarToggle');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.getElementById('sidebarMenu');
+        const backdrop = document.getElementById('sidebarBackdrop');
+        
+        function toggleSidebar() {
+            sidebar.classList.toggle('show');
+            backdrop.classList.toggle('show');
+        }
+        
+        if (mobileSidebarToggle) {
+            mobileSidebarToggle.addEventListener('click', toggleSidebar);
+        }
+        
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', toggleSidebar);
+        }
+        
+        if (backdrop) {
+            backdrop.addEventListener('click', toggleSidebar);
+        }
+    });
+</script>
+{% endblock %}
