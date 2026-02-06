@@ -1089,7 +1089,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def setUp(self):
         """Set up test data"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Create company
         self.company = Mandant.objects.create(
@@ -1154,7 +1153,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_create_document_source(self):
         """Test creating a document source"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         source = SalesDocumentSource.objects.create(
             target_document=self.target_doc,
@@ -1170,7 +1168,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_str_representation(self):
         """Test __str__ method"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         source = SalesDocumentSource.objects.create(
             target_document=self.target_doc,
@@ -1183,7 +1180,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_multiple_sources_for_target(self):
         """Test that multiple sources for one target are allowed"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Create second source document
         source_doc2 = SalesDocument.objects.create(
@@ -1217,7 +1213,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_company_consistency_validation_fails(self):
         """Test that different companies for source/target are rejected"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Try to create source with different companies
         source = SalesDocumentSource(
@@ -1234,7 +1229,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_company_consistency_validation_passes(self):
         """Test that same company for source/target passes validation"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         source = SalesDocumentSource(
             target_document=self.target_doc,
@@ -1249,7 +1243,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_self_reference_validation_fails(self):
         """Test that self-reference is rejected via clean()"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Try to create source that references itself
         source = SalesDocumentSource(
@@ -1266,7 +1259,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_self_reference_constraint_fails(self):
         """Test that self-reference is also rejected at database level"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Try to bypass validation and save directly
         source = SalesDocumentSource(
@@ -1281,7 +1273,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_duplicate_constraint_fails(self):
         """Test that duplicate (target, source, role) is rejected"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Create first source
         SalesDocumentSource.objects.create(
@@ -1303,7 +1294,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_duplicate_allows_different_role(self):
         """Test that same target/source with different role is allowed"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Create first source
         source1 = SalesDocumentSource.objects.create(
@@ -1324,7 +1314,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_protect_on_delete_target(self):
         """Test that deleting target document is prevented"""
-        from auftragsverwaltung.models import SalesDocumentSource
         from django.db.models.deletion import ProtectedError
         
         # Create source relation
@@ -1340,7 +1329,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_protect_on_delete_source(self):
         """Test that deleting source document is prevented"""
-        from auftragsverwaltung.models import SalesDocumentSource
         from django.db.models.deletion import ProtectedError
         
         # Create source relation
@@ -1356,7 +1344,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_related_name_sources_as_target(self):
         """Test that sources can be accessed via target document"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Create source relation
         SalesDocumentSource.objects.create(
@@ -1372,7 +1359,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_related_name_sources_as_source(self):
         """Test that targets can be accessed via source document"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         # Create source relation
         SalesDocumentSource.objects.create(
@@ -1388,7 +1374,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_role_choices(self):
         """Test all role choices"""
-        from auftragsverwaltung.models import SalesDocumentSource
         
         roles = ['COPIED_FROM', 'DERIVED_FROM', 'CORRECTION_OF']
         
@@ -1411,7 +1396,6 @@ class SalesDocumentSourceModelTestCase(TestCase):
     
     def test_ordering_by_created_at(self):
         """Test that sources are ordered by created_at descending"""
-        from auftragsverwaltung.models import SalesDocumentSource
         from django.utils import timezone
         import time
         
