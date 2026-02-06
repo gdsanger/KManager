@@ -213,6 +213,15 @@ class SalesDocument(models.Model):
         related_name='sales_documents',
         verbose_name="Dokumenttyp"
     )
+    customer = models.ForeignKey(
+        'core.Adresse',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_documents',
+        verbose_name="Kunde",
+        help_text="Kunde oder Adresse für dieses Dokument"
+    )
     
     # Central Fields
     number = models.CharField(
@@ -349,6 +358,7 @@ class SalesDocument(models.Model):
             models.Index(fields=['company', 'document_type']),
             models.Index(fields=['company', 'status']),
             models.Index(fields=['-issue_date']),
+            models.Index(fields=['customer']),
         ]
         constraints = [
             # Unique constraint: number is unique per (company, document_type)
