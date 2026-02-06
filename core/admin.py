@@ -5,7 +5,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib import messages
 from django.conf import settings
 from core.models import (
-    Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, TaxRate, Kostenart,
+    Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, PaymentTerm, TaxRate, Kostenart,
     AIProvider, AIModel, AIJobsHistory, ReportDocument
 )
 from core.mailing.service import send_mail, MailServiceError
@@ -117,6 +117,42 @@ class MandantAdmin(admin.ModelAdmin):
             'fields': ('steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 'kreditinstitut', 'iban', 'bic', 'kontoinhaber')
         }),
     )
+
+
+@admin.register(PaymentTerm)
+class PaymentTermAdmin(admin.ModelAdmin):
+    """Admin interface for PaymentTerm with CRUD functionality"""
+    list_display = ('name', 'company', 'discount_info', 'net_days', 'is_default')
+    list_filter = ('company', 'is_default')
+    search_fields = ('name', 'company__name')
+    ordering = ('company', 'name')
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('company', 'name', 'is_default')
+        }),
+        ('Zahlungskonditionen', {
+            'fields': ('net_days', 'discount_days', 'discount_rate'),
+            'description': 'Zahlungsziel und optionale Skonto-Bedingungen'
+        }),
+    )
+    
+    def discount_info(self, obj):
+        """Display discount information"""
+        if obj.has_discount():
+            from decimal import Decimal
+            discount_pct = (obj.discount_rate * Decimal('100')).quantize(Decimal('0.01'))
+            return f"{discount_pct}% bei {obj.discount_days} Tagen"
+        return "-"
+    discount_info.short_description = "Skonto"
+    
+    def has_delete_permission(self, request, obj=None):
+        """
+        Allow deletion for now since there are no references yet.
+        TODO: Implement reference checking once PaymentTerm is referenced by documents.
+        Should check if obj is referenced by any invoices/documents and return False if so.
+        """
+        return True
 
 
 @admin.register(TaxRate)
