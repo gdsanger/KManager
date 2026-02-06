@@ -106,13 +106,19 @@ class NumberRange(models.Model):
     """
     Number Range (Nummernkreis) - race-safe, tenant-specific number assignment
     
-    Provides atomic number generation for documents with yearly reset policy.
-    Each company+document_type combination has exactly one NumberRange.
+    Provides atomic number generation for documents and contracts with yearly reset policy.
+    Each company+target (and document_type for DOCUMENT target) combination has exactly one NumberRange.
     
     Examples:
     - R26-00001 (Invoice from 2026)
     - A26-00001 (Quote from 2026)
+    - V26-00001 (Contract from 2026)
     """
+    TARGET_CHOICES = [
+        ('DOCUMENT', 'Dokument'),
+        ('CONTRACT', 'Vertrag'),
+    ]
+    
     RESET_POLICY_CHOICES = [
         ('YEARLY', 'Yearly Reset'),
         ('NEVER', 'Never Reset'),
@@ -124,11 +130,21 @@ class NumberRange(models.Model):
         related_name='number_ranges',
         verbose_name="Mandant"
     )
+    target = models.CharField(
+        max_length=10,
+        choices=TARGET_CHOICES,
+        default='DOCUMENT',
+        verbose_name="Ziel",
+        help_text="Target type: DOCUMENT for SalesDocument, CONTRACT for Contract"
+    )
     document_type = models.ForeignKey(
         DocumentType,
         on_delete=models.PROTECT,
         related_name='number_ranges',
-        verbose_name="Dokumenttyp"
+        verbose_name="Dokumenttyp",
+        null=True,
+        blank=True,
+        help_text="Required for DOCUMENT target, not used for CONTRACT target"
     )
     format = models.CharField(
         max_length=100,
@@ -157,20 +173,38 @@ class NumberRange(models.Model):
     class Meta:
         verbose_name = "Nummernkreis"
         verbose_name_plural = "Nummernkreise"
-        ordering = ['company', 'document_type']
+        ordering = ['company', 'target', 'document_type']
         indexes = [
+            models.Index(fields=['company', 'target']),
             models.Index(fields=['company', 'document_type']),
         ]
         constraints = [
+            # Unique constraint for DOCUMENT target: one per company+document_type
             models.UniqueConstraint(
                 fields=['company', 'document_type'],
+                condition=models.Q(target='DOCUMENT'),
                 name='unique_numberrange_per_company_doctype',
                 violation_error_message='Es kann nur einen Nummernkreis pro Mandant und Dokumenttyp geben.'
+            ),
+            # Unique constraint for CONTRACT target: one per company
+            models.UniqueConstraint(
+                fields=['company'],
+                condition=models.Q(target='CONTRACT'),
+                name='unique_numberrange_contract_per_company',
+                violation_error_message='Es kann nur einen Vertrags-Nummernkreis pro Mandant geben.'
+            ),
+            # Check constraint: DOCUMENT target requires document_type
+            models.CheckConstraint(
+                check=models.Q(target='DOCUMENT', document_type__isnull=False) | models.Q(target='CONTRACT'),
+                name='numberrange_document_requires_doctype',
+                violation_error_message='Dokumenttyp ist erforderlich für DOCUMENT-Nummernkreis.'
             )
         ]
     
     def __str__(self):
-        return f"{self.company.name} - {self.document_type.name} ({self.reset_policy})"
+        if self.target == 'CONTRACT':
+            return f"{self.company.name} - Vertrag ({self.reset_policy})"
+        return f"{self.company.name} - {self.document_type.name if self.document_type else 'N/A'} ({self.reset_policy})"
 
 
 class SalesDocument(models.Model):
@@ -739,6 +773,14 @@ class Contract(models.Model):
     )
     
     # Basic Fields
+    number = models.CharField(
+        max_length=32,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Vertragsnummer",
+        help_text="Vertragsnummer (z.B. V26-00001), automatisch generiert falls leer"
+    )
     name = models.CharField(
         max_length=200,
         verbose_name="Vertragsname",
@@ -814,6 +856,14 @@ class Contract(models.Model):
             models.Index(fields=['next_run_date']),
             models.Index(fields=['company', 'customer']),
         ]
+        constraints = [
+            # Unique constraint: number is unique per company (when set)
+            models.UniqueConstraint(
+                fields=['company', 'number'],
+                name='unique_contract_number_per_company',
+                violation_error_message='Diese Vertragsnummer existiert bereits für diesen Mandanten.'
+            )
+        ]
     
     def __str__(self):
         return f"{self.name} ({self.company.name})"
@@ -885,6 +935,27 @@ class Contract(models.Model):
             raise ValueError(f"Unknown interval: {self.interval}")
         
         return new_date
+    
+    def save(self, *args, **kwargs):
+        """
+        Save contract and auto-assign number if not set.
+        
+        Auto-generates contract number on first save if number is not manually set.
+        Uses race-safe number generation from NumberRange service.
+        """
+        # Auto-assign number only if not already set and this is a new instance
+        if not self.number and not self.pk:
+            from auftragsverwaltung.services.number_range import get_next_contract_number
+            try:
+                self.number = get_next_contract_number(self.company, self.start_date)
+            except ValueError as e:
+                # Re-raise as ValidationError for better user feedback
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'number': str(e)
+                })
+        
+        super().save(*args, **kwargs)
 
 
 class ContractLine(models.Model):
