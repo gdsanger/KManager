@@ -351,6 +351,106 @@ class SalesDocument(models.Model):
                 })
 
 
+class SalesDocumentSource(models.Model):
+    """
+    Sales Document Source (Dokumentherkunft) - tracks origin and references
+    
+    Stores the structured origin of sales documents (e.g., "copied from",
+    "derived from", "correction of") to enable reporting and audit trails.
+    
+    Business Rules:
+    - Company consistency: target_document.company_id == source_document.company_id
+    - Multiple sources per document allowed
+    - No self-references allowed
+    - Unique per (target_document, source_document, role)
+    """
+    
+    # Role choices
+    ROLE_CHOICES = [
+        ('COPIED_FROM', 'Kopiert von'),
+        ('DERIVED_FROM', 'Abgeleitet von'),
+        ('CORRECTION_OF', 'Korrektur von'),
+    ]
+    
+    # Foreign Keys
+    target_document = models.ForeignKey(
+        SalesDocument,
+        on_delete=models.PROTECT,
+        related_name='sources_as_target',
+        verbose_name="Zieldokument",
+        help_text="Das Dokument, für das die Herkunft gespeichert wird"
+    )
+    source_document = models.ForeignKey(
+        SalesDocument,
+        on_delete=models.PROTECT,
+        related_name='sources_as_source',
+        verbose_name="Quelldokument",
+        help_text="Das Ursprungsdokument"
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        verbose_name="Rolle",
+        help_text="Art der Beziehung zwischen Ziel- und Quelldokument"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am"
+    )
+    
+    class Meta:
+        verbose_name = "Dokumentherkunft"
+        verbose_name_plural = "Dokumentherkünfte"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['target_document']),
+            models.Index(fields=['source_document']),
+            models.Index(fields=['target_document', 'role']),
+        ]
+        constraints = [
+            # Unique constraint: (target, source, role) triple
+            models.UniqueConstraint(
+                fields=['target_document', 'source_document', 'role'],
+                name='unique_document_source_per_target_source_role',
+                violation_error_message='Diese Dokumentherkunft existiert bereits.'
+            ),
+            # Check constraint: prevent self-reference
+            models.CheckConstraint(
+                check=~models.Q(target_document=models.F('source_document')),
+                name='prevent_self_reference_document_source',
+                violation_error_message='Ein Dokument kann nicht auf sich selbst verweisen.'
+            ),
+        ]
+    
+    def __str__(self):
+        return f"{self.target_document.number} ← {self.get_role_display()} ← {self.source_document.number}"
+    
+    def clean(self):
+        """Validate sales document source data
+        
+        Business rules:
+        1. Company consistency: target and source must belong to same company
+        2. No self-references allowed
+        """
+        super().clean()
+        
+        # Validation 1: Company consistency
+        if self.target_document and self.source_document:
+            if self.target_document.company_id != self.source_document.company_id:
+                raise ValidationError({
+                    'source_document': 'Ziel- und Quelldokument müssen zum selben Mandanten gehören.'
+                })
+        
+        # Validation 2: No self-references
+        if self.target_document and self.source_document:
+            if self.target_document_id == self.source_document_id:
+                raise ValidationError({
+                    'source_document': 'Ein Dokument kann nicht auf sich selbst verweisen.'
+                })
+
+
 class SalesDocumentLine(models.Model):
     """
     Sales Document Line (Dokumentposition) - flexible line item model
