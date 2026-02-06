@@ -6,8 +6,17 @@ app_name = 'auftragsverwaltung'
 urlpatterns = [
     path('', views.auftragsverwaltung_home, name='home'),
     
-    # Contract list view
+    # Contract views
     path('contracts/', views.contract_list, name='contract_list'),
+    path('contracts/create/', views.contract_create, name='contract_create'),
+    path('contracts/<int:pk>/', views.contract_detail, name='contract_detail'),
+    path('contracts/<int:pk>/update/', views.contract_update, name='contract_update'),
+    
+    # Contract AJAX endpoints
+    path('ajax/contracts/<int:pk>/lines/add/', views.ajax_contract_add_line, name='ajax_contract_add_line'),
+    path('ajax/contracts/<int:pk>/lines/<int:line_id>/update/', views.ajax_contract_update_line, name='ajax_contract_update_line'),
+    path('ajax/contracts/<int:pk>/lines/<int:line_id>/delete/', views.ajax_contract_delete_line, name='ajax_contract_delete_line'),
+    path('ajax/contracts/<int:pk>/calculate-next-run-date/', views.ajax_contract_calculate_next_run_date, name='ajax_contract_calculate_next_run_date'),
     
     # Document list views (generic view with doc_key parameter)
     path('documents/<str:doc_key>/', views.document_list, name='document_list'),
