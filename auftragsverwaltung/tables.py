@@ -4,7 +4,7 @@ Django Tables2 table definitions for the auftragsverwaltung app.
 import django_tables2 as tables
 from django.urls import reverse
 from django.utils.html import format_html
-from .models import SalesDocument, Contract
+from .models import SalesDocument, Contract, TextTemplate
 
 
 class SalesDocumentTable(tables.Table):
@@ -193,6 +193,91 @@ class ContractTable(tables.Table):
             'next_run_date',
             'last_run_date',
             'is_active',
+        )
+        attrs = {
+            'class': 'table table-dark table-hover',
+            'thead': {'class': 'table-dark'}
+        }
+        per_page = 25
+
+
+class TextTemplateTable(tables.Table):
+    """Table for displaying Text Templates (Textbausteine)."""
+    
+    title = tables.Column(
+        verbose_name='Titel',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    type = tables.Column(
+        verbose_name='Typ',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    key = tables.Column(
+        verbose_name='Schlüssel',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    is_active = tables.BooleanColumn(
+        verbose_name='Aktiv',
+        attrs={'td': {'class': 'text-center'}}
+    )
+    
+    updated_at = tables.DateTimeColumn(
+        verbose_name='Aktualisiert',
+        format='d.m.Y H:i',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    aktionen = tables.Column(
+        verbose_name='Aktionen',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-end text-nowrap'}}
+    )
+    
+    def render_title(self, value, record):
+        """Render title as a link to edit view."""
+        url = reverse('auftragsverwaltung:texttemplate_update', kwargs={'pk': record.pk})
+        return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
+    
+    def render_type(self, value, record):
+        """Render type with German display text."""
+        type_classes = {
+            'HEADER': 'bg-info',
+            'FOOTER': 'bg-warning',
+            'BOTH': 'bg-success',
+        }
+        badge_class = type_classes.get(record.type, 'bg-secondary')
+        display_value = record.get_type_display()
+        return format_html('<span class="badge {}">{}</span>', badge_class, display_value)
+    
+    def render_aktionen(self, record):
+        """Render action buttons."""
+        edit_url = reverse('auftragsverwaltung:texttemplate_update', kwargs={'pk': record.pk})
+        delete_url = reverse('auftragsverwaltung:texttemplate_delete', kwargs={'pk': record.pk})
+        return format_html(
+            '<div class="btn-group btn-group-sm" role="group">'
+            '<a href="{}" class="btn btn-outline-primary" title="Bearbeiten">'
+            '<i class="bi bi-pencil"></i></a>'
+            '<a href="{}" class="btn btn-outline-danger" title="Löschen">'
+            '<i class="bi bi-trash"></i></a>'
+            '</div>',
+            edit_url,
+            delete_url
+        )
+    
+    class Meta:
+        model = TextTemplate
+        template_name = 'django_tables2/bootstrap5-dark.html'
+        fields = (
+            'title',
+            'type',
+            'key',
+            'is_active',
+            'updated_at',
+            'aktionen'
         )
         attrs = {
             'class': 'table table-dark table-hover',

@@ -1060,3 +1060,95 @@ class ContractRun(models.Model):
     def __str__(self):
         return f"{self.contract.name} - {self.run_date} ({self.get_status_display()})"
 
+
+class TextTemplate(models.Model):
+    """
+    Text Template (Textbaustein) - reusable header/footer text blocks
+    
+    Provides reusable text templates for SalesDocument header_text and footer_text fields.
+    Templates are copied (not referenced) when applied to documents to maintain historical accuracy.
+    
+    Scope: Tenant-specific (company FK required)
+    """
+    
+    # Type choices
+    TYPE_HEADER = 'HEADER'
+    TYPE_FOOTER = 'FOOTER'
+    TYPE_BOTH = 'BOTH'
+    
+    TYPE_CHOICES = [
+        (TYPE_HEADER, 'Kopftext'),
+        (TYPE_FOOTER, 'Fußtext'),
+        (TYPE_BOTH, 'Kopf- und Fußtext'),
+    ]
+    
+    # Mandatory Foreign Keys
+    company = models.ForeignKey(
+        'core.Mandant',
+        on_delete=models.PROTECT,
+        related_name='text_templates',
+        verbose_name="Mandant"
+    )
+    
+    # Core Fields
+    key = models.SlugField(
+        max_length=50,
+        verbose_name="Schlüssel",
+        help_text="Eindeutiger Kurzbezeichner (z.B. 'standard_header')"
+    )
+    title = models.CharField(
+        max_length=200,
+        verbose_name="Titel",
+        help_text="Anzeigename für die Auswahl im Dropdown"
+    )
+    type = models.CharField(
+        max_length=10,
+        choices=TYPE_CHOICES,
+        verbose_name="Typ",
+        help_text="Verwendungszweck des Textbausteins"
+    )
+    content = models.TextField(
+        verbose_name="Inhalt",
+        help_text="Textinhalt des Bausteins"
+    )
+    
+    # Optional Fields
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktiv",
+        help_text="Inaktive Bausteine werden nicht in der Auswahl angezeigt"
+    )
+    sort_order = models.IntegerField(
+        default=0,
+        verbose_name="Sortierung",
+        help_text="Sortierreihenfolge (niedrigere Werte zuerst)"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am"
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Aktualisiert am"
+    )
+    
+    class Meta:
+        verbose_name = "Textbaustein"
+        verbose_name_plural = "Textbausteine"
+        ordering = ['type', 'sort_order', 'title']
+        indexes = [
+            models.Index(fields=['company', 'type', 'is_active']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'key'],
+                name='unique_texttemplate_company_key',
+                violation_error_message='Ein Textbaustein mit diesem Schlüssel existiert bereits für diesen Mandanten.'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.title} ({self.get_type_display()})"
+
