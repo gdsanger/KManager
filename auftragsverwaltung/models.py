@@ -325,7 +325,7 @@ class SalesDocument(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.document_type.prefix}{self.number} ({self.company.name})"
+        return f"{self.number} ({self.company.name})"
     
     def clean(self):
         """Validate sales document data

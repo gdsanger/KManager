@@ -217,7 +217,7 @@ class SalesDocumentModelTestCase(TestCase):
             due_date=date(2026, 3, 8)
         )
         
-        expected = f"R{doc.number} ({self.company.name})"
+        expected = f"{doc.number} ({self.company.name})"
         self.assertEqual(str(doc), expected)
     
     def test_unique_constraint_number_per_company_doctype(self):
