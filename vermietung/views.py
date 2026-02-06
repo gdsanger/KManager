@@ -18,7 +18,7 @@ from django_tables2 import RequestConfig
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, AktivitaetsBereich,
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
-    EINGANGSRECHNUNG_STATUS
+    EINGANGSRECHNUNG_STATUS, AKTIVITAET_STATUS
 )
 from core.models import Adresse, AdresseKontakt, Mandant, Kostenart
 from .forms import (
@@ -30,11 +30,121 @@ from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
 from core.services.ai.invoice_extraction import InvoiceExtractionService
 from core.services.ai.supplier_matching import SupplierMatchingService
+from core.services.activity_stream import ActivityStreamService
 from .tables import EingangsrechnungTable
 from .filters import EingangsrechnungFilter
 
 
 logger = logging.getLogger(__name__)
+
+
+# Helper functions for ActivityStream integration
+def _get_mandant_for_aktivitaet(aktivitaet):
+    """
+    Get Mandant for an Aktivitaet from its context.
+    
+    Args:
+        aktivitaet: Aktivitaet instance
+        
+    Returns:
+        Mandant instance or None if no mandant can be determined
+    """
+    # Try to get mandant from vertrag
+    if aktivitaet.vertrag and aktivitaet.vertrag.mandant:
+        return aktivitaet.vertrag.mandant
+    
+    # Try to get mandant from mietobjekt
+    if aktivitaet.mietobjekt and aktivitaet.mietobjekt.mandant:
+        return aktivitaet.mietobjekt.mandant
+    
+    # Fallback: get first available mandant or return None
+    return Mandant.objects.first()
+
+
+def _get_aktivitaet_target_url(aktivitaet):
+    """
+    Generate target URL for an Aktivitaet.
+    
+    Args:
+        aktivitaet: Aktivitaet instance
+        
+    Returns:
+        str: Relative URL to the aktivitaet detail/edit page
+    """
+    # For now, link to the kanban view with aktivitaet_id as a parameter
+    # In future, this could be a dedicated detail view
+    return reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+
+
+def _get_assignee_display_name(user):
+    """
+    Get display name for an assignee user.
+    
+    Args:
+        user: User instance or None
+        
+    Returns:
+        str: Full name, username, or 'Niemand' if user is None
+    """
+    if not user:
+        return 'Niemand'
+    return user.get_full_name() or user.username
+
+
+def _get_status_display_description(old_status, new_status, status_choices):
+    """
+    Generate description for a status change.
+    
+    Args:
+        old_status: str, old status code
+        new_status: str, new status code
+        status_choices: list of tuples, status choices from model
+        
+    Returns:
+        str: Description like "Status geändert: Offen → Erledigt"
+    """
+    status_dict = dict(status_choices)
+    old_display = status_dict.get(old_status, old_status)
+    new_display = status_dict.get(new_status, new_status)
+    return f'Status geändert: {old_display} → {new_display}'
+
+
+def _log_aktivitaet_stream_event(aktivitaet, event_type, actor=None, description=None):
+    """
+    Log an ActivityStream event for an Aktivitaet.
+    
+    Args:
+        aktivitaet: Aktivitaet instance
+        event_type: str, event type (e.g., 'activity.created', 'activity.status_changed')
+        actor: User instance who performed the action (optional)
+        description: str, additional description (optional)
+    """
+    mandant = _get_mandant_for_aktivitaet(aktivitaet)
+    
+    # If no mandant, cannot create stream event
+    if not mandant:
+        logger.warning(
+            f"Cannot create ActivityStream event for Aktivitaet {aktivitaet.pk}: "
+            f"No Mandant found"
+        )
+        return
+    
+    try:
+        ActivityStreamService.add(
+            company=mandant,
+            domain='RENTAL',
+            activity_type=event_type,
+            title=f'Aktivität: {aktivitaet.titel}',
+            description=description or '',
+            target_url=_get_aktivitaet_target_url(aktivitaet),
+            actor=actor,
+            severity='INFO'
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to create ActivityStream event for Aktivitaet {aktivitaet.pk}: {e}"
+        )
+
 
 @login_required
 def download_dokument(request, dokument_id):
@@ -1854,6 +1964,15 @@ def aktivitaet_create(request, context_type=None, context_id=None):
         if form.is_valid():
             try:
                 aktivitaet = form.save()
+                
+                # Log ActivityStream event: activity.created
+                _log_aktivitaet_stream_event(
+                    aktivitaet=aktivitaet,
+                    event_type='activity.created',
+                    actor=request.user,
+                    description=f'Status: {aktivitaet.get_status_display()}'
+                )
+                
                 messages.success(
                     request,
                     f'Aktivität "{aktivitaet.titel}" wurde erfolgreich angelegt.'
@@ -1895,11 +2014,49 @@ def aktivitaet_edit(request, pk):
     """
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
     
+    # Store old values for comparison
+    old_status = aktivitaet.status
+    old_assigned_user = aktivitaet.assigned_user
+    
     if request.method == 'POST':
         form = AktivitaetForm(request.POST, instance=aktivitaet, current_user=request.user)
         if form.is_valid():
             try:
                 aktivitaet = form.save()
+                
+                # Check if status changed and log event
+                if old_status != aktivitaet.status:
+                    description = _get_status_display_description(old_status, aktivitaet.status, AKTIVITAET_STATUS)
+                    
+                    # Check if this is a "closed" status change
+                    if aktivitaet.status == 'ERLEDIGT':
+                        _log_aktivitaet_stream_event(
+                            aktivitaet=aktivitaet,
+                            event_type='activity.closed',
+                            actor=request.user,
+                            description=description
+                        )
+                    else:
+                        _log_aktivitaet_stream_event(
+                            aktivitaet=aktivitaet,
+                            event_type='activity.status_changed',
+                            actor=request.user,
+                            description=description
+                        )
+                
+                # Check if assignment changed and log event
+                if old_assigned_user != aktivitaet.assigned_user:
+                    old_assignee_name = _get_assignee_display_name(old_assigned_user)
+                    new_assignee_name = _get_assignee_display_name(aktivitaet.assigned_user)
+                    description = f'Zuweisung geändert: {old_assignee_name} → {new_assignee_name}'
+                    
+                    _log_aktivitaet_stream_event(
+                        aktivitaet=aktivitaet,
+                        event_type='activity.assigned',
+                        actor=request.user,
+                        description=description
+                    )
+                
                 messages.success(
                     request,
                     f'Aktivität "{aktivitaet.titel}" wurde erfolgreich aktualisiert.'
@@ -1956,8 +2113,19 @@ def aktivitaet_mark_completed(request, pk):
         messages.info(request, 'Diese Aktivität ist bereits als erledigt markiert.')
     else:
         try:
+            old_status = aktivitaet.status
             aktivitaet.status = 'ERLEDIGT'
             aktivitaet.save()
+            
+            # Log ActivityStream event: activity.closed
+            description = _get_status_display_description(old_status, aktivitaet.status, AKTIVITAET_STATUS)
+            _log_aktivitaet_stream_event(
+                aktivitaet=aktivitaet,
+                event_type='activity.closed',
+                actor=request.user,
+                description=description
+            )
+            
             messages.success(
                 request,
                 f'Aktivität "{aktivitaet.titel}" wurde als erledigt markiert. '
@@ -1992,13 +2160,25 @@ def aktivitaet_assign(request, pk):
         if aktivitaet.assigned_user == new_user:
             messages.info(request, f'Die Aktivität ist bereits {new_user.get_full_name() or new_user.username} zugewiesen.')
         else:
+            old_assigned_user = aktivitaet.assigned_user
             aktivitaet.assigned_user = new_user
             aktivitaet.save()
+            
+            # Log ActivityStream event: activity.assigned
+            old_assignee_name = _get_assignee_display_name(old_assigned_user)
+            new_assignee_name = _get_assignee_display_name(new_user)
+            description = f'Zuweisung geändert: {old_assignee_name} → {new_assignee_name}'
+            _log_aktivitaet_stream_event(
+                aktivitaet=aktivitaet,
+                event_type='activity.assigned',
+                actor=request.user,
+                description=description
+            )
             
             # Signal will automatically send email
             messages.success(
                 request,
-                f'Aktivität "{aktivitaet.titel}" wurde {new_user.get_full_name() or new_user.username} zugewiesen. '
+                f'Aktivität "{aktivitaet.titel}" wurde {_get_assignee_display_name(new_user)} zugewiesen. '
                 f'Eine E-Mail-Benachrichtigung wurde versendet.'
             )
     except User.DoesNotExist:
@@ -2016,9 +2196,8 @@ def aktivitaet_update_status(request, pk):
     Quick update of activity status (for Kanban drag & drop).
     Expects 'status' in POST data.
     """
-    from .models import AKTIVITAET_STATUS
-    
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    old_status = aktivitaet.status
     new_status = request.POST.get('status')
     
     # Validate status using model choices
@@ -2029,6 +2208,27 @@ def aktivitaet_update_status(request, pk):
     try:
         aktivitaet.status = new_status
         aktivitaet.save()
+        
+        # Log ActivityStream event if status actually changed
+        if old_status != new_status:
+            description = _get_status_display_description(old_status, new_status, AKTIVITAET_STATUS)
+            
+            # Check if this is a "closed" status change
+            if new_status == 'ERLEDIGT':
+                _log_aktivitaet_stream_event(
+                    aktivitaet=aktivitaet,
+                    event_type='activity.closed',
+                    actor=request.user,
+                    description=description
+                )
+            else:
+                _log_aktivitaet_stream_event(
+                    aktivitaet=aktivitaet,
+                    event_type='activity.status_changed',
+                    actor=request.user,
+                    description=description
+                )
+        
         return JsonResponse({
             'success': True,
             'message': f'Status wurde auf "{aktivitaet.get_status_display()}" geändert.'
