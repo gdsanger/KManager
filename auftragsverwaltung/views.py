@@ -907,17 +907,6 @@ def texttemplate_create(request):
             sort_order=sort_order
         )
         
-        # Log activity
-        ActivityStreamService.log_activity(
-            user=request.user,
-            company=company,
-            action='created',
-            entity_type='texttemplate',
-            entity_id=template.id,
-            entity_name=template.title,
-            description=f"Textbaustein '{template.title}' erstellt"
-        )
-        
         return redirect('auftragsverwaltung:texttemplate_list')
     
     # GET request - show form
@@ -946,17 +935,6 @@ def texttemplate_update(request, pk):
         
         template.save()
         
-        # Log activity
-        ActivityStreamService.log_activity(
-            user=request.user,
-            company=template.company,
-            action='updated',
-            entity_type='texttemplate',
-            entity_id=template.id,
-            entity_name=template.title,
-            description=f"Textbaustein '{template.title}' aktualisiert"
-        )
-        
         return redirect('auftragsverwaltung:texttemplate_list')
     
     # GET request - show form
@@ -976,17 +954,6 @@ def texttemplate_delete(request, pk):
     template = get_object_or_404(TextTemplate, pk=pk)
     
     if request.method == 'POST':
-        # Log activity before deletion
-        ActivityStreamService.log_activity(
-            user=request.user,
-            company=template.company,
-            action='deleted',
-            entity_type='texttemplate',
-            entity_id=template.id,
-            entity_name=template.title,
-            description=f"Textbaustein '{template.title}' gelöscht"
-        )
-        
         template.delete()
         
         return redirect('auftragsverwaltung:texttemplate_list')
@@ -1047,18 +1014,6 @@ def ajax_apply_texttemplate(request):
         # Copy content to document field
         setattr(document, field, template.content)
         document.save()
-        
-        # Log activity
-        field_name = 'Kopftext' if field == 'header_text' else 'Fußtext'
-        ActivityStreamService.log_activity(
-            user=request.user,
-            company=document.company,
-            action='updated',
-            entity_type='salesdocument',
-            entity_id=document.id,
-            entity_name=document.number,
-            description=f"Textbaustein '{template.title}' auf {field_name} angewendet"
-        )
         
         return JsonResponse({
             'success': True,
