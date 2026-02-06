@@ -192,6 +192,68 @@ class Mandant(models.Model):
         return f"{self.name}, {self.plz} {self.ort}"
 
 
+class TaxRate(models.Model):
+    """Tax Rate entity (Steuersätze)
+    
+    Central management of tax rates. Tax rates can be referenced by other domain objects
+    via ForeignKey. Tax rates must not be hardcoded (no Enum) but managed data-driven.
+    """
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name="Code",
+        help_text="Eindeutiger Code für den Steuersatz (z.B. VAT, REDUCED)"
+    )
+    name = models.CharField(
+        max_length=200,
+        verbose_name="Name",
+        help_text="Bezeichnung des Steuersatzes"
+    )
+    rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        verbose_name="Steuersatz",
+        help_text="Steuersatz als Dezimalzahl (z.B. 0.19 für 19%)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktiv",
+        help_text="Gibt an, ob dieser Steuersatz aktiv ist"
+    )
+    
+    class Meta:
+        verbose_name = "Steuersatz"
+        verbose_name_plural = "Steuersätze"
+        ordering = ['code']
+        constraints = [
+            models.UniqueConstraint(
+                models.functions.Lower('code'),
+                name='taxrate_code_unique_case_insensitive',
+                violation_error_message='Ein Steuersatz mit diesem Code existiert bereits (Groß-/Kleinschreibung wird ignoriert).'
+            )
+        ]
+    
+    def __str__(self):
+        # Format rate as percentage with 2 decimal places
+        percentage = float(self.rate) * 100
+        return f"{self.code}: {self.name} ({percentage:.2f}%)"
+    
+    def clean(self):
+        """Validate tax rate data"""
+        super().clean()
+        
+        # Validate rate: must be between 0 and 1
+        if self.rate is not None:
+            if self.rate < 0:
+                raise ValidationError({
+                    'rate': 'Der Steuersatz darf nicht negativ sein.'
+                })
+            if self.rate > 1:
+                raise ValidationError({
+                    'rate': 'Der Steuersatz darf nicht größer als 1 sein.'
+                })
+
+
 class Kostenart(models.Model):
     """Kostenarten (Cost Types) with hierarchical structure
     
