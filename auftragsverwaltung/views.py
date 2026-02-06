@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Max
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from datetime import datetime, timedelta, date
@@ -498,7 +498,7 @@ def ajax_add_line(request, doc_key, pk):
         )
         
         # Get next position number
-        max_position = document.lines.aggregate(max_pos=Sum('position_no'))['max_pos'] or 0
+        max_position = document.lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
         position_no = max_position + 1
         
         # Create line
