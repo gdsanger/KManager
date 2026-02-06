@@ -15,6 +15,12 @@ class SalesDocumentTable(tables.Table):
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
+    customer = tables.Column(
+        verbose_name='Kunde',
+        accessor='customer.name',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
     subject = tables.Column(
         verbose_name='Betreff',
         attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 200px;'}}
@@ -98,6 +104,7 @@ class SalesDocumentTable(tables.Table):
         template_name = 'django_tables2/bootstrap5-dark.html'
         fields = (
             'number',
+            'customer',
             'subject',
             'issue_date',
             'due_date',

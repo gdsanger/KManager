@@ -18,6 +18,15 @@ class SalesDocumentFilter(django_filters.FilterSet):
         })
     )
     
+    customer = django_filters.ModelChoiceFilter(
+        queryset=None,  # Will be set in __init__
+        label='Kunde',
+        empty_label='Alle Kunden',
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+    
     status = django_filters.ChoiceFilter(
         choices=[('', 'Alle Status')] + SalesDocument.STATUS_CHOICES,
         label='Status',
@@ -80,9 +89,17 @@ class SalesDocumentFilter(django_filters.FilterSet):
             Q(notes_internal__icontains=value)
         )
     
+    def __init__(self, *args, **kwargs):
+        """Initialize filter and set up customer queryset."""
+        super().__init__(*args, **kwargs)
+        # Import here to avoid circular imports
+        from core.models import Adresse
+        # Set customer queryset with ordering by name for easier searching
+        self.filters['customer'].queryset = Adresse.objects.all().order_by('name')
+    
     class Meta:
         model = SalesDocument
-        fields = ['q', 'status', 'number', 'subject', 'issue_date_from', 'issue_date_to']
+        fields = ['q', 'customer', 'status', 'number', 'subject', 'issue_date_from', 'issue_date_to']
 
 
 class ContractFilter(django_filters.FilterSet):

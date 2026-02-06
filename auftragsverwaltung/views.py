@@ -148,7 +148,7 @@ def document_list(request, doc_key):
     
     # Base queryset with optimized select/prefetch
     queryset = SalesDocument.objects.select_related(
-        'document_type', 'company'
+        'document_type', 'company', 'customer'
     ).filter(
         document_type=document_type
     )
