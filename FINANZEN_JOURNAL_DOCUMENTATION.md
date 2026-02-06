@@ -218,4 +218,6 @@ Diese Funktionalitäten werden in zukünftigen Issues implementiert.
 
 **Migration**: `finanzen.0001_initial`
 
-**Tests**: Noch nicht implementiert (kann in zukünftigen Issues ergänzt werden)
+**Tests**: Umfassende Test-Suite mit 9 Testfällen in `finanzen/tests.py`:
+- CompanyAccountingSettings: Erstellung, OneToOne-Beziehung, Zugriff über Mandant
+- OutgoingInvoiceJournalEntry: Erstellung, Constraints, Validierung, Snapshot-Prinzip, Export-Tracking
