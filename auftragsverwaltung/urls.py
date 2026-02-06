@@ -20,6 +20,7 @@ urlpatterns = [
     # AJAX endpoints
     path('ajax/calculate-payment-term/', views.ajax_calculate_payment_term, name='ajax_calculate_payment_term'),
     path('ajax/search-articles/', views.ajax_search_articles, name='ajax_search_articles'),
+    path('ajax/get-kostenart2-options/', views.ajax_get_kostenart2_options, name='ajax_get_kostenart2_options'),
     path('ajax/documents/<str:doc_key>/<int:pk>/lines/add/', views.ajax_add_line, name='ajax_add_line'),
     path('ajax/documents/<str:doc_key>/<int:pk>/lines/<int:line_id>/update/', views.ajax_update_line, name='ajax_update_line'),
     path('ajax/documents/<str:doc_key>/<int:pk>/lines/<int:line_id>/delete/', views.ajax_delete_line, name='ajax_delete_line'),
