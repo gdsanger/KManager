@@ -567,8 +567,8 @@ def ajax_add_line(request, doc_key, pk):
             quantity=quantity,
             unit_price_net=unit_price_net,
             is_discountable=is_discountable,
-            kostenart1_id=kostenart1_id if kostenart1_id else None,
-            kostenart2_id=kostenart2_id if kostenart2_id else None,
+            kostenart1_id=kostenart1_id if kostenart1_id not in [None, '', 'null'] else None,
+            kostenart2_id=kostenart2_id if kostenart2_id not in [None, '', 'null'] else None,
         )
         
         # Recalculate document totals
@@ -639,10 +639,12 @@ def ajax_update_line(request, doc_key, pk, line_id):
             line.is_selected = data['is_selected']
         if 'kostenart1_id' in data:
             kostenart1_id = data['kostenart1_id']
-            line.kostenart1_id = kostenart1_id if kostenart1_id else None
+            # Handle empty string from form submissions - convert to None for database
+            line.kostenart1_id = kostenart1_id if kostenart1_id not in [None, '', 'null'] else None
         if 'kostenart2_id' in data:
             kostenart2_id = data['kostenart2_id']
-            line.kostenart2_id = kostenart2_id if kostenart2_id else None
+            # Handle empty string from form submissions - convert to None for database
+            line.kostenart2_id = kostenart2_id if kostenart2_id not in [None, '', 'null'] else None
         
         line.save()
         
