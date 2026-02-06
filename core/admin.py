@@ -149,7 +149,8 @@ class PaymentTermAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """
         Allow deletion for now since there are no references yet.
-        In the future, this should check for references and prevent deletion.
+        TODO: Implement reference checking once PaymentTerm is referenced by documents.
+        Should check if obj is referenced by any invoices/documents and return False if so.
         """
         return True
 
