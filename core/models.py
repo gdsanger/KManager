@@ -193,6 +193,172 @@ class Mandant(models.Model):
         return f"{self.name}, {self.plz} {self.ort}"
 
 
+class PaymentTerm(models.Model):
+    """Payment Terms (Zahlungsbedingungen) for invoices
+    
+    Central management of payment terms including discount (Skonto) and net payment terms.
+    Each company can have multiple payment terms with one default.
+    """
+    company = models.ForeignKey(
+        Mandant,
+        on_delete=models.PROTECT,
+        related_name='payment_terms',
+        verbose_name="Mandant"
+    )
+    name = models.CharField(
+        max_length=200,
+        verbose_name="Name",
+        help_text="Bezeichnung der Zahlungsbedingung (z.B. '2% Skonto 10 Tage, netto 30 Tage')"
+    )
+    discount_days = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Skontofrist (Tage)",
+        help_text="Anzahl Tage für Skontoabzug (optional)"
+    )
+    discount_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Skontosatz",
+        help_text="Skontosatz als Dezimalzahl (z.B. 0.02 für 2%)"
+    )
+    net_days = models.IntegerField(
+        verbose_name="Zahlungsziel (Tage)",
+        help_text="Anzahl Tage bis zur Fälligkeit (Netto)"
+    )
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name="Standard",
+        help_text="Ist dies die Standard-Zahlungsbedingung für diesen Mandanten?"
+    )
+    
+    class Meta:
+        verbose_name = "Zahlungsbedingung"
+        verbose_name_plural = "Zahlungsbedingungen"
+        ordering = ['company', 'name']
+        indexes = [
+            models.Index(fields=['company']),
+            models.Index(fields=['company', 'is_default']),
+        ]
+        constraints = [
+            # Ensure only one default per company
+            models.UniqueConstraint(
+                fields=['company'],
+                condition=models.Q(is_default=True),
+                name='unique_default_payment_term_per_company',
+                violation_error_message='Es kann nur eine Standard-Zahlungsbedingung pro Mandant existieren.'
+            )
+        ]
+    
+    def __str__(self):
+        if self.discount_days and self.discount_rate:
+            discount_pct = (self.discount_rate * Decimal('100')).quantize(Decimal('0.01'))
+            return f"{self.name} ({discount_pct}% {self.discount_days}T, netto {self.net_days}T)"
+        return f"{self.name} (netto {self.net_days}T)"
+    
+    def clean(self):
+        """Validate payment term data"""
+        super().clean()
+        
+        # Validation 1: discount_days must be <= net_days
+        if self.discount_days is not None and self.discount_days > self.net_days:
+            raise ValidationError({
+                'discount_days': 'Die Skontofrist darf nicht größer sein als das Zahlungsziel.'
+            })
+        
+        # Validation 2: If discount_days is set, discount_rate must be set and > 0
+        if self.discount_days is not None:
+            if self.discount_rate is None:
+                raise ValidationError({
+                    'discount_rate': 'Wenn eine Skontofrist angegeben ist, muss auch ein Skontosatz angegeben werden.'
+                })
+            if self.discount_rate <= 0:
+                raise ValidationError({
+                    'discount_rate': 'Der Skontosatz muss größer als 0 sein.'
+                })
+        
+        # Validation 3: If discount_rate is set, discount_days must be set
+        if self.discount_rate is not None and self.discount_days is None:
+            raise ValidationError({
+                'discount_days': 'Wenn ein Skontosatz angegeben ist, muss auch eine Skontofrist angegeben werden.'
+            })
+    
+    def save(self, *args, **kwargs):
+        """Override save to handle default switching"""
+        if self.is_default:
+            # Deactivate any existing default for this company
+            PaymentTerm.objects.filter(
+                company=self.company,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_default(cls, company):
+        """Get the default payment term for a company
+        
+        Args:
+            company: Mandant instance
+            
+        Returns:
+            PaymentTerm instance or None if no default exists
+        """
+        try:
+            return cls.objects.get(company=company, is_default=True)
+        except cls.DoesNotExist:
+            return None
+    
+    def calculate_due_date(self, invoice_date):
+        """Calculate due date based on invoice date
+        
+        Args:
+            invoice_date: datetime.date or datetime.datetime
+            
+        Returns:
+            datetime.date - Due date
+        """
+        from datetime import timedelta
+        if hasattr(invoice_date, 'date'):
+            invoice_date = invoice_date.date()
+        return invoice_date + timedelta(days=self.net_days)
+    
+    def calculate_discount_end_date(self, invoice_date):
+        """Calculate discount end date based on invoice date
+        
+        Args:
+            invoice_date: datetime.date or datetime.datetime
+            
+        Returns:
+            datetime.date or None - Discount end date if discount is active, None otherwise
+        """
+        if self.discount_days is None:
+            return None
+        
+        from datetime import timedelta
+        if hasattr(invoice_date, 'date'):
+            invoice_date = invoice_date.date()
+        return invoice_date + timedelta(days=self.discount_days)
+    
+    def get_discount_rate(self):
+        """Get discount rate
+        
+        Returns:
+            Decimal or None - Discount rate if discount is active, None otherwise
+        """
+        return self.discount_rate
+    
+    def has_discount(self):
+        """Check if this payment term has discount terms
+        
+        Returns:
+            bool - True if discount is active
+        """
+        return self.discount_days is not None and self.discount_rate is not None
+
+
 class TaxRate(models.Model):
     """Tax Rate entity (Steuersätze)
     
