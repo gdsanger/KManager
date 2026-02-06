@@ -83,6 +83,49 @@ class ActivityStreamService:
         return activity
     
     @staticmethod
+    def log(
+        company: Mandant,
+        domain: str,
+        activity_type: str,
+        title: str,
+        target_url: str,
+        description: Optional[str] = None,
+        actor: Optional[User] = None,
+        severity: str = 'INFO',
+    ) -> Activity:
+        """
+        Log a new activity entry to the stream.
+        
+        This is an alias for the add() method.
+        
+        Args:
+            company: Mandant instance (required)
+            domain: Activity domain - one of: RENTAL, ORDER, FINANCE
+            activity_type: Machine-readable activity code (e.g., INVOICE_CREATED, CONTRACT_RUN_FAILED)
+            title: Short description of the activity (max 255 chars)
+            target_url: Clickable link to affected object (relative URL, e.g., /auftragsverwaltung/documents/123)
+            description: Optional detailed description
+            actor: User who performed the action (optional)
+            severity: Severity level - one of: INFO, WARNING, ERROR (default: INFO)
+        
+        Returns:
+            Created Activity instance
+        
+        Raises:
+            ValueError: If invalid domain or severity is provided
+        """
+        return ActivityStreamService.add(
+            company=company,
+            domain=domain,
+            activity_type=activity_type,
+            title=title,
+            target_url=target_url,
+            description=description,
+            actor=actor,
+            severity=severity,
+        )
+    
+    @staticmethod
     def latest(
         n: int = 20,
         company: Optional[Mandant] = None,
