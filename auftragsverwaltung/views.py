@@ -8,9 +8,9 @@ from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
 
-from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract
-from .tables import SalesDocumentTable, ContractTable
-from .filters import SalesDocumentFilter, ContractFilter
+from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, TextTemplate
+from .tables import SalesDocumentTable, ContractTable, TextTemplateTable
+from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter
 from .services import (
     DocumentCalculationService,
     TaxDeterminationService,
@@ -212,6 +212,19 @@ def document_detail(request, doc_key, pk):
     # Get document lines (ordered by position_no)
     lines = document.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2').order_by('position_no')
     
+    # Get available text templates for this company
+    header_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['HEADER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
+    footer_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['FOOTER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
     context = {
         'document': document,
         'document_type': document_type,
@@ -223,6 +236,8 @@ def document_detail(request, doc_key, pk):
         'tax_rates': tax_rates,
         'kostenarten1': kostenarten1,
         'lines': lines,
+        'header_templates': header_templates,
+        'footer_templates': footer_templates,
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
@@ -318,6 +333,19 @@ def document_create(request, doc_key):
     tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
     
+    # Get available text templates for this company
+    header_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['HEADER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
+    footer_templates = TextTemplate.objects.filter(
+        company=company,
+        is_active=True,
+        type__in=['FOOTER', 'BOTH']
+    ).order_by('sort_order', 'title')
+    
     context = {
         'document_type': document_type,
         'doc_key': doc_key,
@@ -328,6 +356,8 @@ def document_create(request, doc_key):
         'tax_rates': tax_rates,
         'kostenarten1': kostenarten1,
         'is_create': True,
+        'header_templates': header_templates,
+        'footer_templates': footer_templates,
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
@@ -798,3 +828,148 @@ def contract_list(request):
     }
     
     return render(request, 'auftragsverwaltung/contracts/list.html', context)
+
+
+# ============================================================================
+# TextTemplate Views
+# ============================================================================
+
+@login_required
+def texttemplate_list(request):
+    """
+    List view for text templates (Textbausteine).
+    
+    Displays a filterable, sortable, paginated list of text templates.
+    Only shows templates for the user's company.
+    """
+    # Get the default company
+    try:
+        company = Mandant.objects.first()
+    except Mandant.DoesNotExist:
+        company = None
+    
+    # Base queryset
+    queryset = TextTemplate.objects.select_related('company')
+    
+    # Filter by company if available
+    if company:
+        queryset = queryset.filter(company=company)
+    
+    # Apply filters
+    filter_set = TextTemplateFilter(request.GET, queryset=queryset)
+    
+    # Create table with filtered data
+    table = TextTemplateTable(filter_set.qs)
+    
+    # Set default ordering
+    table.order_by = request.GET.get('sort', 'type,sort_order,title')
+    
+    # Configure pagination (25 per page)
+    RequestConfig(request, paginate={'per_page': 25}).configure(table)
+    
+    # Prepare context
+    context = {
+        'table': table,
+        'filter': filter_set,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/list.html', context)
+
+
+@login_required
+def texttemplate_create(request):
+    """
+    Create view for text template.
+    """
+    # Get the default company
+    try:
+        company = Mandant.objects.first()
+    except Mandant.DoesNotExist:
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    if request.method == 'POST':
+        # Extract form data
+        key = request.POST.get('key', '').strip()
+        title = request.POST.get('title', '').strip()
+        type = request.POST.get('type', '').strip()
+        content = request.POST.get('content', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        
+        try:
+            sort_order = int(request.POST.get('sort_order', '0'))
+        except (ValueError, TypeError):
+            sort_order = 0
+        
+        # Create text template
+        template = TextTemplate.objects.create(
+            company=company,
+            key=key,
+            title=title,
+            type=type,
+            content=content,
+            is_active=is_active,
+            sort_order=sort_order
+        )
+        
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    # GET request - show form
+    context = {
+        'type_choices': TextTemplate.TYPE_CHOICES,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/form.html', context)
+
+
+@login_required
+def texttemplate_update(request, pk):
+    """
+    Update view for text template.
+    """
+    template = get_object_or_404(TextTemplate, pk=pk)
+    
+    if request.method == 'POST':
+        # Extract form data
+        template.key = request.POST.get('key', '').strip()
+        template.title = request.POST.get('title', '').strip()
+        template.type = request.POST.get('type', '').strip()
+        template.content = request.POST.get('content', '').strip()
+        template.is_active = request.POST.get('is_active') == 'on'
+        
+        try:
+            template.sort_order = int(request.POST.get('sort_order', '0'))
+        except (ValueError, TypeError):
+            template.sort_order = 0
+        
+        template.save()
+        
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    # GET request - show form
+    context = {
+        'template': template,
+        'type_choices': TextTemplate.TYPE_CHOICES,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/form.html', context)
+
+
+@login_required
+def texttemplate_delete(request, pk):
+    """
+    Delete view for text template.
+    """
+    template = get_object_or_404(TextTemplate, pk=pk)
+    
+    if request.method == 'POST':
+        template.delete()
+        
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    # GET request - show confirmation
+    context = {
+        'template': template,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/delete_confirm.html', context)
+

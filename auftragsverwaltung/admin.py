@@ -9,6 +9,7 @@ from auftragsverwaltung.models import (
     Contract,
     ContractLine,
     ContractRun,
+    TextTemplate,
 )
 from auftragsverwaltung.services import DocumentCalculationService
 
@@ -451,3 +452,47 @@ class ContractRunAdmin(admin.ModelAdmin):
             return f"{obj.message[:50]}..."
         return obj.message or ""
     message_short.short_description = "Nachricht"
+
+
+@admin.register(TextTemplate)
+class TextTemplateAdmin(admin.ModelAdmin):
+    """Admin interface for TextTemplate"""
+    list_display = (
+        'title',
+        'company',
+        'type',
+        'key',
+        'is_active',
+        'sort_order',
+        'updated_at',
+    )
+    list_filter = (
+        'company',
+        'type',
+        'is_active',
+    )
+    search_fields = (
+        'title',
+        'key',
+        'content',
+        'company__name',
+    )
+    ordering = ('company', 'type', 'sort_order', 'title')
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('company', 'key', 'title', 'type')
+        }),
+        ('Inhalt', {
+            'fields': ('content',)
+        }),
+        ('Optionen', {
+            'fields': ('is_active', 'sort_order')
+        }),
+        ('Metadaten', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')

@@ -3,7 +3,7 @@ Django Filters for the auftragsverwaltung app.
 """
 import django_filters
 from django.db.models import Q
-from .models import SalesDocument, Contract
+from .models import SalesDocument, Contract, TextTemplate
 
 
 class SalesDocumentFilter(django_filters.FilterSet):
@@ -160,3 +160,61 @@ class ContractFilter(django_filters.FilterSet):
     class Meta:
         model = Contract
         fields = ['q', 'is_active', 'interval', 'next_run_date_from', 'next_run_date_to']
+
+
+class TextTemplateFilter(django_filters.FilterSet):
+    """Filter for TextTemplate list view."""
+    
+    q = django_filters.CharFilter(
+        method='search_filter',
+        label='Suche',
+        widget=django_filters.widgets.forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Suche nach Titel, Schlüssel, Inhalt...'
+        })
+    )
+    
+    type = django_filters.ChoiceFilter(
+        choices=[('', 'Alle Typen')] + TextTemplate.TYPE_CHOICES,
+        label='Typ',
+        empty_label=None,
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+    
+    is_active = django_filters.ChoiceFilter(
+        choices=[('', 'Alle'), ('true', 'Aktiv'), ('false', 'Inaktiv')],
+        label='Status',
+        empty_label=None,
+        method='filter_is_active',
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+    
+    def search_filter(self, queryset, name, value):
+        """
+        Full-text search across multiple fields using OR.
+        Searches in: title, key, content
+        """
+        if not value:
+            return queryset
+        
+        return queryset.filter(
+            Q(title__icontains=value) |
+            Q(key__icontains=value) |
+            Q(content__icontains=value)
+        )
+    
+    def filter_is_active(self, queryset, name, value):
+        """Filter for is_active field."""
+        if value == 'true':
+            return queryset.filter(is_active=True)
+        elif value == 'false':
+            return queryset.filter(is_active=False)
+        return queryset
+    
+    class Meta:
+        model = TextTemplate
+        fields = ['q', 'type', 'is_active']

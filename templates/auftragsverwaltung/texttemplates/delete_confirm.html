@@ -1,0 +1,52 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+
+{% block title %}Textbaustein löschen - Domus{% endblock %}
+
+{% block page_title %}Textbaustein löschen{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="{% url 'auftragsverwaltung:texttemplate_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Zurück
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card bg-dark border-danger">
+            <div class="card-header bg-danger">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Textbaustein löschen
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="lead">Möchten Sie den folgenden Textbaustein wirklich löschen?</p>
+                
+                <div class="alert alert-warning">
+                    <strong>{{ template.title }}</strong> ({{ template.get_type_display }})<br>
+                    <small class="text-muted">Schlüssel: {{ template.key }}</small>
+                </div>
+                
+                <p class="text-muted">
+                    <i class="bi bi-info-circle"></i> 
+                    Diese Aktion kann nicht rückgängig gemacht werden. Bereits in Dokumenten verwendeter Text bleibt erhalten.
+                </p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'auftragsverwaltung:texttemplate_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Abbrechen
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Löschen
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

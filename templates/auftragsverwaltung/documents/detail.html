@@ -412,11 +412,43 @@ Neues {{ document_type.name }}
                 </ul>
                 <div class="tab-content mt-3" id="textTabsContent">
                     <div class="tab-pane fade show active" id="header-content" role="tabpanel">
-                        <textarea class="form-control" name="header_text" rows="4" 
+                        <!-- Text Template Selection for Header -->
+                        <div class="row mb-2">
+                            <div class="col-md-8">
+                                <select class="form-select form-select-sm" id="headerTemplateSelect">
+                                    <option value="">-- Textbaustein wählen --</option>
+                                    {% for template in header_templates %}
+                                    <option value="{{ template.id }}" data-content="{{ template.content }}">{{ template.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-sm btn-outline-primary w-100" id="applyHeaderTemplate">
+                                    <i class="bi bi-arrow-down-circle"></i> Übernehmen
+                                </button>
+                            </div>
+                        </div>
+                        <textarea class="form-control" name="header_text" id="header_text" rows="4" 
                                   placeholder="Kopftext des Dokuments">{% if document %}{{ document.header_text }}{% endif %}</textarea>
                     </div>
                     <div class="tab-pane fade" id="footer-content" role="tabpanel">
-                        <textarea class="form-control" name="footer_text" rows="4" 
+                        <!-- Text Template Selection for Footer -->
+                        <div class="row mb-2">
+                            <div class="col-md-8">
+                                <select class="form-select form-select-sm" id="footerTemplateSelect">
+                                    <option value="">-- Textbaustein wählen --</option>
+                                    {% for template in footer_templates %}
+                                    <option value="{{ template.id }}" data-content="{{ template.content }}">{{ template.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-sm btn-outline-primary w-100" id="applyFooterTemplate">
+                                    <i class="bi bi-arrow-down-circle"></i> Übernehmen
+                                </button>
+                            </div>
+                        </div>
+                        <textarea class="form-control" name="footer_text" id="footer_text" rows="4" 
                                   placeholder="Fußtext des Dokuments">{% if document %}{{ document.footer_text }}{% endif %}</textarea>
                     </div>
                     <div class="tab-pane fade" id="notes-content" role="tabpanel">
@@ -1023,6 +1055,129 @@ document.addEventListener('DOMContentLoaded', function() {
             {% endif %}
         });
     });
+    
+    // ============================================================================
+    // Text Template Application
+    // ============================================================================
+    
+    // Apply Header Template
+    const applyHeaderTemplateBtn = document.getElementById('applyHeaderTemplate');
+    const headerTemplateSelect = document.getElementById('headerTemplateSelect');
+    const headerTextArea = document.getElementById('header_text');
+    
+    if (applyHeaderTemplateBtn && headerTemplateSelect && headerTextArea) {
+        applyHeaderTemplateBtn.addEventListener('click', function() {
+            const selectedOption = headerTemplateSelect.options[headerTemplateSelect.selectedIndex];
+            if (!selectedOption || !selectedOption.value) {
+                showToast('Bitte wählen Sie einen Textbaustein aus.', 'error');
+                return;
+            }
+            
+            const content = selectedOption.getAttribute('data-content');
+            
+            // Check if header already has content
+            if (headerTextArea.value.trim() !== '') {
+                if (!confirm('Der Kopftext enthält bereits Text. Möchten Sie ihn überschreiben?')) {
+                    return;
+                }
+            }
+            
+            // Apply the template content
+            headerTextArea.value = content;
+            
+            // Mark as dirty
+            isDirty = true;
+            if (unsavedIndicator) {
+                unsavedIndicator.classList.add('show');
+            }
+            
+            // Show success message
+            showToast('Textbaustein erfolgreich übernommen', 'success');
+        });
+    }
+    
+    // Apply Footer Template
+    const applyFooterTemplateBtn = document.getElementById('applyFooterTemplate');
+    const footerTemplateSelect = document.getElementById('footerTemplateSelect');
+    const footerTextArea = document.getElementById('footer_text');
+    
+    if (applyFooterTemplateBtn && footerTemplateSelect && footerTextArea) {
+        applyFooterTemplateBtn.addEventListener('click', function() {
+            const selectedOption = footerTemplateSelect.options[footerTemplateSelect.selectedIndex];
+            if (!selectedOption || !selectedOption.value) {
+                showToast('Bitte wählen Sie einen Textbaustein aus.', 'error');
+                return;
+            }
+            
+            const content = selectedOption.getAttribute('data-content');
+            
+            // Check if footer already has content
+            if (footerTextArea.value.trim() !== '') {
+                if (!confirm('Der Fußtext enthält bereits Text. Möchten Sie ihn überschreiben?')) {
+                    return;
+                }
+            }
+            
+            // Apply the template content
+            footerTextArea.value = content;
+            
+            // Mark as dirty
+            isDirty = true;
+            if (unsavedIndicator) {
+                unsavedIndicator.classList.add('show');
+            }
+            
+            // Show success message
+            showToast('Textbaustein erfolgreich übernommen', 'success');
+        });
+    }
+    
+    // Toast notification function
+    function showToast(message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Create toast element
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = 'toast';
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+        
+        toast.innerHTML = `
+            <div class="toast-header ${bgClass} text-white">
+                <strong class="me-auto">Benachrichtigung</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        
+        // Show toast using Bootstrap
+        const bsToast = new bootstrap.Toast(toast, {
+            autohide: true,
+            delay: 3000
+        });
+        bsToast.show();
+        
+        // Remove toast after it's hidden
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }
 });
 </script>
 {% endblock %}
