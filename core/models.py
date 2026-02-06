@@ -1032,3 +1032,97 @@ class Item(models.Model):
                     'item_group': 'Ein Artikel kann nur einer Unterwarengruppe (SUB) zugeordnet werden, '
                                   'nicht einer Hauptwarengruppe (MAIN). Bitte wählen Sie eine Unterwarengruppe.'
                 })
+
+
+# Activity Stream choices
+ACTIVITY_DOMAIN_CHOICES = [
+    ('RENTAL', 'Vermietung'),
+    ('ORDER', 'Auftragsverwaltung'),
+    ('FINANCE', 'Finanzen'),
+]
+
+ACTIVITY_SEVERITY_CHOICES = [
+    ('INFO', 'Info'),
+    ('WARNING', 'Warnung'),
+    ('ERROR', 'Fehler'),
+]
+
+
+class Activity(models.Model):
+    """
+    Central Activity Stream for tracking events across all modules.
+    
+    Activities are explicitly created where business logic happens (save + action).
+    Each activity contains a clickable link (target_url) to the affected object.
+    
+    Design constraints:
+    - No Django Signals/Events/automatic hooks
+    - No GenericFK/Object-Resolution; only target_url is persisted
+    - Activities are written explicitly in business logic
+    """
+    company = models.ForeignKey(
+        Mandant,
+        on_delete=models.CASCADE,
+        verbose_name="Mandant",
+        help_text="Zugehöriger Mandant"
+    )
+    domain = models.CharField(
+        max_length=20,
+        choices=ACTIVITY_DOMAIN_CHOICES,
+        verbose_name="Bereich",
+        help_text="Fachlicher Bereich (Vermietung, Auftragsverwaltung, Finanzen)"
+    )
+    activity_type = models.CharField(
+        max_length=64,
+        verbose_name="Aktivitätstyp",
+        help_text="Maschinenlesbarer Code, z.B. INVOICE_CREATED, CONTRACT_RUN_FAILED"
+    )
+    title = models.CharField(
+        max_length=255,
+        verbose_name="Titel",
+        help_text="Kurze Beschreibung der Aktivität"
+    )
+    description = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Beschreibung",
+        help_text="Optionale detaillierte Beschreibung"
+    )
+    target_url = models.CharField(
+        max_length=500,
+        verbose_name="Ziel-URL",
+        help_text="Klickbarer Link zum betroffenen Objekt (relativ), z.B. /auftragsverwaltung/documents/123"
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Akteur",
+        help_text="Benutzer, der die Aktion ausgeführt hat"
+    )
+    severity = models.CharField(
+        max_length=10,
+        choices=ACTIVITY_SEVERITY_CHOICES,
+        default='INFO',
+        verbose_name="Schweregrad",
+        help_text="Schweregrad der Aktivität"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am",
+        help_text="Zeitpunkt der Erstellung"
+    )
+    
+    class Meta:
+        verbose_name = "Aktivität"
+        verbose_name_plural = "Aktivitäten"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at'], name='activity_created_at_idx'),
+            models.Index(fields=['company', '-created_at'], name='activity_company_created_idx'),
+            models.Index(fields=['company', 'domain', '-created_at'], name='activity_company_domain_idx'),
+        ]
+    
+    def __str__(self):
+        return f"{self.company.name} - {self.get_domain_display()}: {self.title}"

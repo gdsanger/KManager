@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.conf import settings
 from core.models import (
     Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, PaymentTerm, TaxRate, Kostenart,
-    AIProvider, AIModel, AIJobsHistory, ReportDocument, Item, ItemGroup
+    AIProvider, AIModel, AIJobsHistory, ReportDocument, Item, ItemGroup, Activity
 )
 from core.mailing.service import send_mail, MailServiceError
 import secrets
@@ -530,3 +530,39 @@ class ItemAdmin(admin.ModelAdmin):
         if obj and obj.sales_document_lines.exists():
             return False
         return True
+
+
+@admin.register(Activity)
+class ActivityAdmin(admin.ModelAdmin):
+    """Read-only admin interface for Activity Stream"""
+    list_display = ('created_at', 'company', 'domain', 'severity', 'title', 'actor')
+    list_filter = ('domain', 'severity', 'company', 'created_at')
+    search_fields = ('title', 'description', 'activity_type')
+    readonly_fields = ('company', 'domain', 'activity_type', 'title', 'description', 
+                      'target_url', 'actor', 'severity', 'created_at')
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('Basis', {
+            'fields': ('company', 'domain', 'activity_type', 'severity', 'created_at')
+        }),
+        ('Inhalt', {
+            'fields': ('title', 'description', 'target_url')
+        }),
+        ('Akteur', {
+            'fields': ('actor',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """Disable manual creation - activities are created programmatically"""
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """Disable deletion to maintain audit trail"""
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Disable editing - activities are immutable"""
+        return False
