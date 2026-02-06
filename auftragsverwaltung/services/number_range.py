@@ -56,9 +56,12 @@ def get_next_number(company, document_type, date_obj=None):
         
         # Check if we need to reset the sequence based on policy
         if number_range.reset_policy == 'YEARLY' and number_range.current_year != yy:
-            # Year has changed, reset sequence
+            # Year has changed with YEARLY policy, reset sequence
             number_range.current_year = yy
             number_range.current_seq = 0
+        elif number_range.reset_policy == 'NEVER' and number_range.current_year != yy:
+            # Year has changed with NEVER policy, update year but don't reset sequence
+            number_range.current_year = yy
         
         # Increment sequence
         number_range.current_seq += 1
