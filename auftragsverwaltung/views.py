@@ -17,8 +17,27 @@ from .services import (
     PaymentTermTextService,
     get_next_number
 )
-from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate
+from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart
 from core.services.activity_stream import ActivityStreamService
+
+
+def normalize_foreign_key_id(value):
+    """
+    Normalize foreign key ID values for database insertion.
+    
+    Converts empty strings, 'null' strings, and None to None.
+    This is needed because form submissions may send empty strings
+    instead of null values, which can cause database integrity issues.
+    
+    Args:
+        value: The foreign key ID value (could be int, str, or None)
+    
+    Returns:
+        The value if valid, None if empty/null
+    """
+    if value in [None, '', 'null']:
+        return None
+    return value
 
 
 @login_required
@@ -187,18 +206,22 @@ def document_detail(request, doc_key, pk):
     customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
     payment_terms = PaymentTerm.objects.all().order_by('name')
     tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
+    companies = Mandant.objects.all().order_by('name')
+    kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
     
     # Get document lines (ordered by position_no)
-    lines = document.lines.select_related('item', 'tax_rate').order_by('position_no')
+    lines = document.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2').order_by('position_no')
     
     context = {
         'document': document,
         'document_type': document_type,
         'doc_key': doc_key,
         'company': company,
+        'companies': companies,
         'customers': customers,
         'payment_terms': payment_terms,
         'tax_rates': tax_rates,
+        'kostenarten1': kostenarten1,
         'lines': lines,
     }
     
@@ -220,6 +243,13 @@ def document_create(request, doc_key):
     company = Mandant.objects.first()
     
     if request.method == 'POST':
+        # Get company from form
+        company_id = request.POST.get('company_id')
+        if company_id:
+            company = get_object_or_404(Mandant, pk=company_id)
+        else:
+            company = Mandant.objects.first()
+        
         # Create new document from POST data
         document = SalesDocument(
             company=company,
@@ -284,13 +314,19 @@ def document_create(request, doc_key):
     # GET: Show empty form
     customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
     payment_terms = PaymentTerm.objects.all().order_by('name')
+    companies = Mandant.objects.all().order_by('name')
+    tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
+    kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
     
     context = {
         'document_type': document_type,
         'doc_key': doc_key,
         'company': company,
+        'companies': companies,
         'customers': customers,
         'payment_terms': payment_terms,
+        'tax_rates': tax_rates,
+        'kostenarten1': kostenarten1,
         'is_create': True,
     }
     
@@ -468,12 +504,14 @@ def ajax_add_line(request, doc_key, pk):
     AJAX endpoint to add a new line to a document
     
     POST parameters (JSON):
-        - item_id: Item/Article ID
+        - item_id: Item/Article ID (optional for manual lines)
         - quantity: Quantity
-        - description: Description (optional, will be filled from item)
-        - unit_price_net: Unit price (optional, will be filled from item)
-        - tax_rate_id: Tax rate ID (optional, will be filled from item)
+        - description: Description (required for manual lines)
+        - unit_price_net: Unit price (required for manual lines)
+        - tax_rate_id: Tax rate ID (required)
         - line_type: Line type (NORMAL, OPTIONAL, ALTERNATIVE)
+        - kostenart1_id: Kostenart 1 ID (optional)
+        - kostenart2_id: Kostenart 2 ID (optional)
     
     Returns:
         JSON: {success, line_id, line_data}
@@ -487,15 +525,50 @@ def ajax_add_line(request, doc_key, pk):
         item_id = data.get('item_id')
         quantity = Decimal(data.get('quantity', '1.0'))
         line_type = data.get('line_type', 'NORMAL')
+        description = data.get('description', '')
+        unit_price_net = data.get('unit_price_net')
+        tax_rate_id = data.get('tax_rate_id')
+        kostenart1_id = data.get('kostenart1_id')
+        kostenart2_id = data.get('kostenart2_id')
         
-        # Get item
-        item = get_object_or_404(Item, pk=item_id)
-        
-        # Determine tax rate (using TaxDeterminationService)
-        tax_rate = TaxDeterminationService.determine_tax_rate(
-            customer=document.customer,
-            item_tax_rate=item.tax_rate
-        )
+        # Determine line data based on whether item is provided
+        if item_id:
+            # Article-based line
+            item = get_object_or_404(Item, pk=item_id)
+            
+            # Determine tax rate (using TaxDeterminationService)
+            tax_rate = TaxDeterminationService.determine_tax_rate(
+                customer=document.customer,
+                item_tax_rate=item.tax_rate
+            )
+            
+            # Use item data
+            if not description:
+                description = f"{item.short_text_1}\n{item.long_text}" if item.long_text else item.short_text_1
+            if not unit_price_net:
+                unit_price_net = item.net_price
+            is_discountable = item.is_discountable
+            
+            # Use item's kostenart if not provided
+            if not kostenart1_id and item.cost_type_1:
+                kostenart1_id = item.cost_type_1.pk
+            if not kostenart2_id and item.cost_type_2:
+                kostenart2_id = item.cost_type_2.pk
+        else:
+            # Manual line without item
+            item = None
+            
+            # Require mandatory fields for manual lines
+            if not description:
+                return JsonResponse({'error': 'Description is required for manual lines'}, status=400)
+            if not unit_price_net:
+                return JsonResponse({'error': 'Unit price is required for manual lines'}, status=400)
+            if not tax_rate_id:
+                return JsonResponse({'error': 'Tax rate is required for manual lines'}, status=400)
+            
+            tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
+            unit_price_net = Decimal(unit_price_net)
+            is_discountable = data.get('is_discountable', True)
         
         # Get next position number
         max_position = document.lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
@@ -509,10 +582,12 @@ def ajax_add_line(request, doc_key, pk):
             position_no=position_no,
             line_type=line_type,
             is_selected=True if line_type == 'NORMAL' else data.get('is_selected', False),
-            description=f"{item.short_text_1}\n{item.long_text}" if item.long_text else item.short_text_1,
+            description=description,
             quantity=quantity,
-            unit_price_net=item.net_price,
-            is_discountable=item.is_discountable,
+            unit_price_net=unit_price_net,
+            is_discountable=is_discountable,
+            kostenart1_id=normalize_foreign_key_id(kostenart1_id),
+            kostenart2_id=normalize_foreign_key_id(kostenart2_id),
         )
         
         # Recalculate document totals
@@ -529,9 +604,12 @@ def ajax_add_line(request, doc_key, pk):
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
                 'tax_rate': str(line.tax_rate.rate),
+                'tax_rate_id': line.tax_rate.pk,
                 'line_net': str(line.line_net),
                 'line_tax': str(line.line_tax),
                 'line_gross': str(line.line_gross),
+                'kostenart1_id': line.kostenart1.pk if line.kostenart1 else None,
+                'kostenart2_id': line.kostenart2.pk if line.kostenart2 else None,
             },
             'totals': {
                 'total_net': str(document.total_net),
@@ -553,6 +631,9 @@ def ajax_update_line(request, doc_key, pk, line_id):
         - quantity: New quantity
         - unit_price_net: New unit price
         - description: New description
+        - tax_rate_id: New tax rate ID
+        - kostenart1_id: New kostenart1 ID
+        - kostenart2_id: New kostenart2 ID
     
     Returns:
         JSON: {success, line_data, totals}
@@ -575,6 +656,10 @@ def ajax_update_line(request, doc_key, pk, line_id):
             line.tax_rate = get_object_or_404(TaxRate, pk=data['tax_rate_id'])
         if 'is_selected' in data:
             line.is_selected = data['is_selected']
+        if 'kostenart1_id' in data:
+            line.kostenart1_id = normalize_foreign_key_id(data['kostenart1_id'])
+        if 'kostenart2_id' in data:
+            line.kostenart2_id = normalize_foreign_key_id(data['kostenart2_id'])
         
         line.save()
         
@@ -592,6 +677,8 @@ def ajax_update_line(request, doc_key, pk, line_id):
                 'line_net': str(line.line_net),
                 'line_tax': str(line.line_tax),
                 'line_gross': str(line.line_gross),
+                'kostenart1_id': line.kostenart1.pk if line.kostenart1 else None,
+                'kostenart2_id': line.kostenart2.pk if line.kostenart2 else None,
             },
             'totals': {
                 'total_net': str(document.total_net),
@@ -629,6 +716,43 @@ def ajax_delete_line(request, doc_key, pk, line_id):
                 'total_gross': str(document.total_gross),
             }
         })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_get_kostenart2_options(request):
+    """
+    AJAX endpoint to get Kostenart2 options based on selected Kostenart1
+    
+    GET parameters:
+        - kostenart1_id: Parent Kostenart ID (optional)
+    
+    Returns:
+        JSON: List of child Kostenart options
+        
+    Note: If kostenart1_id is not provided or empty, returns an empty list
+    (as Kostenart2 requires Kostenart1 to be selected first for cascading dropdown).
+    """
+    try:
+        kostenart1_id = request.GET.get('kostenart1_id')
+        
+        if not kostenart1_id:
+            # No parent specified - return empty list (Kostenart2 requires Kostenart1 to be selected first)
+            results = []
+        else:
+            # Return children of the specified parent
+            kostenarten = Kostenart.objects.filter(parent_id=kostenart1_id).order_by('name')
+            results = [
+                {
+                    'id': k.pk,
+                    'name': k.name,
+                }
+                for k in kostenarten
+            ]
+        
+        return JsonResponse({'kostenarten': results})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
