@@ -97,3 +97,75 @@ class DocumentType(models.Model):
             raise ValidationError({
                 'prefix': 'Das Präfix darf nicht nur aus Leerzeichen bestehen.'
             })
+
+
+class NumberRange(models.Model):
+    """
+    Number Range (Nummernkreis) - race-safe, tenant-specific number assignment
+    
+    Provides atomic number generation for documents with yearly reset policy.
+    Each company+document_type combination has exactly one NumberRange.
+    
+    Examples:
+    - R26-00001 (Invoice from 2026)
+    - A26-00001 (Quote from 2026)
+    """
+    RESET_POLICY_CHOICES = [
+        ('YEARLY', 'Yearly Reset'),
+        ('NEVER', 'Never Reset'),
+    ]
+    
+    company = models.ForeignKey(
+        'core.Mandant',
+        on_delete=models.PROTECT,
+        related_name='number_ranges',
+        verbose_name="Mandant"
+    )
+    document_type = models.ForeignKey(
+        DocumentType,
+        on_delete=models.PROTECT,
+        related_name='number_ranges',
+        verbose_name="Dokumenttyp"
+    )
+    format = models.CharField(
+        max_length=100,
+        default='{prefix}{yy}-{seq:05d}',
+        verbose_name="Format",
+        help_text="Format string with tokens: {prefix}, {yy}, {seq:05d}"
+    )
+    reset_policy = models.CharField(
+        max_length=10,
+        choices=RESET_POLICY_CHOICES,
+        default='YEARLY',
+        verbose_name="Reset-Policy",
+        help_text="YEARLY: Reset sequence on year change, NEVER: Continuous sequence"
+    )
+    current_year = models.IntegerField(
+        default=0,
+        verbose_name="Aktuelles Jahr (YY)",
+        help_text="Zweistellige Jahreszahl der zuletzt vergebenen Nummer"
+    )
+    current_seq = models.IntegerField(
+        default=0,
+        verbose_name="Aktuelle Sequenz",
+        help_text="Zuletzt vergebene Sequenznummer"
+    )
+    
+    class Meta:
+        verbose_name = "Nummernkreis"
+        verbose_name_plural = "Nummernkreise"
+        ordering = ['company', 'document_type']
+        indexes = [
+            models.Index(fields=['company', 'document_type']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'document_type'],
+                name='unique_numberrange_per_company_doctype',
+                violation_error_message='Es kann nur einen Nummernkreis pro Mandant und Dokumenttyp geben.'
+            )
+        ]
+    
+    def __str__(self):
+        return f"{self.company.name} - {self.document_type.name} ({self.reset_policy})"
+
