@@ -21,6 +21,25 @@ from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart
 from core.services.activity_stream import ActivityStreamService
 
 
+def normalize_foreign_key_id(value):
+    """
+    Normalize foreign key ID values for database insertion.
+    
+    Converts empty strings, 'null' strings, and None to None.
+    This is needed because form submissions may send empty strings
+    instead of null values, which can cause database integrity issues.
+    
+    Args:
+        value: The foreign key ID value (could be int, str, or None)
+    
+    Returns:
+        The value if valid, None if empty/null
+    """
+    if value in [None, '', 'null']:
+        return None
+    return value
+
+
 @login_required
 def auftragsverwaltung_home(request):
     """
@@ -567,8 +586,8 @@ def ajax_add_line(request, doc_key, pk):
             quantity=quantity,
             unit_price_net=unit_price_net,
             is_discountable=is_discountable,
-            kostenart1_id=kostenart1_id if kostenart1_id not in [None, '', 'null'] else None,
-            kostenart2_id=kostenart2_id if kostenart2_id not in [None, '', 'null'] else None,
+            kostenart1_id=normalize_foreign_key_id(kostenart1_id),
+            kostenart2_id=normalize_foreign_key_id(kostenart2_id),
         )
         
         # Recalculate document totals
@@ -638,13 +657,9 @@ def ajax_update_line(request, doc_key, pk, line_id):
         if 'is_selected' in data:
             line.is_selected = data['is_selected']
         if 'kostenart1_id' in data:
-            kostenart1_id = data['kostenart1_id']
-            # Handle empty string from form submissions - convert to None for database
-            line.kostenart1_id = kostenart1_id if kostenart1_id not in [None, '', 'null'] else None
+            line.kostenart1_id = normalize_foreign_key_id(data['kostenart1_id'])
         if 'kostenart2_id' in data:
-            kostenart2_id = data['kostenart2_id']
-            # Handle empty string from form submissions - convert to None for database
-            line.kostenart2_id = kostenart2_id if kostenart2_id not in [None, '', 'null'] else None
+            line.kostenart2_id = normalize_foreign_key_id(data['kostenart2_id'])
         
         line.save()
         

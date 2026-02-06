@@ -665,7 +665,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addManualLineButton) {
         addManualLineButton.addEventListener('click', function() {
             // Close article search modal
-            bootstrap.Modal.getInstance(document.getElementById('articleSearchModal')).hide();
+            const articleModal = bootstrap.Modal.getInstance(document.getElementById('articleSearchModal'));
+            if (articleModal) {
+                articleModal.hide();
+            }
             
             // Show manual line modal
             const modal = new bootstrap.Modal(document.getElementById('manualLineModal'));
@@ -742,7 +745,10 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     // Close modal and reload page
-                    bootstrap.Modal.getInstance(document.getElementById('manualLineModal')).hide();
+                    const manualModal = bootstrap.Modal.getInstance(document.getElementById('manualLineModal'));
+                    if (manualModal) {
+                        manualModal.hide();
+                    }
                     location.reload();
                 } else if (data.error) {
                     alert('Fehler: ' + data.error);
@@ -820,8 +826,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (articleModal) {
             articleModal.hide();
         }
-        articleSearchInput.value = '';
-        articleSearchResults.innerHTML = '';
+        if (articleSearchInput) {
+            articleSearchInput.value = '';
+        }
+        if (articleSearchResults) {
+            articleSearchResults.innerHTML = '';
+        }
         
         fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
             method: 'POST',
