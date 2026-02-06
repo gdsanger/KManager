@@ -207,7 +207,7 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item" href="#">
+                                    <a class="nav-link nav-sub-item {% if 'contracts' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:contract_list' %}">
                                         <i class="bi bi-file-text"></i> <span class="sidebar-text">Verträge</span>
                                     </a>
                                 </li>

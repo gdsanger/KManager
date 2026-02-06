@@ -8,9 +8,9 @@ from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
 
-from .models import SalesDocument, DocumentType, SalesDocumentLine
-from .tables import SalesDocumentTable
-from .filters import SalesDocumentFilter
+from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract
+from .tables import SalesDocumentTable, ContractTable
+from .filters import SalesDocumentFilter, ContractFilter
 from .services import (
     DocumentCalculationService,
     TaxDeterminationService,
@@ -631,3 +631,46 @@ def ajax_delete_line(request, doc_key, pk, line_id):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def contract_list(request):
+    """
+    List view for contracts with filtering, sorting, and pagination.
+    
+    Displays a filterable, sortable, paginated list of recurring billing contracts.
+    """
+    # Get the default company (for now, we'll use the first available)
+    try:
+        company = Mandant.objects.first()
+    except Mandant.DoesNotExist:
+        company = None
+    
+    # Base queryset with optimized select/prefetch
+    queryset = Contract.objects.select_related(
+        'customer', 'company'
+    )
+    
+    # Filter by company if available
+    if company:
+        queryset = queryset.filter(company=company)
+    
+    # Apply filters
+    filter_set = ContractFilter(request.GET, queryset=queryset)
+    
+    # Create table with filtered data
+    table = ContractTable(filter_set.qs)
+    
+    # Set default ordering to next_run_date (ascending - operationally sensible)
+    table.order_by = request.GET.get('sort', 'next_run_date')
+    
+    # Configure pagination (25 per page)
+    RequestConfig(request, paginate={'per_page': 25}).configure(table)
+    
+    # Prepare context
+    context = {
+        'table': table,
+        'filter': filter_set,
+    }
+    
+    return render(request, 'auftragsverwaltung/contracts/list.html', context)

@@ -3,7 +3,7 @@ Django Filters for the auftragsverwaltung app.
 """
 import django_filters
 from django.db.models import Q
-from .models import SalesDocument
+from .models import SalesDocument, Contract
 
 
 class SalesDocumentFilter(django_filters.FilterSet):
@@ -83,3 +83,80 @@ class SalesDocumentFilter(django_filters.FilterSet):
     class Meta:
         model = SalesDocument
         fields = ['q', 'status', 'number', 'subject', 'issue_date_from', 'issue_date_to']
+
+
+class ContractFilter(django_filters.FilterSet):
+    """Filter for Contract list view."""
+    
+    q = django_filters.CharFilter(
+        method='search_filter',
+        label='Suche',
+        widget=django_filters.widgets.forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Suche nach Name, Kunde...'
+        })
+    )
+    
+    is_active = django_filters.ChoiceFilter(
+        choices=[('', 'Alle'), ('true', 'Aktiv'), ('false', 'Inaktiv')],
+        label='Status',
+        empty_label=None,
+        method='filter_is_active',
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+    
+    interval = django_filters.ChoiceFilter(
+        choices=[('', 'Alle Intervalle')] + Contract.INTERVAL_CHOICES,
+        label='Intervall',
+        empty_label=None,
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+    
+    next_run_date_from = django_filters.DateFilter(
+        field_name='next_run_date',
+        lookup_expr='gte',
+        label='Nächster Lauf von',
+        widget=django_filters.widgets.forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    
+    next_run_date_to = django_filters.DateFilter(
+        field_name='next_run_date',
+        lookup_expr='lte',
+        label='Nächster Lauf bis',
+        widget=django_filters.widgets.forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    
+    def search_filter(self, queryset, name, value):
+        """
+        Full-text search across multiple fields using OR.
+        Searches in: name, customer.name
+        """
+        if not value:
+            return queryset
+        
+        return queryset.filter(
+            Q(name__icontains=value) |
+            Q(customer__name__icontains=value)
+        )
+    
+    def filter_is_active(self, queryset, name, value):
+        """Filter for is_active field."""
+        if value == 'true':
+            return queryset.filter(is_active=True)
+        elif value == 'false':
+            return queryset.filter(is_active=False)
+        return queryset
+    
+    class Meta:
+        model = Contract
+        fields = ['q', 'is_active', 'interval', 'next_run_date_from', 'next_run_date_to']
