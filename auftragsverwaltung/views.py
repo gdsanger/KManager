@@ -719,19 +719,18 @@ def ajax_get_kostenart2_options(request):
         kostenart1_id = request.GET.get('kostenart1_id')
         
         if not kostenart1_id:
-            # Return all Hauptkostenarten if no filter
-            kostenarten = Kostenart.objects.filter(parent__isnull=True).order_by('name')
+            # No parent specified - return empty list (Kostenart2 requires Kostenart1 to be selected first)
+            results = []
         else:
             # Return children of the specified parent
             kostenarten = Kostenart.objects.filter(parent_id=kostenart1_id).order_by('name')
-        
-        results = [
-            {
-                'id': k.pk,
-                'name': k.name,
-            }
-            for k in kostenarten
-        ]
+            results = [
+                {
+                    'id': k.pk,
+                    'name': k.name,
+                }
+                for k in kostenarten
+            ]
         
         return JsonResponse({'kostenarten': results})
     except Exception as e:

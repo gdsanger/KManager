@@ -325,12 +325,13 @@ Neues {{ document_type.name }}
                                         <textarea class="form-control form-control-sm line-description" rows="2" 
                                                   placeholder="Beschreibung">{{ line.description }}</textarea>
                                     </div>
-                                    <div class="col-md-2">
+                                    <!-- Row 1: Quantity, Price, Kostenart1, Kostenart2 -->
+                                    <div class="col-md-3">
                                         <label class="form-label-sm">Menge</label>
                                         <input type="number" class="form-control form-control-sm line-quantity" 
                                                value="{{ line.quantity }}" step="0.01" min="0" placeholder="Menge">
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-3">
                                         <label class="form-label-sm">Einzelpreis</label>
                                         <input type="number" class="form-control form-control-sm line-unit-price" 
                                                value="{{ line.unit_price_net }}" step="0.01" min="0" placeholder="Preis">
@@ -359,15 +360,16 @@ Neues {{ document_type.name }}
                                             {% endif %}
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
+                                    <!-- Row 2: Totals -->
+                                    <div class="col-md-4">
                                         <label class="form-label-sm">Netto</label>
                                         <span class="form-control form-control-sm text-end line-net">{{ line.line_net|floatformat:2 }} €</span>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div class="col-md-4">
                                         <label class="form-label-sm">MwSt.</label>
                                         <span class="form-control form-control-sm text-end line-tax">{{ line.line_tax|floatformat:2 }} €</span>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-4">
                                         <label class="form-label-sm">Brutto</label>
                                         <span class="form-control form-control-sm text-end fw-bold line-gross">{{ line.line_gross|floatformat:2 }} €</span>
                                     </div>
@@ -785,8 +787,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Add click handlers
                         document.querySelectorAll('.article-search-result').forEach(el => {
                             el.addEventListener('click', function() {
-                                const article = JSON.parse(this.dataset.article);
-                                addLineFromArticle(article);
+                                try {
+                                    const article = JSON.parse(this.dataset.article);
+                                    addLineFromArticle(article);
+                                } catch (error) {
+                                    console.error('Error parsing article data:', error);
+                                    alert('Fehler beim Verarbeiten der Artikeldaten. Bitte versuchen Sie es erneut.');
+                                }
                             });
                         });
                     } else {
