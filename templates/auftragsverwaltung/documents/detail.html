@@ -1,5 +1,6 @@
 {% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
 {% load static %}
+{% load l10n %}
 
 {% block title %}
 {% if is_create %}Neues {{ document_type.name }}{% else %}{{ document.number }}{% endif %} - Domus
@@ -333,12 +334,12 @@ Neues {{ document_type.name }}
                                     <div class="col-md-3">
                                         <label class="form-label-sm">Menge</label>
                                         <input type="number" class="form-control form-control-sm line-quantity" 
-                                               value="{{ line.quantity }}" step="0.01" min="0" placeholder="Menge">
+                                               value="{{ line.quantity|unlocalize }}" step="0.01" min="0" placeholder="Menge">
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label-sm">Einzelpreis</label>
                                         <input type="number" class="form-control form-control-sm line-unit-price" 
-                                               value="{{ line.unit_price_net }}" step="0.01" min="0" placeholder="Preis">
+                                               value="{{ line.unit_price_net|unlocalize }}" step="0.01" min="0" placeholder="Preis">
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label-sm">Kostenart 1</label>
