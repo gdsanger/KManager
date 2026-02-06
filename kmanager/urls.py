@@ -31,5 +31,6 @@ urlpatterns = [
     path('reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
     
     path('vermietung/', include('vermietung.urls')),
+    path('auftragsverwaltung/', include('auftragsverwaltung.urls')),
     path('', include('core.urls')),
 ]
