@@ -1,5 +1,5 @@
 from django.contrib import admin
-from auftragsverwaltung.models import DocumentType, NumberRange
+from auftragsverwaltung.models import DocumentType, NumberRange, SalesDocument
 
 
 @admin.register(NumberRange)
@@ -40,3 +40,69 @@ class DocumentTypeAdmin(admin.ModelAdmin):
             'fields': ('is_invoice', 'is_correction', 'requires_due_date')
         }),
     )
+
+
+@admin.register(SalesDocument)
+class SalesDocumentAdmin(admin.ModelAdmin):
+    """Admin interface for SalesDocument"""
+    list_display = (
+        'number',
+        'company',
+        'document_type',
+        'status',
+        'issue_date',
+        'due_date',
+        'total_net',
+        'total_tax',
+        'total_gross',
+        'source_document'
+    )
+    list_filter = (
+        'company',
+        'document_type',
+        'status',
+        'issue_date'
+    )
+    search_fields = (
+        'number',
+        'company__name',
+        'document_type__name',
+        'document_type__key',
+        'notes_internal',
+        'notes_public'
+    )
+    ordering = ('-issue_date', '-id')
+    date_hierarchy = 'issue_date'
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('company', 'document_type', 'number', 'status')
+        }),
+        ('Datumsangaben', {
+            'fields': ('issue_date', 'due_date', 'paid_at')
+        }),
+        ('Beziehungen', {
+            'fields': ('payment_term', 'source_document')
+        }),
+        ('Beträge', {
+            'fields': ('total_net', 'total_tax', 'total_gross'),
+            'description': 'Diese Felder sind denormalisiert. Berechnungslogik wird in einem separaten Issue implementiert.'
+        }),
+        ('Snapshots', {
+            'fields': ('payment_term_snapshot',),
+            'classes': ('collapse',),
+            'description': 'JSON-Snapshots zum Zeitpunkt der Belegausstellung.'
+        }),
+        ('Notizen', {
+            'fields': ('notes_internal', 'notes_public'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ()
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Make payment_term_snapshot readonly by default"""
+        readonly = list(self.readonly_fields)
+        # Optionally make payment_term_snapshot readonly in the future
+        return readonly
