@@ -176,33 +176,33 @@
 
                         <!-- Auftragsverwaltung Section -->
                         <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#auftragsverwaltungMenu" data-bs-toggle="collapse" aria-expanded="false">
+                            <a class="nav-link nav-category" href="#auftragsverwaltungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'documents' in request.path or 'angebote' in request.path or 'auftraege' in request.path or 'rechnungen' in request.path or 'lieferscheine' in request.path or 'gutschriften' in request.path %}true{% else %}false{% endif %}">
                                 <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Auftragsverwaltung</span>
                                 <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
                             </a>
-                            <ul class="collapse nav flex-column ms-3" id="auftragsverwaltungMenu">
+                            <ul class="collapse nav flex-column ms-3 {% if 'documents' in request.path or 'angebote' in request.path or 'auftraege' in request.path or 'rechnungen' in request.path or 'lieferscheine' in request.path or 'gutschriften' in request.path %}show{% endif %}" id="auftragsverwaltungMenu">
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item" href="#">
+                                    <a class="nav-link nav-sub-item {% if 'angebote' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:quotes' %}">
                                         <i class="bi bi-file-earmark-richtext"></i> <span class="sidebar-text">Angebote</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item" href="#">
+                                    <a class="nav-link nav-sub-item {% if 'auftraege' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:orders' %}">
                                         <i class="bi bi-cart-check"></i> <span class="sidebar-text">Aufträge</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item" href="#">
+                                    <a class="nav-link nav-sub-item {% if 'rechnungen' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:invoices' %}">
                                         <i class="bi bi-receipt"></i> <span class="sidebar-text">Rechnungen</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item" href="#">
+                                    <a class="nav-link nav-sub-item {% if 'lieferscheine' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:deliveries' %}">
                                         <i class="bi bi-truck"></i> <span class="sidebar-text">Lieferscheine</span>
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link nav-sub-item" href="#">
+                                    <a class="nav-link nav-sub-item {% if 'gutschriften' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:credits' %}">
                                         <i class="bi bi-arrow-counterclockwise"></i> <span class="sidebar-text">Gutschriften</span>
                                     </a>
                                 </li>

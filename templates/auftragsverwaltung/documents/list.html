@@ -1,0 +1,113 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load django_tables2 %}
+
+{% block title %}{{ document_type.name }} - Domus{% endblock %}
+
+{% block page_title %}{{ document_type.name }}{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-primary" disabled title="Funktion noch nicht implementiert">
+        <i class="bi bi-plus-circle"></i> Neu erstellen
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filters Section -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <form method="get" action="">
+            <div class="row g-2">
+                <!-- Search Field -->
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        {{ filter.form.q }}
+                    </div>
+                </div>
+                
+                <!-- Status Filter -->
+                <div class="col-md-2">
+                    {{ filter.form.status }}
+                </div>
+                
+                <!-- Customer Filter -->
+                <div class="col-md-2">
+                    {{ filter.form.customer }}
+                </div>
+                
+                <!-- Filter Actions -->
+                <div class="col-md-2">
+                    <div class="btn-group w-100" role="group">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="bi bi-funnel"></i> Filter
+                        </button>
+                        {% if request.GET %}
+                        <a href="{% url 'auftragsverwaltung:document_list' doc_key %}" class="btn btn-outline-secondary" title="Filter zurücksetzen">
+                            <i class="bi bi-x"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Advanced Filters Toggle -->
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false" aria-controls="advancedFilters">
+                        <i class="bi bi-funnel-fill"></i> Erweitert
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Advanced Filters (Collapsible) -->
+            <div class="collapse mt-2" id="advancedFilters">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.number.id_for_label }}" class="form-label small">{{ filter.form.number.label }}</label>
+                        {{ filter.form.number }}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.subject.id_for_label }}" class="form-label small">{{ filter.form.subject.label }}</label>
+                        {{ filter.form.subject }}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.issue_date_from.id_for_label }}" class="form-label small">{{ filter.form.issue_date_from.label }}</label>
+                        {{ filter.form.issue_date_from }}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.issue_date_to.id_for_label }}" class="form-label small">{{ filter.form.issue_date_to.label }}</label>
+                        {{ filter.form.issue_date_to }}
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Result Count -->
+<div class="row mb-2">
+    <div class="col text-end">
+        <span class="text-muted">{{ table.paginator.count }} Dokument{{ table.paginator.count|pluralize:"e" }}</span>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="table-responsive">
+    {% render_table table %}
+</div>
+
+<!-- Help Text -->
+{% if table.paginator.count == 0 %}
+<div class="alert alert-info mt-3" role="alert">
+    <i class="bi bi-info-circle"></i>
+    {% if request.GET %}
+        Keine Dokumente gefunden, die den Filterkriterien entsprechen.
+        <a href="{% url 'auftragsverwaltung:document_list' doc_key %}" class="alert-link">Filter zurücksetzen</a>
+    {% else %}
+        Es sind noch keine {{ document_type.name }} vorhanden.
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

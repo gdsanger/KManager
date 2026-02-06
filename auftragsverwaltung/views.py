@@ -1,10 +1,13 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
 from datetime import datetime, timedelta
 from decimal import Decimal
+from django_tables2 import RequestConfig
 
-from .models import SalesDocument
+from .models import SalesDocument, DocumentType
+from .tables import SalesDocumentTable
+from .filters import SalesDocumentFilter
 from core.models import Mandant
 from core.services.activity_stream import ActivityStreamService
 
@@ -97,3 +100,56 @@ def auftragsverwaltung_home(request):
     }
     
     return render(request, 'auftragsverwaltung/home.html', context)
+
+
+@login_required
+def document_list(request, doc_key):
+    """
+    Generic list view for sales documents filtered by document type.
+    
+    Args:
+        doc_key: The document type key (e.g., 'quote', 'order', 'invoice', 'delivery', 'credit')
+    
+    Displays a filterable, sortable, paginated list of sales documents.
+    """
+    # Get the document type or 404
+    document_type = get_object_or_404(DocumentType, key=doc_key, is_active=True)
+    
+    # Get the default company (for now, we'll use the first available)
+    try:
+        company = Mandant.objects.first()
+    except Mandant.DoesNotExist:
+        company = None
+    
+    # Base queryset with optimized select/prefetch
+    queryset = SalesDocument.objects.select_related(
+        'document_type', 'company'
+    ).filter(
+        document_type=document_type
+    )
+    
+    # Filter by company if available
+    if company:
+        queryset = queryset.filter(company=company)
+    
+    # Apply filters
+    filter_set = SalesDocumentFilter(request.GET, queryset=queryset)
+    
+    # Create table with filtered data
+    table = SalesDocumentTable(filter_set.qs)
+    
+    # Set default ordering to -issue_date
+    table.order_by = request.GET.get('sort', '-issue_date')
+    
+    # Configure pagination (25 per page)
+    RequestConfig(request, paginate={'per_page': 25}).configure(table)
+    
+    # Prepare context
+    context = {
+        'table': table,
+        'filter': filter_set,
+        'document_type': document_type,
+        'doc_key': doc_key,
+    }
+    
+    return render(request, 'auftragsverwaltung/documents/list.html', context)
