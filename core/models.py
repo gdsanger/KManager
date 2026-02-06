@@ -37,6 +37,40 @@ class Adresse(models.Model):
     mobil = models.CharField(max_length=50, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
     bemerkung = models.TextField(blank=True, null=True)
+    
+    # Tax and accounting fields
+    vat_id = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        verbose_name="USt-IdNr.",
+        help_text="Umsatzsteuer-Identifikationsnummer (optional)"
+    )
+    country_code = models.CharField(
+        max_length=2,
+        blank=True,
+        default='DE',
+        verbose_name="Ländercode",
+        help_text="ISO 3166-1 Alpha-2 Ländercode (z.B. DE, AT, FR)"
+    )
+    is_eu = models.BooleanField(
+        default=False,
+        verbose_name="EU",
+        help_text="Ist dies ein EU-Kunde?"
+    )
+    is_business = models.BooleanField(
+        default=True,
+        verbose_name="Unternehmer",
+        help_text="Ist dies ein Unternehmer/Geschäftskunde?"
+    )
+    debitor_number = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        verbose_name="Debitorennummer",
+        help_text="Debitorennummer für die Buchhaltung (optional)"
+    )
+    
     def full_name(self):
         if self.firma:
             return f"{self.firma} - ({self.name})"
@@ -44,6 +78,34 @@ class Adresse(models.Model):
 
     def __str__(self):
         return f"{self.full_name()}, {self.strasse}, {self.plz} {self.ort}, {self.land}"
+    
+    def clean(self):
+        """Validate and normalize address data"""
+        super().clean()
+        
+        # Normalize and validate country_code
+        if self.country_code:
+            self.country_code = self.country_code.strip().upper()
+            if len(self.country_code) != 2:
+                raise ValidationError({
+                    'country_code': 'Ländercode muss genau 2 Zeichen lang sein (z.B. DE, AT, FR).'
+                })
+        
+        # Normalize vat_id
+        if self.vat_id:
+            self.vat_id = self.vat_id.strip().upper()
+    
+    def save(self, *args, **kwargs):
+        """Override save to normalize fields before saving"""
+        # Normalize country_code
+        if self.country_code:
+            self.country_code = self.country_code.strip().upper()
+        
+        # Normalize vat_id
+        if self.vat_id:
+            self.vat_id = self.vat_id.strip().upper()
+        
+        super().save(*args, **kwargs)
 
 
 class AdresseKontakt(models.Model):

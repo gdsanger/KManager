@@ -132,6 +132,74 @@
                         {% endif %}
                         <div class="form-text">Optionale Bemerkungen oder Notizen zum Kunden</div>
                     </div>
+
+                    <hr class="my-4">
+                    <h5 class="mb-3"><i class="bi bi-calculator"></i> Steuer &amp; Buchhaltung</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.country_code.id_for_label }}" class="form-label">{{ form.country_code.label }}</label>
+                            {{ form.country_code }}
+                            {% if form.country_code.errors %}
+                            <div class="text-danger small">{{ form.country_code.errors }}</div>
+                            {% endif %}
+                            {% if form.country_code.help_text %}
+                            <div class="form-text">{{ form.country_code.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.vat_id.id_for_label }}" class="form-label">{{ form.vat_id.label }}</label>
+                            {{ form.vat_id }}
+                            {% if form.vat_id.errors %}
+                            <div class="text-danger small">{{ form.vat_id.errors }}</div>
+                            {% endif %}
+                            {% if form.vat_id.help_text %}
+                            <div class="form-text">{{ form.vat_id.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                {{ form.is_business }}
+                                <label class="form-check-label" for="{{ form.is_business.id_for_label }}">
+                                    {{ form.is_business.label }}
+                                </label>
+                            </div>
+                            {% if form.is_business.errors %}
+                            <div class="text-danger small">{{ form.is_business.errors }}</div>
+                            {% endif %}
+                            {% if form.is_business.help_text %}
+                            <div class="form-text">{{ form.is_business.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                {{ form.is_eu }}
+                                <label class="form-check-label" for="{{ form.is_eu.id_for_label }}">
+                                    {{ form.is_eu.label }}
+                                </label>
+                            </div>
+                            {% if form.is_eu.errors %}
+                            <div class="text-danger small">{{ form.is_eu.errors }}</div>
+                            {% endif %}
+                            {% if form.is_eu.help_text %}
+                            <div class="form-text">{{ form.is_eu.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.debitor_number.id_for_label }}" class="form-label">{{ form.debitor_number.label }}</label>
+                        {{ form.debitor_number }}
+                        {% if form.debitor_number.errors %}
+                        <div class="text-danger small">{{ form.debitor_number.errors }}</div>
+                        {% endif %}
+                        {% if form.debitor_number.help_text %}
+                        <div class="form-text">{{ form.debitor_number.help_text }}</div>
+                        {% endif %}
+                    </div>
                     
                     <div class="d-flex justify-content-between mt-4">
                         <button type="submit" class="btn btn-primary">

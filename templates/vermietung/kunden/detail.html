@@ -89,6 +89,52 @@
             </div>
         </div>
 
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Steuer &amp; Buchhaltung</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Ländercode:</div>
+                    <div class="col-md-8">
+                        {% if kunde.country_code %}
+                            <span class="badge bg-secondary">{{ kunde.country_code }}</span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">USt-IdNr.:</div>
+                    <div class="col-md-8">{{ kunde.vat_id|default:"-" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">EU-Kunde:</div>
+                    <div class="col-md-8">
+                        {% if kunde.is_eu %}
+                            <span class="badge bg-info">EU</span>
+                        {% else %}
+                            <span class="text-muted">Nein</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Kundentyp:</div>
+                    <div class="col-md-8">
+                        {% if kunde.is_business %}
+                            <span class="badge bg-primary">Unternehmer</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Privat</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Debitorennummer:</div>
+                    <div class="col-md-8">{{ kunde.debitor_number|default:"-" }}</div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <div class="col-lg-4">

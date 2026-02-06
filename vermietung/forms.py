@@ -119,6 +119,21 @@ class AdresseKundeForm(forms.ModelForm):
     The adressen_type field is fixed to KUNDE and not editable by the user.
     """
     
+    # Common EU country choices for dropdown
+    COUNTRY_CHOICES = [
+        ('DE', 'Deutschland (DE)'),
+        ('AT', 'Österreich (AT)'),
+        ('CH', 'Schweiz (CH)'),
+        ('FR', 'Frankreich (FR)'),
+        ('IT', 'Italien (IT)'),
+        ('NL', 'Niederlande (NL)'),
+        ('BE', 'Belgien (BE)'),
+        ('LU', 'Luxemburg (LU)'),
+        ('PL', 'Polen (PL)'),
+        ('ES', 'Spanien (ES)'),
+        ('', '--- Andere ---'),
+    ]
+    
     class Meta:
         model = Adresse
         fields = [
@@ -132,7 +147,13 @@ class AdresseKundeForm(forms.ModelForm):
             'telefon',
             'mobil',
             'email',
-            'bemerkung'
+            'bemerkung',
+            # Tax and accounting fields
+            'country_code',
+            'vat_id',
+            'is_eu',
+            'is_business',
+            'debitor_number',
         ]
         widgets = {
             'firma': forms.TextInput(attrs={'class': 'form-control'}),
@@ -146,6 +167,11 @@ class AdresseKundeForm(forms.ModelForm):
             'mobil': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'bemerkung': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'country_code': forms.Select(attrs={'class': 'form-select'}),
+            'vat_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. DE123456789'}),
+            'is_eu': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_business': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'debitor_number': forms.TextInput(attrs={'class': 'form-control'}),
         }
         labels = {
             'firma': 'Firma (optional)',
@@ -159,7 +185,24 @@ class AdresseKundeForm(forms.ModelForm):
             'mobil': 'Mobil (optional)',
             'email': 'E-Mail (optional)',
             'bemerkung': 'Bemerkung (optional)',
+            'country_code': 'Ländercode',
+            'vat_id': 'USt-IdNr. (optional)',
+            'is_eu': 'EU-Kunde',
+            'is_business': 'Unternehmer/Geschäftskunde',
+            'debitor_number': 'Debitorennummer (optional)',
         }
+        help_texts = {
+            'country_code': 'ISO 3166-1 Alpha-2 Ländercode (2 Zeichen, z.B. DE, AT, FR)',
+            'vat_id': 'Umsatzsteuer-Identifikationsnummer',
+            'is_eu': 'Kennzeichnet EU-Kunden für Reverse Charge',
+            'is_business': 'Unterscheidung zwischen Geschäfts- und Privatkunden',
+            'debitor_number': 'Nummer für die Buchhaltung',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set country_code choices
+        self.fields['country_code'].widget.choices = self.COUNTRY_CHOICES
     
     def save(self, commit=True):
         """
