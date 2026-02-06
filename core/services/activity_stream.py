@@ -96,7 +96,7 @@ class ActivityStreamService:
         """
         Log a new activity entry to the stream.
         
-        This is an alias for add() method, provided for backward compatibility.
+        This is an alias for the add() method.
         
         Args:
             company: Mandant instance (required)
