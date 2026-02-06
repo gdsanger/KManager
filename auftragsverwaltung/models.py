@@ -578,6 +578,13 @@ class SalesDocumentLine(models.Model):
         verbose_name="Rabattfähig",
         help_text="Gibt an, ob diese Position rabattfähig ist"
     )
+    discount = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Rabatt (%)",
+        help_text="Rabatt in Prozent (z.B. 10.00 für 10% Rabatt)"
+    )
     
     # Sum fields (denormalized; calculated by service, not in save())
     line_net = models.DecimalField(
@@ -600,6 +607,22 @@ class SalesDocumentLine(models.Model):
         default=Decimal('0.00'),
         verbose_name="Bruttobetrag",
         help_text="Zeilenbetrag brutto"
+    )
+    kostenart1 = models.ForeignKey(
+        'core.Kostenart',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_document_lines_kostenart1',
+        verbose_name="Kostenart 1"
+    )
+    kostenart2 = models.ForeignKey(
+        'core.Kostenart',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_document_lines_kostenart2',
+        verbose_name="Kostenart 2"
     )
     
     class Meta:
