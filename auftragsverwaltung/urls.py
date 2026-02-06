@@ -6,6 +6,9 @@ app_name = 'auftragsverwaltung'
 urlpatterns = [
     path('', views.auftragsverwaltung_home, name='home'),
     
+    # Contract list view
+    path('contracts/', views.contract_list, name='contract_list'),
+    
     # Document list views (generic view with doc_key parameter)
     path('documents/<str:doc_key>/', views.document_list, name='document_list'),
     

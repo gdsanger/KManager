@@ -4,7 +4,7 @@ Django Tables2 table definitions for the auftragsverwaltung app.
 import django_tables2 as tables
 from django.urls import reverse
 from django.utils.html import format_html
-from .models import SalesDocument
+from .models import SalesDocument, Contract
 
 
 class SalesDocumentTable(tables.Table):
@@ -104,6 +104,95 @@ class SalesDocumentTable(tables.Table):
             'total_gross',
             'status',
             'aktionen'
+        )
+        attrs = {
+            'class': 'table table-dark table-hover',
+            'thead': {'class': 'table-dark'}
+        }
+        per_page = 25
+
+
+class ContractTable(tables.Table):
+    """Table for displaying Contracts (Verträge)."""
+    
+    name = tables.Column(
+        verbose_name='Vertragsname',
+        attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 200px;'}}
+    )
+    
+    customer = tables.Column(
+        verbose_name='Kunde',
+        accessor='customer.name',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    interval = tables.Column(
+        verbose_name='Intervall',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    start_date = tables.DateColumn(
+        verbose_name='Startdatum',
+        format='d.m.Y',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    end_date = tables.DateColumn(
+        verbose_name='Enddatum',
+        format='d.m.Y',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    next_run_date = tables.DateColumn(
+        verbose_name='Nächster Lauf',
+        format='d.m.Y',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    last_run_date = tables.DateColumn(
+        verbose_name='Letzter Lauf',
+        format='d.m.Y',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    is_active = tables.BooleanColumn(
+        verbose_name='Aktiv',
+        attrs={'td': {'class': 'text-center'}}
+    )
+    
+    def render_name(self, value, record):
+        """Render name as a link to detail view (when detail view exists)."""
+        # For now, just return the name. Can be updated later when detail view is created
+        return value
+    
+    def render_interval(self, value, record):
+        """Render interval with German display text."""
+        return record.get_interval_display()
+    
+    def render_end_date(self, value):
+        """Render end_date with fallback for None."""
+        if value is None:
+            return '—'
+        return value
+    
+    def render_last_run_date(self, value):
+        """Render last_run_date with fallback for None."""
+        if value is None:
+            return '—'
+        return value
+    
+    class Meta:
+        model = Contract
+        template_name = 'django_tables2/bootstrap5-dark.html'
+        fields = (
+            'name',
+            'customer',
+            'interval',
+            'start_date',
+            'end_date',
+            'next_run_date',
+            'last_run_date',
+            'is_active',
         )
         attrs = {
             'class': 'table table-dark table-hover',
