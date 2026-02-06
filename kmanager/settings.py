@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     # Project apps
     'core',
     'vermietung.apps.VermietungConfig',
+    'auftragsverwaltung.apps.AuftragsverwaltungConfig',
 ]
 
 MIDDLEWARE = [
