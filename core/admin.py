@@ -5,7 +5,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib import messages
 from django.conf import settings
 from core.models import (
-    Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, Kostenart,
+    Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, TaxRate, Kostenart,
     AIProvider, AIModel, AIJobsHistory, ReportDocument
 )
 from core.mailing.service import send_mail, MailServiceError
@@ -117,6 +117,37 @@ class MandantAdmin(admin.ModelAdmin):
             'fields': ('steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 'kreditinstitut', 'iban', 'bic', 'kontoinhaber')
         }),
     )
+
+
+@admin.register(TaxRate)
+class TaxRateAdmin(admin.ModelAdmin):
+    """Admin interface for TaxRate with CRUD functionality"""
+    list_display = ('code', 'name', 'rate_percentage', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('code', 'name')
+    ordering = ('code',)
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('code', 'name', 'rate', 'is_active')
+        }),
+    )
+    
+    def rate_percentage(self, obj):
+        """Display rate as percentage"""
+        return f"{obj.rate * 100:.2f}%"
+    rate_percentage.short_description = "Steuersatz"
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of TaxRate - only deactivation via is_active"""
+        return False
+    
+    def get_actions(self, request):
+        """Remove delete action from admin"""
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
 
 
 class UnterkostenartInline(admin.TabularInline):
