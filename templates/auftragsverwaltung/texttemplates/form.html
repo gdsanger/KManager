@@ -1,0 +1,94 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+
+{% block title %}{% if template %}Textbaustein bearbeiten{% else %}Textbaustein erstellen{% endif %} - Domus{% endblock %}
+
+{% block page_title %}{% if template %}Textbaustein bearbeiten{% else %}Textbaustein erstellen{% endif %}{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="{% url 'auftragsverwaltung:texttemplate_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Zurück
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card bg-dark">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Basic Information -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="title" class="form-label">Titel <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="title" name="title" 
+                                   value="{% if template %}{{ template.title }}{% endif %}" required>
+                            <div class="form-text">Anzeigename für die Auswahl im Dropdown</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="key" class="form-label">Schlüssel <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="key" name="key" 
+                                   value="{% if template %}{{ template.key }}{% endif %}" 
+                                   pattern="[a-z0-9_-]+" required>
+                            <div class="form-text">Eindeutiger Kurzbezeichner (z.B. standard_header)</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Type and Options -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="type" class="form-label">Typ <span class="text-danger">*</span></label>
+                            <select class="form-select" id="type" name="type" required>
+                                {% for choice_value, choice_label in type_choices %}
+                                <option value="{{ choice_value }}" {% if template and template.type == choice_value %}selected{% endif %}>
+                                    {{ choice_label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Verwendungszweck des Textbausteins</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="sort_order" class="form-label">Sortierung</label>
+                            <input type="number" class="form-control" id="sort_order" name="sort_order" 
+                                   value="{% if template %}{{ template.sort_order }}{% else %}0{% endif %}">
+                            <div class="form-text">Sortierreihenfolge (0 = oben)</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label d-block">Status</label>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                       {% if not template or template.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="is_active">
+                                    Aktiv
+                                </label>
+                            </div>
+                            <div class="form-text">Inaktive Bausteine werden ausgeblendet</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Inhalt <span class="text-danger">*</span></label>
+                        <textarea class="form-control font-monospace" id="content" name="content" 
+                                  rows="10" required>{% if template %}{{ template.content }}{% endif %}</textarea>
+                        <div class="form-text">Textinhalt des Bausteins</div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'auftragsverwaltung:texttemplate_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Abbrechen
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Speichern
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -31,4 +31,13 @@ urlpatterns = [
     path('rechnungen/', views.document_list, {'doc_key': 'invoice'}, name='invoices'),
     path('lieferscheine/', views.document_list, {'doc_key': 'delivery'}, name='deliveries'),
     path('gutschriften/', views.document_list, {'doc_key': 'credit'}, name='credits'),
+    
+    # TextTemplate CRUD
+    path('textbausteine/', views.texttemplate_list, name='texttemplate_list'),
+    path('textbausteine/erstellen/', views.texttemplate_create, name='texttemplate_create'),
+    path('textbausteine/<int:pk>/bearbeiten/', views.texttemplate_update, name='texttemplate_update'),
+    path('textbausteine/<int:pk>/loeschen/', views.texttemplate_delete, name='texttemplate_delete'),
+    
+    # AJAX endpoint for applying text templates
+    path('ajax/apply-texttemplate/', views.ajax_apply_texttemplate, name='ajax_apply_texttemplate'),
 ]

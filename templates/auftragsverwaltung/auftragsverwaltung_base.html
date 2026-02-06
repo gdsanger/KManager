@@ -176,11 +176,11 @@
 
                         <!-- Auftragsverwaltung Section -->
                         <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#auftragsverwaltungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'documents' in request.path or 'angebote' in request.path or 'auftraege' in request.path or 'rechnungen' in request.path or 'lieferscheine' in request.path or 'gutschriften' in request.path %}true{% else %}false{% endif %}">
+                            <a class="nav-link nav-category" href="#auftragsverwaltungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'documents' in request.path or 'angebote' in request.path or 'auftraege' in request.path or 'rechnungen' in request.path or 'lieferscheine' in request.path or 'gutschriften' in request.path or 'textbausteine' in request.path %}true{% else %}false{% endif %}">
                                 <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Auftragsverwaltung</span>
                                 <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
                             </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'documents' in request.path or 'angebote' in request.path or 'auftraege' in request.path or 'rechnungen' in request.path or 'lieferscheine' in request.path or 'gutschriften' in request.path %}show{% endif %}" id="auftragsverwaltungMenu">
+                            <ul class="collapse nav flex-column ms-3 {% if 'documents' in request.path or 'angebote' in request.path or 'auftraege' in request.path or 'rechnungen' in request.path or 'lieferscheine' in request.path or 'gutschriften' in request.path or 'textbausteine' in request.path %}show{% endif %}" id="auftragsverwaltungMenu">
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'angebote' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:quotes' %}">
                                         <i class="bi bi-file-earmark-richtext"></i> <span class="sidebar-text">Angebote</span>
@@ -209,6 +209,11 @@
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'contracts' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:contract_list' %}">
                                         <i class="bi bi-file-text"></i> <span class="sidebar-text">Verträge</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'textbausteine' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:texttemplate_list' %}">
+                                        <i class="bi bi-blockquote-left"></i> <span class="sidebar-text">Textbausteine</span>
                                     </a>
                                 </li>
                             </ul>

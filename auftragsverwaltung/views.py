@@ -8,9 +8,9 @@ from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
 
-from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract
-from .tables import SalesDocumentTable, ContractTable
-from .filters import SalesDocumentFilter, ContractFilter
+from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, TextTemplate
+from .tables import SalesDocumentTable, ContractTable, TextTemplateTable
+from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter
 from .services import (
     DocumentCalculationService,
     TaxDeterminationService,
@@ -798,3 +798,246 @@ def contract_list(request):
     }
     
     return render(request, 'auftragsverwaltung/contracts/list.html', context)
+
+
+# ============================================================================
+# TextTemplate Views
+# ============================================================================
+
+@login_required
+def texttemplate_list(request):
+    """
+    List view for text templates (Textbausteine).
+    
+    Displays a filterable, sortable, paginated list of text templates.
+    Only shows templates for the user's company.
+    """
+    # Get the default company
+    try:
+        company = Mandant.objects.first()
+    except Mandant.DoesNotExist:
+        company = None
+    
+    # Base queryset
+    queryset = TextTemplate.objects.select_related('company')
+    
+    # Filter by company if available
+    if company:
+        queryset = queryset.filter(company=company)
+    
+    # Apply filters
+    filter_set = TextTemplateFilter(request.GET, queryset=queryset)
+    
+    # Create table with filtered data
+    table = TextTemplateTable(filter_set.qs)
+    
+    # Set default ordering
+    table.order_by = request.GET.get('sort', 'type,sort_order,title')
+    
+    # Configure pagination (25 per page)
+    RequestConfig(request, paginate={'per_page': 25}).configure(table)
+    
+    # Prepare context
+    context = {
+        'table': table,
+        'filter': filter_set,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/list.html', context)
+
+
+@login_required
+def texttemplate_create(request):
+    """
+    Create view for text template.
+    """
+    # Get the default company
+    try:
+        company = Mandant.objects.first()
+    except Mandant.DoesNotExist:
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    if request.method == 'POST':
+        # Extract form data
+        key = request.POST.get('key', '').strip()
+        title = request.POST.get('title', '').strip()
+        type = request.POST.get('type', '').strip()
+        content = request.POST.get('content', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+        sort_order = int(request.POST.get('sort_order', '0'))
+        
+        # Create text template
+        template = TextTemplate.objects.create(
+            company=company,
+            key=key,
+            title=title,
+            type=type,
+            content=content,
+            is_active=is_active,
+            sort_order=sort_order
+        )
+        
+        # Log activity
+        ActivityStreamService.log_activity(
+            user=request.user,
+            company=company,
+            action='created',
+            entity_type='texttemplate',
+            entity_id=template.id,
+            entity_name=template.title,
+            description=f"Textbaustein '{template.title}' erstellt"
+        )
+        
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    # GET request - show form
+    context = {
+        'type_choices': TextTemplate.TYPE_CHOICES,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/form.html', context)
+
+
+@login_required
+def texttemplate_update(request, pk):
+    """
+    Update view for text template.
+    """
+    template = get_object_or_404(TextTemplate, pk=pk)
+    
+    if request.method == 'POST':
+        # Extract form data
+        template.key = request.POST.get('key', '').strip()
+        template.title = request.POST.get('title', '').strip()
+        template.type = request.POST.get('type', '').strip()
+        template.content = request.POST.get('content', '').strip()
+        template.is_active = request.POST.get('is_active') == 'on'
+        template.sort_order = int(request.POST.get('sort_order', '0'))
+        
+        template.save()
+        
+        # Log activity
+        ActivityStreamService.log_activity(
+            user=request.user,
+            company=template.company,
+            action='updated',
+            entity_type='texttemplate',
+            entity_id=template.id,
+            entity_name=template.title,
+            description=f"Textbaustein '{template.title}' aktualisiert"
+        )
+        
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    # GET request - show form
+    context = {
+        'template': template,
+        'type_choices': TextTemplate.TYPE_CHOICES,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/form.html', context)
+
+
+@login_required
+def texttemplate_delete(request, pk):
+    """
+    Delete view for text template.
+    """
+    template = get_object_or_404(TextTemplate, pk=pk)
+    
+    if request.method == 'POST':
+        # Log activity before deletion
+        ActivityStreamService.log_activity(
+            user=request.user,
+            company=template.company,
+            action='deleted',
+            entity_type='texttemplate',
+            entity_id=template.id,
+            entity_name=template.title,
+            description=f"Textbaustein '{template.title}' gelöscht"
+        )
+        
+        template.delete()
+        
+        return redirect('auftragsverwaltung:texttemplate_list')
+    
+    # GET request - show confirmation
+    context = {
+        'template': template,
+    }
+    
+    return render(request, 'auftragsverwaltung/texttemplates/delete_confirm.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_apply_texttemplate(request):
+    """
+    AJAX endpoint to apply a text template to a sales document.
+    
+    Copies the template content to the document's header_text or footer_text field.
+    
+    Args (POST):
+        document_id: ID of the sales document
+        template_id: ID of the text template
+        field: 'header_text' or 'footer_text'
+    
+    Returns:
+        JsonResponse with success status and content
+    """
+    try:
+        document_id = request.POST.get('document_id')
+        template_id = request.POST.get('template_id')
+        field = request.POST.get('field')
+        
+        # Validate input
+        if not all([document_id, template_id, field]):
+            return JsonResponse({
+                'success': False,
+                'error': 'Fehlende Parameter'
+            }, status=400)
+        
+        if field not in ['header_text', 'footer_text']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Ungültiges Feld'
+            }, status=400)
+        
+        # Get document and template
+        document = get_object_or_404(SalesDocument, pk=document_id)
+        template = get_object_or_404(TextTemplate, pk=template_id)
+        
+        # Verify company match
+        if document.company != template.company:
+            return JsonResponse({
+                'success': False,
+                'error': 'Textbaustein gehört nicht zum selben Mandanten'
+            }, status=403)
+        
+        # Copy content to document field
+        setattr(document, field, template.content)
+        document.save()
+        
+        # Log activity
+        field_name = 'Kopftext' if field == 'header_text' else 'Fußtext'
+        ActivityStreamService.log_activity(
+            user=request.user,
+            company=document.company,
+            action='updated',
+            entity_type='salesdocument',
+            entity_id=document.id,
+            entity_name=document.number,
+            description=f"Textbaustein '{template.title}' auf {field_name} angewendet"
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'content': template.content,
+            'message': f'Textbaustein erfolgreich übernommen'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
