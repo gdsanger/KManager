@@ -8,7 +8,7 @@ from django.utils import timezone
 from decimal import Decimal
 from datetime import date
 
-from auftragsverwaltung.models import DocumentType, NumberRange, SalesDocument
+from auftragsverwaltung.models import DocumentType, NumberRange, SalesDocument, SalesDocumentSource
 from core.models import Mandant, PaymentTerm
 
 
@@ -1082,3 +1082,384 @@ class SalesDocumentLineModelTestCase(TestCase):
         # Access via related_name
         lines = self.document.lines.all()
         self.assertEqual(lines.count(), 2)
+
+
+class SalesDocumentSourceModelTestCase(TestCase):
+    """Test SalesDocumentSource model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Create company
+        self.company = Mandant.objects.create(
+            name="Test Company",
+            adresse="Test Street 1",
+            plz="12345",
+            ort="Test City",
+            land="Deutschland"
+        )
+        
+        # Create another company for cross-company tests
+        self.company2 = Mandant.objects.create(
+            name="Another Company",
+            adresse="Another Street 1",
+            plz="54321",
+            ort="Another City",
+            land="Deutschland"
+        )
+        
+        # Create document types
+        self.doctype_invoice = DocumentType.objects.create(
+            key="invoice",
+            name="Rechnung",
+            prefix="R",
+            is_invoice=True,
+            requires_due_date=True
+        )
+        
+        self.doctype_quote = DocumentType.objects.create(
+            key="quote",
+            name="Angebot",
+            prefix="A"
+        )
+        
+        # Create source documents
+        self.source_doc = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_quote,
+            number="A26-00001",
+            status="SENT",
+            issue_date=date(2026, 1, 15)
+        )
+        
+        # Create target document
+        self.target_doc = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_invoice,
+            number="R26-00001",
+            status="DRAFT",
+            issue_date=date(2026, 2, 6),
+            due_date=date(2026, 3, 8)
+        )
+        
+        # Create document in another company
+        self.other_company_doc = SalesDocument.objects.create(
+            company=self.company2,
+            document_type=self.doctype_quote,
+            number="A26-00001",
+            status="SENT",
+            issue_date=date(2026, 1, 20)
+        )
+    
+    def test_create_document_source(self):
+        """Test creating a document source"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        source = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        self.assertIsNotNone(source.pk)
+        self.assertEqual(source.target_document, self.target_doc)
+        self.assertEqual(source.source_document, self.source_doc)
+        self.assertEqual(source.role, 'DERIVED_FROM')
+        self.assertIsNotNone(source.created_at)
+    
+    def test_str_representation(self):
+        """Test __str__ method"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        source = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='COPIED_FROM'
+        )
+        
+        expected = f"{self.target_doc.number} ← Kopiert von ← {self.source_doc.number}"
+        self.assertEqual(str(source), expected)
+    
+    def test_multiple_sources_for_target(self):
+        """Test that multiple sources for one target are allowed"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Create second source document
+        source_doc2 = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_quote,
+            number="A26-00002",
+            status="SENT",
+            issue_date=date(2026, 1, 20)
+        )
+        
+        # Create first source relation
+        source1 = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        # Create second source relation - should work
+        source2 = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=source_doc2,
+            role='DERIVED_FROM'
+        )
+        
+        self.assertIsNotNone(source1.pk)
+        self.assertIsNotNone(source2.pk)
+        
+        # Verify both sources are accessible via related_name
+        sources = self.target_doc.sources_as_target.all()
+        self.assertEqual(sources.count(), 2)
+    
+    def test_company_consistency_validation_fails(self):
+        """Test that different companies for source/target are rejected"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Try to create source with different companies
+        source = SalesDocumentSource(
+            target_document=self.target_doc,  # company1
+            source_document=self.other_company_doc,  # company2
+            role='COPIED_FROM'
+        )
+        
+        with self.assertRaises(ValidationError) as context:
+            source.full_clean()
+        
+        self.assertIn('source_document', context.exception.message_dict)
+        self.assertIn('selben Mandanten', context.exception.message_dict['source_document'][0])
+    
+    def test_company_consistency_validation_passes(self):
+        """Test that same company for source/target passes validation"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        source = SalesDocumentSource(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='COPIED_FROM'
+        )
+        
+        # Should not raise any exceptions
+        source.full_clean()
+        source.save()
+        self.assertIsNotNone(source.pk)
+    
+    def test_self_reference_validation_fails(self):
+        """Test that self-reference is rejected via clean()"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Try to create source that references itself
+        source = SalesDocumentSource(
+            target_document=self.target_doc,
+            source_document=self.target_doc,  # Same as target
+            role='COPIED_FROM'
+        )
+        
+        with self.assertRaises(ValidationError) as context:
+            source.full_clean()
+        
+        self.assertIn('source_document', context.exception.message_dict)
+        self.assertIn('nicht auf sich selbst verweisen', context.exception.message_dict['source_document'][0])
+    
+    def test_self_reference_constraint_fails(self):
+        """Test that self-reference is also rejected at database level"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Try to bypass validation and save directly
+        source = SalesDocumentSource(
+            target_document=self.target_doc,
+            source_document=self.target_doc,  # Same as target
+            role='COPIED_FROM'
+        )
+        
+        # Should raise IntegrityError due to CheckConstraint
+        with self.assertRaises((ValidationError, IntegrityError)):
+            source.save()
+    
+    def test_duplicate_constraint_fails(self):
+        """Test that duplicate (target, source, role) is rejected"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Create first source
+        SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        # Try to create duplicate
+        source2 = SalesDocumentSource(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'  # Same triple
+        )
+        
+        # Should raise IntegrityError when saving
+        with self.assertRaises(IntegrityError):
+            source2.save()
+    
+    def test_duplicate_allows_different_role(self):
+        """Test that same target/source with different role is allowed"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Create first source
+        source1 = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        # Create second with different role - should work
+        source2 = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='COPIED_FROM'  # Different role
+        )
+        
+        self.assertIsNotNone(source1.pk)
+        self.assertIsNotNone(source2.pk)
+    
+    def test_protect_on_delete_target(self):
+        """Test that deleting target document is prevented"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        from django.db.models.deletion import ProtectedError
+        
+        # Create source relation
+        SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        # Try to delete target document
+        with self.assertRaises(ProtectedError):
+            self.target_doc.delete()
+    
+    def test_protect_on_delete_source(self):
+        """Test that deleting source document is prevented"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        from django.db.models.deletion import ProtectedError
+        
+        # Create source relation
+        SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        # Try to delete source document
+        with self.assertRaises(ProtectedError):
+            self.source_doc.delete()
+    
+    def test_related_name_sources_as_target(self):
+        """Test that sources can be accessed via target document"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Create source relation
+        SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        # Access via related_name
+        sources = self.target_doc.sources_as_target.all()
+        self.assertEqual(sources.count(), 1)
+        self.assertEqual(sources[0].source_document, self.source_doc)
+    
+    def test_related_name_sources_as_source(self):
+        """Test that targets can be accessed via source document"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        # Create source relation
+        SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=self.source_doc,
+            role='DERIVED_FROM'
+        )
+        
+        # Access via related_name
+        targets = self.source_doc.sources_as_source.all()
+        self.assertEqual(targets.count(), 1)
+        self.assertEqual(targets[0].target_document, self.target_doc)
+    
+    def test_role_choices(self):
+        """Test all role choices"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        
+        roles = ['COPIED_FROM', 'DERIVED_FROM', 'CORRECTION_OF']
+        
+        for i, role in enumerate(roles):
+            source_doc = SalesDocument.objects.create(
+                company=self.company,
+                document_type=self.doctype_quote,
+                number=f"A26-{100 + i:05d}",  # Start from 00100 to avoid conflicts
+                status="SENT",
+                issue_date=date(2026, 1, 10 + i)
+            )
+            
+            source = SalesDocumentSource.objects.create(
+                target_document=self.target_doc,
+                source_document=source_doc,
+                role=role
+            )
+            
+            self.assertEqual(source.role, role)
+    
+    def test_ordering_by_created_at(self):
+        """Test that sources are ordered by created_at descending"""
+        from auftragsverwaltung.models import SalesDocumentSource
+        from django.utils import timezone
+        import time
+        
+        # Create three sources with slight time differences
+        source_doc1 = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_quote,
+            number="A26-00010",
+            status="SENT",
+            issue_date=date(2026, 1, 10)
+        )
+        source1 = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=source_doc1,
+            role='COPIED_FROM'
+        )
+        time.sleep(0.01)
+        
+        source_doc2 = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_quote,
+            number="A26-00011",
+            status="SENT",
+            issue_date=date(2026, 1, 11)
+        )
+        source2 = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=source_doc2,
+            role='DERIVED_FROM'
+        )
+        time.sleep(0.01)
+        
+        source_doc3 = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doctype_quote,
+            number="A26-00012",
+            status="SENT",
+            issue_date=date(2026, 1, 12)
+        )
+        source3 = SalesDocumentSource.objects.create(
+            target_document=self.target_doc,
+            source_document=source_doc3,
+            role='CORRECTION_OF'
+        )
+        
+        # Get all sources - should be ordered by created_at descending
+        sources = SalesDocumentSource.objects.all()
+        self.assertEqual(sources[0], source3)  # Most recent
+        self.assertEqual(sources[1], source2)
+        self.assertEqual(sources[2], source1)  # Oldest
+

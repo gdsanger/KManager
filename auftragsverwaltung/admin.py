@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib import messages
-from auftragsverwaltung.models import DocumentType, NumberRange, SalesDocument, SalesDocumentLine
+from auftragsverwaltung.models import DocumentType, NumberRange, SalesDocument, SalesDocumentLine, SalesDocumentSource
 from auftragsverwaltung.services import DocumentCalculationService
 
 
@@ -226,3 +226,43 @@ class SalesDocumentLineAdmin(admin.ModelAdmin):
             return f"{obj.description[:50]}..."
         return obj.description
     description_short.short_description = "Beschreibung"
+
+
+@admin.register(SalesDocumentSource)
+class SalesDocumentSourceAdmin(admin.ModelAdmin):
+    """Admin interface for SalesDocumentSource"""
+    list_display = (
+        'target_document',
+        'source_document',
+        'role',
+        'created_at',
+        'target_company'
+    )
+    list_filter = (
+        'role',
+        'target_document__company',
+    )
+    search_fields = (
+        'target_document__number',
+        'source_document__number',
+        'target_document__company__name',
+    )
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Dokumentbeziehung', {
+            'fields': ('target_document', 'source_document', 'role')
+        }),
+        ('Metadaten', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at',)
+    
+    def target_company(self, obj):
+        """Show company of target document"""
+        return obj.target_document.company.name
+    target_company.short_description = "Mandant"
