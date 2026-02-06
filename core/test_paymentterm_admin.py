@@ -91,15 +91,17 @@ class PaymentTermAdminTestCase(TestCase):
         """Test that the queryset doesn't attempt to filter by company
         
         This is the core test to prevent the ProgrammingError mentioned in the issue.
+        The test verifies that get_queryset() executes successfully without errors.
         """
         request = self.factory.get('/admin/core/paymentterm/')
         request.user = self.user
         
+        # Get the queryset - this will raise an exception if it tries to access
+        # non-existent company_id column
         queryset = self.admin.get_queryset(request)
         
-        # Get the SQL query and verify it doesn't reference core_mandant or company_id
-        sql = str(queryset.query).lower()
-        self.assertNotIn('core_mandant', sql, 
-                        "Queryset should not join with core_mandant table")
-        self.assertNotIn('company_id', sql,
-                        "Queryset should not reference company_id column")
+        # Verify we can iterate over results without error
+        list(queryset)
+        
+        # Verify we get the expected payment terms
+        self.assertEqual(queryset.count(), 2)

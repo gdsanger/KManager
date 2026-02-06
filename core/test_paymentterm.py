@@ -12,10 +12,6 @@ from core.models import PaymentTerm
 class PaymentTermModelTestCase(TestCase):
     """Test PaymentTerm model - PaymentTerm is global, not company-specific"""
     
-    def setUp(self):
-        """Set up test data"""
-        pass
-    
     def test_create_payment_term_without_discount(self):
         """Test creating a payment term without discount"""
         payment_term = PaymentTerm.objects.create(
