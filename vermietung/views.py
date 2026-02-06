@@ -18,7 +18,7 @@ from django_tables2 import RequestConfig
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, AktivitaetsBereich,
     Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
-    EINGANGSRECHNUNG_STATUS
+    EINGANGSRECHNUNG_STATUS, AKTIVITAET_STATUS
 )
 from core.models import Adresse, AdresseKontakt, Mandant, Kostenart
 from .forms import (
@@ -74,6 +74,39 @@ def _get_aktivitaet_target_url(aktivitaet):
     # For now, link to the kanban view with aktivitaet_id as a parameter
     # In future, this could be a dedicated detail view
     return reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+
+
+def _get_assignee_display_name(user):
+    """
+    Get display name for an assignee user.
+    
+    Args:
+        user: User instance or None
+        
+    Returns:
+        str: Full name, username, or 'Niemand' if user is None
+    """
+    if not user:
+        return 'Niemand'
+    return user.get_full_name() or user.username
+
+
+def _get_status_display_description(old_status, new_status, status_choices):
+    """
+    Generate description for a status change.
+    
+    Args:
+        old_status: str, old status code
+        new_status: str, new status code
+        status_choices: list of tuples, status choices from model
+        
+    Returns:
+        str: Description like "Status geändert: Offen → Erledigt"
+    """
+    status_dict = dict(status_choices)
+    old_display = status_dict.get(old_status, old_status)
+    new_display = status_dict.get(new_status, new_status)
+    return f'Status geändert: {old_display} → {new_display}'
 
 
 def _log_aktivitaet_stream_event(aktivitaet, event_type, actor=None, description=None):
@@ -1993,7 +2026,7 @@ def aktivitaet_edit(request, pk):
                 
                 # Check if status changed and log event
                 if old_status != aktivitaet.status:
-                    description = f'Status geändert: {dict(aktivitaet._meta.get_field("status").choices).get(old_status, old_status)} → {aktivitaet.get_status_display()}'
+                    description = _get_status_display_description(old_status, aktivitaet.status, AKTIVITAET_STATUS)
                     
                     # Check if this is a "closed" status change
                     if aktivitaet.status == 'ERLEDIGT':
@@ -2013,8 +2046,8 @@ def aktivitaet_edit(request, pk):
                 
                 # Check if assignment changed and log event
                 if old_assigned_user != aktivitaet.assigned_user:
-                    old_assignee_name = old_assigned_user.get_full_name() or old_assigned_user.username if old_assigned_user else 'Niemand'
-                    new_assignee_name = aktivitaet.assigned_user.get_full_name() or aktivitaet.assigned_user.username if aktivitaet.assigned_user else 'Niemand'
+                    old_assignee_name = _get_assignee_display_name(old_assigned_user)
+                    new_assignee_name = _get_assignee_display_name(aktivitaet.assigned_user)
                     description = f'Zuweisung geändert: {old_assignee_name} → {new_assignee_name}'
                     
                     _log_aktivitaet_stream_event(
@@ -2085,7 +2118,7 @@ def aktivitaet_mark_completed(request, pk):
             aktivitaet.save()
             
             # Log ActivityStream event: activity.closed
-            description = f'Status geändert: {dict(aktivitaet._meta.get_field("status").choices).get(old_status, old_status)} → {aktivitaet.get_status_display()}'
+            description = _get_status_display_description(old_status, aktivitaet.status, AKTIVITAET_STATUS)
             _log_aktivitaet_stream_event(
                 aktivitaet=aktivitaet,
                 event_type='activity.closed',
@@ -2132,8 +2165,8 @@ def aktivitaet_assign(request, pk):
             aktivitaet.save()
             
             # Log ActivityStream event: activity.assigned
-            old_assignee_name = old_assigned_user.get_full_name() or old_assigned_user.username if old_assigned_user else 'Niemand'
-            new_assignee_name = new_user.get_full_name() or new_user.username
+            old_assignee_name = _get_assignee_display_name(old_assigned_user)
+            new_assignee_name = _get_assignee_display_name(new_user)
             description = f'Zuweisung geändert: {old_assignee_name} → {new_assignee_name}'
             _log_aktivitaet_stream_event(
                 aktivitaet=aktivitaet,
@@ -2145,7 +2178,7 @@ def aktivitaet_assign(request, pk):
             # Signal will automatically send email
             messages.success(
                 request,
-                f'Aktivität "{aktivitaet.titel}" wurde {new_user.get_full_name() or new_user.username} zugewiesen. '
+                f'Aktivität "{aktivitaet.titel}" wurde {_get_assignee_display_name(new_user)} zugewiesen. '
                 f'Eine E-Mail-Benachrichtigung wurde versendet.'
             )
     except User.DoesNotExist:
@@ -2163,8 +2196,6 @@ def aktivitaet_update_status(request, pk):
     Quick update of activity status (for Kanban drag & drop).
     Expects 'status' in POST data.
     """
-    from .models import AKTIVITAET_STATUS
-    
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
     old_status = aktivitaet.status
     new_status = request.POST.get('status')
@@ -2180,7 +2211,7 @@ def aktivitaet_update_status(request, pk):
         
         # Log ActivityStream event if status actually changed
         if old_status != new_status:
-            description = f'Status geändert: {dict(AKTIVITAET_STATUS).get(old_status, old_status)} → {aktivitaet.get_status_display()}'
+            description = _get_status_display_description(old_status, new_status, AKTIVITAET_STATUS)
             
             # Check if this is a "closed" status change
             if new_status == 'ERLEDIGT':
