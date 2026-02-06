@@ -25,10 +25,30 @@ class AdresseKontaktInline(admin.TabularInline):
 
 @admin.register(Adresse)
 class AdressenAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email')
-    search_fields = ('firma', 'name', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email')
-    list_filter = ('adressen_type', 'land')
+    list_display = ('full_name', 'strasse', 'plz', 'ort', 'land', 'country_code', 'is_business', 'is_eu', 'telefon', 'email')
+    search_fields = ('firma', 'name', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'vat_id', 'debitor_number')
+    list_filter = ('adressen_type', 'land', 'country_code', 'is_business', 'is_eu')
     inlines = [AdresseKontaktInline]
+    
+    fieldsets = (
+        ('Basisdaten', {
+            'fields': ('adressen_type', 'firma', 'anrede', 'name')
+        }),
+        ('Adresse', {
+            'fields': ('strasse', 'plz', 'ort', 'land')
+        }),
+        ('Kontakt', {
+            'fields': ('telefon', 'mobil', 'email')
+        }),
+        ('Steuer & Buchhaltung', {
+            'fields': ('country_code', 'vat_id', 'is_eu', 'is_business', 'debitor_number'),
+            'classes': ('collapse',)
+        }),
+        ('Zusatzinformationen', {
+            'fields': ('bemerkung',),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 class MailTemplateAdminForm(forms.ModelForm):

@@ -371,3 +371,50 @@ class AdresseKundeFormTestCase(TestCase):
         self.assertEqual(updated_kunde.strasse, 'Updated Strasse')
         # adressen_type should still be KUNDE
         self.assertEqual(updated_kunde.adressen_type, 'KUNDE')
+    
+    def test_form_with_tax_fields(self):
+        """Test that form accepts and saves tax and accounting fields."""
+        form_data = {
+            'name': 'Tax Test Kunde',
+            'strasse': 'Steuerstrasse 1',
+            'plz': '11111',
+            'ort': 'Steuerstadt',
+            'land': 'Deutschland',
+            'country_code': 'DE',
+            'vat_id': 'DE123456789',
+            'is_eu': True,
+            'is_business': True,
+            'debitor_number': 'DEB-2024-001'
+        }
+        form = AdresseKundeForm(data=form_data)
+        
+        self.assertTrue(form.is_valid())
+        kunde = form.save()
+        
+        self.assertEqual(kunde.country_code, 'DE')
+        self.assertEqual(kunde.vat_id, 'DE123456789')
+        self.assertTrue(kunde.is_eu)
+        self.assertTrue(kunde.is_business)
+        self.assertEqual(kunde.debitor_number, 'DEB-2024-001')
+    
+    def test_form_tax_fields_optional(self):
+        """Test that tax and accounting fields are optional."""
+        form_data = {
+            'name': 'Simple Kunde',
+            'strasse': 'Einfachstrasse 1',
+            'plz': '11111',
+            'ort': 'Einfachstadt',
+            'land': 'Deutschland',
+            # Checkboxes: False when not provided in form data
+            'is_business': True,  # Explicitly set
+            'is_eu': False,  # Explicitly set
+        }
+        form = AdresseKundeForm(data=form_data)
+        
+        self.assertTrue(form.is_valid())
+        kunde = form.save()
+        
+        # Should have values as set
+        self.assertEqual(kunde.country_code, 'DE')  # default
+        self.assertFalse(kunde.is_eu)
+        self.assertTrue(kunde.is_business)

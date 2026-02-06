@@ -43,6 +43,8 @@
                 <th>Name</th>
                 <th>Firma</th>
                 <th>Adresse</th>
+                <th>Land</th>
+                <th>Typ</th>
                 <th>Kontakt</th>
                 <th class="text-end">Aktionen</th>
                 {% endblock %}
@@ -62,6 +64,23 @@
                     <td>
                         {{ kunde.strasse }}<br>
                         <small class="text-muted">{{ kunde.plz }} {{ kunde.ort }}</small>
+                    </td>
+                    <td>
+                        {% if kunde.country_code %}
+                            <span class="badge bg-secondary">{{ kunde.country_code }}</span>
+                            {% if kunde.is_eu %}
+                                <span class="badge bg-info">EU</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if kunde.is_business %}
+                            <span class="badge bg-primary">Geschäft</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Privat</span>
+                        {% endif %}
                     </td>
                     <td>
                         {% if kunde.telefon %}
@@ -91,7 +110,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted">
+                    <td colspan="7" class="text-center text-muted">
                         <i class="bi bi-inbox"></i> 
                         {% if search_query %}
                             Keine Kunden gefunden für "{{ search_query }}"
