@@ -313,15 +313,6 @@ def document_create(request, doc_key):
         document.save()
         
         # Log activity
-        ActivityStreamService.log(
-            company=company,
-            domain='ORDER',
-            entity_type='SalesDocument',
-            entity_id=document.pk,
-            action='created',
-            description=f'Dokument {document.number} erstellt',
-            user=request.user
-        )
         
         # Redirect to detail view
         return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
@@ -428,15 +419,6 @@ def document_update(request, doc_key, pk):
     DocumentCalculationService.recalculate(document, persist=True)
     
     # Log activity
-    ActivityStreamService.log(
-        company=document.company,
-        domain='ORDER',
-        entity_type='SalesDocument',
-        entity_id=document.pk,
-        action='updated',
-        description=f'Dokument {document.number} aktualisiert',
-        user=request.user
-    )
     
     # Redirect to detail view
     return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
@@ -945,15 +927,6 @@ def contract_create(request):
         contract.save()
         
         # Log activity
-        ActivityStreamService.log(
-            company=contract.company,
-            user=request.user if request.user.is_authenticated else None,
-            domain='ORDER',
-            action='CREATE',
-            target_model='Contract',
-            target_id=contract.id,
-            message=f'Vertrag erstellt: {contract.name}'
-        )
         
         # Redirect to detail view
         return redirect('auftragsverwaltung:contract_detail', pk=contract.pk)
@@ -1040,15 +1013,6 @@ def contract_update(request, pk):
     contract.save()
     
     # Log activity
-    ActivityStreamService.log(
-        company=contract.company,
-        user=request.user if request.user.is_authenticated else None,
-        domain='ORDER',
-        action='UPDATE',
-        target_model='Contract',
-        target_id=contract.id,
-        message=f'Vertrag aktualisiert: {contract.name}'
-    )
     
     # Redirect to detail view
     return redirect('auftragsverwaltung:contract_detail', pk=contract.pk)
@@ -1150,15 +1114,6 @@ def ajax_contract_add_line(request, pk):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
-        ActivityStreamService.log(
-            company=contract.company,
-            user=request.user if request.user.is_authenticated else None,
-            domain='ORDER',
-            action='UPDATE',
-            target_model='Contract',
-            target_id=contract.id,
-            message=f'Vertragsposition hinzugefügt: {description[:50]}'
-        )
         
         # Return success with line data
         return JsonResponse({
@@ -1230,15 +1185,6 @@ def ajax_contract_update_line(request, pk, line_id):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
-        ActivityStreamService.log(
-            company=contract.company,
-            user=request.user if request.user.is_authenticated else None,
-            domain='ORDER',
-            action='UPDATE',
-            target_model='Contract',
-            target_id=contract.id,
-            message=f'Vertragsposition aktualisiert: {line.description[:50]}'
-        )
         
         # Return updated line data
         return JsonResponse({
@@ -1281,15 +1227,6 @@ def ajax_contract_delete_line(request, pk, line_id):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
-        ActivityStreamService.log(
-            company=contract.company,
-            user=request.user if request.user.is_authenticated else None,
-            domain='ORDER',
-            action='UPDATE',
-            target_model='Contract',
-            target_id=contract.id,
-            message=f'Vertragsposition gelöscht: {line_desc}'
-        )
         
         return JsonResponse({
             'success': True,
@@ -1371,8 +1308,8 @@ def _calculate_contract_preview_totals(contract):
         # Calculate line total (net)
         line_total_net = (line.quantity * line.unit_price_net).quantize(Decimal('0.01'))
         
-        # Calculate line tax
-        line_tax = (line_total_net * line.tax_rate.rate / Decimal('100')).quantize(Decimal('0.01'))
+        # Calculate line tax (rate is already decimal, e.g. 0.19 for 19%)
+        line_tax = (line_total_net * line.tax_rate.rate).quantize(Decimal('0.01'))
         
         total_net += line_total_net
         total_tax += line_tax
