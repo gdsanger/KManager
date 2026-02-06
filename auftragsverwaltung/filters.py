@@ -45,16 +45,6 @@ class SalesDocumentFilter(django_filters.FilterSet):
         })
     )
     
-    customer = django_filters.CharFilter(
-        field_name='customer_name',
-        lookup_expr='icontains',
-        label='Kunde',
-        widget=django_filters.widgets.forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Kundenname...'
-        })
-    )
-    
     issue_date_from = django_filters.DateFilter(
         field_name='issue_date',
         lookup_expr='gte',
@@ -78,7 +68,7 @@ class SalesDocumentFilter(django_filters.FilterSet):
     def search_filter(self, queryset, name, value):
         """
         Full-text search across multiple fields using OR.
-        Searches in: number, subject, customer_name, notes_public, notes_internal
+        Searches in: number, subject, notes_public, notes_internal
         """
         if not value:
             return queryset
@@ -86,11 +76,10 @@ class SalesDocumentFilter(django_filters.FilterSet):
         return queryset.filter(
             Q(number__icontains=value) |
             Q(subject__icontains=value) |
-            Q(customer_name__icontains=value) |
             Q(notes_public__icontains=value) |
             Q(notes_internal__icontains=value)
         )
     
     class Meta:
         model = SalesDocument
-        fields = ['q', 'status', 'number', 'subject', 'customer', 'issue_date_from', 'issue_date_to']
+        fields = ['q', 'status', 'number', 'subject', 'issue_date_from', 'issue_date_to']

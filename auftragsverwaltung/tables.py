@@ -20,12 +20,6 @@ class SalesDocumentTable(tables.Table):
         attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 200px;'}}
     )
     
-    customer_name = tables.Column(
-        verbose_name='Kunde',
-        accessor='customer_name',
-        order_by='customer_name'
-    )
-    
     issue_date = tables.DateColumn(
         verbose_name='Belegdatum',
         format='d.m.Y',
@@ -102,7 +96,6 @@ class SalesDocumentTable(tables.Table):
         fields = (
             'number',
             'subject',
-            'customer_name',
             'issue_date',
             'due_date',
             'total_gross',
