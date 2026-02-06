@@ -1154,12 +1154,13 @@ def ajax_contract_add_line(request, pk):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
+        description_preview = line.description[:100] if line.description and len(line.description) <= 100 else (line.description[:97] + '...' if line.description else None)
         ActivityStreamService.add(
             company=contract.company,
             domain='ORDER',
             activity_type='CONTRACT_LINE_ADDED',
             title=f'Vertragsposition hinzugefügt: {contract.name}',
-            description=f'Position: {line.description[:100]}' if line.description else None,
+            description=f'Position: {description_preview}' if description_preview else None,
             target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
             actor=request.user,
             severity='INFO'
@@ -1235,12 +1236,13 @@ def ajax_contract_update_line(request, pk, line_id):
         preview_totals = _calculate_contract_preview_totals(contract)
         
         # Log activity
+        description_preview = line.description[:100] if line.description and len(line.description) <= 100 else (line.description[:97] + '...' if line.description else None)
         ActivityStreamService.add(
             company=contract.company,
             domain='ORDER',
             activity_type='CONTRACT_LINE_UPDATED',
             title=f'Vertragsposition aktualisiert: {contract.name}',
-            description=f'Position: {line.description[:100]}' if line.description else None,
+            description=f'Position: {description_preview}' if description_preview else None,
             target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
             actor=request.user,
             severity='INFO'
