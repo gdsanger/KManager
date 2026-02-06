@@ -176,7 +176,6 @@ class SalesDocumentModelTestCase(TestCase):
         
         # Create PaymentTerm
         self.payment_term = PaymentTerm.objects.create(
-            company=self.company,
             name="30 Tage netto",
             net_days=30,
             is_default=True
@@ -542,7 +541,7 @@ class SalesDocumentLineModelTestCase(TestCase):
     
     def setUp(self):
         """Set up test data"""
-        from core.models import TaxRate, Item
+        from core.models import TaxRate, Item, Kostenart
         
         # Create a Mandant
         self.company = Mandant.objects.create(
@@ -569,12 +568,22 @@ class SalesDocumentLineModelTestCase(TestCase):
             is_active=True
         )
         
+        # Create Kostenart
+        self.cost_type = Kostenart.objects.create(
+            name="Material",
+            umsatzsteuer_satz="19"
+        )
+        
         # Create Item
         self.item = Item.objects.create(
-            name="Test Item",
-            description="Test Item Description",
-            unit_price_net=Decimal('100.00'),
+            article_no="TEST-001",
+            short_text_1="Test Item",
+            long_text="Test Item Description",
+            net_price=Decimal('100.00'),
+            purchase_price=Decimal('50.00'),
             tax_rate=self.tax_rate,
+            cost_type_1=self.cost_type,
+            item_type="MATERIAL",
             is_active=True
         )
         
