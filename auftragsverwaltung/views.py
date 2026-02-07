@@ -654,6 +654,9 @@ def ajax_add_line(request, doc_key, pk):
             'line': {
                 'id': line.pk,
                 'position_no': line.position_no,
+                'short_text_1': line.short_text_1,
+                'short_text_2': line.short_text_2,
+                'long_text': line.long_text,
                 'description': line.description,
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
@@ -731,6 +734,9 @@ def ajax_update_line(request, doc_key, pk, line_id):
             'success': True,
             'line': {
                 'id': line.pk,
+                'short_text_1': line.short_text_1,
+                'short_text_2': line.short_text_2,
+                'long_text': line.long_text,
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
                 'description': line.description,

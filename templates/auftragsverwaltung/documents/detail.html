@@ -1593,6 +1593,64 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Add change handlers for short text fields
+    document.querySelectorAll('.line-short-text-2').forEach(input => {
+        input.addEventListener('change', function() {
+            const lineItem = this.closest('.line-item');
+            const lineId = lineItem.dataset.lineId;
+            const shortText2 = this.value;
+            
+            updateLineField(lineId, {
+                short_text_2: shortText2
+            });
+        });
+    });
+    
+    // Add change handlers for kostenart and tax rate
+    document.querySelectorAll('.line-kostenart1, .line-kostenart2, .line-tax-rate').forEach(select => {
+        select.addEventListener('change', function() {
+            const lineItem = this.closest('.line-item');
+            const lineId = lineItem.dataset.lineId;
+            
+            if (this.classList.contains('line-kostenart1')) {
+                const kostenart1Id = this.value;
+                updateLineField(lineId, {
+                    kostenart1_id: kostenart1Id ? parseInt(kostenart1Id) : null
+                });
+                
+                // Update kostenart2 options
+                const kostenart2Select = lineItem.querySelector('.line-kostenart2');
+                kostenart2Select.innerHTML = '<option value="">-- Keine --</option>';
+                
+                if (kostenart1Id) {
+                    fetch(`{% url "auftragsverwaltung:ajax_get_kostenart2_options" %}?kostenart1_id=${kostenart1Id}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.kostenarten && data.kostenarten.length > 0) {
+                            data.kostenarten.forEach(k => {
+                                const option = document.createElement('option');
+                                option.value = k.id;
+                                option.textContent = k.name;
+                                kostenart2Select.appendChild(option);
+                            });
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+            } else if (this.classList.contains('line-kostenart2')) {
+                const kostenart2Id = this.value;
+                updateLineField(lineId, {
+                    kostenart2_id: kostenart2Id ? parseInt(kostenart2Id) : null
+                });
+            } else if (this.classList.contains('line-tax-rate')) {
+                const taxRateId = this.value;
+                updateLineField(lineId, {
+                    tax_rate_id: taxRateId ? parseInt(taxRateId) : null
+                });
+            }
+        });
+    });
+    
     // Function to update document totals
     function updateDocumentTotals(totals) {
         const totalNetEl = document.getElementById('totalNet');
