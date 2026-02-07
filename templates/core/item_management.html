@@ -418,6 +418,17 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             saveItem();
         });
+        
+        // Handle cancel button
+        const cancelBtn = document.getElementById('cancelItemEdit');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function() {
+                const closeButton = document.getElementById('itemModalClose');
+                if (closeButton) {
+                    closeButton.click();
+                }
+            });
+        }
     }
     
     // Save item via AJAX
