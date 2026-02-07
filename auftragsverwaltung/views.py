@@ -410,6 +410,8 @@ def document_create(request, doc_key):
     ).order_by('sort_order', 'title')
     
     context = {
+        'document': None,  # Explicitly set to None for create mode
+        'lines': [],  # No lines in create mode
         'document_type': document_type,
         'doc_key': doc_key,
         'company': company,
