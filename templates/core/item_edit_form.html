@@ -1,7 +1,26 @@
+{% load static %}
+
+<!-- Quill CSS -->
+<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
+<style>
+    #longTextEditor {
+        height: 200px;
+        background-color: var(--bs-body-bg);
+    }
+    .ql-toolbar {
+        background-color: var(--bs-secondary-bg);
+        border-color: var(--bs-border-color);
+    }
+    .ql-container {
+        border-color: var(--bs-border-color);
+    }
+</style>
+
 <form id="itemEditForm">
     {% csrf_token %}
     <input type="hidden" name="item_id" value="{{ item.pk }}">
     
+    <!-- Basic Information Section -->
     <div class="row">
         <div class="col-md-6">
             <div class="mb-3">
@@ -23,12 +42,6 @@
             </div>
 
             <div class="mb-3">
-                <label for="{{ form.long_text.id_for_label }}" class="form-label">{{ form.long_text.label }}</label>
-                {{ form.long_text }}
-                <div class="invalid-feedback"></div>
-            </div>
-
-            <div class="mb-3">
                 <label for="{{ form.item_type.id_for_label }}" class="form-label">{{ form.item_type.label }}</label>
                 {{ form.item_type }}
                 <div class="invalid-feedback"></div>
@@ -41,6 +54,7 @@
             </div>
         </div>
 
+        <!-- Pricing and Cost Section -->
         <div class="col-md-6">
             <div class="mb-3">
                 <label for="{{ form.net_price.id_for_label }}" class="form-label">{{ form.net_price.label }}</label>
@@ -104,6 +118,20 @@
         </div>
     </div>
 
+    <!-- Long Text Section - Full Width at Bottom -->
+    <div class="row">
+        <div class="col-12">
+            <div class="mb-3">
+                <label for="{{ form.long_text.id_for_label }}" class="form-label">{{ form.long_text.label }}</label>
+                <!-- Quill Editor Container -->
+                <div id="longTextEditor"></div>
+                <!-- Hidden field to store content - keep original form field but hide it -->
+                <textarea name="{{ form.long_text.name }}" id="{{ form.long_text.id_for_label }}" style="display: none;">{{ form.long_text.value|default:'' }}</textarea>
+                <div class="invalid-feedback"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="d-flex justify-content-end gap-2">
         <button type="button" class="btn btn-secondary" id="cancelItemEdit">
             <i class="bi bi-x"></i> Abbrechen
@@ -115,7 +143,40 @@
 </form>
 
 <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<!-- Quill JS -->
+<script src="{% static 'quill/quill.js' %}"></script>
 <script>
+// Initialize Quill editor for long_text
+(function() {
+    const quill = new Quill('#longTextEditor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline'],        // toggled buttons
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],  // lists
+                ['link'],                                // link
+                ['clean']                                // remove formatting
+            ]
+        },
+        placeholder: 'Langtext eingeben...'
+    });
+    
+    // Load initial content from the hidden textarea
+    const hiddenTextarea = document.getElementById('{{ form.long_text.id_for_label }}');
+    const initialContent = hiddenTextarea.value || '';
+    if (initialContent) {
+        quill.root.innerHTML = initialContent;
+    }
+    
+    // Update hidden textarea on text change
+    quill.on('text-change', function() {
+        hiddenTextarea.value = quill.root.innerHTML;
+    });
+    
+    // Set initial value in hidden textarea
+    hiddenTextarea.value = quill.root.innerHTML;
+})();
+
 // Attach cancel handler
 document.getElementById('cancelItemEdit').addEventListener('click', function() {
     document.getElementById('itemModalClose').click();
