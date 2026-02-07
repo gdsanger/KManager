@@ -89,8 +89,8 @@ Neues {{ document_type.name }}
         background: var(--bs-secondary-bg);
         border: 1px solid var(--bs-border-color);
         border-radius: 6px;
-        padding: 15px;
-        margin-bottom: 10px;
+        padding: 8px;
+        margin-bottom: 8px;
         position: relative;
     }
     
@@ -100,22 +100,22 @@ Neues {{ document_type.name }}
     
     .line-number {
         position: absolute;
-        top: 10px;
-        left: 10px;
+        top: 8px;
+        left: 8px;
         background: var(--bs-primary);
         color: white;
-        width: 30px;
-        height: 30px;
+        width: 26px;
+        height: 26px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: bold;
-        font-size: 0.9em;
+        font-size: 0.85em;
     }
     
     .line-content {
-        padding-left: 45px;
+        padding-left: 38px;
     }
     
     .line-actions {
@@ -372,103 +372,127 @@ Neues {{ document_type.name }}
                 <div id="linesContainer">
                     {% if document and lines %}
                         {% for line in lines %}
-                        <div class="line-item" data-line-id="{{ line.pk }}">
+                        <div class="line-item mb-1" data-line-id="{{ line.pk }}">
                             <div class="line-number">{{ line.position_no }}</div>
-                            <div class="line-actions">
-                                <button type="button" class="btn btn-sm btn-outline-danger delete-line-btn" data-line-id="{{ line.pk }}">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
                             <div class="line-content">
-                                <div class="row g-2">
-                                    <!-- Kurztext 1 with article search -->
-                                    <div class="col-md-6">
-                                        <label class="form-label-sm">Kurztext 1</label>
-                                        <input type="text" class="form-control form-control-sm line-short-text-1" 
-                                               value="{{ line.short_text_1 }}" placeholder="Kurztext 1" data-line-id="{{ line.pk }}">
-                                        <div class="article-suggestions" id="suggestions-{{ line.pk }}" style="display:none;"></div>
-                                    </div>
-                                    <!-- Kurztext 2 -->
-                                    <div class="col-md-6">
-                                        <label class="form-label-sm">Kurztext 2</label>
-                                        <input type="text" class="form-control form-control-sm line-short-text-2" 
-                                               value="{{ line.short_text_2 }}" placeholder="Kurztext 2">
-                                    </div>
-                                    <!-- Langtext with Quill editor button -->
-                                    <div class="col-md-12">
-                                        <label class="form-label-sm">Langtext</label>
-                                        <div class="input-group">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary edit-longtext-btn" 
-                                                    data-line-id="{{ line.pk }}" data-bs-toggle="tooltip" 
-                                                    title="{{ line.long_text|default:'Kein Langtext' }}">
-                                                <i class="bi bi-pencil"></i> Langtext bearbeiten
-                                            </button>
-                                            <span class="form-control form-control-sm line-long-text-preview" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                                                {{ line.long_text|default:"(kein Langtext)" }}
-                                            </span>
+                                <div class="row g-1">
+                                    <!-- Left Column (col-9) -->
+                                    <div class="col-md-9">
+                                        <!-- Row 1: short_text_1, quantity, unit, unit_price_net, discount -->
+                                        <div class="row g-1 mb-1">
+                                            <div class="col-md-4">
+                                                <input type="text" 
+                                                       class="form-control form-control-sm line-short-text-1" 
+                                                       value="{{ line.short_text_1 }}" 
+                                                       placeholder="Kurztext"
+                                                       hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
+                                                       hx-trigger="change, keyup changed delay:500ms"
+                                                       hx-vals='js:{"short_text_1": event.target.value}'
+                                                       hx-swap="none">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <input type="number" 
+                                                       class="form-control form-control-sm line-quantity" 
+                                                       value="{{ line.quantity|unlocalize }}" 
+                                                       step="0.01" 
+                                                       min="0" 
+                                                       placeholder="Menge"
+                                                       hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
+                                                       hx-trigger="change"
+                                                       hx-vals='js:{"quantity": parseFloat(event.target.value)}'
+                                                       hx-swap="none">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <select class="form-select form-select-sm line-unit"
+                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
+                                                        hx-trigger="change"
+                                                        hx-vals='js:{"unit_id": event.target.value || null}'
+                                                        hx-swap="none">
+                                                    <option value="">--</option>
+                                                    {% for unit in units %}
+                                                    <option value="{{ unit.pk }}" {% if line.unit and line.unit.pk == unit.pk %}selected{% endif %}>
+                                                        {{ unit.code }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <input type="number" 
+                                                       class="form-control form-control-sm line-unit-price" 
+                                                       value="{{ line.unit_price_net|unlocalize }}" 
+                                                       step="0.01" 
+                                                       min="0" 
+                                                       placeholder="€"
+                                                       hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
+                                                       hx-trigger="change"
+                                                       hx-vals='js:{"unit_price_net": parseFloat(event.target.value)}'
+                                                       hx-swap="none">
+                                            </div>
+                                            <div class="col-md-2">
+                                                <input type="number" 
+                                                       class="form-control form-control-sm line-discount" 
+                                                       value="{{ line.discount|unlocalize }}" 
+                                                       step="0.01" 
+                                                       min="0" 
+                                                       max="100" 
+                                                       placeholder="%"
+                                                       hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
+                                                       hx-trigger="change"
+                                                       hx-vals='js:{"discount": parseFloat(event.target.value)}'
+                                                       hx-swap="none">
+                                            </div>
+                                        </div>
+                                        <!-- Row 2: long_text as plain textarea -->
+                                        <div class="row g-1">
+                                            <div class="col-12">
+                                                <textarea class="form-control form-control-sm line-long-text" 
+                                                          rows="2" 
+                                                          placeholder="Langtext"
+                                                          hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
+                                                          hx-trigger="change, keyup changed delay:500ms"
+                                                          hx-vals='js:{"long_text": event.target.value}'
+                                                          hx-swap="none">{{ line.long_text }}</textarea>
+                                            </div>
                                         </div>
                                     </div>
-                                    <!-- Row: Quantity, Price, Tax Rate -->
+                                    
+                                    <!-- Right Column (col-3) -->
                                     <div class="col-md-3">
-                                        <label class="form-label-sm">Menge</label>
-                                        <input type="number" class="form-control form-control-sm line-quantity" 
-                                               value="{{ line.quantity|unlocalize }}" step="0.01" min="0" placeholder="Menge">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label-sm">Einzelpreis</label>
-                                        <input type="number" class="form-control form-control-sm line-unit-price" 
-                                               value="{{ line.unit_price_net|unlocalize }}" step="0.01" min="0" placeholder="Preis">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label-sm">Steuersatz</label>
-                                        <select class="form-select form-select-sm line-tax-rate">
-                                            {% for tax_rate in tax_rates %}
-                                            <option value="{{ tax_rate.pk }}" {% if line.tax_rate.pk == tax_rate.pk %}selected{% endif %}>
-                                                {{ tax_rate.code }} ({{ tax_rate.rate }}%)
-                                            </option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <!-- Placeholder for alignment -->
-                                    </div>
-                                    <!-- Row: Kostenart 1 and 2 -->
-                                    <div class="col-md-6">
-                                        <label class="form-label-sm">Kostenart 1</label>
-                                        <select class="form-select form-select-sm line-kostenart1" data-line-id="{{ line.pk }}">
-                                            <option value="">-- Keine --</option>
-                                            {% for k in kostenarten1 %}
-                                            <option value="{{ k.pk }}" {% if line.kostenart1 and line.kostenart1.pk == k.pk %}selected{% endif %}>
-                                                {{ k.name }}
-                                            </option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label-sm">Kostenart 2</label>
-                                        <select class="form-select form-select-sm line-kostenart2" data-line-id="{{ line.pk }}">
-                                            <option value="">-- Keine --</option>
-                                            {% if line.kostenart1 %}
-                                                {% for k in line.kostenart1.children.all %}
-                                                <option value="{{ k.pk }}" {% if line.kostenart2 and line.kostenart2.pk == k.pk %}selected{% endif %}>
-                                                    {{ k.name }}
-                                                </option>
-                                                {% endfor %}
-                                            {% endif %}
-                                        </select>
-                                    </div>
-                                    <!-- Row: Totals (calculated) -->
-                                    <div class="col-md-4">
-                                        <label class="form-label-sm">Netto</label>
-                                        <span class="form-control form-control-sm text-end line-net">{{ line.line_net|floatformat:2 }} €</span>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label-sm">MwSt.</label>
-                                        <span class="form-control form-control-sm text-end line-tax">{{ line.line_tax|floatformat:2 }} €</span>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label-sm">Brutto</label>
-                                        <span class="form-control form-control-sm text-end fw-bold line-gross">{{ line.line_gross|floatformat:2 }} €</span>
+                                        <div class="row g-1">
+                                            <!-- col-8: line_total_net and tax_rate -->
+                                            <div class="col-8">
+                                                <div class="mb-1">
+                                                    <input type="text" 
+                                                           class="form-control form-control-sm text-end line-net" 
+                                                           value="{{ line.line_net|floatformat:2 }} €" 
+                                                           readonly 
+                                                           style="background-color: var(--bs-secondary-bg);">
+                                                </div>
+                                                <div>
+                                                    <select class="form-select form-select-sm line-tax-rate"
+                                                            hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
+                                                            hx-trigger="change"
+                                                            hx-vals='js:{"tax_rate_id": parseInt(event.target.value)}'
+                                                            hx-swap="none">
+                                                        {% for tax_rate in tax_rates %}
+                                                        <option value="{{ tax_rate.pk }}" {% if line.tax_rate.pk == tax_rate.pk %}selected{% endif %}>
+                                                            {{ tax_rate.code }} ({{ tax_rate.rate }}%)
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- col-4: Delete button -->
+                                            <div class="col-4 d-flex align-items-center justify-content-center">
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-danger delete-line-btn" 
+                                                        data-line-id="{{ line.pk }}"
+                                                        style="width: 100%; aspect-ratio: 1;">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -718,6 +742,57 @@ document.addEventListener('DOMContentLoaded', function() {
     const unsavedIndicator = document.getElementById('unsavedIndicator');
     
     // ============================================================================
+    // HTMX Event Handlers for Auto-Save
+    // ============================================================================
+    
+    // Listen for HTMX responses and update totals
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        // Only handle responses from our line update endpoints
+        if (event.detail.pathInfo.requestPath.includes('/lines/') && event.detail.pathInfo.requestPath.includes('/update/')) {
+            const xhr = event.detail.xhr;
+            if (xhr.status === 200) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        // Update line totals
+                        if (response.line) {
+                            const lineId = response.line.id;
+                            const lineItem = document.querySelector(`.line-item[data-line-id="${lineId}"]`);
+                            if (lineItem) {
+                                const lineNetEl = lineItem.querySelector('.line-net');
+                                if (lineNetEl && response.line.line_net) {
+                                    lineNetEl.value = parseFloat(response.line.line_net).toFixed(2) + ' €';
+                                }
+                            }
+                        }
+                        
+                        // Update document totals
+                        if (response.totals) {
+                            const totalNetEl = document.getElementById('totalNet');
+                            const totalGrossEl = document.getElementById('totalGross');
+                            
+                            if (totalNetEl && response.totals.total_net) {
+                                totalNetEl.textContent = parseFloat(response.totals.total_net).toFixed(2) + ' €';
+                            }
+                            if (totalGrossEl && response.totals.total_gross) {
+                                totalGrossEl.textContent = parseFloat(response.totals.total_gross).toFixed(2) + ' €';
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing HTMX response:', e);
+                }
+            }
+        }
+    });
+    
+    // Silent error handling for HTMX - don't show alerts
+    document.body.addEventListener('htmx:responseError', function(event) {
+        console.error('HTMX Error:', event.detail);
+        // No alert - silent fail as per requirements
+    });
+    
+    // ============================================================================
     // Quill Editors for Header and Footer Text
     // ============================================================================
     
@@ -783,8 +858,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mark form as dirty on any change
     // ============================================================================
     
-    // Mark form as dirty on any change
-    document.querySelectorAll('input, textarea, select').forEach(el => {
+    // Mark form as dirty on any change (excluding HTMX auto-saved fields)
+    document.querySelectorAll('input:not([hx-post]), textarea:not([hx-post]), select:not([hx-post])').forEach(el => {
         el.addEventListener('change', function() {
             isDirty = true;
             if (unsavedIndicator) {
@@ -907,7 +982,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'X-CSRFToken': '{{ csrf_token }}'
             },
             body: JSON.stringify({
-                short_text_1: '',
+                short_text_1: 'neue Position',
                 short_text_2: '',
                 long_text: '',
                 quantity: 1.0,
@@ -924,12 +999,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Reload page to show new line
                 location.reload();
             } else if (data.error) {
-                alert('Fehler: ' + data.error);
+                // Silent fail - no alert shown, just console log
+                console.error('Fehler beim Hinzufügen der Position:', data.error);
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Fehler beim Hinzufügen der Position');
+            // Silent fail - no alert shown
         });
     }
     
