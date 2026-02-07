@@ -648,7 +648,16 @@ def ajax_add_line(request, doc_key, pk):
         
         # Get unit and discount if provided
         unit_id = data.get('unit_id')
-        discount = data.get('discount', '0.00')
+        discount = data.get('discount')
+        
+        # Safely convert discount to Decimal
+        if discount not in (None, ''):
+            try:
+                discount_value = Decimal(str(discount))
+            except (ValueError, TypeError):
+                discount_value = Decimal('0.00')
+        else:
+            discount_value = Decimal('0.00')
         
         # Create line
         line = SalesDocumentLine.objects.create(
@@ -665,7 +674,7 @@ def ajax_add_line(request, doc_key, pk):
             quantity=quantity,
             unit_id=normalize_foreign_key_id(unit_id),
             unit_price_net=unit_price_net,
-            discount=Decimal(discount) if discount else Decimal('0.00'),
+            discount=discount_value,
             is_discountable=is_discountable,
             kostenart1_id=normalize_foreign_key_id(kostenart1_id),
             kostenart2_id=normalize_foreign_key_id(kostenart2_id),
@@ -751,7 +760,14 @@ def ajax_update_line(request, doc_key, pk, line_id):
         if 'unit_id' in data:
             line.unit_id = normalize_foreign_key_id(data['unit_id'])
         if 'discount' in data:
-            line.discount = Decimal(data['discount']) if data['discount'] else Decimal('0.00')
+            discount_value = data['discount']
+            if discount_value not in (None, ''):
+                try:
+                    line.discount = Decimal(str(discount_value))
+                except (ValueError, TypeError):
+                    line.discount = Decimal('0.00')
+            else:
+                line.discount = Decimal('0.00')
         if 'kostenart1_id' in data:
             line.kostenart1_id = normalize_foreign_key_id(data['kostenart1_id'])
         if 'kostenart2_id' in data:

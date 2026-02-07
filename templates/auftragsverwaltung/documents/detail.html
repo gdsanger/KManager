@@ -399,14 +399,14 @@ Neues {{ document_type.name }}
                                                        placeholder="Menge"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change"
-                                                       hx-vals='js:{"quantity": parseFloat(event.target.value)}'
+                                                       hx-vals='js:{"quantity": parseFloat(event.target.value) || 0}'
                                                        hx-swap="none">
                                             </div>
                                             <div class="col-md-2">
                                                 <select class="form-select form-select-sm line-unit"
                                                         hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                         hx-trigger="change"
-                                                        hx-vals='js:{"unit_id": event.target.value || null}'
+                                                        hx-vals='js:{"unit_id": parseInt(event.target.value) || null}'
                                                         hx-swap="none">
                                                     <option value="">--</option>
                                                     {% for unit in units %}
@@ -425,7 +425,7 @@ Neues {{ document_type.name }}
                                                        placeholder="€"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change"
-                                                       hx-vals='js:{"unit_price_net": parseFloat(event.target.value)}'
+                                                       hx-vals='js:{"unit_price_net": parseFloat(event.target.value) || 0}'
                                                        hx-swap="none">
                                             </div>
                                             <div class="col-md-2">
@@ -438,7 +438,7 @@ Neues {{ document_type.name }}
                                                        placeholder="%"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change"
-                                                       hx-vals='js:{"discount": parseFloat(event.target.value)}'
+                                                       hx-vals='js:{"discount": parseFloat(event.target.value) || 0}'
                                                        hx-swap="none">
                                             </div>
                                         </div>
@@ -472,7 +472,7 @@ Neues {{ document_type.name }}
                                                     <select class="form-select form-select-sm line-tax-rate"
                                                             hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                             hx-trigger="change"
-                                                            hx-vals='js:{"tax_rate_id": parseInt(event.target.value)}'
+                                                            hx-vals='js:{"tax_rate_id": parseInt(event.target.value) || null}'
                                                             hx-swap="none">
                                                         {% for tax_rate in tax_rates %}
                                                         <option value="{{ tax_rate.pk }}" {% if line.tax_rate.pk == tax_rate.pk %}selected{% endif %}>
@@ -982,7 +982,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'X-CSRFToken': '{{ csrf_token }}'
             },
             body: JSON.stringify({
-                short_text_1: 'neue Position',
+                short_text_1: 'Neue Position',
                 short_text_2: '',
                 long_text: '',
                 quantity: 1.0,
