@@ -598,14 +598,15 @@ def kunde_delete(request, pk):
     kunde = get_object_or_404(Adresse, pk=pk, adressen_type='KUNDE')
     kunde_name = kunde.full_name()
     
-    # Log ActivityStream event before deletion
-    _log_adresse_stream_event(
-        adresse=kunde,
-        event_type='customer.deleted',
-        actor=request.user
-    )
-    
     try:
+        # Log ActivityStream event before deletion (while object still exists)
+        # We log before to ensure we have all the object data available
+        _log_adresse_stream_event(
+            adresse=kunde,
+            event_type='customer.deleted',
+            actor=request.user
+        )
+        
         kunde.delete()
         messages.success(request, f'Kunde "{kunde_name}" wurde erfolgreich gelöscht.')
     except Exception as e:
@@ -752,14 +753,15 @@ def standort_delete(request, pk):
         messages.error(request, f'Standort "{standort_name}" kann nicht gelöscht werden, da es noch Mietobjekte an diesem Standort gibt.')
         return redirect('vermietung:standort_detail', pk=pk)
     
-    # Log ActivityStream event before deletion
-    _log_adresse_stream_event(
-        adresse=standort,
-        event_type='location.deleted',
-        actor=request.user
-    )
-    
     try:
+        # Log ActivityStream event before deletion (while object still exists)
+        # We log before to ensure we have all the object data available
+        _log_adresse_stream_event(
+            adresse=standort,
+            event_type='location.deleted',
+            actor=request.user
+        )
+        
         standort.delete()
         messages.success(request, f'Standort "{standort_name}" wurde erfolgreich gelöscht.')
     except Exception as e:
@@ -903,14 +905,15 @@ def lieferant_delete(request, pk):
     lieferant = get_object_or_404(Adresse, pk=pk, adressen_type='LIEFERANT')
     lieferant_name = lieferant.full_name()
     
-    # Log ActivityStream event before deletion
-    _log_adresse_stream_event(
-        adresse=lieferant,
-        event_type='supplier.deleted',
-        actor=request.user
-    )
-    
     try:
+        # Log ActivityStream event before deletion (while object still exists)
+        # We log before to ensure we have all the object data available
+        _log_adresse_stream_event(
+            adresse=lieferant,
+            event_type='supplier.deleted',
+            actor=request.user
+        )
+        
         lieferant.delete()
         messages.success(request, f'Lieferant "{lieferant_name}" wurde erfolgreich gelöscht.')
     except Exception as e:
@@ -1053,14 +1056,15 @@ def adresse_delete(request, pk):
     adresse = get_object_or_404(Adresse, pk=pk, adressen_type='Adresse')
     adresse_name = adresse.full_name()
     
-    # Log ActivityStream event before deletion
-    _log_adresse_stream_event(
-        adresse=adresse,
-        event_type='address.deleted',
-        actor=request.user
-    )
-    
     try:
+        # Log ActivityStream event before deletion (while object still exists)
+        # We log before to ensure we have all the object data available
+        _log_adresse_stream_event(
+            adresse=adresse,
+            event_type='address.deleted',
+            actor=request.user
+        )
+        
         adresse.delete()
         messages.success(request, f'Adresse "{adresse_name}" wurde erfolgreich gelöscht.')
     except Exception as e:
