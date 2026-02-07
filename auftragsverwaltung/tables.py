@@ -362,7 +362,7 @@ class OutgoingInvoiceJournalTable(tables.Table):
     def render_amounts(self, record):
         """Render net and gross amounts."""
         total_net = record.net_0 + record.net_7 + record.net_19
-        return format_html('{:.2f} € / {:.2f} €', total_net, record.gross_amount)
+        return f'{total_net:.2f} € / {record.gross_amount:.2f} €'
     
     def render_export_status(self, value, record):
         """Render export_status with colored badge."""
