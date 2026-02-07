@@ -14,6 +14,7 @@ from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, Un
 from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm, ItemGroupForm, UnitForm
 from core.tables import ItemTable
 from core.filters import ItemFilter
+from core.services.activity_stream import ActivityStreamService
 
 
 def home(request):
@@ -479,6 +480,11 @@ def item_save_ajax(request):
     """
     Handle item save via AJAX.
     Returns JSON response with success/error status.
+    
+    Activity Stream Integration:
+    - Logs ITEM_CREATED for new items
+    - Logs ITEM_STATUS_CHANGED when is_active changes
+    - Logs ITEM_UPDATED for other changes
     """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'errors': {'non_field_errors': ['Invalid request method']}})
@@ -486,9 +492,15 @@ def item_save_ajax(request):
     # Get item ID if updating
     item_id = request.POST.get('item_id', '')
     item = None
+    is_new = True
+    old_is_active = None
+    
     if item_id:
         try:
             item = Item.objects.get(pk=item_id)
+            is_new = False
+            # Track old values for change detection
+            old_is_active = item.is_active
         except (Item.DoesNotExist, ValueError):
             return JsonResponse({'success': False, 'errors': {'non_field_errors': ['Item not found']}})
     
@@ -500,6 +512,59 @@ def item_save_ajax(request):
     
     if form.is_valid():
         saved_item = form.save()
+        
+        # Get company for activity logging (items are global, use first company)
+        # TODO: In a multi-tenant setup, consider making company association more explicit
+        company = Mandant.objects.first()
+        
+        # Log activity based on operation type
+        if company:  # Only log if company exists
+            if is_new:
+                # Log item creation
+                ActivityStreamService.add(
+                    company=company,
+                    domain='ORDER',
+                    activity_type='ITEM_CREATED',
+                    title=f'Artikel erstellt: {saved_item.article_no}',
+                    description=f'{saved_item.short_text_1}',
+                    target_url=f'/items/?selected={saved_item.pk}',
+                    actor=request.user,
+                    severity='INFO'
+                )
+            else:
+                # For updates, check if status changed
+                new_is_active = saved_item.is_active
+                
+                if old_is_active is not None and old_is_active != new_is_active:
+                    # Status changed
+                    old_status = 'aktiv' if old_is_active else 'inaktiv'
+                    status_action = 'aktiviert' if new_is_active else 'deaktiviert'
+                    
+                    ActivityStreamService.add(
+                        company=company,
+                        domain='ORDER',
+                        activity_type='ITEM_STATUS_CHANGED',
+                        title=f'Artikel-Status geändert: {saved_item.article_no}',
+                        description=f'Status: {status_action} (vorher: {old_status})',
+                        target_url=f'/items/?selected={saved_item.pk}',
+                        actor=request.user,
+                        severity='INFO'
+                    )
+                else:
+                    # Generic update (only if there were actual changes)
+                    # Check if form actually changed anything
+                    if form.changed_data:
+                        ActivityStreamService.add(
+                            company=company,
+                            domain='ORDER',
+                            activity_type='ITEM_UPDATED',
+                            title=f'Artikel aktualisiert: {saved_item.article_no}',
+                            description=f'{saved_item.short_text_1}',
+                            target_url=f'/items/?selected={saved_item.pk}',
+                            actor=request.user,
+                            severity='INFO'
+                        )
+        
         return JsonResponse({
             'success': True,
             'item_id': saved_item.pk,
