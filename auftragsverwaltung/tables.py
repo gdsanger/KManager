@@ -167,10 +167,17 @@ class ContractTable(tables.Table):
         attrs={'td': {'class': 'text-center'}}
     )
     
+    aktionen = tables.Column(
+        verbose_name='Aktionen',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-end text-nowrap'}}
+    )
+    
     def render_name(self, value, record):
-        """Render name as a link to detail view (when detail view exists)."""
-        # For now, just return the name. Can be updated later when detail view is created
-        return value
+        """Render name as an HTML link to the contract update view."""
+        url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': record.pk})
+        return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
     
     def render_interval(self, value, record):
         """Render interval with German display text."""
@@ -188,6 +195,21 @@ class ContractTable(tables.Table):
             return '—'
         return value
     
+    def render_aktionen(self, record):
+        """Render action buttons."""
+        detail_url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': record.pk})
+        edit_url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': record.pk})
+        return format_html(
+            '<div class="btn-group btn-group-sm" role="group">'
+            '<a href="{}" class="btn btn-outline-info" title="Details">'
+            '<i class="bi bi-eye"></i></a>'
+            '<a href="{}" class="btn btn-outline-primary" title="Bearbeiten">'
+            '<i class="bi bi-pencil"></i></a>'
+            '</div>',
+            detail_url,
+            edit_url
+        )
+    
     class Meta:
         model = Contract
         template_name = 'django_tables2/bootstrap5-dark.html'
@@ -200,6 +222,7 @@ class ContractTable(tables.Table):
             'next_run_date',
             'last_run_date',
             'is_active',
+            'aktionen',
         )
         attrs = {
             'class': 'table table-dark table-hover',
