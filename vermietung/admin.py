@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    MietObjekt, Vertrag, Uebergabeprotokoll, Dokument, Aktivitaet, AktivitaetsBereich,
+    MietObjekt, Vertrag, VertragsObjekt, Uebergabeprotokoll, Dokument, Aktivitaet, AktivitaetsBereich,
     OBJEKT_TYPE, VERTRAG_STATUS, DOKUMENT_ENTITY_TYPES, AKTIVITAET_STATUS, AKTIVITAET_PRIORITAET,
     Eingangsrechnung, EingangsrechnungAufteilung
 )
@@ -234,12 +234,14 @@ class VertragAdmin(admin.ModelAdmin):
     def mark_as_active(self, request, queryset):
         """Set selected contracts to active status and log ActivityStream events."""
         updated = 0
+        affected_vertrage = []
+        
         for vertrag in queryset:
             old_status = vertrag.status
             if old_status != 'active':
                 vertrag.status = 'active'
                 vertrag.save()
-                vertrag.update_mietobjekte_availability()
+                affected_vertrage.append(vertrag)
                 
                 # Log ActivityStream event
                 old_status_display = _get_vertrag_status_display_name(old_status)
@@ -253,18 +255,46 @@ class VertragAdmin(admin.ModelAdmin):
                 )
                 updated += 1
         
+        # Batch update availability for all affected contracts
+        # Note: Each call updates all associated MietObjekte, but doing it once per unique set is more efficient
+        affected_mietobjekt_ids = set()
+        for vertrag in affected_vertrage:
+            if vertrag.mietobjekt_id:
+                affected_mietobjekt_ids.add(vertrag.mietobjekt_id)
+            affected_mietobjekt_ids.update(
+                vertrag.vertragsobjekte.values_list('mietobjekt_id', flat=True)
+            )
+        
+        # Update each unique MietObjekt only once
+        from django.utils import timezone
+        from django.db.models import Q
+        for mietobjekt_id in affected_mietobjekt_ids:
+            has_active_contract = VertragsObjekt.objects.filter(
+                mietobjekt_id=mietobjekt_id,
+                vertrag__status='active'
+            ).select_related('vertrag').filter(
+                vertrag__start__lte=timezone.now().date()
+            ).filter(
+                Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=timezone.now().date())
+            ).exists()
+            MietObjekt.objects.filter(pk=mietobjekt_id).update(
+                verfuegbar=not has_active_contract
+            )
+        
         self.message_user(request, f'{updated} Verträge wurden als aktiv markiert.')
     mark_as_active.short_description = 'Als aktiv markieren'
     
     def mark_as_ended(self, request, queryset):
         """Set selected contracts to ended status and log ActivityStream events."""
         updated = 0
+        affected_vertrage = []
+        
         for vertrag in queryset:
             old_status = vertrag.status
             if old_status != 'ended':
                 vertrag.status = 'ended'
                 vertrag.save()
-                vertrag.update_mietobjekte_availability()
+                affected_vertrage.append(vertrag)
                 
                 # Log ActivityStream event
                 old_status_display = _get_vertrag_status_display_name(old_status)
@@ -278,18 +308,45 @@ class VertragAdmin(admin.ModelAdmin):
                 )
                 updated += 1
         
+        # Batch update availability for all affected contracts
+        affected_mietobjekt_ids = set()
+        for vertrag in affected_vertrage:
+            if vertrag.mietobjekt_id:
+                affected_mietobjekt_ids.add(vertrag.mietobjekt_id)
+            affected_mietobjekt_ids.update(
+                vertrag.vertragsobjekte.values_list('mietobjekt_id', flat=True)
+            )
+        
+        # Update each unique MietObjekt only once
+        from django.utils import timezone
+        from django.db.models import Q
+        for mietobjekt_id in affected_mietobjekt_ids:
+            has_active_contract = VertragsObjekt.objects.filter(
+                mietobjekt_id=mietobjekt_id,
+                vertrag__status='active'
+            ).select_related('vertrag').filter(
+                vertrag__start__lte=timezone.now().date()
+            ).filter(
+                Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=timezone.now().date())
+            ).exists()
+            MietObjekt.objects.filter(pk=mietobjekt_id).update(
+                verfuegbar=not has_active_contract
+            )
+        
         self.message_user(request, f'{updated} Verträge wurden als beendet markiert.')
     mark_as_ended.short_description = 'Als beendet markieren'
     
     def mark_as_cancelled(self, request, queryset):
         """Set selected contracts to cancelled status and log ActivityStream events."""
         updated = 0
+        affected_vertrage = []
+        
         for vertrag in queryset:
             old_status = vertrag.status
             if old_status != 'cancelled':
                 vertrag.status = 'cancelled'
                 vertrag.save()
-                vertrag.update_mietobjekte_availability()
+                affected_vertrage.append(vertrag)
                 
                 # Log ActivityStream event
                 old_status_display = _get_vertrag_status_display_name(old_status)
@@ -302,6 +359,31 @@ class VertragAdmin(admin.ModelAdmin):
                     severity='WARNING'
                 )
                 updated += 1
+        
+        # Batch update availability for all affected contracts
+        affected_mietobjekt_ids = set()
+        for vertrag in affected_vertrage:
+            if vertrag.mietobjekt_id:
+                affected_mietobjekt_ids.add(vertrag.mietobjekt_id)
+            affected_mietobjekt_ids.update(
+                vertrag.vertragsobjekte.values_list('mietobjekt_id', flat=True)
+            )
+        
+        # Update each unique MietObjekt only once
+        from django.utils import timezone
+        from django.db.models import Q
+        for mietobjekt_id in affected_mietobjekt_ids:
+            has_active_contract = VertragsObjekt.objects.filter(
+                mietobjekt_id=mietobjekt_id,
+                vertrag__status='active'
+            ).select_related('vertrag').filter(
+                vertrag__start__lte=timezone.now().date()
+            ).filter(
+                Q(vertrag__ende__isnull=True) | Q(vertrag__ende__gt=timezone.now().date())
+            ).exists()
+            MietObjekt.objects.filter(pk=mietobjekt_id).update(
+                verfuegbar=not has_active_contract
+            )
         
         self.message_user(request, f'{updated} Verträge wurden als storniert markiert.')
     mark_as_cancelled.short_description = 'Als storniert markieren'
