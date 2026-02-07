@@ -106,7 +106,6 @@ class VertragActivityStreamTest(TestCase):
                 'vertragsobjekte-0-anzahl': '1',
                 'vertragsobjekte-0-preis': '500.00',
                 'vertragsobjekte-0-status': 'AKTIV',
-                'vertragsobjekte-0-status': 'AKTIV',
             }
         )
         
