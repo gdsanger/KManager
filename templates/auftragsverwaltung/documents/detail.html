@@ -321,7 +321,7 @@ Neues {{ document_type.name }}
                     <div class="col-md-3">
                         <label class="form-label">Status</label>
                         <select class="form-select" name="status">
-                            {% for code, label in document.STATUS_CHOICES %}
+                            {% for code, label in status_choices %}
                             <option value="{{ code }}" {% if document and document.status == code %}selected{% endif %}>
                                 {{ label }}
                             </option>
@@ -364,9 +364,15 @@ Neues {{ document_type.name }}
             <div class="document-lines">
                 <h5 class="mb-3">
                     <i class="bi bi-list-ul"></i> Positionen
+                    {% if document.pk %}
                     <button type="button" class="btn btn-sm btn-primary float-end" id="addLineButton">
                         <i class="bi bi-plus"></i> Position hinzufügen
                     </button>
+                    {% else %}
+                    <button type="button" class="btn btn-sm btn-secondary float-end" disabled title="Bitte speichern Sie das Dokument zuerst">
+                        <i class="bi bi-plus"></i> Position hinzufügen
+                    </button>
+                    {% endif %}
                 </h5>
                 
                 <div id="linesContainer">
@@ -504,7 +510,7 @@ Neues {{ document_type.name }}
                         <p class="text-muted text-center py-4">
                             <i class="bi bi-inbox"></i><br>
                             Noch keine Positionen vorhanden.<br>
-                            Klicken Sie auf "Position hinzufügen", um zu beginnen.
+                            {% if document.pk %}Klicken Sie auf "Position hinzufügen", um zu beginnen.{% else %}Bitte speichern Sie zunächst das Dokument.{% endif %}
                         </p>
                     {% endif %}
                 </div>
@@ -959,7 +965,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const addLineButton = document.getElementById('addLineButton');
     if (addLineButton) {
         addLineButton.addEventListener('click', function() {
-            {% if document %}
+            {% if document.pk %}
             // Add a new empty position directly
             addNewPosition();
             {% else %}
@@ -968,6 +974,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    {% if document.pk %}
     // Function to add a new empty position
     function addNewPosition() {
         // Get default tax rate (first in the list)
@@ -1010,6 +1017,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Silent fail - no alert shown
         });
     }
+    {% endif %}
     
     // Manual line button in article search modal
     const addManualLineButton = document.getElementById('addManualLineButton');
@@ -1077,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            {% if document %}
+            {% if document.pk %}
             fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
                 method: 'POST',
                 headers: {
@@ -1113,6 +1121,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 alert('Fehler beim Hinzufügen der Position');
             });
+            {% else %}
+            alert('Bitte speichern Sie das Dokument zuerst, bevor Sie Positionen hinzufügen.');
             {% endif %}
         });
     }
@@ -1173,9 +1183,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    {% if document.pk %}
     // Add line from article
     function addLineFromArticle(article) {
-        {% if document %}
         // Close modal immediately to prevent user interaction during AJAX call
         const articleModal = bootstrap.Modal.getInstance(document.getElementById('articleSearchModal'));
         if (articleModal) {
@@ -1215,16 +1225,16 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error:', error);
             alert('Fehler beim Hinzufügen der Position');
         });
-        {% endif %}
     }
+    {% endif %}
     
+    {% if document.pk %}
     // Delete line buttons
     document.querySelectorAll('.delete-line-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             if (!confirm('Position wirklich löschen?')) return;
             
             const lineId = this.dataset.lineId;
-            {% if document %}
             fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/delete/`, {
                 method: 'POST',
                 headers: {
@@ -1243,10 +1253,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 alert('Fehler beim Löschen der Position');
             });
-            {% endif %}
         });
     });
+    {% endif %}
     
+    {% if document.pk %}
     // Add change handlers for quantity and unit price to update calculations
     document.querySelectorAll('.line-kostenart1').forEach(select => {
         select.addEventListener('change', function() {
@@ -1275,7 +1286,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Update the line with new kostenart1
-            {% if document %}
             fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/update/`, {
                 method: 'POST',
                 headers: {
@@ -1297,7 +1307,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 alert('Fehler beim Aktualisieren der Kostenart');
             });
-            {% endif %}
         });
     });
     
@@ -1308,7 +1317,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const kostenart2Id = this.value;
             
             // Update the line with new kostenart2
-            {% if document %}
             fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/update/`, {
                 method: 'POST',
                 headers: {
@@ -1329,9 +1337,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 alert('Fehler beim Aktualisieren der Kostenart');
             });
-            {% endif %}
         });
     });
+    {% endif %}
     
     // ============================================================================
     // Text Template Application
@@ -1497,6 +1505,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    {% if document.pk %}
     // Save longtext button
     const saveLongtextButton = document.getElementById('saveLongtextButton');
     if (saveLongtextButton) {
@@ -1506,7 +1515,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const longtext = quillEditor.getText().trim();
             
             // Update the line via AJAX
-            {% if document %}
             fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${currentEditingLineId}/update/`, {
                 method: 'POST',
                 headers: {
@@ -1544,9 +1552,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 alert('Fehler beim Speichern des Langtexts');
             });
-            {% endif %}
         });
     }
+    {% endif %}
     
     // Constants for timing
     const SEARCH_DEBOUNCE_MS = 300; // Delay before triggering search after typing stops
@@ -1708,9 +1716,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    {% if document.pk %}
     // Update line field via AJAX
     function updateLineField(lineId, data) {
-        {% if document %}
         fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/update/`, {
             method: 'POST',
             headers: {
@@ -1746,8 +1754,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error:', error);
         });
-        {% endif %}
     }
+    {% endif %}
     
     // Add change handlers for quantity and unit price to update calculations
     document.querySelectorAll('.line-quantity, .line-unit-price').forEach(input => {
