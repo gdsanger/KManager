@@ -379,13 +379,15 @@ Vertrag: {{ contract.name }}
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label-sm">Menge</label>
-                                        <input type="number" class="form-control form-control-sm line-quantity" 
-                                               value="{{ line.quantity }}" step="0.0001" min="0" placeholder="Menge">
+                                        <input type="text" class="form-control form-control-sm line-quantity" 
+                                               value="{{ line.quantity }}" placeholder="Menge" 
+                                               pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben">
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label-sm">Einzelpreis (netto)</label>
-                                        <input type="number" class="form-control form-control-sm line-unit-price" 
-                                               value="{{ line.unit_price_net }}" step="0.01" min="0" placeholder="Preis">
+                                        <input type="text" class="form-control form-control-sm line-unit-price" 
+                                               value="{{ line.unit_price_net }}" placeholder="Preis"
+                                               pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben">
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label-sm">Steuersatz</label>
@@ -558,11 +560,13 @@ Vertrag: {{ contract.name }}
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Menge <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="newLineQuantity" value="1.0000" step="0.0001" min="0" required>
+                        <input type="text" class="form-control" id="newLineQuantity" value="1.0000" 
+                               pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben" required>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Einzelpreis <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" id="newLineUnitPrice" value="0.00" step="0.01" min="0" required>
+                        <input type="text" class="form-control" id="newLineUnitPrice" value="0.00" 
+                               pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben" required>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Steuersatz <span class="text-danger">*</span></label>
@@ -630,6 +634,40 @@ Vertrag: {{ contract.name }}
 $(document).ready(function() {
     let hasUnsavedChanges = false;
     let pendingNavigation = null;
+    
+    /**
+     * Normalize decimal input from German format to English format
+     * Handles: "1,0000" → "1.0000", "99,00" → "99.00", "1.234,56" → "1234.56"
+     */
+    function normalizeDecimalInput(value) {
+        if (!value || value === '') {
+            return value;
+        }
+        
+        // Convert to string and trim
+        let str = String(value).trim();
+        
+        if (str === '') {
+            return str;
+        }
+        
+        // Find last occurrence of comma and dot
+        const lastComma = str.lastIndexOf(',');
+        const lastDot = str.lastIndexOf('.');
+        
+        // German format: comma is decimal separator (1.234,56 or 1,56)
+        if (lastComma > lastDot) {
+            // Remove thousands separator (dot) and replace comma with dot
+            str = str.replace(/\./g, '').replace(',', '.');
+        } 
+        // English format or no separator: dot is decimal separator (1,234.56 or 1.56)
+        else {
+            // Remove thousands separator (comma)
+            str = str.replace(/,/g, '');
+        }
+        
+        return str;
+    }
     
     // Track changes
     $('#contractForm input, #contractForm select, #contractForm textarea').on('change', function() {
@@ -795,8 +833,8 @@ $(document).ready(function() {
     // Confirm add line
     $('#confirmAddLineBtn').on('click', function() {
         const description = $('#newLineDescription').val();
-        const quantity = $('#newLineQuantity').val();
-        const unitPrice = $('#newLineUnitPrice').val();
+        const quantity = normalizeDecimalInput($('#newLineQuantity').val());
+        const unitPrice = normalizeDecimalInput($('#newLineUnitPrice').val());
         const taxRateId = $('#newLineTaxRate').val();
         const isDiscountable = $('#newLineDiscountable').is(':checked');
         const costType1Id = $('#newLineCostType1').val() || null;
@@ -829,7 +867,8 @@ $(document).ready(function() {
                 }
             },
             error: function(xhr) {
-                alert('Fehler beim Hinzufügen der Position: ' + xhr.responseJSON.error);
+                const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Unbekannter Fehler';
+                alert('Fehler beim Hinzufügen der Position: ' + errorMsg);
             }
         });
     });
@@ -865,8 +904,8 @@ $(document).ready(function() {
         const lineId = lineItem.data('line-id');
         
         const description = lineItem.find('.line-description').val();
-        const quantity = lineItem.find('.line-quantity').val();
-        const unitPrice = lineItem.find('.line-unit-price').val();
+        const quantity = normalizeDecimalInput(lineItem.find('.line-quantity').val());
+        const unitPrice = normalizeDecimalInput(lineItem.find('.line-unit-price').val());
         const taxRateId = lineItem.find('.line-tax-rate').val();
         const isDiscountable = lineItem.find('.line-is-discountable').is(':checked');
         const costType1Id = lineItem.find('.line-cost-type-1').val() || null;
@@ -894,6 +933,10 @@ $(document).ready(function() {
                     $('#previewTotalTax').text(parseFloat(response.preview_totals.total_tax).toFixed(2).replace('.', ',') + ' €');
                     $('#previewTotalGross').text(parseFloat(response.preview_totals.total_gross).toFixed(2).replace('.', ',') + ' €');
                 }
+            },
+            error: function(xhr) {
+                const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Unbekannter Fehler';
+                alert('Fehler beim Aktualisieren der Position: ' + errorMsg);
             }
         });
         

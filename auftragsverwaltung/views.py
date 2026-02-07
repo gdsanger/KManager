@@ -42,6 +42,63 @@ def normalize_foreign_key_id(value):
     return value
 
 
+def normalize_decimal_input(value):
+    """
+    Normalize decimal input from various formats (German and English).
+    
+    Handles German decimal format (comma as decimal separator, optional dot as thousands separator)
+    and English decimal format (dot as decimal separator, optional comma as thousands separator).
+    
+    Examples:
+        - "1,0000" → Decimal("1.0000")  # German format with comma
+        - "99,00" → Decimal("99.00")    # German format
+        - "1.234,56" → Decimal("1234.56")  # German with thousands separator
+        - "99.00" → Decimal("99.00")    # English format
+        - "1,234.56" → Decimal("1234.56")  # English with thousands separator
+        - 1.5 → Decimal("1.5")          # Numeric input
+    
+    Args:
+        value: The decimal value to normalize (str, int, float, or Decimal)
+    
+    Returns:
+        Decimal: The normalized decimal value
+    
+    Raises:
+        ValueError: If the value cannot be parsed as a decimal
+        TypeError: If the value type is unsupported
+    """
+    if value is None or value == '':
+        raise ValueError("Decimal value cannot be None or empty string")
+    
+    # If already a Decimal, return as-is
+    if isinstance(value, Decimal):
+        return value
+    
+    # Convert to string for processing
+    value_str = str(value).strip()
+    
+    if not value_str:
+        raise ValueError("Decimal value cannot be empty")
+    
+    # Detect format based on last occurrence of comma vs dot
+    last_comma = value_str.rfind(',')
+    last_dot = value_str.rfind('.')
+    
+    # German format: comma is decimal separator (1.234,56 or 1,56)
+    if last_comma > last_dot:
+        # Remove thousands separator (dot) and replace comma with dot
+        normalized = value_str.replace('.', '').replace(',', '.')
+    # English format or no separator: dot is decimal separator (1,234.56 or 1.56)
+    else:
+        # Remove thousands separator (comma)
+        normalized = value_str.replace(',', '')
+    
+    try:
+        return Decimal(normalized)
+    except Exception as e:
+        raise ValueError(f"Cannot parse '{value}' as decimal: {str(e)}")
+
+
 @login_required
 def auftragsverwaltung_home(request):
     """
@@ -1207,13 +1264,19 @@ def ajax_contract_add_line(request, pk):
         data = json.loads(request.body)
         
         item_id = data.get('item_id')
-        quantity = Decimal(data.get('quantity', '1.0'))
         description = data.get('description', '')
-        unit_price_net = data.get('unit_price_net')
         tax_rate_id = data.get('tax_rate_id')
         cost_type_1_id = data.get('cost_type_1_id')
         cost_type_2_id = data.get('cost_type_2_id')
         is_discountable = data.get('is_discountable', True)
+        
+        # Parse and normalize decimal fields with error handling
+        try:
+            quantity = normalize_decimal_input(data.get('quantity', '1.0'))
+        except (ValueError, TypeError) as e:
+            return JsonResponse({'error': f'Ungültige Menge: {str(e)}'}, status=400)
+        
+        unit_price_net = data.get('unit_price_net')
         
         # Determine line data based on whether item is provided
         if item_id:
@@ -1224,7 +1287,7 @@ def ajax_contract_add_line(request, pk):
             if not description:
                 description = f"{item.short_text_1}\n{item.long_text}" if item.long_text else item.short_text_1
             if not unit_price_net:
-                unit_price_net = item.net_price
+                unit_price_net = item.net_price  # Already a Decimal from the model
             
             # Use item's tax rate if not provided
             if not tax_rate_id and item.tax_rate:
@@ -1248,6 +1311,15 @@ def ajax_contract_add_line(request, pk):
         if not tax_rate_id:
             return JsonResponse({'error': 'Steuersatz ist erforderlich'}, status=400)
         
+        # Normalize unit_price_net (might be from item or from input)
+        try:
+            if isinstance(unit_price_net, Decimal):
+                unit_price_net_decimal = unit_price_net
+            else:
+                unit_price_net_decimal = normalize_decimal_input(unit_price_net)
+        except (ValueError, TypeError) as e:
+            return JsonResponse({'error': f'Ungültiger Netto-Stückpreis: {str(e)}'}, status=400)
+        
         # Get tax rate
         tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
         
@@ -1262,7 +1334,7 @@ def ajax_contract_add_line(request, pk):
             position_no=position_no,
             description=description,
             quantity=quantity,
-            unit_price_net=Decimal(unit_price_net),
+            unit_price_net=unit_price_net_decimal,
             tax_rate=tax_rate,
             cost_type_1_id=normalize_foreign_key_id(cost_type_1_id),
             cost_type_2_id=normalize_foreign_key_id(cost_type_2_id),
@@ -1304,7 +1376,11 @@ def ajax_contract_add_line(request, pk):
             },
             'preview_totals': preview_totals,
         })
+    except ValueError as e:
+        # Validation errors should return 400
+        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
+        # Unexpected errors return 500
         return JsonResponse({'error': str(e)}, status=500)
 
 
@@ -1333,11 +1409,19 @@ def ajax_contract_update_line(request, pk, line_id):
         # Parse JSON body
         data = json.loads(request.body)
         
-        # Update fields
+        # Update fields with proper decimal normalization
         if 'quantity' in data:
-            line.quantity = Decimal(data['quantity'])
+            try:
+                line.quantity = normalize_decimal_input(data['quantity'])
+            except (ValueError, TypeError) as e:
+                return JsonResponse({'error': f'Ungültige Menge: {str(e)}'}, status=400)
+        
         if 'unit_price_net' in data:
-            line.unit_price_net = Decimal(data['unit_price_net'])
+            try:
+                line.unit_price_net = normalize_decimal_input(data['unit_price_net'])
+            except (ValueError, TypeError) as e:
+                return JsonResponse({'error': f'Ungültiger Netto-Stückpreis: {str(e)}'}, status=400)
+        
         if 'description' in data:
             line.description = data['description']
         if 'tax_rate_id' in data:
@@ -1384,7 +1468,11 @@ def ajax_contract_update_line(request, pk, line_id):
             },
             'preview_totals': preview_totals,
         })
+    except ValueError as e:
+        # Validation errors should return 400
+        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
+        # Unexpected errors return 500
         return JsonResponse({'error': str(e)}, status=500)
 
 
