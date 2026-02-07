@@ -175,7 +175,7 @@ class ContractTable(tables.Table):
     )
     
     def render_name(self, value, record):
-        """Render name as a link to update view."""
+        """Render name as an HTML link to the contract update view."""
         url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': record.pk})
         return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
     
