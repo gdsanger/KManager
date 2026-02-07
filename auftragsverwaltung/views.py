@@ -615,7 +615,7 @@ def ajax_add_line(request, doc_key, pk):
             # Allow positions with just short_text_1 and zero price for initial creation
             if description and description.strip():
                 # If user entered description, require short_text_1 too
-                if not short_text_1:
+                if not short_text_1 or not short_text_1.strip():
                     return JsonResponse({'error': 'Short text 1 is required when description is provided'}, status=400)
             
             if not tax_rate_id:
