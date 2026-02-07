@@ -607,13 +607,15 @@ def ajax_add_line(request, doc_key, pk):
             except (ValueError, TypeError):
                 price_value = 0.0
             
-            has_any_content = short_text_1 or description or price_value != 0.0
+            # Consider negative prices as content too
+            has_any_content = short_text_1 or description or abs(price_value) > 0.001
             
             if has_any_content:
                 # If user started entering data, require mandatory fields
                 if not short_text_1 and not description:
                     return JsonResponse({'error': 'Short text 1 or description is required for manual lines'}, status=400)
-                if not unit_price_net:
+                # Check if price was actually provided (not just default 0)
+                if abs(price_value) < 0.001:
                     return JsonResponse({'error': 'Unit price is required for manual lines'}, status=400)
             
             if not tax_rate_id:
