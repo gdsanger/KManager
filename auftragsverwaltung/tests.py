@@ -36,13 +36,9 @@ class DocumentTypeModelTestCase(TestCase):
     
     def test_str_representation(self):
         """Test __str__ method"""
-        doctype = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="INV"
-        )
+        doctype = DocumentType.objects.get(key="invoice")
         
-        expected = "invoice: Invoice (INV)"
+        expected = "invoice: Rechnung (R)"
         self.assertEqual(str(doctype), expected)
     
     def test_key_whitespace_only_validation(self):
@@ -86,18 +82,18 @@ class DocumentTypeModelTestCase(TestCase):
     
     def test_key_case_insensitive_uniqueness(self):
         """Test that key is unique case-insensitively"""
-        # Create first document type
+        # Create first document type with a test key
         DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="INV"
+            key="testkey",
+            name="Test Key",
+            prefix="TK"
         )
         
         # Try to create another with different case
         doctype = DocumentType(
-            key="INVOICE",
-            name="Another Invoice",
-            prefix="INV2"
+            key="TESTKEY",
+            name="Another Test Key",
+            prefix="TK2"
         )
         
         # Should raise IntegrityError when saving
@@ -149,15 +145,8 @@ class SalesDocumentModelTestCase(TestCase):
             land="Deutschland"
         )
         
-        # Create DocumentTypes
-        self.doctype_invoice = DocumentType.objects.create(
-            key="invoice",
-            name="Rechnung",
-            prefix="R",
-            is_invoice=True,
-            requires_due_date=True,
-            is_active=True
-        )
+        # Get DocumentTypes (created by migration)
+        self.doctype_invoice = DocumentType.objects.get(key="invoice")
         
         self.doctype_correction = DocumentType.objects.create(
             key="correction",
@@ -167,12 +156,7 @@ class SalesDocumentModelTestCase(TestCase):
             is_active=True
         )
         
-        self.doctype_quote = DocumentType.objects.create(
-            key="quote",
-            name="Angebot",
-            prefix="A",
-            is_active=True
-        )
+        self.doctype_quote = DocumentType.objects.get(key="quote")
         
         # Create PaymentTerm
         self.payment_term = PaymentTerm.objects.create(
@@ -552,13 +536,8 @@ class SalesDocumentLineModelTestCase(TestCase):
             land="Deutschland"
         )
         
-        # Create DocumentType
-        self.doctype_quote = DocumentType.objects.create(
-            key="quote",
-            name="Angebot",
-            prefix="A",
-            is_active=True
-        )
+        # Get DocumentType (created by migration)
+        self.doctype_quote = DocumentType.objects.get(key="quote")
         
         # Create TaxRate
         self.tax_rate = TaxRate.objects.create(
@@ -1117,20 +1096,10 @@ class SalesDocumentSourceModelTestCase(TestCase):
             land="Deutschland"
         )
         
-        # Create document types
-        self.doctype_invoice = DocumentType.objects.create(
-            key="invoice",
-            name="Rechnung",
-            prefix="R",
-            is_invoice=True,
-            requires_due_date=True
-        )
+        # Get document types (created by migration)
+        self.doctype_invoice = DocumentType.objects.get(key="invoice")
         
-        self.doctype_quote = DocumentType.objects.create(
-            key="quote",
-            name="Angebot",
-            prefix="A"
-        )
+        self.doctype_quote = DocumentType.objects.get(key="quote")
         
         # Create source documents
         self.source_doc = SalesDocument.objects.create(

@@ -34,14 +34,8 @@ class DocumentCalculationServiceTestCase(TestCase):
             ort="Test City"
         )
         
-        # Create document type
-        self.doc_type = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="INV",
-            is_invoice=True,
-            is_active=True
-        )
+        # Get document type (created by migration)
+        self.doc_type = DocumentType.objects.get(key="invoice")
         
         # Create tax rates
         self.tax_rate_19 = TaxRate.objects.create(

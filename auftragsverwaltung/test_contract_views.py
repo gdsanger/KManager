@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import json
 
 from auftragsverwaltung.models import (
-    Contract, ContractLine, ContractRun, DocumentType
+    Contract, ContractLine, ContractRun, DocumentType, NumberRange
 )
 from core.models import Mandant, Adresse, TaxRate, PaymentTerm
 
@@ -76,6 +76,14 @@ class ContractViewTestCase(TestCase):
             name='Net 30',
             net_days=30,
             is_default=False
+        )
+        
+        # Create contract NumberRange
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
         )
         
         # Create test contract
@@ -247,6 +255,14 @@ class ContractAjaxEndpointTestCase(TestCase):
             name='Net 30',
             net_days=30,
             is_default=False
+        )
+        
+        # Create contract NumberRange
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
         )
         
         # Create test contract
@@ -461,6 +477,14 @@ class ContractPreviewCalculationTestCase(TestCase):
             name='Net 30',
             net_days=30,
             is_default=False
+        )
+        
+        # Create contract NumberRange
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
         )
         
         # Create test contract

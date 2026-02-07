@@ -23,6 +23,7 @@ from auftragsverwaltung.models import (
     Contract,
     ContractLine,
     ContractRun,
+    NumberRange,
 )
 from auftragsverwaltung.services.contract_billing import ContractBillingService
 from core.models import Mandant, Adresse, PaymentTerm, TaxRate, Kostenart, Item
@@ -50,21 +51,22 @@ class ContractModelTestCase(TestCase):
             land="Germany"
         )
         
-        # Create document type
-        self.doc_type = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="INV",
-            is_invoice=True,
-            requires_due_date=True,
-            is_active=True
-        )
+        # Get document type (created by migration)
+        self.doc_type = DocumentType.objects.get(key="invoice")
         
         # Create payment term
         self.payment_term = PaymentTerm.objects.create(
             name="Net 30",
             net_days=30,
             is_default=True
+        )
+        
+        # Create contract NumberRange
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
         )
     
     def test_contract_creation(self):
@@ -298,14 +300,8 @@ class ContractLineModelTestCase(TestCase):
             land="Germany"
         )
         
-        # Create document type
-        self.doc_type = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="INV",
-            is_invoice=True,
-            is_active=True
-        )
+        # Get document type (created by migration)
+        self.doc_type = DocumentType.objects.get(key="invoice")
         
         # Create tax rate
         self.tax_rate = TaxRate.objects.create(
@@ -318,6 +314,14 @@ class ContractLineModelTestCase(TestCase):
         # Create cost type
         self.cost_type = Kostenart.objects.create(
             name="General"
+        )
+        
+        # Create contract NumberRange
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
         )
         
         # Create contract
@@ -395,13 +399,15 @@ class ContractRunModelTestCase(TestCase):
             land="Germany"
         )
         
-        # Create document type
-        self.doc_type = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="INV",
-            is_invoice=True,
-            is_active=True
+        # Get document type (created by migration)
+        self.doc_type = DocumentType.objects.get(key="invoice")
+        
+        # Create contract NumberRange
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
         )
         
         # Create contract
@@ -470,15 +476,8 @@ class ContractBillingServiceTestCase(TestCase):
             land="Germany"
         )
         
-        # Create document type
-        self.doc_type = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="INV",
-            is_invoice=True,
-            requires_due_date=True,
-            is_active=True
-        )
+        # Get document type (created by migration)
+        self.doc_type = DocumentType.objects.get(key="invoice")
         
         # Create payment term
         self.payment_term = PaymentTerm.objects.create(
@@ -498,6 +497,14 @@ class ContractBillingServiceTestCase(TestCase):
         # Create cost type
         self.cost_type = Kostenart.objects.create(
             name="General"
+        )
+        
+        # Create contract NumberRange
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
         )
     
     def test_generate_due_no_contracts(self):
