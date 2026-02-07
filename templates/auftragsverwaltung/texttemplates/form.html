@@ -1,8 +1,27 @@
 {% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load static %}
 
 {% block title %}{% if template %}Textbaustein bearbeiten{% else %}Textbaustein erstellen{% endif %} - Domus{% endblock %}
 
 {% block page_title %}{% if template %}Textbaustein bearbeiten{% else %}Textbaustein erstellen{% endif %}{% endblock %}
+
+{% block extra_css %}
+<!-- Quill CSS -->
+<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
+<style>
+    #editor-container {
+        height: 300px;
+        background-color: var(--bs-body-bg);
+    }
+    .ql-toolbar {
+        background-color: var(--bs-secondary-bg);
+        border-color: var(--bs-border-color);
+    }
+    .ql-container {
+        border-color: var(--bs-border-color);
+    }
+</style>
+{% endblock %}
 
 {% block page_actions %}
 <div class="btn-group" role="group">
@@ -72,9 +91,11 @@
                     <!-- Content -->
                     <div class="mb-3">
                         <label for="content" class="form-label">Inhalt <span class="text-danger">*</span></label>
-                        <textarea class="form-control font-monospace" id="content" name="content" 
-                                  rows="10" required>{% if template %}{{ template.content }}{% endif %}</textarea>
-                        <div class="form-text">Textinhalt des Bausteins</div>
+                        <!-- Quill Editor Container -->
+                        <div id="editor-container"></div>
+                        <!-- Hidden field to store HTML content -->
+                        <input type="hidden" id="content" name="content" required>
+                        <div class="form-text">Textinhalt des Bausteins (HTML-Formatierung)</div>
                     </div>
                     
                     <!-- Action Buttons -->
@@ -91,4 +112,41 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Quill JS -->
+<script src="{% static 'quill/quill.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Quill editor with toolbar configuration
+    const quill = new Quill('#editor-container', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline'],        // toggled buttons
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],  // lists
+                ['link'],                                // link
+                ['clean']                                // remove formatting
+            ]
+        },
+        placeholder: 'Inhalt eingeben...'
+    });
+    
+    // Load initial content from template if exists
+    const initialContent = {% if template %}'{{ template.content|escapejs }}'{% else %}''{% endif %};
+    if (initialContent) {
+        // Set HTML content in Quill
+        quill.root.innerHTML = initialContent;
+    }
+    
+    // Update hidden field on text change
+    quill.on('text-change', function() {
+        document.getElementById('content').value = quill.root.innerHTML;
+    });
+    
+    // Set initial value in hidden field
+    document.getElementById('content').value = quill.root.innerHTML;
+});
+</script>
 {% endblock %}

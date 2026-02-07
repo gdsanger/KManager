@@ -216,3 +216,5 @@ __marimo__/
 kmanager/manual_test_settings.py
 cookies.txt
 csrf.txt
+node_modules/
+package-lock.json
