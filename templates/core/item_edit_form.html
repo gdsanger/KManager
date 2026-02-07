@@ -126,7 +126,7 @@
                 <!-- Quill Editor Container -->
                 <div id="longTextEditor"></div>
                 <!-- Hidden field to store content - keep original form field but hide it -->
-                <textarea name="{{ form.long_text.name }}" id="{{ form.long_text.id_for_label }}" style="display: none;">{{ form.long_text.value|default:'' }}</textarea>
+                <textarea name="{{ form.long_text.name }}" id="{{ form.long_text.id_for_label }}" style="display: none;" aria-hidden="true">{{ form.long_text.value|default:'' }}</textarea>
                 <div class="invalid-feedback"></div>
             </div>
         </div>
@@ -172,9 +172,6 @@
     quill.on('text-change', function() {
         hiddenTextarea.value = quill.root.innerHTML;
     });
-    
-    // Set initial value in hidden textarea
-    hiddenTextarea.value = quill.root.innerHTML;
 })();
 
 // Attach cancel handler
