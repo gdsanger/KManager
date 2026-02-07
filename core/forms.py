@@ -185,7 +185,7 @@ class ItemForm(forms.ModelForm):
             'net_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'tax_rate': forms.Select(attrs={'class': 'form-select'}),
-            'cost_type_1': forms.Select(attrs={'class': 'form-select', 'hx-get': '/items/cost-type-2-options/', 'hx-target': '#cost-type-2-wrapper', 'hx-trigger': 'change'}),
+            'cost_type_1': forms.Select(attrs={'class': 'form-select'}),
             'cost_type_2': forms.Select(attrs={'class': 'form-select'}),
             'item_group': forms.Select(attrs={'class': 'form-select'}),
             'item_type': forms.Select(attrs={'class': 'form-select'}),

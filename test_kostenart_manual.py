@@ -22,15 +22,29 @@ def test_kostenart_filtering():
     print("TESTING KOSTENART FILTERING IN ITEM FORM")
     print("=" * 80)
     
-    # Get test data
-    tax_rate = TaxRate.objects.get(code='VAT19')
-    item_group = ItemGroup.objects.get(code='SUB')
+    # Get test data with error handling
+    try:
+        tax_rate = TaxRate.objects.get(code='VAT19')
+    except TaxRate.DoesNotExist:
+        print("ERROR: TaxRate with code 'VAT19' not found. Please run setup_test_data.py first.")
+        sys.exit(1)
     
-    # Get Kostenarten
-    personal = Kostenart.objects.get(name='Personal')
-    material = Kostenart.objects.get(name='Material')
-    gehaelter = Kostenart.objects.get(name='Gehälter')
-    rohstoffe = Kostenart.objects.get(name='Rohstoffe')
+    try:
+        item_group = ItemGroup.objects.get(code='SUB')
+    except ItemGroup.DoesNotExist:
+        print("ERROR: ItemGroup with code 'SUB' not found. Please run setup_test_data.py first.")
+        sys.exit(1)
+    
+    # Get Kostenarten with error handling
+    try:
+        personal = Kostenart.objects.get(name='Personal', parent__isnull=True)
+        material = Kostenart.objects.get(name='Material', parent__isnull=True)
+        gehaelter = Kostenart.objects.get(name='Gehälter', parent__isnull=False)
+        rohstoffe = Kostenart.objects.get(name='Rohstoffe', parent__isnull=False)
+    except Kostenart.DoesNotExist as e:
+        print(f"ERROR: Required Kostenart not found: {e}")
+        print("Please ensure test data is created with proper Hauptkostenarten and Unterkostenarten.")
+        sys.exit(1)
     
     print("\n1. TEST: Cost_type_1 queryset only contains Hauptkostenarten")
     print("-" * 80)
