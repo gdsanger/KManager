@@ -20,7 +20,7 @@
         <form method="get" action="">
             <div class="row g-2">
                 <!-- Search Field -->
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="input-group">
                         <span class="input-group-text">
                             <i class="bi bi-search"></i>
@@ -29,13 +29,18 @@
                     </div>
                 </div>
                 
+                <!-- Customer Filter -->
+                <div class="col-md-3">
+                    {{ filter.form.customer }}
+                </div>
+                
                 <!-- Status Filter -->
                 <div class="col-md-2">
                     {{ filter.form.status }}
                 </div>
                 
                 <!-- Filter Actions -->
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="btn-group w-100" role="group">
                         <button type="submit" class="btn btn-outline-secondary">
                             <i class="bi bi-funnel"></i> Filter
@@ -49,7 +54,7 @@
                 </div>
                 
                 <!-- Advanced Filters Toggle -->
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false" aria-controls="advancedFilters">
                         <i class="bi bi-funnel-fill"></i> Erweitert
                     </button>

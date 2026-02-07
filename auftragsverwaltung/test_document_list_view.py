@@ -235,3 +235,155 @@ class SalesDocumentListViewTestCase(TestCase):
         table = response.context['table']
         self.assertEqual(len(table.data), 1)
         self.assertIn('Quote 1', table.data.data[0].subject)
+    
+    def test_customer_column_in_table(self):
+        """Test that customer column is present in the table"""
+        # Import Adresse model
+        from core.models import Adresse
+        
+        # Create test customers
+        customer1 = Adresse.objects.create(
+            name='Max Mustermann',
+            strasse='Musterstrasse 1',
+            plz='12345',
+            ort='Musterstadt',
+            land='Deutschland'
+        )
+        customer2 = Adresse.objects.create(
+            name='Erika Beispiel',
+            strasse='Beispielweg 2',
+            plz='54321',
+            ort='Beispielort',
+            land='Deutschland'
+        )
+        
+        # Update documents with customers
+        self.doc1.customer = customer1
+        self.doc1.save()
+        self.doc2.customer = customer2
+        self.doc2.save()
+        
+        url = reverse('auftragsverwaltung:quotes')
+        response = self.client.get(url)
+        
+        # Check that table has customer field
+        table = response.context['table']
+        self.assertIn('customer', [col.name for col in table.columns])
+        
+        # Check that response contains customer names
+        self.assertContains(response, 'Max Mustermann')
+        self.assertContains(response, 'Erika Beispiel')
+    
+    def test_customer_column_position(self):
+        """Test that customer column is in second position after number"""
+        url = reverse('auftragsverwaltung:quotes')
+        response = self.client.get(url)
+        
+        table = response.context['table']
+        column_names = [col.name for col in table.columns]
+        
+        # Check that customer is the second column (index 1)
+        self.assertEqual(column_names[0], 'number')
+        self.assertEqual(column_names[1], 'customer')
+    
+    def test_customer_filter(self):
+        """Test the customer filter"""
+        # Import Adresse model
+        from core.models import Adresse
+        
+        # Create test customers
+        customer1 = Adresse.objects.create(
+            name='Max Mustermann',
+            strasse='Musterstrasse 1',
+            plz='12345',
+            ort='Musterstadt',
+            land='Deutschland'
+        )
+        customer2 = Adresse.objects.create(
+            name='Erika Beispiel',
+            strasse='Beispielweg 2',
+            plz='54321',
+            ort='Beispielort',
+            land='Deutschland'
+        )
+        
+        # Update documents with customers
+        self.doc1.customer = customer1
+        self.doc1.save()
+        self.doc2.customer = customer2
+        self.doc2.save()
+        
+        url = reverse('auftragsverwaltung:quotes')
+        
+        # Filter by customer1
+        response = self.client.get(url, {'customer': customer1.pk})
+        table = response.context['table']
+        self.assertEqual(len(table.data), 1)
+        self.assertEqual(table.data.data[0].customer, customer1)
+        
+        # Filter by customer2
+        response = self.client.get(url, {'customer': customer2.pk})
+        table = response.context['table']
+        self.assertEqual(len(table.data), 1)
+        self.assertEqual(table.data.data[0].customer, customer2)
+    
+    def test_customer_filter_in_context(self):
+        """Test that customer filter is available in the filter form"""
+        url = reverse('auftragsverwaltung:quotes')
+        response = self.client.get(url)
+        
+        filter_set = response.context['filter']
+        self.assertIn('customer', filter_set.filters)
+    
+    def test_no_n_plus_one_queries_with_customer(self):
+        """Test that rendering customer column doesn't cause N+1 queries"""
+        # Import Adresse model
+        from core.models import Adresse
+        from django.test.utils import override_settings
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        
+        # Create test customers
+        customer1 = Adresse.objects.create(
+            name='Max Mustermann',
+            strasse='Musterstrasse 1',
+            plz='12345',
+            ort='Musterstadt',
+            land='Deutschland'
+        )
+        
+        # Update all documents with customer
+        self.doc1.customer = customer1
+        self.doc1.save()
+        self.doc2.customer = customer1
+        self.doc2.save()
+        
+        url = reverse('auftragsverwaltung:quotes')
+        
+        # Count queries when fetching the page
+        with CaptureQueriesContext(connection) as context:
+            response = self.client.get(url)
+            initial_query_count = len(context.captured_queries)
+        
+        # Add more documents with the same customer
+        for i in range(5):
+            SalesDocument.objects.create(
+                company=self.company,
+                document_type=self.doc_type_quote,
+                number=f'AN-2024-{i+200:03d}',
+                status='DRAFT',
+                issue_date=timezone.now().date(),
+                subject=f'Test Quote {i+200}',
+                total_gross=Decimal('100.00'),
+                customer=customer1
+            )
+        
+        # Count queries again - should be similar (no N+1)
+        with CaptureQueriesContext(connection) as context:
+            response = self.client.get(url)
+            new_query_count = len(context.captured_queries)
+        
+        # Query count should not increase proportionally with more rows
+        # Allow for some variation but ensure no N+1
+        self.assertLessEqual(new_query_count, initial_query_count + 2)
+
