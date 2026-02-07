@@ -383,12 +383,14 @@ Neues {{ document_type.name }}
                                             <div class="col-md-4">
                                                 <input type="text" 
                                                        class="form-control form-control-sm line-short-text-1" 
+                                                       data-line-id="{{ line.pk }}"
                                                        value="{{ line.short_text_1 }}" 
                                                        placeholder="Kurztext"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change, keyup changed delay:500ms"
                                                        hx-vals='js:{"short_text_1": event.target.value}'
                                                        hx-swap="none">
+                                                <div id="suggestions-{{ line.pk }}" class="article-suggestions" style="display: none;"></div>
                                             </div>
                                             <div class="col-md-2">
                                                 <input type="number" 
