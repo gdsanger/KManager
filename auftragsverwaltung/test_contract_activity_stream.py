@@ -384,35 +384,6 @@ class ContractActivityStreamTestCase(TestCase):
         self.assertIn('Rechnung aus Vertrag erstellt', activity.title)
         self.assertIn('Billing Test Contract', activity.title)
         self.assertEqual(activity.severity, 'INFO')
-    
-    def test_contract_billing_failure_logs_error_activity(self):
-        """Test that failed contract billing logs an error activity"""
-        # Create contract WITHOUT lines (will cause billing to fail)
-        contract = Contract.objects.create(
-            company=self.company,
-            customer=self.customer1,
-            document_type=self.document_type,
-            payment_term=self.payment_term,
-            name='Failing Billing Contract',
-            currency='EUR',
-            interval='MONTHLY',
-            start_date=date(2026, 1, 1),
-            next_run_date=date(2026, 1, 1),
-            is_active=True
-        )
-        # Note: No contract lines added - invoice will have no lines
-        
-        # Clear any existing activities
-        Activity.objects.all().delete()
-        
-        # Run billing service - this should create an invoice but may fail validation
-        # Actually, it should succeed but create an empty invoice
-        # Let me modify this test to force a real failure
-        
-        # For now, let's just verify the success case exists
-        # A real failure would need to mock a database error or similar
-        # Skip this test for now as forcing a failure is complex
-        pass
 
 
 class ContractLineActivityStreamTestCase(TestCase):
