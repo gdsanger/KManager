@@ -32,6 +32,7 @@ urlpatterns = [
     path('items/', views.item_management, name='item_management'),
     path('items/save/', views.item_save_ajax, name='item_save'),
     path('items/new/', views.item_create_new, name='item_create_new'),
+    path('items/new-ajax/', views.item_new_ajax, name='item_new_ajax'),
     path('items/edit/<int:pk>/', views.item_edit_ajax, name='item_edit_ajax'),
     path('items/groups/<int:pk>/', views.item_group_get, name='item_group_get'),
     path('items/groups/save/', views.item_group_save, name='item_group_save'),

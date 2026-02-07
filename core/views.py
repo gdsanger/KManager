@@ -447,6 +447,33 @@ def item_edit_ajax(request, pk):
 
 
 @login_required
+def item_new_ajax(request):
+    """
+    Load item creation form for AJAX modal.
+    Supports preselecting item_group via ?group=<id> parameter.
+    Returns HTML partial for the modal body.
+    """
+    # Get group parameter for preselection
+    group_id = request.GET.get('group', '')
+    initial_data = {}
+    
+    if group_id:
+        try:
+            group = ItemGroup.objects.get(pk=group_id)
+            initial_data['item_group'] = group
+        except (ItemGroup.DoesNotExist, ValueError):
+            pass
+    
+    form = ItemForm(initial=initial_data)
+    
+    return render(request, 'core/item_edit_form.html', {
+        'form': form,
+        'item': None,
+    })
+
+
+
+@login_required
 def item_save_ajax(request):
     """
     Handle item save via AJAX.
