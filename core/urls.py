@@ -37,4 +37,11 @@ urlpatterns = [
     path('items/cost-type-2-options/', views.cost_type_2_options, name='cost_type_2_options'),
     path('items/groups/<int:pk>/', views.item_group_get, name='item_group_get'),
     path('items/groups/save/', views.item_group_save, name='item_group_save'),
+    
+    # Units
+    path('units/', views.unit_list, name='unit_list'),
+    path('units/create/', views.unit_create, name='unit_create'),
+    path('units/<int:pk>/', views.unit_detail, name='unit_detail'),
+    path('units/<int:pk>/edit/', views.unit_edit, name='unit_edit'),
+    path('units/<int:pk>/delete/', views.unit_delete, name='unit_delete'),
 ]

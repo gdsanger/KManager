@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Domus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-rulers"></i> {{ title }}</h2>
+        <a href="{% url 'unit_list' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Zurück zur Liste
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark-text"></i> {{ title }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Basic Information -->
+                        <h6 class="text-uppercase text-muted mb-3"><i class="bi bi-info-circle"></i> Grunddaten</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.code.id_for_label }}" class="form-label">{{ form.code.label }}</label>
+                                {{ form.code }}
+                                {% if form.code.help_text %}
+                                    <div class="form-text">{{ form.code.help_text }}</div>
+                                {% endif %}
+                                {% if form.code.errors %}
+                                    <div class="text-danger small">{{ form.code.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.symbol.id_for_label }}" class="form-label">{{ form.symbol.label }}</label>
+                                {{ form.symbol }}
+                                {% if form.symbol.help_text %}
+                                    <div class="form-text">{{ form.symbol.help_text }}</div>
+                                {% endif %}
+                                {% if form.symbol.errors %}
+                                    <div class="text-danger small">{{ form.symbol.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">{{ form.name.label }}</label>
+                                {{ form.name }}
+                                {% if form.name.help_text %}
+                                    <div class="form-text">{{ form.name.help_text }}</div>
+                                {% endif %}
+                                {% if form.name.errors %}
+                                    <div class="text-danger small">{{ form.name.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="{{ form.description.id_for_label }}" class="form-label">{{ form.description.label }}</label>
+                                {{ form.description }}
+                                {% if form.description.help_text %}
+                                    <div class="form-text">{{ form.description.help_text }}</div>
+                                {% endif %}
+                                {% if form.description.errors %}
+                                    <div class="text-danger small">{{ form.description.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                        {{ form.is_active.label }}
+                                    </label>
+                                    {% if form.is_active.help_text %}
+                                        <div class="form-text">{{ form.is_active.help_text }}</div>
+                                    {% endif %}
+                                    {% if form.is_active.errors %}
+                                        <div class="text-danger small">{{ form.is_active.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> {{ action }}
+                            </button>
+                            <a href="{% url 'unit_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar with info -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-info-circle"></i> Hinweise
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        <strong>Pflichtfelder:</strong> Code und Name sind erforderlich.
+                    </p>
+                    <p class="text-muted small mb-2">
+                        <strong>Code:</strong> Der Code wird automatisch in Großbuchstaben umgewandelt und muss eindeutig sein.
+                    </p>
+                    <p class="text-muted small mb-0">
+                        <strong>Beispiele:</strong> 
+                        <ul class="small mt-1">
+                            <li>STK - Stück</li>
+                            <li>PAU - Pauschal</li>
+                            <li>LFM - Laufender Meter</li>
+                        </ul>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

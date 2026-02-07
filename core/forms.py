@@ -5,7 +5,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
-from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart
+from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart, Unit
 
 
 class SmtpSettingsForm(forms.ModelForm):
@@ -292,4 +292,32 @@ class ItemGroupForm(forms.ModelForm):
         help_texts = {
             'code': 'Eindeutiger Code für die Warengruppe',
             'name': 'Bezeichnung der Warengruppe',
+        }
+
+
+class UnitForm(forms.ModelForm):
+    """Form for Unit (Einheit) entity"""
+    
+    class Meta:
+        model = Unit
+        fields = ['code', 'name', 'symbol', 'is_active', 'description']
+        widgets = {
+            'code': forms.TextInput(attrs={'class': 'form-control', 'style': 'text-transform: uppercase;'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'symbol': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+        labels = {
+            'code': 'Code *',
+            'name': 'Name *',
+            'symbol': 'Symbol',
+            'is_active': 'Aktiv',
+            'description': 'Beschreibung',
+        }
+        help_texts = {
+            'code': 'Eindeutiger Code für die Einheit (z.B. STK, PAU, LFM) - wird automatisch in Großbuchstaben umgewandelt',
+            'name': 'Bezeichnung der Einheit (z.B. Stück, Pauschal, Laufender Meter)',
+            'symbol': 'Optionales Symbol für die Einheit (z.B. Stk, lfm)',
+            'description': 'Optionale Beschreibung der Einheit',
         }

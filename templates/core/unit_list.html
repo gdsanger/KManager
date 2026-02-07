@@ -1,0 +1,104 @@
+{% extends "core/core_base.html" %}
+
+{% block title %}Einheiten - Domus{% endblock %}
+
+{% block page_title %}Einheiten{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'unit_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Neue Einheit
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- Search and Filter Card -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-6">
+                    <label for="q" class="form-label">Suche (Code / Name)</label>
+                    <input type="text" class="form-control" id="q" name="q" value="{{ request.GET.q }}" placeholder="Code oder Name eingeben...">
+                </div>
+                <div class="col-md-3">
+                    <label for="is_active" class="form-label">Status</label>
+                    <select class="form-select" id="is_active" name="is_active">
+                        <option value="">Alle</option>
+                        <option value="1" {% if request.GET.is_active == '1' %}selected{% endif %}>Aktiv</option>
+                        <option value="0" {% if request.GET.is_active == '0' %}selected{% endif %}>Inaktiv</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-secondary me-2">
+                        <i class="bi bi-search"></i> Suchen
+                    </button>
+                    <a href="{% url 'unit_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i> Zurücksetzen
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Units Table -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Symbol</th>
+                            <th>Status</th>
+                            <th class="text-end">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for unit in units %}
+                        <tr>
+                            <td><strong>{{ unit.code }}</strong></td>
+                            <td><a href="{% url 'unit_detail' unit.pk %}">{{ unit.name }}</a></td>
+                            <td>
+                                {% if unit.symbol %}
+                                    {{ unit.symbol }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if unit.is_active %}
+                                    <span class="badge bg-success">Aktiv</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inaktiv</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'unit_detail' unit.pk %}" class="btn btn-outline-info" title="Details anzeigen">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'unit_edit' unit.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'unit_delete' unit.pk %}" class="btn btn-outline-danger" title="Löschen">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">
+                                <i class="bi bi-inbox"></i> Keine Einheiten vorhanden
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
