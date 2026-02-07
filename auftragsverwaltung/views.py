@@ -559,6 +559,9 @@ def ajax_add_line(request, doc_key, pk):
         quantity = Decimal(data.get('quantity', '1.0'))
         line_type = data.get('line_type', 'NORMAL')
         description = data.get('description', '')
+        short_text_1 = data.get('short_text_1', '')
+        short_text_2 = data.get('short_text_2', '')
+        long_text = data.get('long_text', '')
         unit_price_net = data.get('unit_price_net')
         tax_rate_id = data.get('tax_rate_id')
         kostenart1_id = data.get('kostenart1_id')
@@ -576,8 +579,14 @@ def ajax_add_line(request, doc_key, pk):
             )
             
             # Use item data
+            if not short_text_1:
+                short_text_1 = item.short_text_1
+            if not short_text_2:
+                short_text_2 = item.short_text_2
+            if not long_text:
+                long_text = item.long_text
             if not description:
-                description = f"{item.short_text_1}\n{item.long_text}" if item.long_text else item.short_text_1
+                description = f"{short_text_1}\n{long_text}" if long_text else short_text_1
             if not unit_price_net:
                 unit_price_net = item.net_price
             is_discountable = item.is_discountable
@@ -592,12 +601,21 @@ def ajax_add_line(request, doc_key, pk):
             item = None
             
             # Require mandatory fields for manual lines
-            if not description:
-                return JsonResponse({'error': 'Description is required for manual lines'}, status=400)
+            if not short_text_1 and not description:
+                return JsonResponse({'error': 'Short text 1 or description is required for manual lines'}, status=400)
             if not unit_price_net:
                 return JsonResponse({'error': 'Unit price is required for manual lines'}, status=400)
             if not tax_rate_id:
                 return JsonResponse({'error': 'Tax rate is required for manual lines'}, status=400)
+            
+            # Generate description from short texts if not provided
+            if not description:
+                parts = [short_text_1]
+                if short_text_2:
+                    parts.append(short_text_2)
+                if long_text:
+                    parts.append(long_text)
+                description = '\n'.join(parts)
             
             tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
             unit_price_net = Decimal(unit_price_net)
@@ -615,6 +633,9 @@ def ajax_add_line(request, doc_key, pk):
             position_no=position_no,
             line_type=line_type,
             is_selected=True if line_type == 'NORMAL' else data.get('is_selected', False),
+            short_text_1=short_text_1,
+            short_text_2=short_text_2,
+            long_text=long_text,
             description=description,
             quantity=quantity,
             unit_price_net=unit_price_net,
@@ -633,6 +654,9 @@ def ajax_add_line(request, doc_key, pk):
             'line': {
                 'id': line.pk,
                 'position_no': line.position_no,
+                'short_text_1': line.short_text_1,
+                'short_text_2': line.short_text_2,
+                'long_text': line.long_text,
                 'description': line.description,
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
@@ -683,6 +707,12 @@ def ajax_update_line(request, doc_key, pk, line_id):
             line.quantity = Decimal(data['quantity'])
         if 'unit_price_net' in data:
             line.unit_price_net = Decimal(data['unit_price_net'])
+        if 'short_text_1' in data:
+            line.short_text_1 = data['short_text_1']
+        if 'short_text_2' in data:
+            line.short_text_2 = data['short_text_2']
+        if 'long_text' in data:
+            line.long_text = data['long_text']
         if 'description' in data:
             line.description = data['description']
         if 'tax_rate_id' in data:
@@ -704,6 +734,9 @@ def ajax_update_line(request, doc_key, pk, line_id):
             'success': True,
             'line': {
                 'id': line.pk,
+                'short_text_1': line.short_text_1,
+                'short_text_2': line.short_text_2,
+                'long_text': line.long_text,
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
                 'description': line.description,

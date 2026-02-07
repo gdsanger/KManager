@@ -588,9 +588,29 @@ class SalesDocumentLine(models.Model):
     )
     
     # Content fields
+    short_text_1 = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Kurztext 1",
+        help_text="Primärer Kurztext"
+    )
+    short_text_2 = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Kurztext 2",
+        help_text="Optionaler zweiter Kurztext"
+    )
+    long_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Langtext",
+        help_text="Detaillierter Langtext"
+    )
     description = models.TextField(
         verbose_name="Beschreibung",
-        help_text="Positionsbeschreibung"
+        help_text="Positionsbeschreibung (generiert aus Kurztexten)"
     )
     quantity = models.DecimalField(
         max_digits=12,

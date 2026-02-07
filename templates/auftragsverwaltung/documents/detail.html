@@ -179,11 +179,42 @@ Neues {{ document_type.name }}
         background: var(--bs-secondary-bg);
     }
     
+    .article-suggestions {
+        position: absolute;
+        z-index: 1000;
+        background: white;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        width: calc(100% - 30px);
+        margin-top: 2px;
+    }
+    
+    .article-suggestion-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--bs-border-color-translucent);
+    }
+    
+    .article-suggestion-item:hover {
+        background: var(--bs-secondary-bg);
+    }
+    
+    .article-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    
     .form-label-sm {
         font-size: 0.75rem;
         margin-bottom: 0.25rem;
         display: block;
         font-weight: 500;
+    }
+    
+    .edit-longtext-btn:hover + .longtext-preview-tooltip {
+        display: block;
     }
 </style>
 {% endblock %}
@@ -326,11 +357,34 @@ Neues {{ document_type.name }}
                             </div>
                             <div class="line-content">
                                 <div class="row g-2">
-                                    <div class="col-md-12">
-                                        <textarea class="form-control form-control-sm line-description" rows="2" 
-                                                  placeholder="Beschreibung">{{ line.description }}</textarea>
+                                    <!-- Kurztext 1 with article search -->
+                                    <div class="col-md-6">
+                                        <label class="form-label-sm">Kurztext 1</label>
+                                        <input type="text" class="form-control form-control-sm line-short-text-1" 
+                                               value="{{ line.short_text_1 }}" placeholder="Kurztext 1" data-line-id="{{ line.pk }}">
+                                        <div class="article-suggestions" id="suggestions-{{ line.pk }}" style="display:none;"></div>
                                     </div>
-                                    <!-- Row 1: Quantity, Price, Kostenart1, Kostenart2 -->
+                                    <!-- Kurztext 2 -->
+                                    <div class="col-md-6">
+                                        <label class="form-label-sm">Kurztext 2</label>
+                                        <input type="text" class="form-control form-control-sm line-short-text-2" 
+                                               value="{{ line.short_text_2 }}" placeholder="Kurztext 2">
+                                    </div>
+                                    <!-- Langtext with Quill editor button -->
+                                    <div class="col-md-12">
+                                        <label class="form-label-sm">Langtext</label>
+                                        <div class="input-group">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary edit-longtext-btn" 
+                                                    data-line-id="{{ line.pk }}" data-bs-toggle="tooltip" 
+                                                    title="{{ line.long_text|default:'Kein Langtext' }}">
+                                                <i class="bi bi-pencil"></i> Langtext bearbeiten
+                                            </button>
+                                            <span class="form-control form-control-sm line-long-text-preview" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                                {{ line.long_text|default:"(kein Langtext)" }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <!-- Row: Quantity, Price, Tax Rate -->
                                     <div class="col-md-3">
                                         <label class="form-label-sm">Menge</label>
                                         <input type="number" class="form-control form-control-sm line-quantity" 
@@ -342,6 +396,20 @@ Neues {{ document_type.name }}
                                                value="{{ line.unit_price_net|unlocalize }}" step="0.01" min="0" placeholder="Preis">
                                     </div>
                                     <div class="col-md-3">
+                                        <label class="form-label-sm">Steuersatz</label>
+                                        <select class="form-select form-select-sm line-tax-rate">
+                                            {% for tax_rate in tax_rates %}
+                                            <option value="{{ tax_rate.pk }}" {% if line.tax_rate.pk == tax_rate.pk %}selected{% endif %}>
+                                                {{ tax_rate.code }} ({{ tax_rate.rate }}%)
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <!-- Placeholder for alignment -->
+                                    </div>
+                                    <!-- Row: Kostenart 1 and 2 -->
+                                    <div class="col-md-6">
                                         <label class="form-label-sm">Kostenart 1</label>
                                         <select class="form-select form-select-sm line-kostenart1" data-line-id="{{ line.pk }}">
                                             <option value="">-- Keine --</option>
@@ -352,7 +420,7 @@ Neues {{ document_type.name }}
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-6">
                                         <label class="form-label-sm">Kostenart 2</label>
                                         <select class="form-select form-select-sm line-kostenart2" data-line-id="{{ line.pk }}">
                                             <option value="">-- Keine --</option>
@@ -365,7 +433,7 @@ Neues {{ document_type.name }}
                                             {% endif %}
                                         </select>
                                     </div>
-                                    <!-- Row 2: Totals -->
+                                    <!-- Row: Totals (calculated) -->
                                     <div class="col-md-4">
                                         <label class="form-label-sm">Netto</label>
                                         <span class="form-control form-control-sm text-end line-net">{{ line.line_net|floatformat:2 }} €</span>
@@ -532,10 +600,20 @@ Neues {{ document_type.name }}
             </div>
             <div class="modal-body">
                 <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Kurztext 1 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="manualLineShortText1" 
+                               placeholder="Kurztext 1" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Kurztext 2</label>
+                        <input type="text" class="form-control" id="manualLineShortText2" 
+                               placeholder="Kurztext 2">
+                    </div>
                     <div class="col-md-12">
-                        <label class="form-label">Beschreibung <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="manualLineDescription" rows="3" 
-                                  placeholder="Beschreibung der Position" required></textarea>
+                        <label class="form-label">Langtext</label>
+                        <textarea class="form-control" id="manualLineLongText" rows="3" 
+                                  placeholder="Detaillierter Langtext"></textarea>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Menge <span class="text-danger">*</span></label>
@@ -581,9 +659,35 @@ Neues {{ document_type.name }}
         </div>
     </div>
 </div>
+
+<!-- Longtext Editor Modal -->
+<div class="modal fade" id="longtextEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Langtext bearbeiten</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="longtextEditor" style="height: 400px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="saveLongtextButton">
+                    <i class="bi bi-check"></i> Speichern
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'quill/quill.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let isDirty = false;
@@ -680,16 +784,56 @@ document.addEventListener('DOMContentLoaded', function() {
         issueDateInput.addEventListener('change', updatePaymentTerm);
     }
     
-    // Add line button - show article search modal
+    // Add line button - directly add new position
     const addLineButton = document.getElementById('addLineButton');
     if (addLineButton) {
         addLineButton.addEventListener('click', function() {
             {% if document %}
-            const modal = new bootstrap.Modal(document.getElementById('articleSearchModal'));
-            modal.show();
+            // Add a new empty position directly
+            addNewPosition();
             {% else %}
             alert('Bitte speichern Sie das Dokument zuerst, bevor Sie Positionen hinzufügen.');
             {% endif %}
+        });
+    }
+    
+    // Function to add a new empty position
+    function addNewPosition() {
+        // Get default tax rate (first in the list)
+        const defaultTaxRateId = {% if tax_rates.0.pk %}{{ tax_rates.0.pk }}{% else %}null{% endif %};
+        if (!defaultTaxRateId) {
+            alert('Kein Steuersatz verfügbar');
+            return;
+        }
+        
+        fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                short_text_1: '',
+                short_text_2: '',
+                long_text: '',
+                quantity: 1.0,
+                unit_price_net: 0.00,
+                tax_rate_id: defaultTaxRateId,
+                line_type: 'NORMAL'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload page to show new line
+                location.reload();
+            } else if (data.error) {
+                alert('Fehler: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Fehler beim Hinzufügen der Position');
         });
     }
     
@@ -740,15 +884,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveManualLineButton = document.getElementById('saveManualLineButton');
     if (saveManualLineButton) {
         saveManualLineButton.addEventListener('click', function() {
-            const description = document.getElementById('manualLineDescription').value.trim();
+            const shortText1 = document.getElementById('manualLineShortText1').value.trim();
+            const shortText2 = document.getElementById('manualLineShortText2').value.trim();
+            const longText = document.getElementById('manualLineLongText').value.trim();
             const quantity = document.getElementById('manualLineQuantity').value;
             const unitPrice = document.getElementById('manualLineUnitPrice').value;
             const taxRateId = document.getElementById('manualLineTaxRate').value;
             const kostenart1Id = document.getElementById('manualLineKostenart1').value;
             const kostenart2Id = document.getElementById('manualLineKostenart2').value;
             
-            if (!description) {
-                alert('Bitte geben Sie eine Beschreibung ein.');
+            if (!shortText1) {
+                alert('Bitte geben Sie Kurztext 1 ein.');
                 return;
             }
             
@@ -765,7 +911,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     'X-CSRFToken': '{{ csrf_token }}'
                 },
                 body: JSON.stringify({
-                    description: description,
+                    short_text_1: shortText1,
+                    short_text_2: shortText2,
+                    long_text: longText,
                     quantity: parseFloat(quantity),
                     unit_price_net: parseFloat(unitPrice),
                     tax_rate_id: parseInt(taxRateId),
@@ -1179,6 +1327,381 @@ document.addEventListener('DOMContentLoaded', function() {
             toast.remove();
         });
     }
+    
+    // Initialize Quill editor for longtext
+    let quillEditor = null;
+    let currentEditingLineId = null;
+    
+    // Edit longtext button handlers
+    document.querySelectorAll('.edit-longtext-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const lineId = this.dataset.lineId;
+            const lineItem = document.querySelector(`.line-item[data-line-id="${lineId}"]`);
+            
+            // Get current longtext from the line (stored in a hidden field or data attribute)
+            // For now, we'll fetch it from the preview span
+            const preview = lineItem.querySelector('.line-long-text-preview');
+            const currentLongtext = preview.textContent.trim();
+            
+            // Initialize Quill if not already
+            if (!quillEditor) {
+                quillEditor = new Quill('#longtextEditor', {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: [
+                            ['bold', 'italic', 'underline'],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            ['clean']
+                        ]
+                    }
+                });
+            }
+            
+            // Set current content
+            quillEditor.setText(currentLongtext === '(kein Langtext)' ? '' : currentLongtext);
+            
+            // Store line ID for saving
+            currentEditingLineId = lineId;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('longtextEditorModal'));
+            modal.show();
+        });
+    });
+    
+    // Save longtext button
+    const saveLongtextButton = document.getElementById('saveLongtextButton');
+    if (saveLongtextButton) {
+        saveLongtextButton.addEventListener('click', function() {
+            if (!currentEditingLineId) return;
+            
+            const longtext = quillEditor.getText().trim();
+            
+            // Update the line via AJAX
+            {% if document %}
+            fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${currentEditingLineId}/update/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    long_text: longtext
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update preview
+                    const lineItem = document.querySelector(`.line-item[data-line-id="${currentEditingLineId}"]`);
+                    const preview = lineItem.querySelector('.line-long-text-preview');
+                    preview.textContent = longtext || '(kein Langtext)';
+                    
+                    // Update tooltip
+                    const editBtn = lineItem.querySelector('.edit-longtext-btn');
+                    editBtn.setAttribute('title', longtext || 'Kein Langtext');
+                    
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('longtextEditorModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    showToast('Langtext gespeichert', 'success');
+                } else if (data.error) {
+                    alert('Fehler: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Speichern des Langtexts');
+            });
+            {% endif %}
+        });
+    }
+    
+    // Constants for timing
+    const SEARCH_DEBOUNCE_MS = 300; // Delay before triggering search after typing stops
+    const SUGGESTIONS_HIDE_DELAY_MS = 200; // Delay to allow click events to register on suggestion items
+    const KOSTENART2_LOAD_TIMEOUT_MS = 500; // Timeout to wait for kostenart2 options to load after article selection
+    
+    // Article search on Kurztext 1 input
+    let searchTimeouts = {};
+    
+    document.querySelectorAll('.line-short-text-1').forEach(input => {
+        input.addEventListener('input', function() {
+            const lineId = this.dataset.lineId;
+            const query = this.value.trim();
+            const suggestionsDiv = document.getElementById(`suggestions-${lineId}`);
+            
+            // Clear existing timeout
+            if (searchTimeouts[lineId]) {
+                clearTimeout(searchTimeouts[lineId]);
+            }
+            
+            if (query.length < 2) {
+                suggestionsDiv.style.display = 'none';
+                suggestionsDiv.innerHTML = '';
+                return;
+            }
+            
+            // Set new timeout
+            searchTimeouts[lineId] = setTimeout(function() {
+                fetch(`{% url "auftragsverwaltung:ajax_search_articles" %}?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.articles && data.articles.length > 0) {
+                        // Store articles in a temporary map for safe access
+                        const articlesMap = {};
+                        let html = '';
+                        
+                        data.articles.forEach((article, index) => {
+                            const articleKey = `article-${lineId}-${index}`;
+                            articlesMap[articleKey] = article;
+                            
+                            // Escape HTML to prevent XSS
+                            const escapeHtml = (str) => {
+                                const div = document.createElement('div');
+                                div.textContent = str;
+                                return div.innerHTML;
+                            };
+                            
+                            html += `
+                                <div class="article-suggestion-item" data-article-key="${articleKey}" data-line-id="${lineId}">
+                                    <strong>${escapeHtml(article.article_no)}</strong> - ${escapeHtml(article.short_text_1)}<br>
+                                    <small class="text-muted">Preis: ${escapeHtml(article.net_price)} €</small>
+                                </div>
+                            `;
+                        });
+                        
+                        suggestionsDiv.innerHTML = html;
+                        suggestionsDiv.style.display = 'block';
+                        
+                        // Add click handlers to suggestions
+                        suggestionsDiv.querySelectorAll('.article-suggestion-item').forEach(item => {
+                            item.addEventListener('click', function() {
+                                const articleKey = this.dataset.articleKey;
+                                const article = articlesMap[articleKey];
+                                const lineId = this.dataset.lineId;
+                                if (article) {
+                                    fillLineFromArticle(lineId, article);
+                                }
+                            });
+                        });
+                    } else {
+                        suggestionsDiv.innerHTML = '<div class="article-suggestion-item text-muted">Keine Artikel gefunden</div>';
+                        suggestionsDiv.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    suggestionsDiv.style.display = 'none';
+                });
+            }, SEARCH_DEBOUNCE_MS);
+        });
+        
+        // Hide suggestions when clicking outside
+        input.addEventListener('blur', function() {
+            const lineId = this.dataset.lineId;
+            const suggestionsDiv = document.getElementById(`suggestions-${lineId}`);
+            // Delay to allow click events to register on suggestion items before hiding
+            setTimeout(function() {
+                suggestionsDiv.style.display = 'none';
+            }, SUGGESTIONS_HIDE_DELAY_MS);
+        });
+    });
+    
+    // Fill line from article data
+    function fillLineFromArticle(lineId, article) {
+        const lineItem = document.querySelector(`.line-item[data-line-id="${lineId}"]`);
+        if (!lineItem) return;
+        
+        // Update fields
+        const shortText1Input = lineItem.querySelector('.line-short-text-1');
+        const shortText2Input = lineItem.querySelector('.line-short-text-2');
+        const longTextPreview = lineItem.querySelector('.line-long-text-preview');
+        const unitPriceInput = lineItem.querySelector('.line-unit-price');
+        const kostenart1Select = lineItem.querySelector('.line-kostenart1');
+        const kostenart2Select = lineItem.querySelector('.line-kostenart2');
+        
+        if (shortText1Input) shortText1Input.value = article.short_text_1 || '';
+        if (shortText2Input) shortText2Input.value = article.short_text_2 || '';
+        if (longTextPreview) longTextPreview.textContent = article.long_text || '(kein Langtext)';
+        if (unitPriceInput) unitPriceInput.value = article.net_price || 0;
+        
+        if (kostenart1Select && article.cost_type_1_id) {
+            kostenart1Select.value = article.cost_type_1_id;
+            // Trigger change to update kostenart2
+            kostenart1Select.dispatchEvent(new Event('change'));
+        }
+        
+        if (kostenart2Select && article.cost_type_2_id) {
+            // Wait for kostenart2 options to load via AJAX, then set value
+            // Check periodically if options are loaded, with timeout
+            const checkInterval = 50; // Check every 50ms
+            const maxAttempts = KOSTENART2_LOAD_TIMEOUT_MS / checkInterval;
+            let attempts = 0;
+            
+            const checkAndSet = setInterval(function() {
+                attempts++;
+                // Check if options are available (more than just the default "-- Keine --" option)
+                if (kostenart2Select.options.length > 1) {
+                    kostenart2Select.value = article.cost_type_2_id;
+                    clearInterval(checkAndSet);
+                } else if (attempts >= maxAttempts) {
+                    // Timeout reached, stop checking
+                    clearInterval(checkAndSet);
+                }
+            }, checkInterval);
+        }
+        
+        // Hide suggestions
+        const suggestionsDiv = document.getElementById(`suggestions-${lineId}`);
+        if (suggestionsDiv) {
+            suggestionsDiv.style.display = 'none';
+        }
+        
+        // Update the line via AJAX
+        updateLineField(lineId, {
+            short_text_1: article.short_text_1 || '',
+            short_text_2: article.short_text_2 || '',
+            long_text: article.long_text || '',
+            unit_price_net: article.net_price || 0,
+            kostenart1_id: article.cost_type_1_id || null,
+            kostenart2_id: article.cost_type_2_id || null
+        });
+    }
+    
+    // Update line field via AJAX
+    function updateLineField(lineId, data) {
+        {% if document %}
+        fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/update/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update totals if needed
+                if (data.line && data.line.line_net !== undefined) {
+                    const lineItem = document.querySelector(`.line-item[data-line-id="${lineId}"]`);
+                    if (lineItem) {
+                        const netSpan = lineItem.querySelector('.line-net');
+                        const taxSpan = lineItem.querySelector('.line-tax');
+                        const grossSpan = lineItem.querySelector('.line-gross');
+                        
+                        if (netSpan) netSpan.textContent = parseFloat(data.line.line_net).toFixed(2) + ' €';
+                        if (taxSpan) taxSpan.textContent = parseFloat(data.line.line_tax).toFixed(2) + ' €';
+                        if (grossSpan) grossSpan.textContent = parseFloat(data.line.line_gross).toFixed(2) + ' €';
+                    }
+                }
+                
+                if (data.totals) {
+                    updateDocumentTotals(data.totals);
+                }
+            } else if (data.error) {
+                console.error('Update error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+        {% endif %}
+    }
+    
+    // Add change handlers for quantity and unit price to update calculations
+    document.querySelectorAll('.line-quantity, .line-unit-price').forEach(input => {
+        input.addEventListener('change', function() {
+            const lineItem = this.closest('.line-item');
+            const lineId = lineItem.dataset.lineId;
+            const quantity = lineItem.querySelector('.line-quantity').value;
+            const unitPrice = lineItem.querySelector('.line-unit-price').value;
+            
+            updateLineField(lineId, {
+                quantity: parseFloat(quantity),
+                unit_price_net: parseFloat(unitPrice)
+            });
+        });
+    });
+    
+    // Add change handlers for short text fields
+    document.querySelectorAll('.line-short-text-2').forEach(input => {
+        input.addEventListener('change', function() {
+            const lineItem = this.closest('.line-item');
+            const lineId = lineItem.dataset.lineId;
+            const shortText2 = this.value;
+            
+            updateLineField(lineId, {
+                short_text_2: shortText2
+            });
+        });
+    });
+    
+    // Add change handlers for kostenart and tax rate
+    document.querySelectorAll('.line-kostenart1, .line-kostenart2, .line-tax-rate').forEach(select => {
+        select.addEventListener('change', function() {
+            const lineItem = this.closest('.line-item');
+            const lineId = lineItem.dataset.lineId;
+            
+            if (this.classList.contains('line-kostenart1')) {
+                const kostenart1Id = this.value;
+                updateLineField(lineId, {
+                    kostenart1_id: kostenart1Id ? parseInt(kostenart1Id) : null
+                });
+                
+                // Update kostenart2 options
+                const kostenart2Select = lineItem.querySelector('.line-kostenart2');
+                kostenart2Select.innerHTML = '<option value="">-- Keine --</option>';
+                
+                if (kostenart1Id) {
+                    fetch(`{% url "auftragsverwaltung:ajax_get_kostenart2_options" %}?kostenart1_id=${kostenart1Id}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.kostenarten && data.kostenarten.length > 0) {
+                            data.kostenarten.forEach(k => {
+                                const option = document.createElement('option');
+                                option.value = k.id;
+                                option.textContent = k.name;
+                                kostenart2Select.appendChild(option);
+                            });
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+            } else if (this.classList.contains('line-kostenart2')) {
+                const kostenart2Id = this.value;
+                updateLineField(lineId, {
+                    kostenart2_id: kostenart2Id ? parseInt(kostenart2Id) : null
+                });
+            } else if (this.classList.contains('line-tax-rate')) {
+                const taxRateId = this.value;
+                updateLineField(lineId, {
+                    tax_rate_id: taxRateId ? parseInt(taxRateId) : null
+                });
+            }
+        });
+    });
+    
+    // Function to update document totals
+    function updateDocumentTotals(totals) {
+        const totalNetEl = document.getElementById('totalNet');
+        const totalTaxEl = document.getElementById('totalTax');
+        const totalGrossEl = document.getElementById('totalGross');
+        
+        if (totalNetEl) totalNetEl.textContent = parseFloat(totals.total_net).toFixed(2) + ' €';
+        if (totalTaxEl) totalTaxEl.textContent = parseFloat(totals.total_tax).toFixed(2) + ' €';
+        if (totalGrossEl) totalGrossEl.textContent = parseFloat(totals.total_gross).toFixed(2) + ' €';
+    }
+    
+    // Initialize Bootstrap tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 });
 </script>
 {% endblock %}
