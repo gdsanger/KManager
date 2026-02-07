@@ -146,6 +146,91 @@ def _log_aktivitaet_stream_event(aktivitaet, event_type, actor=None, description
         )
 
 
+# Helper functions for Vertrag ActivityStream integration
+def _get_mandant_for_vertrag(vertrag):
+    """
+    Get Mandant for a Vertrag.
+    
+    Args:
+        vertrag: Vertrag instance
+        
+    Returns:
+        Mandant instance or None if no mandant can be determined
+    """
+    # Get mandant from vertrag
+    if vertrag.mandant:
+        return vertrag.mandant
+    
+    # Fallback: get first available mandant
+    return Mandant.objects.first()
+
+
+def _get_vertrag_target_url(vertrag):
+    """
+    Generate target URL for a Vertrag.
+    
+    Args:
+        vertrag: Vertrag instance
+        
+    Returns:
+        str: Relative URL to the vertrag detail page
+    """
+    return reverse('vermietung:vertrag_detail', args=[vertrag.pk])
+
+
+def _get_vertrag_status_display_name(status):
+    """
+    Get display name for a Vertrag status.
+    
+    Args:
+        status: str, status code (e.g., 'active', 'ended', 'cancelled')
+        
+    Returns:
+        str: Display name from VERTRAG_STATUS choices
+    """
+    from vermietung.models import VERTRAG_STATUS
+    status_dict = dict(VERTRAG_STATUS)
+    return status_dict.get(status, status)
+
+
+def _log_vertrag_stream_event(vertrag, event_type, actor=None, description=None, severity='INFO'):
+    """
+    Log an ActivityStream event for a Vertrag.
+    
+    Args:
+        vertrag: Vertrag instance
+        event_type: str, event type (e.g., 'contract.created', 'contract.status_changed')
+        actor: User instance who performed the action (optional)
+        description: str, additional description (optional)
+        severity: str, severity level (default: 'INFO')
+    """
+    mandant = _get_mandant_for_vertrag(vertrag)
+    
+    # If no mandant, cannot create stream event
+    if not mandant:
+        logger.warning(
+            f"Cannot create ActivityStream event for Vertrag {vertrag.pk}: "
+            f"No Mandant found"
+        )
+        return
+    
+    try:
+        ActivityStreamService.add(
+            company=mandant,
+            domain='RENTAL',
+            activity_type=event_type,
+            title=f'Vertrag: {vertrag.vertragsnummer}',
+            description=description or '',
+            target_url=_get_vertrag_target_url(vertrag),
+            actor=actor,
+            severity=severity
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to create ActivityStream event for Vertrag {vertrag.pk}: {e}"
+        )
+
+
 @login_required
 def download_dokument(request, dokument_id):
     """
@@ -1111,6 +1196,15 @@ def vertrag_create(request):
                 # Update availability of all affected mietobjekte
                 vertrag.update_mietobjekte_availability()
                 
+                # Log ActivityStream event for contract creation
+                mieter_name = vertrag.mieter.full_name() if vertrag.mieter else 'Unbekannt'
+                _log_vertrag_stream_event(
+                    vertrag=vertrag,
+                    event_type='contract.created',
+                    actor=request.user,
+                    description=f'Neuer Vertrag erstellt für Mieter: {mieter_name}. Status: {_get_vertrag_status_display_name(vertrag.status)}'
+                )
+                
                 messages.success(
                     request,
                     f'Vertrag "{vertrag.vertragsnummer}" wurde erfolgreich angelegt.'
@@ -1146,6 +1240,9 @@ def vertrag_edit(request, pk):
     vertrag = get_object_or_404(Vertrag, pk=pk)
     
     if request.method == 'POST':
+        # Store old status before update to detect changes
+        old_status = vertrag.status
+        
         form = VertragForm(request.POST, instance=vertrag)
         formset = VertragsObjektFormSet(request.POST, instance=vertrag)
         
@@ -1161,6 +1258,18 @@ def vertrag_edit(request, pk):
                 
                 # Update availability of all affected mietobjekte
                 vertrag.update_mietobjekte_availability()
+                
+                # Log ActivityStream event for status change
+                new_status = vertrag.status
+                if old_status != new_status:
+                    old_status_display = _get_vertrag_status_display_name(old_status)
+                    new_status_display = _get_vertrag_status_display_name(new_status)
+                    _log_vertrag_stream_event(
+                        vertrag=vertrag,
+                        event_type='contract.status_changed',
+                        actor=request.user,
+                        description=f'Status geändert: {old_status_display} → {new_status_display}'
+                    )
                 
                 messages.success(
                     request,
@@ -1212,11 +1321,27 @@ def vertrag_end(request, pk):
         form = VertragEndForm(request.POST, vertrag=vertrag)
         if form.is_valid():
             try:
+                old_status = vertrag.status
                 vertrag.ende = form.cleaned_data['ende']
                 # If end date is in the past or today, set status to 'ended'
                 if vertrag.ende <= timezone.now().date():
                     vertrag.status = 'ended'
                 vertrag.save()
+                
+                # Log ActivityStream event for contract ending
+                status_info = ''
+                if old_status != vertrag.status:
+                    old_status_display = _get_vertrag_status_display_name(old_status)
+                    new_status_display = _get_vertrag_status_display_name(vertrag.status)
+                    status_info = f' Status: {old_status_display} → {new_status_display}.'
+                
+                _log_vertrag_stream_event(
+                    vertrag=vertrag,
+                    event_type='contract.ended',
+                    actor=request.user,
+                    description=f'Vertrag wurde auf den {vertrag.ende.strftime("%d.%m.%Y")} beendet.{status_info}'
+                )
+                
                 messages.success(
                     request,
                     f'Vertrag "{vertrag.vertragsnummer}" wurde auf den {vertrag.ende} beendet.'
@@ -1254,8 +1379,21 @@ def vertrag_cancel(request, pk):
         return redirect('vermietung:vertrag_detail', pk=pk)
     
     try:
+        old_status = vertrag.status
         vertrag.status = 'cancelled'
         vertrag.save()
+        
+        # Log ActivityStream event for contract cancellation
+        old_status_display = _get_vertrag_status_display_name(old_status)
+        new_status_display = _get_vertrag_status_display_name(vertrag.status)
+        _log_vertrag_stream_event(
+            vertrag=vertrag,
+            event_type='contract.cancelled',
+            actor=request.user,
+            description=f'Vertrag wurde storniert. Status: {old_status_display} → {new_status_display}',
+            severity='WARNING'
+        )
+        
         messages.success(
             request,
             f'Vertrag "{vertrag.vertragsnummer}" wurde storniert.'
