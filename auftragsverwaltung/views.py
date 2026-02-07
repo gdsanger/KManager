@@ -611,16 +611,12 @@ def ajax_add_line(request, doc_key, pk):
             except (ValueError, TypeError):
                 price_value = 0.0
             
-            # Consider negative prices as content too
-            has_any_content = short_text_1 or description or abs(price_value) > 0.001
-            
-            if has_any_content:
-                # If user started entering data, require mandatory fields
-                if not short_text_1 and not description:
-                    return JsonResponse({'error': 'Short text 1 or description is required for manual lines'}, status=400)
-                # Check if price was actually provided (not just default 0)
-                if abs(price_value) < 0.001:
-                    return JsonResponse({'error': 'Unit price is required for manual lines'}, status=400)
+            # Validate mandatory fields only if user has entered description content
+            # Allow positions with just short_text_1 and zero price for initial creation
+            if description and description.strip():
+                # If user entered description, require short_text_1 too
+                if not short_text_1 or not short_text_1.strip():
+                    return JsonResponse({'error': 'Short text 1 is required when description is provided'}, status=400)
             
             if not tax_rate_id:
                 return JsonResponse({'error': 'Tax rate is required for manual lines'}, status=400)
