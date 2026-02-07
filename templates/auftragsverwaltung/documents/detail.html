@@ -802,6 +802,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 form.reportValidity();
                 return;
             }
+            // Reset isDirty flag before submission to prevent warning
+            isDirty = false;
             form.submit();
         });
     }
@@ -815,6 +817,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 form.reportValidity();
                 return;
             }
+            // Reset isDirty flag before submission to prevent warning
+            isDirty = false;
             form.submit();
         });
     }
@@ -915,6 +919,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // Reset isDirty flag before reload to prevent warning
+                isDirty = false;
                 // Reload page to show new line
                 location.reload();
             } else if (data.error) {
@@ -1163,53 +1169,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Live calculation on line changes (quantity, unit price)
-    document.querySelectorAll('.line-quantity, .line-unit-price, .line-description').forEach(input => {
-        input.addEventListener('change', function() {
-            const lineItem = this.closest('.line-item');
-            const lineId = lineItem.dataset.lineId;
-            const quantity = lineItem.querySelector('.line-quantity').value;
-            const unitPrice = lineItem.querySelector('.line-unit-price').value;
-            const description = lineItem.querySelector('.line-description').value;
-            
-            {% if document %}
-            fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/update/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    quantity: parseFloat(quantity),
-                    unit_price_net: parseFloat(unitPrice),
-                    description: description
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update line totals
-                    lineItem.querySelector('.line-net').textContent = `${parseFloat(data.line.line_net).toFixed(2)} €`;
-                    lineItem.querySelector('.line-tax').textContent = `${parseFloat(data.line.line_tax).toFixed(2)} €`;
-                    lineItem.querySelector('.line-gross').textContent = `${parseFloat(data.line.line_gross).toFixed(2)} €`;
-                    
-                    // Update document totals
-                    document.getElementById('totalNet').textContent = `${parseFloat(data.totals.total_net).toFixed(2)} €`;
-                    document.getElementById('totalTax').textContent = `${parseFloat(data.totals.total_tax).toFixed(2)} €`;
-                    document.getElementById('totalGross').textContent = `${parseFloat(data.totals.total_gross).toFixed(2)} €`;
-                } else if (data.error) {
-                    alert('Fehler: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Fehler beim Aktualisieren der Position');
-            });
-            {% endif %}
-        });
-    });
-    
-    // Kostenart 1 change in line items - update kostenart 2 options
+    // Add change handlers for quantity and unit price to update calculations
     document.querySelectorAll('.line-kostenart1').forEach(select => {
         select.addEventListener('change', function() {
             const lineId = this.dataset.lineId;
@@ -1707,13 +1667,41 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.line-quantity, .line-unit-price').forEach(input => {
         input.addEventListener('change', function() {
             const lineItem = this.closest('.line-item');
+            if (!lineItem) return;
+            
             const lineId = lineItem.dataset.lineId;
-            const quantity = lineItem.querySelector('.line-quantity').value;
-            const unitPrice = lineItem.querySelector('.line-unit-price').value;
+            if (!lineId) return;
+            
+            const quantityInput = lineItem.querySelector('.line-quantity');
+            const unitPriceInput = lineItem.querySelector('.line-unit-price');
+            
+            if (!quantityInput || !unitPriceInput) return;
+            
+            const quantity = quantityInput.value;
+            const unitPrice = unitPriceInput.value;
+            
+            // Use || 0 to handle empty/invalid values
+            // Empty positions are allowed - clearing a field sends 0 to backend
+            updateLineField(lineId, {
+                quantity: parseFloat(quantity) || 0,
+                unit_price_net: parseFloat(unitPrice) || 0
+            });
+        });
+    });
+    
+    // Add change handler for description
+    document.querySelectorAll('.line-description').forEach(input => {
+        input.addEventListener('change', function() {
+            const lineItem = this.closest('.line-item');
+            if (!lineItem) return;
+            
+            const lineId = lineItem.dataset.lineId;
+            if (!lineId) return;
+            
+            const description = this.value;
             
             updateLineField(lineId, {
-                quantity: parseFloat(quantity),
-                unit_price_net: parseFloat(unitPrice)
+                description: description
             });
         });
     });
