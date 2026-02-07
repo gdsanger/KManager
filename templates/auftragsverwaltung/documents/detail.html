@@ -1680,6 +1680,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const quantity = quantityInput.value;
             const unitPrice = unitPriceInput.value;
             
+            // Use || 0 to handle empty/invalid values - empty positions are now allowed
             updateLineField(lineId, {
                 quantity: parseFloat(quantity) || 0,
                 unit_price_net: parseFloat(unitPrice) || 0

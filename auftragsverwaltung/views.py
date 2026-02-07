@@ -602,7 +602,12 @@ def ajax_add_line(request, doc_key, pk):
             
             # Allow empty positions for initial creation (user will fill them in)
             # Only validate if we have some non-empty content
-            has_any_content = short_text_1 or description or (unit_price_net and float(unit_price_net) != 0.0)
+            try:
+                price_value = float(unit_price_net) if unit_price_net else 0.0
+            except (ValueError, TypeError):
+                price_value = 0.0
+            
+            has_any_content = short_text_1 or description or price_value != 0.0
             
             if has_any_content:
                 # If user started entering data, require mandatory fields
