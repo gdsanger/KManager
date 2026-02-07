@@ -35,7 +35,7 @@ class VertragActivityStreamTest(TestCase):
         
         # Create client and login
         self.client = Client()
-        self.client.login(username='testuser', password='testpass123')
+        self.client.force_login(self.user)
         
         # Create Mandant (company)
         self.mandant = Mandant.objects.create(
@@ -95,7 +95,7 @@ class VertragActivityStreamTest(TestCase):
                 'kaution': '1500.00',
                 'status': 'active',
                 'umsatzsteuer_satz': '19',
-                'auto_total': True,
+                'auto_total': 'on',
                 'mandant': self.mandant.pk,
                 # VertragsObjekt formset data
                 'vertragsobjekte-TOTAL_FORMS': '1',
@@ -105,8 +105,15 @@ class VertragActivityStreamTest(TestCase):
                 'vertragsobjekte-0-mietobjekt': self.mietobjekt.pk,
                 'vertragsobjekte-0-anzahl': '1',
                 'vertragsobjekte-0-preis': '500.00',
+                'vertragsobjekte-0-status': 'AKTIV',
+                'vertragsobjekte-0-status': 'AKTIV',
             }
         )
+        
+        # If not redirect, check errors
+        if response.status_code != 302:
+            print("Form errors:", response.context.get('form').errors if hasattr(response, 'context') and response.context.get('form') else 'No form')
+            print("Formset errors:", response.context.get('formset').errors if hasattr(response, 'context') and response.context.get('formset') else 'No formset')
         
         # Check that redirect happened (success)
         self.assertEqual(response.status_code, 302)
@@ -164,7 +171,7 @@ class VertragActivityStreamTest(TestCase):
                 'kaution': '1500.00',
                 'status': 'draft',  # Changed from 'active' to 'draft'
                 'umsatzsteuer_satz': '19',
-                'auto_total': True,
+                'auto_total': 'on',
                 'mandant': self.mandant.pk,
                 # VertragsObjekt formset data
                 'vertragsobjekte-TOTAL_FORMS': '1',
@@ -176,8 +183,14 @@ class VertragActivityStreamTest(TestCase):
                 'vertragsobjekte-0-mietobjekt': self.mietobjekt.pk,
                 'vertragsobjekte-0-anzahl': '1',
                 'vertragsobjekte-0-preis': '500.00',
+                'vertragsobjekte-0-status': 'AKTIV',
             }
         )
+        
+        # If not redirect, print errors
+        if response.status_code != 302:
+            print("Form errors:", response.context.get('form').errors if hasattr(response, 'context') and response.context.get('form') else 'No form')
+            print("Formset errors:", response.context.get('formset').errors if hasattr(response, 'context') and response.context.get('formset') else 'No formset')
         
         # Verify stream event was created
         stream_events = Activity.objects.filter(
@@ -335,7 +348,7 @@ class VertragActivityStreamTest(TestCase):
                 'kaution': '1800.00',  # Changed kaution
                 'status': 'active',  # Same status
                 'umsatzsteuer_satz': '19',
-                'auto_total': True,
+                'auto_total': 'on',
                 'mandant': self.mandant.pk,
                 # VertragsObjekt formset data
                 'vertragsobjekte-TOTAL_FORMS': '1',
@@ -347,6 +360,7 @@ class VertragActivityStreamTest(TestCase):
                 'vertragsobjekte-0-mietobjekt': self.mietobjekt.pk,
                 'vertragsobjekte-0-anzahl': '1',
                 'vertragsobjekte-0-preis': '600.00',
+                'vertragsobjekte-0-status': 'AKTIV',
             }
         )
         
@@ -370,7 +384,7 @@ class VertragActivityStreamTest(TestCase):
                 'kaution': '1500.00',
                 'status': 'active',
                 'umsatzsteuer_satz': '19',
-                'auto_total': True,
+                'auto_total': 'on',
                 'mandant': self.mandant.pk,
                 # VertragsObjekt formset data
                 'vertragsobjekte-TOTAL_FORMS': '1',
@@ -380,11 +394,15 @@ class VertragActivityStreamTest(TestCase):
                 'vertragsobjekte-0-mietobjekt': self.mietobjekt.pk,
                 'vertragsobjekte-0-anzahl': '1',
                 'vertragsobjekte-0-preis': '500.00',
+                'vertragsobjekte-0-status': 'AKTIV',
             }
         )
         
+        # Should have created successfully
+        self.assertEqual(response.status_code, 302)
+        
         # Get the created vertrag
-        vertrag = Vertrag.objects.latest('id')
+        vertrag = Vertrag.objects.filter(mieter=self.kunde).latest('id')
         
         # Get the event
         event = Activity.objects.filter(
@@ -396,8 +414,8 @@ class VertragActivityStreamTest(TestCase):
         self.assertTrue(event.target_url)
         self.assertIn(f'/vermietung/vertraege/{vertrag.pk}/', event.target_url)
     
-    def test_event_without_mandant_logged_warning(self):
-        """Test that attempting to create event without mandant logs warning."""
+    def test_event_without_mandant_uses_fallback(self):
+        """Test that attempting to create event without mandant uses fallback."""
         # Create vertrag without mandant
         vertrag = Vertrag.objects.create(
             mieter=self.kunde,
@@ -408,19 +426,17 @@ class VertragActivityStreamTest(TestCase):
             mandant=None  # No mandant
         )
         
-        # Try to cancel (should not create event due to missing mandant)
-        # But should still work functionally
-        with self.assertLogs('vermietung.views', level='WARNING') as cm:
-            response = self.client.post(
-                reverse('vermietung:vertrag_cancel', args=[vertrag.pk])
-            )
-            
-            # Check that warning was logged
-            self.assertTrue(
-                any('No Mandant found' in log for log in cm.output),
-                "Expected warning about missing Mandant not found in logs"
-            )
+        # Try to cancel (should still work with fallback to first mandant)
+        response = self.client.post(
+            reverse('vermietung:vertrag_cancel', args=[vertrag.pk])
+        )
         
         # Verify contract was still cancelled
         vertrag.refresh_from_db()
         self.assertEqual(vertrag.status, 'cancelled')
+        
+        # Verify event was created using fallback mandant
+        event = Activity.objects.filter(
+            activity_type='contract.cancelled'
+        ).latest('created_at')
+        self.assertEqual(event.company, self.mandant)  # Should use fallback
