@@ -39,10 +39,6 @@ class SalesDocumentCreateTestCase(TestCase):
             is_active=True
         )
         
-        # Get document type (created by migration)
-        self.doc_type_quote = DocumentType.objects.get(key='quote')
-        self.doc_type_invoice = DocumentType.objects.get(key='invoice')
-        
         # Create client
         self.client = Client()
         self.client.login(username='testuser', password='testpass123')
