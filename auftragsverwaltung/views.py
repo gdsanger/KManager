@@ -299,6 +299,7 @@ def document_detail(request, doc_key, pk):
         'lines': lines,
         'header_templates': header_templates,
         'footer_templates': footer_templates,
+        'status_choices': SalesDocument.STATUS_CHOICES,  # Add for template consistency
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
@@ -424,6 +425,7 @@ def document_create(request, doc_key):
         'is_create': True,
         'header_templates': header_templates,
         'footer_templates': footer_templates,
+        'status_choices': SalesDocument.STATUS_CHOICES,  # Add STATUS_CHOICES for create mode
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
