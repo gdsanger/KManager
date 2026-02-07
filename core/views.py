@@ -514,6 +514,7 @@ def item_save_ajax(request):
         saved_item = form.save()
         
         # Get company for activity logging (items are global, use first company)
+        # TODO: In a multi-tenant setup, consider making company association more explicit
         company = Mandant.objects.first()
         
         # Log activity based on operation type
@@ -537,14 +538,14 @@ def item_save_ajax(request):
                 if old_is_active is not None and old_is_active != new_is_active:
                     # Status changed
                     old_status = 'aktiv' if old_is_active else 'inaktiv'
-                    new_status = 'aktiviert' if new_is_active else 'deaktiviert'
+                    status_action = 'aktiviert' if new_is_active else 'deaktiviert'
                     
                     ActivityStreamService.add(
                         company=company,
                         domain='ORDER',
                         activity_type='ITEM_STATUS_CHANGED',
                         title=f'Artikel-Status geändert: {saved_item.article_no}',
-                        description=f'Status: {new_status} (vorher: {old_status})',
+                        description=f'Status: {status_action} (vorher: {old_status})',
                         target_url=f'/items/?selected={saved_item.pk}',
                         actor=request.user,
                         severity='INFO'
