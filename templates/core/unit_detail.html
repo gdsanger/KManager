@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Einheit: {{ unit.code }} - Domus{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-rulers"></i> Einheit: {{ unit.code }}</h2>
+        <div>
+            <a href="{% url 'unit_edit' unit.pk %}" class="btn btn-warning">
+                <i class="bi bi-pencil"></i> Bearbeiten
+            </a>
+            <a href="{% url 'unit_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Zurück zur Liste
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark-text"></i> Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-3">Code:</dt>
+                        <dd class="col-sm-9"><strong>{{ unit.code }}</strong></dd>
+
+                        <dt class="col-sm-3">Name:</dt>
+                        <dd class="col-sm-9">{{ unit.name }}</dd>
+
+                        <dt class="col-sm-3">Symbol:</dt>
+                        <dd class="col-sm-9">
+                            {% if unit.symbol %}
+                                {{ unit.symbol }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-3">Status:</dt>
+                        <dd class="col-sm-9">
+                            {% if unit.is_active %}
+                                <span class="badge bg-success">Aktiv</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inaktiv</span>
+                            {% endif %}
+                        </dd>
+
+                        {% if unit.description %}
+                        <dt class="col-sm-3">Beschreibung:</dt>
+                        <dd class="col-sm-9">{{ unit.description|linebreaks }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar with actions -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-gear"></i> Aktionen
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'unit_edit' unit.pk %}" class="btn btn-warning">
+                            <i class="bi bi-pencil"></i> Bearbeiten
+                        </a>
+                        <a href="{% url 'unit_delete' unit.pk %}" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Löschen
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

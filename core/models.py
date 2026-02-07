@@ -1126,3 +1126,72 @@ class Activity(models.Model):
     
     def __str__(self):
         return f"{self.company.name} - {self.get_domain_display()}: {self.title}"
+
+
+class Unit(models.Model):
+    """Unit of Measurement (Einheiten)
+    
+    Central master data for units of measurement (e.g., Stück, Pauschal, lfm).
+    Units can be referenced by articles and sales document lines.
+    """
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name="Code",
+        help_text="Eindeutiger Code für die Einheit (z.B. STK, PAU, LFM)"
+    )
+    name = models.CharField(
+        max_length=200,
+        verbose_name="Name",
+        help_text="Bezeichnung der Einheit (z.B. Stück, Pauschal, Laufender Meter)"
+    )
+    symbol = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        verbose_name="Symbol",
+        help_text="Optionales Symbol für die Einheit (z.B. Stk, lfm)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktiv",
+        help_text="Gibt an, ob diese Einheit aktiv ist"
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Beschreibung",
+        help_text="Optionale Beschreibung der Einheit"
+    )
+    
+    class Meta:
+        verbose_name = "Einheit"
+        verbose_name_plural = "Einheiten"
+        ordering = ['code']
+        constraints = [
+            # Ensure code is globally unique
+            models.UniqueConstraint(
+                fields=['code'],
+                name='unit_code_unique',
+                violation_error_message='Eine Einheit mit diesem Code existiert bereits.'
+            ),
+        ]
+    
+    def __str__(self):
+        return f"{self.code}: {self.name}"
+    
+    def clean(self):
+        """Validate and normalize unit data"""
+        super().clean()
+        
+        # Normalize code to uppercase
+        if self.code:
+            self.code = self.code.strip().upper()
+    
+    def save(self, *args, **kwargs):
+        """Override save to normalize code before saving"""
+        # Normalize code to uppercase
+        if self.code:
+            self.code = self.code.strip().upper()
+        
+        super().save(*args, **kwargs)

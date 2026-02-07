@@ -138,14 +138,19 @@
                         
                         <!-- Stammdaten Section -->
                         <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#stammdatenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'items' in request.path %}true{% else %}false{% endif %}">
+                            <a class="nav-link nav-category" href="#stammdatenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'items' in request.path or 'units' in request.path %}true{% else %}false{% endif %}">
                                 <i class="bi bi-database"></i> <span class="sidebar-text">Stammdaten</span>
                                 <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
                             </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'items' in request.path %}show{% endif %}" id="stammdatenMenu">
+                            <ul class="collapse nav flex-column ms-3 {% if 'items' in request.path or 'units' in request.path %}show{% endif %}" id="stammdatenMenu">
                                 <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'item_management' or 'items' in request.path %}active{% endif %}" href="{% url 'item_management' %}">
                                         <i class="bi bi-box-seam"></i> <span class="sidebar-text">Artikelverwaltung</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'units' in request.path %}active{% endif %}" href="{% url 'unit_list' %}">
+                                        <i class="bi bi-rulers"></i> <span class="sidebar-text">Einheiten</span>
                                     </a>
                                 </li>
                             </ul>

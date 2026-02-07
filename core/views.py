@@ -1,6 +1,7 @@
 import os
 import json
 
+from django.db import models
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
@@ -9,8 +10,8 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
 from django.http import JsonResponse
 from django_tables2 import RequestConfig
-from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup
-from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm, ItemGroupForm
+from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, Unit
+from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm, ItemGroupForm, UnitForm
 from core.tables import ItemTable
 from core.filters import ItemFilter
 
@@ -636,4 +637,89 @@ def cost_type_2_options(request):
         form.fields['cost_type_2'].widget.attrs['disabled'] = 'disabled'
     
     return render(request, 'core/partials/cost_type_2_select.html', {'form': form})
+
+
+# Unit CRUD Views
+@login_required
+def unit_list(request):
+    """List all units with search and filter"""
+    units = Unit.objects.all()
+    
+    # Search by code or name
+    search_q = request.GET.get('q', '').strip()
+    if search_q:
+        units = units.filter(
+            models.Q(code__icontains=search_q) | 
+            models.Q(name__icontains=search_q)
+        )
+    
+    # Filter by is_active
+    filter_active = request.GET.get('is_active', '')
+    if filter_active == '1':
+        units = units.filter(is_active=True)
+    elif filter_active == '0':
+        units = units.filter(is_active=False)
+    
+    return render(request, 'core/unit_list.html', {'units': units})
+
+
+@login_required
+def unit_create(request):
+    """Create a new unit"""
+    if request.method == 'POST':
+        form = UnitForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Einheit erfolgreich erstellt.')
+            return redirect('unit_list')
+    else:
+        form = UnitForm()
+    
+    return render(request, 'core/unit_form.html', {
+        'form': form,
+        'title': 'Neue Einheit',
+        'action': 'Erstellen'
+    })
+
+
+@login_required
+def unit_detail(request, pk):
+    """Display unit details"""
+    unit = get_object_or_404(Unit, pk=pk)
+    return render(request, 'core/unit_detail.html', {'unit': unit})
+
+
+@login_required
+def unit_edit(request, pk):
+    """Edit an existing unit"""
+    unit = get_object_or_404(Unit, pk=pk)
+    
+    if request.method == 'POST':
+        form = UnitForm(request.POST, instance=unit)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Einheit erfolgreich aktualisiert.')
+            return redirect('unit_list')
+    else:
+        form = UnitForm(instance=unit)
+    
+    return render(request, 'core/unit_form.html', {
+        'form': form,
+        'title': 'Einheit bearbeiten',
+        'action': 'Speichern'
+    })
+
+
+@login_required
+def unit_delete(request, pk):
+    """Delete a unit"""
+    unit = get_object_or_404(Unit, pk=pk)
+    
+    if request.method == 'POST':
+        unit.delete()
+        messages.success(request, 'Einheit erfolgreich gelöscht.')
+        return redirect('unit_list')
+    
+    return render(request, 'core/unit_confirm_delete.html', {'unit': unit})
+
 

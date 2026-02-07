@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.conf import settings
 from core.models import (
     Adresse, AdresseKontakt, SmtpSettings, MailTemplate, Mandant, PaymentTerm, TaxRate, Kostenart,
-    AIProvider, AIModel, AIJobsHistory, ReportDocument, Item, ItemGroup, Activity
+    AIProvider, AIModel, AIJobsHistory, ReportDocument, Item, ItemGroup, Activity, Unit
 )
 from core.mailing.service import send_mail, MailServiceError
 import secrets
@@ -566,3 +566,31 @@ class ActivityAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         """Disable editing - activities are immutable"""
         return False
+
+
+@admin.register(Unit)
+class UnitAdmin(admin.ModelAdmin):
+    """Admin interface for Unit (Einheit) with CRUD functionality"""
+    list_display = ('code', 'name', 'symbol', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('code', 'name', 'symbol')
+    ordering = ('code',)
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('code', 'name', 'symbol', 'is_active')
+        }),
+        ('Zusatzinformationen', {
+            'fields': ('description',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def has_delete_permission(self, request, obj=None):
+        """
+        Allow deletion if no items or sales document lines reference this unit.
+        Otherwise, recommend deactivation via is_active.
+        """
+        # For now, allow deletion. Later when Unit is referenced by Item or SalesDocumentLine,
+        # this should check for references and return False if any exist.
+        return True
