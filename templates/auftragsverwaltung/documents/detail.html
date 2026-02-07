@@ -35,6 +35,8 @@ Neues {{ document_type.name }}
 {% endblock %}
 
 {% block extra_css %}
+<!-- Quill CSS -->
+<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
 <style>
     .document-detail-container {
         display: grid;
@@ -215,6 +217,28 @@ Neues {{ document_type.name }}
     
     .edit-longtext-btn:hover + .longtext-preview-tooltip {
         display: block;
+    }
+    
+    /* Quill Editor Styles */
+    .quill-editor-container {
+        height: 250px;
+        background-color: var(--bs-body-bg);
+    }
+    
+    .ql-toolbar {
+        background-color: var(--bs-secondary-bg);
+        border-color: var(--bs-border-color);
+        border-radius: 4px 4px 0 0;
+    }
+    
+    .ql-container {
+        border-color: var(--bs-border-color);
+        border-radius: 0 0 4px 4px;
+        font-size: 14px;
+    }
+    
+    .ql-editor {
+        min-height: 200px;
     }
 </style>
 {% endblock %}
@@ -497,8 +521,10 @@ Neues {{ document_type.name }}
                                 </button>
                             </div>
                         </div>
-                        <textarea class="form-control" name="header_text" id="header_text" rows="4" 
-                                  placeholder="Kopftext des Dokuments">{% if document %}{{ document.header_text }}{% endif %}</textarea>
+                        <!-- Quill Editor for Header Text -->
+                        <div id="headerQuillEditor" class="quill-editor-container"></div>
+                        <!-- Hidden field to store HTML content -->
+                        <input type="hidden" name="header_text" id="header_text">
                     </div>
                     <div class="tab-pane fade" id="footer-content" role="tabpanel">
                         <!-- Text Template Selection for Footer -->
@@ -517,8 +543,10 @@ Neues {{ document_type.name }}
                                 </button>
                             </div>
                         </div>
-                        <textarea class="form-control" name="footer_text" id="footer_text" rows="4" 
-                                  placeholder="Fußtext des Dokuments">{% if document %}{{ document.footer_text }}{% endif %}</textarea>
+                        <!-- Quill Editor for Footer Text -->
+                        <div id="footerQuillEditor" class="quill-editor-container"></div>
+                        <!-- Hidden field to store HTML content -->
+                        <input type="hidden" name="footer_text" id="footer_text">
                     </div>
                     <div class="tab-pane fade" id="notes-content" role="tabpanel">
                         <label class="form-label">Interne Notizen</label>
@@ -682,16 +710,78 @@ Neues {{ document_type.name }}
 </div>
 {% endblock %}
 
-{% block extra_css %}
-<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
-{% endblock %}
-
 {% block extra_js %}
 <script src="{% static 'quill/quill.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let isDirty = false;
     const unsavedIndicator = document.getElementById('unsavedIndicator');
+    
+    // ============================================================================
+    // Quill Editors for Header and Footer Text
+    // ============================================================================
+    
+    // Toolbar configuration (Light MVP)
+    const toolbarOptions = [
+        ['bold', 'italic', 'underline'],          // toggled buttons
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],  // lists
+        ['link'],                                  // link
+        ['clean']                                  // remove formatting
+    ];
+    
+    // Initialize Header Quill Editor
+    const headerQuill = new Quill('#headerQuillEditor', {
+        theme: 'snow',
+        modules: {
+            toolbar: toolbarOptions
+        },
+        placeholder: 'Kopftext des Dokuments eingeben...'
+    });
+    
+    // Initialize Footer Quill Editor
+    const footerQuill = new Quill('#footerQuillEditor', {
+        theme: 'snow',
+        modules: {
+            toolbar: toolbarOptions
+        },
+        placeholder: 'Fußtext des Dokuments eingeben...'
+    });
+    
+    // Load initial content from Django template
+    const initialHeaderText = {% if document %}'{{ document.header_text|escapejs }}'{% else %}''{% endif %};
+    const initialFooterText = {% if document %}'{{ document.footer_text|escapejs }}'{% else %}''{% endif %};
+    
+    if (initialHeaderText) {
+        headerQuill.root.innerHTML = initialHeaderText;
+    }
+    if (initialFooterText) {
+        footerQuill.root.innerHTML = initialFooterText;
+    }
+    
+    // Update hidden fields when Quill content changes
+    headerQuill.on('text-change', function() {
+        document.getElementById('header_text').value = headerQuill.root.innerHTML;
+        isDirty = true;
+        if (unsavedIndicator) {
+            unsavedIndicator.classList.add('show');
+        }
+    });
+    
+    footerQuill.on('text-change', function() {
+        document.getElementById('footer_text').value = footerQuill.root.innerHTML;
+        isDirty = true;
+        if (unsavedIndicator) {
+            unsavedIndicator.classList.add('show');
+        }
+    });
+    
+    // Set initial values in hidden fields
+    document.getElementById('header_text').value = headerQuill.root.innerHTML;
+    document.getElementById('footer_text').value = footerQuill.root.innerHTML;
+    
+    // ============================================================================
+    // Mark form as dirty on any change
+    // ============================================================================
     
     // Mark form as dirty on any change
     document.querySelectorAll('input, textarea, select').forEach(el => {
@@ -1212,9 +1302,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Apply Header Template
     const applyHeaderTemplateBtn = document.getElementById('applyHeaderTemplate');
     const headerTemplateSelect = document.getElementById('headerTemplateSelect');
-    const headerTextArea = document.getElementById('header_text');
     
-    if (applyHeaderTemplateBtn && headerTemplateSelect && headerTextArea) {
+    if (applyHeaderTemplateBtn && headerTemplateSelect) {
         applyHeaderTemplateBtn.addEventListener('click', function() {
             const selectedOption = headerTemplateSelect.options[headerTemplateSelect.selectedIndex];
             if (!selectedOption || !selectedOption.value) {
@@ -1225,14 +1314,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const content = selectedOption.getAttribute('data-content');
             
             // Check if header already has content
-            if (headerTextArea.value.trim() !== '') {
+            if (headerQuill.getText().trim() !== '') {
                 if (!confirm('Der Kopftext enthält bereits Text. Möchten Sie ihn überschreiben?')) {
                     return;
                 }
             }
             
-            // Apply the template content
-            headerTextArea.value = content;
+            // Apply the template content to Quill editor
+            headerQuill.root.innerHTML = content;
+            document.getElementById('header_text').value = content;
             
             // Mark as dirty
             isDirty = true;
@@ -1248,9 +1338,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Apply Footer Template
     const applyFooterTemplateBtn = document.getElementById('applyFooterTemplate');
     const footerTemplateSelect = document.getElementById('footerTemplateSelect');
-    const footerTextArea = document.getElementById('footer_text');
     
-    if (applyFooterTemplateBtn && footerTemplateSelect && footerTextArea) {
+    if (applyFooterTemplateBtn && footerTemplateSelect) {
         applyFooterTemplateBtn.addEventListener('click', function() {
             const selectedOption = footerTemplateSelect.options[footerTemplateSelect.selectedIndex];
             if (!selectedOption || !selectedOption.value) {
@@ -1261,14 +1350,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const content = selectedOption.getAttribute('data-content');
             
             // Check if footer already has content
-            if (footerTextArea.value.trim() !== '') {
+            if (footerQuill.getText().trim() !== '') {
                 if (!confirm('Der Fußtext enthält bereits Text. Möchten Sie ihn überschreiben?')) {
                     return;
                 }
             }
             
-            // Apply the template content
-            footerTextArea.value = content;
+            // Apply the template content to Quill editor
+            footerQuill.root.innerHTML = content;
+            document.getElementById('footer_text').value = content;
             
             // Mark as dirty
             isDirty = true;
