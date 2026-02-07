@@ -1,5 +1,5 @@
 """
-Test for vermietung home view with activity stream.
+Tests for vermietung home view with activity stream.
 
 This test verifies that the activity stream is properly displayed
 on the vermietung dashboard and shows activities from all domains.
