@@ -388,7 +388,7 @@ Neues {{ document_type.name }}
                                                        placeholder="Kurztext"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change, keyup changed delay:500ms"
-                                                       hx-vals='js:{"short_text_1": event.target.value}'
+                                                       hx-vals='js:{"short_text_1": this.value}'
                                                        hx-swap="none">
                                                 <div id="suggestions-{{ line.pk }}" class="article-suggestions" style="display: none;"></div>
                                             </div>
@@ -401,14 +401,14 @@ Neues {{ document_type.name }}
                                                        placeholder="Menge"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change"
-                                                       hx-vals='js:{"quantity": parseFloat(event.target.value) || 0}'
+                                                       hx-vals='js:{"quantity": parseFloat(this.value) || 0}'
                                                        hx-swap="none">
                                             </div>
                                             <div class="col-md-2">
                                                 <select class="form-select form-select-sm line-unit"
                                                         hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                         hx-trigger="change"
-                                                        hx-vals='js:{"unit_id": parseInt(event.target.value) || null}'
+                                                        hx-vals='js:{"unit_id": parseInt(this.value) || null}'
                                                         hx-swap="none">
                                                     <option value="">--</option>
                                                     {% for unit in units %}
@@ -427,7 +427,7 @@ Neues {{ document_type.name }}
                                                        placeholder="€"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change"
-                                                       hx-vals='js:{"unit_price_net": parseFloat(event.target.value) || 0}'
+                                                       hx-vals='js:{"unit_price_net": parseFloat(this.value) || 0}'
                                                        hx-swap="none">
                                             </div>
                                             <div class="col-md-2">
@@ -440,7 +440,7 @@ Neues {{ document_type.name }}
                                                        placeholder="%"
                                                        hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                        hx-trigger="change"
-                                                       hx-vals='js:{"discount": parseFloat(event.target.value) || 0}'
+                                                       hx-vals='js:{"discount": parseFloat(this.value) || 0}'
                                                        hx-swap="none">
                                             </div>
                                         </div>
@@ -452,7 +452,7 @@ Neues {{ document_type.name }}
                                                           placeholder="Langtext"
                                                           hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                           hx-trigger="change, keyup changed delay:500ms"
-                                                          hx-vals='js:{"long_text": event.target.value}'
+                                                          hx-vals='js:{"long_text": this.value}'
                                                           hx-swap="none">{{ line.long_text }}</textarea>
                                             </div>
                                         </div>
@@ -474,7 +474,7 @@ Neues {{ document_type.name }}
                                                     <select class="form-select form-select-sm line-tax-rate"
                                                             hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                             hx-trigger="change"
-                                                            hx-vals='js:{"tax_rate_id": parseInt(event.target.value) || null}'
+                                                            hx-vals='js:{"tax_rate_id": parseInt(this.value) || null}'
                                                             hx-swap="none">
                                                         {% for tax_rate in tax_rates %}
                                                         <option value="{{ tax_rate.pk }}" {% if line.tax_rate.pk == tax_rate.pk %}selected{% endif %}>
