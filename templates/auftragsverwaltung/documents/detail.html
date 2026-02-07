@@ -800,7 +800,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to add a new empty position
     function addNewPosition() {
         // Get default tax rate (first in the list)
-        const defaultTaxRateId = {{ tax_rates.0.pk|default:"null" }};
+        const defaultTaxRateId = {% if tax_rates.0.pk %}{{ tax_rates.0.pk }}{% else %}null{% endif %};
         if (!defaultTaxRateId) {
             alert('Kein Steuersatz verfügbar');
             return;
@@ -1420,6 +1420,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Constants for timing
+    const SEARCH_DEBOUNCE_MS = 300; // Delay before triggering search after typing stops
+    const SUGGESTIONS_HIDE_DELAY_MS = 200; // Delay to allow click events to register on suggestion items
+    const KOSTENART2_LOAD_TIMEOUT_MS = 500; // Timeout to wait for kostenart2 options to load after article selection
+    
     // Article search on Kurztext 1 input
     let searchTimeouts = {};
     
@@ -1446,24 +1451,41 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.json())
                 .then(data => {
                     if (data.articles && data.articles.length > 0) {
+                        // Store articles in a temporary map for safe access
+                        const articlesMap = {};
                         let html = '';
-                        data.articles.forEach(article => {
+                        
+                        data.articles.forEach((article, index) => {
+                            const articleKey = `article-${lineId}-${index}`;
+                            articlesMap[articleKey] = article;
+                            
+                            // Escape HTML to prevent XSS
+                            const escapeHtml = (str) => {
+                                const div = document.createElement('div');
+                                div.textContent = str;
+                                return div.innerHTML;
+                            };
+                            
                             html += `
-                                <div class="article-suggestion-item" data-article='${JSON.stringify(article)}' data-line-id="${lineId}">
-                                    <strong>${article.article_no}</strong> - ${article.short_text_1}<br>
-                                    <small class="text-muted">Preis: ${article.net_price} €</small>
+                                <div class="article-suggestion-item" data-article-key="${articleKey}" data-line-id="${lineId}">
+                                    <strong>${escapeHtml(article.article_no)}</strong> - ${escapeHtml(article.short_text_1)}<br>
+                                    <small class="text-muted">Preis: ${escapeHtml(article.net_price)} €</small>
                                 </div>
                             `;
                         });
+                        
                         suggestionsDiv.innerHTML = html;
                         suggestionsDiv.style.display = 'block';
                         
                         // Add click handlers to suggestions
                         suggestionsDiv.querySelectorAll('.article-suggestion-item').forEach(item => {
                             item.addEventListener('click', function() {
-                                const article = JSON.parse(this.dataset.article);
+                                const articleKey = this.dataset.articleKey;
+                                const article = articlesMap[articleKey];
                                 const lineId = this.dataset.lineId;
-                                fillLineFromArticle(lineId, article);
+                                if (article) {
+                                    fillLineFromArticle(lineId, article);
+                                }
                             });
                         });
                     } else {
@@ -1475,17 +1497,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Error:', error);
                     suggestionsDiv.style.display = 'none';
                 });
-            }, 300);
+            }, SEARCH_DEBOUNCE_MS);
         });
         
         // Hide suggestions when clicking outside
         input.addEventListener('blur', function() {
             const lineId = this.dataset.lineId;
             const suggestionsDiv = document.getElementById(`suggestions-${lineId}`);
-            // Delay to allow click on suggestion
+            // Delay to allow click events to register on suggestion items before hiding
             setTimeout(function() {
                 suggestionsDiv.style.display = 'none';
-            }, 200);
+            }, SUGGESTIONS_HIDE_DELAY_MS);
         });
     });
     
@@ -1514,10 +1536,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (kostenart2Select && article.cost_type_2_id) {
-            // Wait for kostenart2 options to load, then set value
-            setTimeout(function() {
-                kostenart2Select.value = article.cost_type_2_id;
-            }, 500);
+            // Wait for kostenart2 options to load via AJAX, then set value
+            // Check periodically if options are loaded, with timeout
+            let attempts = 0;
+            const maxAttempts = 10;
+            const checkInterval = 50; // Check every 50ms
+            
+            const checkAndSet = setInterval(function() {
+                attempts++;
+                // Check if options are available (more than just the default "-- Keine --" option)
+                if (kostenart2Select.options.length > 1) {
+                    kostenart2Select.value = article.cost_type_2_id;
+                    clearInterval(checkAndSet);
+                } else if (attempts >= maxAttempts) {
+                    // Timeout reached, stop checking
+                    clearInterval(checkAndSet);
+                }
+            }, checkInterval);
         }
         
         // Hide suggestions
