@@ -39,14 +39,14 @@ class SalesDocumentLineInline(admin.TabularInline):
 @admin.register(NumberRange)
 class NumberRangeAdmin(admin.ModelAdmin):
     """Admin interface for NumberRange"""
-    list_display = ('company', 'document_type', 'reset_policy', 'current_year', 'current_seq', 'format')
-    list_filter = ('company', 'document_type', 'reset_policy')
+    list_display = ('company', 'target', 'document_type', 'reset_policy', 'current_year', 'current_seq', 'format')
+    list_filter = ('company', 'target', 'document_type', 'reset_policy')
     search_fields = ('company__name', 'document_type__name', 'document_type__key')
-    ordering = ('company', 'document_type')
+    ordering = ('company', 'target', 'document_type')
     
     fieldsets = (
         ('Zuordnung', {
-            'fields': ('company', 'document_type')
+            'fields': ('company', 'target', 'document_type')
         }),
         ('Konfiguration', {
             'fields': ('format', 'reset_policy')
@@ -307,6 +307,7 @@ class ContractLineInline(admin.TabularInline):
 class ContractAdmin(admin.ModelAdmin):
     """Admin interface for Contract"""
     list_display = (
+        'number',
         'name',
         'company',
         'customer',
@@ -325,6 +326,7 @@ class ContractAdmin(admin.ModelAdmin):
         'next_run_date',
     )
     search_fields = (
+        'number',
         'name',
         'reference',
         'company__name',
@@ -337,7 +339,7 @@ class ContractAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Grunddaten', {
-            'fields': ('company', 'name', 'customer', 'reference')
+            'fields': ('company', 'number', 'name', 'customer', 'reference')
         }),
         ('Abrechnungskonfiguration', {
             'fields': ('document_type', 'payment_term', 'currency', 'interval')
