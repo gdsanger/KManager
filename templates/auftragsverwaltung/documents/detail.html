@@ -1568,8 +1568,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (query.length < 2) {
-                suggestionsDiv.style.display = 'none';
-                suggestionsDiv.innerHTML = '';
+                if (suggestionsDiv) {
+                    suggestionsDiv.style.display = 'none';
+                    suggestionsDiv.innerHTML = '';
+                }
                 return;
             }
             
@@ -1578,6 +1580,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 fetch(`{% url "auftragsverwaltung:ajax_search_articles" %}?q=${encodeURIComponent(query)}`)
                 .then(response => response.json())
                 .then(data => {
+                    if (!suggestionsDiv) return;
+                    
                     if (data.articles && data.articles.length > 0) {
                         // Store articles in a temporary map for safe access
                         const articlesMap = {};
@@ -1623,7 +1627,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    suggestionsDiv.style.display = 'none';
+                    if (suggestionsDiv) {
+                        suggestionsDiv.style.display = 'none';
+                    }
                 });
             }, SEARCH_DEBOUNCE_MS);
         });
@@ -1632,10 +1638,12 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('blur', function() {
             const lineId = this.dataset.lineId;
             const suggestionsDiv = document.getElementById(`suggestions-${lineId}`);
-            // Delay to allow click events to register on suggestion items before hiding
-            setTimeout(function() {
-                suggestionsDiv.style.display = 'none';
-            }, SUGGESTIONS_HIDE_DELAY_MS);
+            if (suggestionsDiv) {
+                // Delay to allow click events to register on suggestion items before hiding
+                setTimeout(function() {
+                    suggestionsDiv.style.display = 'none';
+                }, SUGGESTIONS_HIDE_DELAY_MS);
+            }
         });
     });
     
