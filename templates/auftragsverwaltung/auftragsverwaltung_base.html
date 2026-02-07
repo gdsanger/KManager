@@ -218,6 +218,21 @@
                         </li>
                      
 
+                        <!-- Buchhaltung Section (NEW - after Aktivitäten) -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#buchhaltungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'buchhaltung' in request.path or 'rechnungsausgangsjournal' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-calculator"></i> <span class="sidebar-text">Buchhaltung</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                            </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'buchhaltung' in request.path or 'rechnungsausgangsjournal' in request.path %}show{% endif %}" id="buchhaltungMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'rechnungsausgangsjournal' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:journal_list' %}">
+                                        <i class="bi bi-journal-text"></i> <span class="sidebar-text">Rechnungsausgangsjournal</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+
                       
 
                     

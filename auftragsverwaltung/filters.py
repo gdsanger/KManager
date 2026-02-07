@@ -4,6 +4,7 @@ Django Filters for the auftragsverwaltung app.
 import django_filters
 from django.db.models import Q
 from .models import SalesDocument, Contract, TextTemplate
+from finanzen.models import OutgoingInvoiceJournalEntry
 
 
 class SalesDocumentFilter(django_filters.FilterSet):
@@ -235,3 +236,46 @@ class TextTemplateFilter(django_filters.FilterSet):
     class Meta:
         model = TextTemplate
         fields = ['q', 'type', 'is_active']
+
+
+class OutgoingInvoiceJournalFilter(django_filters.FilterSet):
+    """Filter for OutgoingInvoiceJournalEntry list view."""
+    
+    customer_name = django_filters.CharFilter(
+        lookup_expr='icontains',
+        label='Kunde',
+        widget=django_filters.widgets.forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Kundenname...'
+        })
+    )
+    
+    export_status = django_filters.ChoiceFilter(
+        choices=[('', 'Alle Status')] + OutgoingInvoiceJournalEntry.EXPORT_STATUS_CHOICES,
+        label='Status',
+        empty_label=None,
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+    
+    company = django_filters.ModelChoiceFilter(
+        queryset=None,  # Will be set in __init__
+        label='Mandant',
+        empty_label='Alle Mandanten',
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+    
+    def __init__(self, *args, **kwargs):
+        """Initialize filter and set up company queryset."""
+        super().__init__(*args, **kwargs)
+        # Import here to avoid circular imports
+        from core.models import Mandant
+        # Set company queryset with ordering by name
+        self.filters['company'].queryset = Mandant.objects.all().order_by('name')
+    
+    class Meta:
+        model = OutgoingInvoiceJournalEntry
+        fields = ['customer_name', 'export_status', 'company']

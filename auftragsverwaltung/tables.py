@@ -5,6 +5,7 @@ import django_tables2 as tables
 from django.urls import reverse
 from django.utils.html import format_html
 from .models import SalesDocument, Contract, TextTemplate
+from finanzen.models import OutgoingInvoiceJournalEntry
 
 
 class SalesDocumentTable(tables.Table):
@@ -308,6 +309,82 @@ class TextTemplateTable(tables.Table):
             'is_active',
             'updated_at',
             'aktionen'
+        )
+        attrs = {
+            'class': 'table table-dark table-hover',
+            'thead': {'class': 'table-dark'}
+        }
+        per_page = 25
+
+
+class OutgoingInvoiceJournalTable(tables.Table):
+    """Table for displaying Outgoing Invoice Journal Entries (Rechnungsausgangsjournal)."""
+    
+    company = tables.Column(
+        verbose_name='Mandant',
+        accessor='company.name',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    document_number = tables.Column(
+        verbose_name='Belegnummer',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    document_date = tables.DateColumn(
+        verbose_name='Datum',
+        format='d.m.Y',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    customer_name = tables.Column(
+        verbose_name='Kunde',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    amounts = tables.Column(
+        verbose_name='Netto/Brutto',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-end text-nowrap'}}
+    )
+    
+    export_status = tables.Column(
+        verbose_name='Status',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    def render_document_number(self, value, record):
+        """Render document_number as a link to detail view."""
+        url = reverse('auftragsverwaltung:journal_detail', kwargs={'pk': record.pk})
+        return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
+    
+    def render_amounts(self, record):
+        """Render net and gross amounts."""
+        total_net = record.net_0 + record.net_7 + record.net_19
+        return f'{total_net:.2f} € / {record.gross_amount:.2f} €'
+    
+    def render_export_status(self, value, record):
+        """Render export_status with colored badge."""
+        status_classes = {
+            'OPEN': 'bg-warning',
+            'EXPORTED': 'bg-success',
+            'ERROR': 'bg-danger',
+        }
+        badge_class = status_classes.get(record.export_status, 'bg-secondary')
+        display_value = record.get_export_status_display()
+        return format_html('<span class="badge {}">{}</span>', badge_class, display_value)
+    
+    class Meta:
+        model = OutgoingInvoiceJournalEntry
+        template_name = 'django_tables2/bootstrap5-dark.html'
+        fields = (
+            'company',
+            'document_number',
+            'document_date',
+            'customer_name',
+            'amounts',
+            'export_status',
         )
         attrs = {
             'class': 'table table-dark table-hover',

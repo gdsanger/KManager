@@ -1,0 +1,82 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load django_tables2 %}
+
+{% block title %}Rechnungsausgangsjournal - Domus{% endblock %}
+
+{% block page_title %}Rechnungsausgangsjournal{% endblock %}
+
+{% block page_actions %}
+<!-- Read-only view: No create/update/delete actions -->
+{% endblock %}
+
+{% block content %}
+<!-- Filters Section -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <form method="get" action="">
+            <div class="row g-2">
+                <!-- Customer Filter -->
+                <div class="col-md-3">
+                    {{ filter.form.customer_name }}
+                </div>
+                
+                <!-- Status Filter -->
+                <div class="col-md-3">
+                    {{ filter.form.export_status }}
+                </div>
+                
+                <!-- Company Filter -->
+                <div class="col-md-3">
+                    {{ filter.form.company }}
+                </div>
+                
+                <!-- Filter Actions -->
+                <div class="col-md-3">
+                    <div class="btn-group w-100" role="group">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="bi bi-funnel"></i> Filter
+                        </button>
+                        {% if request.GET %}
+                        <a href="{% url 'auftragsverwaltung:journal_list' %}" class="btn btn-outline-secondary" title="Filter zurücksetzen">
+                            <i class="bi bi-x"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Result Count -->
+<div class="row mb-2">
+    <div class="col text-end">
+        <span class="text-muted">{{ table.paginator.count }} Eintrag{{ table.paginator.count|pluralize:",äge" }}</span>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="table-responsive">
+    {% render_table table %}
+</div>
+
+<!-- Help Text -->
+{% if table.paginator.count == 0 %}
+<div class="alert alert-info mt-3" role="alert">
+    <i class="bi bi-info-circle"></i>
+    {% if request.GET %}
+        Keine Journaleinträge gefunden, die den Filterkriterien entsprechen.
+        <a href="{% url 'auftragsverwaltung:journal_list' %}" class="alert-link">Filter zurücksetzen</a>
+    {% else %}
+        Es sind noch keine Journaleinträge vorhanden.
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Read-only Info -->
+<div class="alert alert-secondary mt-3" role="alert">
+    <i class="bi bi-info-circle"></i>
+    <strong>Hinweis:</strong> Dies ist eine schreibgeschützte Ansicht des Rechnungsausgangsjournals. 
+    Journaleinträge können nicht manuell erstellt, bearbeitet oder gelöscht werden.
+</div>
+{% endblock %}

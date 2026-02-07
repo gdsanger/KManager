@@ -46,4 +46,8 @@ urlpatterns = [
     path('textbausteine/erstellen/', views.texttemplate_create, name='texttemplate_create'),
     path('textbausteine/<int:pk>/bearbeiten/', views.texttemplate_update, name='texttemplate_update'),
     path('textbausteine/<int:pk>/loeschen/', views.texttemplate_delete, name='texttemplate_delete'),
+    
+    # Outgoing Invoice Journal (Read-Only)
+    path('buchhaltung/rechnungsausgangsjournal/', views.journal_list, name='journal_list'),
+    path('buchhaltung/rechnungsausgangsjournal/<int:pk>/', views.journal_detail, name='journal_detail'),
 ]
