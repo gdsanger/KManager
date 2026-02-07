@@ -600,16 +600,29 @@ def ajax_add_line(request, doc_key, pk):
             # Manual line without item
             item = None
             
-            # Require mandatory fields for manual lines
-            if not short_text_1 and not description:
-                return JsonResponse({'error': 'Short text 1 or description is required for manual lines'}, status=400)
-            if not unit_price_net:
-                return JsonResponse({'error': 'Unit price is required for manual lines'}, status=400)
+            # Allow empty positions for initial creation (user will fill them in)
+            # Only validate if we have some non-empty content
+            try:
+                price_value = float(unit_price_net) if unit_price_net else 0.0
+            except (ValueError, TypeError):
+                price_value = 0.0
+            
+            # Consider negative prices as content too
+            has_any_content = short_text_1 or description or abs(price_value) > 0.001
+            
+            if has_any_content:
+                # If user started entering data, require mandatory fields
+                if not short_text_1 and not description:
+                    return JsonResponse({'error': 'Short text 1 or description is required for manual lines'}, status=400)
+                # Check if price was actually provided (not just default 0)
+                if abs(price_value) < 0.001:
+                    return JsonResponse({'error': 'Unit price is required for manual lines'}, status=400)
+            
             if not tax_rate_id:
                 return JsonResponse({'error': 'Tax rate is required for manual lines'}, status=400)
             
             # Generate description from short texts if not provided
-            if not description:
+            if not description and short_text_1:
                 parts = [short_text_1]
                 if short_text_2:
                     parts.append(short_text_2)
@@ -617,8 +630,12 @@ def ajax_add_line(request, doc_key, pk):
                     parts.append(long_text)
                 description = '\n'.join(parts)
             
+            # Set default empty description if still empty
+            if not description:
+                description = ''
+            
             tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
-            unit_price_net = Decimal(unit_price_net)
+            unit_price_net = Decimal(unit_price_net) if unit_price_net else Decimal('0.00')
             is_discountable = data.get('is_discountable', True)
         
         # Get next position number
