@@ -119,6 +119,25 @@ class ContractViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Test Monthly Contract')
     
+    def test_contract_list_has_clickable_links(self):
+        """Test that contract list contains clickable links to edit and detail views"""
+        url = reverse('auftragsverwaltung:contract_list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that the contract name is a link to the update view
+        update_url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': self.contract.pk})
+        self.assertContains(response, f'href="{update_url}"')
+        
+        # Check that the detail link exists in the action buttons
+        detail_url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': self.contract.pk})
+        self.assertContains(response, f'href="{detail_url}"')
+        
+        # Check that both action buttons are present (eye icon for detail, pencil for edit)
+        self.assertContains(response, 'bi-eye')
+        self.assertContains(response, 'bi-pencil')
+    
     def test_contract_detail_view(self):
         """Test that contract detail view works"""
         url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': self.contract.pk})
