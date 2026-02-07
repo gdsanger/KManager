@@ -167,9 +167,9 @@ def auftragsverwaltung_home(request):
         ).select_related('document_type').order_by('-issue_date', '-id')[:10]
     
     # Get activity stream (last 25 activities)
-    # Filter by ORDER domain if we want only order management activities
+    # Show all activities from all domains (RENTAL, ORDER, FINANCE)
     if company:
-        activities = ActivityStreamService.latest(n=25, company=company, domain='ORDER')
+        activities = ActivityStreamService.latest(n=25, company=company)
     else:
         activities = []
     
