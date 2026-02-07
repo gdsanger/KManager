@@ -276,8 +276,8 @@ def document_create(request, doc_key):
         # Set fields from form
         document.subject = request.POST.get('subject', '')
         document.reference_number = request.POST.get('reference_number', '')
-        document.header_text = request.POST.get('header_text', '')
-        document.footer_text = request.POST.get('footer_text', '')
+        document.header_text = sanitize_html(request.POST.get('header_text', ''))
+        document.footer_text = sanitize_html(request.POST.get('footer_text', ''))
         document.notes_internal = request.POST.get('notes_internal', '')
         document.notes_public = request.POST.get('notes_public', '')
         
@@ -387,8 +387,8 @@ def document_update(request, doc_key, pk):
     # Update fields from form
     document.subject = request.POST.get('subject', '')
     document.reference_number = request.POST.get('reference_number', '')
-    document.header_text = request.POST.get('header_text', '')
-    document.footer_text = request.POST.get('footer_text', '')
+    document.header_text = sanitize_html(request.POST.get('header_text', ''))
+    document.footer_text = sanitize_html(request.POST.get('footer_text', ''))
     document.notes_internal = request.POST.get('notes_internal', '')
     document.notes_public = request.POST.get('notes_public', '')
     document.status = request.POST.get('status', 'DRAFT')
