@@ -611,19 +611,28 @@ def cost_type_2_options(request):
     # Create a temporary form to render the cost_type_2 field
     form = ItemForm()
     
+    # Flag to track if we should disable the field
+    should_disable = False
+    
     # Filter cost_type_2 options based on cost_type_1
     if cost_type_1_id:
         try:
+            # Try to convert to int and filter
+            cost_type_1_id_int = int(cost_type_1_id)
             form.fields['cost_type_2'].queryset = Kostenart.objects.filter(
-                parent_id=cost_type_1_id
+                parent_id=cost_type_1_id_int
             )
         except (ValueError, TypeError):
+            # Invalid ID - disable and set empty queryset
             form.fields['cost_type_2'].queryset = Kostenart.objects.none()
+            should_disable = True
     else:
+        # No cost_type_1 selected - disable
         form.fields['cost_type_2'].queryset = Kostenart.objects.none()
+        should_disable = True
     
-    # Disable the field if no cost_type_1 is selected
-    if not cost_type_1_id:
+    # Disable the field if needed
+    if should_disable:
         form.fields['cost_type_2'].widget.attrs['disabled'] = 'disabled'
     
     return render(request, 'core/partials/cost_type_2_select.html', {'form': form})
