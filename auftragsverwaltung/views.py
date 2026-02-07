@@ -95,8 +95,8 @@ def normalize_decimal_input(value):
     
     try:
         return Decimal(normalized)
-    except Exception as e:
-        raise ValueError(f"Cannot parse '{value}' as decimal: {str(e)}")
+    except Exception:
+        raise ValueError(f"Ungültiges Dezimalformat: '{value}'")
 
 
 @login_required

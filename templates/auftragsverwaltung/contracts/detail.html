@@ -638,6 +638,10 @@ $(document).ready(function() {
     /**
      * Normalize decimal input from German format to English format
      * Handles: "1,0000" → "1.0000", "99,00" → "99.00", "1.234,56" → "1234.56"
+     * 
+     * @param {string|number} value - The decimal value to normalize
+     * @returns {string} The normalized value in English format (dot as decimal separator)
+     *                   Returns the original value unchanged if empty/null
      */
     function normalizeDecimalInput(value) {
         if (!value || value === '') {
