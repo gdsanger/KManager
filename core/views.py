@@ -1,4 +1,5 @@
 import os
+import json
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
@@ -6,9 +7,10 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
+from django.http import JsonResponse
 from django_tables2 import RequestConfig
 from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup
-from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm
+from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm, ItemGroupForm
 from core.tables import ItemTable
 from core.filters import ItemFilter
 
@@ -427,4 +429,144 @@ def item_create_new(request):
     }
     
     return render(request, 'core/item_management.html', context)
+
+
+@login_required
+def item_edit_ajax(request, pk):
+    """
+    Load item edit form for AJAX modal.
+    Returns HTML partial for the modal body.
+    """
+    item = get_object_or_404(Item, pk=pk)
+    form = ItemForm(instance=item)
+    
+    return render(request, 'core/item_edit_form.html', {
+        'form': form,
+        'item': item,
+    })
+
+
+@login_required
+def item_save_ajax(request):
+    """
+    Handle item save via AJAX.
+    Returns JSON response with success/error status.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'errors': {'non_field_errors': ['Invalid request method']}})
+    
+    # Get item ID if updating
+    item_id = request.POST.get('item_id', '')
+    item = None
+    if item_id:
+        try:
+            item = Item.objects.get(pk=item_id)
+        except (Item.DoesNotExist, ValueError):
+            return JsonResponse({'success': False, 'errors': {'non_field_errors': ['Item not found']}})
+    
+    # Create or update form
+    if item:
+        form = ItemForm(request.POST, instance=item)
+    else:
+        form = ItemForm(request.POST)
+    
+    if form.is_valid():
+        saved_item = form.save()
+        return JsonResponse({
+            'success': True,
+            'item_id': saved_item.pk,
+            'message': f'Artikel "{saved_item.article_no}" erfolgreich gespeichert.'
+        })
+    else:
+        # Return errors as JSON
+        errors = {}
+        for field, error_list in form.errors.items():
+            errors[field] = [str(e) for e in error_list]
+        return JsonResponse({'success': False, 'errors': errors})
+
+
+@login_required
+def item_group_get(request, pk):
+    """
+    Get item group data for editing.
+    Returns JSON with group details.
+    """
+    group = get_object_or_404(ItemGroup, pk=pk)
+    
+    return JsonResponse({
+        'id': group.pk,
+        'code': group.code,
+        'name': group.name,
+        'group_type': group.group_type,
+        'parent_id': group.parent.pk if group.parent else None,
+        'description': group.description or '',
+    })
+
+
+@login_required
+def item_group_save(request):
+    """
+    Handle item group save (create or update) via AJAX.
+    Returns JSON response with success/error status.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'errors': 'Invalid request method'})
+    
+    try:
+        # Get form data
+        group_id = request.POST.get('group_id', '').strip()
+        code = request.POST.get('code', '').strip()
+        name = request.POST.get('name', '').strip()
+        group_type = request.POST.get('group_type', '').strip()
+        parent_id = request.POST.get('parent_id', '').strip()
+        description = request.POST.get('description', '').strip()
+        
+        # Validate required fields
+        if not code or not name or not group_type:
+            return JsonResponse({'success': False, 'errors': 'Code, Name und Typ sind erforderlich'})
+        
+        # Get or create group
+        if group_id:
+            group = get_object_or_404(ItemGroup, pk=group_id)
+        else:
+            group = ItemGroup()
+        
+        # Set values
+        group.code = code
+        group.name = name
+        group.group_type = group_type
+        group.description = description if description else None
+        
+        # Set parent for SUB groups
+        if group_type == 'SUB' and parent_id:
+            try:
+                parent = ItemGroup.objects.get(pk=parent_id)
+                group.parent = parent
+            except ItemGroup.DoesNotExist:
+                return JsonResponse({'success': False, 'errors': 'Übergeordnete Gruppe nicht gefunden'})
+        else:
+            group.parent = None
+        
+        # Validate and save
+        try:
+            group.full_clean()  # Run model validation
+            group.save()
+            
+            return JsonResponse({
+                'success': True,
+                'group_id': group.pk,
+                'message': f'Warengruppe "{group.name}" erfolgreich gespeichert.'
+            })
+        except Exception as e:
+            # Return validation errors
+            if hasattr(e, 'message_dict'):
+                errors = {}
+                for field, messages in e.message_dict.items():
+                    errors[field] = messages
+                return JsonResponse({'success': False, 'errors': errors})
+            else:
+                return JsonResponse({'success': False, 'errors': str(e)})
+    
+    except Exception as e:
+        return JsonResponse({'success': False, 'errors': f'Fehler beim Speichern: {str(e)}'})
 

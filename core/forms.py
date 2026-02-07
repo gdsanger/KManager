@@ -214,3 +214,27 @@ class ItemForm(forms.ModelForm):
             'long_text': 'Detaillierte Beschreibung',
             'item_group': 'Optional: Zuordnung zu einer Warengruppe',
         }
+
+
+class ItemGroupForm(forms.ModelForm):
+    """Form for ItemGroup (Warengruppe) entity"""
+    
+    class Meta:
+        model = ItemGroup
+        fields = ['code', 'name', 'group_type', 'parent', 'description']
+        widgets = {
+            'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'group_type': forms.HiddenInput(),
+            'parent': forms.HiddenInput(),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+        labels = {
+            'code': 'Code',
+            'name': 'Name',
+            'description': 'Beschreibung',
+        }
+        help_texts = {
+            'code': 'Eindeutiger Code für die Warengruppe',
+            'name': 'Bezeichnung der Warengruppe',
+        }
