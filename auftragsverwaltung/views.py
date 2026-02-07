@@ -17,6 +17,7 @@ from .services import (
     PaymentTermTextService,
     get_next_number
 )
+from .utils import sanitize_html
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart
 from core.services.activity_stream import ActivityStreamService
 
@@ -1465,13 +1466,16 @@ def texttemplate_create(request):
         except (ValueError, TypeError):
             sort_order = 0
         
+        # Sanitize HTML content
+        sanitized_content = sanitize_html(content)
+        
         # Create text template
         template = TextTemplate.objects.create(
             company=company,
             key=key,
             title=title,
             type=type,
-            content=content,
+            content=sanitized_content,
             is_active=is_active,
             sort_order=sort_order
         )
@@ -1498,13 +1502,16 @@ def texttemplate_update(request, pk):
         template.key = request.POST.get('key', '').strip()
         template.title = request.POST.get('title', '').strip()
         template.type = request.POST.get('type', '').strip()
-        template.content = request.POST.get('content', '').strip()
+        content = request.POST.get('content', '').strip()
         template.is_active = request.POST.get('is_active') == 'on'
         
         try:
             template.sort_order = int(request.POST.get('sort_order', '0'))
         except (ValueError, TypeError):
             template.sort_order = 0
+        
+        # Sanitize HTML content
+        template.content = sanitize_html(content)
         
         template.save()
         

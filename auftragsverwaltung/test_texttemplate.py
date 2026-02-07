@@ -300,3 +300,72 @@ class TextTemplateViewTestCase(TestCase):
         # Should redirect to login
         self.assertEqual(response.status_code, 302)
         self.assertIn('/login/', response.url)
+    
+    def test_create_sanitizes_html_content(self):
+        """Test that create view sanitizes HTML content"""
+        url = reverse('auftragsverwaltung:texttemplate_create')
+        data = {
+            'key': 'test_sanitize',
+            'title': 'Test Sanitize',
+            'type': 'HEADER',
+            'content': '<p>Safe content</p><script>alert("XSS")</script>',
+            'is_active': 'on',
+            'sort_order': '0'
+        }
+        
+        response = self.client.post(url, data)
+        
+        # Should redirect to list view
+        self.assertEqual(response.status_code, 302)
+        
+        # Check template was created with sanitized content
+        template = TextTemplate.objects.get(key='test_sanitize')
+        self.assertEqual(template.content, '<p>Safe content</p>alert("XSS")')
+        self.assertNotIn('<script>', template.content)
+    
+    def test_update_sanitizes_html_content(self):
+        """Test that update view sanitizes HTML content"""
+        url = reverse('auftragsverwaltung:texttemplate_update', kwargs={'pk': self.template.pk})
+        data = {
+            'key': 'test_header',
+            'title': 'Test Header',
+            'type': 'HEADER',
+            'content': '<p>Updated</p><iframe src="evil.com"></iframe>',
+            'is_active': 'on',
+            'sort_order': '0'
+        }
+        
+        response = self.client.post(url, data)
+        
+        # Should redirect to list view
+        self.assertEqual(response.status_code, 302)
+        
+        # Check template was updated with sanitized content
+        self.template.refresh_from_db()
+        self.assertEqual(self.template.content, '<p>Updated</p>')
+        self.assertNotIn('<iframe>', self.template.content)
+    
+    def test_create_preserves_allowed_html(self):
+        """Test that create view preserves allowed HTML tags"""
+        url = reverse('auftragsverwaltung:texttemplate_create')
+        data = {
+            'key': 'test_allowed',
+            'title': 'Test Allowed',
+            'type': 'HEADER',
+            'content': '<p>Text with <strong>bold</strong> and <em>italic</em></p><ul><li>Item</li></ul>',
+            'is_active': 'on',
+            'sort_order': '0'
+        }
+        
+        response = self.client.post(url, data)
+        
+        # Should redirect to list view
+        self.assertEqual(response.status_code, 302)
+        
+        # Check template was created with all allowed tags preserved
+        template = TextTemplate.objects.get(key='test_allowed')
+        self.assertIn('<p>', template.content)
+        self.assertIn('<strong>bold</strong>', template.content)
+        self.assertIn('<em>italic</em>', template.content)
+        self.assertIn('<ul>', template.content)
+        self.assertIn('<li>Item</li>', template.content)
