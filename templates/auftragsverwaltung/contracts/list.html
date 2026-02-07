@@ -7,7 +7,7 @@
 
 {% block page_actions %}
 <div class="btn-group" role="group">
-    <a href="#" class="btn btn-primary disabled" title="Neu erstellen (noch nicht implementiert)">
+    <a href="{% url 'auftragsverwaltung:contract_create' %}" class="btn btn-primary" title="Neuen Vertrag erstellen">
         <i class="bi bi-plus-circle"></i> Neu erstellen
     </a>
 </div>
