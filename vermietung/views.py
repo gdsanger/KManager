@@ -324,6 +324,15 @@ def vermietung_home(request):
         ende__lte=expiring_soon_date
     ).order_by('ende')[:10]
     
+    # Get activity stream (last 25 activities from ALL domains)
+    # Get the default company (Mandant) - in a multi-tenant setup, this would be based on the user's company
+    company = Mandant.objects.first()
+    if company:
+        # Fetch all activities without domain filter to show activities from all areas
+        activities = ActivityStreamService.latest(n=25, company=company)
+    else:
+        activities = []
+    
     context = {
         'total_mietobjekte': total_mietobjekte,
         'verfuegbare_einheiten_gesamt': verfuegbare_einheiten_gesamt,
@@ -333,6 +342,7 @@ def vermietung_home(request):
         'recent_vertraege': recent_vertraege,
         'expiring_vertraege': expiring_vertraege,
         'mietobjekte_mit_einheiten': mietobjekte_mit_einheiten,
+        'activities': activities,
     }
     
     return render(request, 'vermietung/home.html', context)
