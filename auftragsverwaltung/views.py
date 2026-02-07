@@ -1083,6 +1083,11 @@ def contract_update(request, pk):
     """
     contract = get_object_or_404(Contract, pk=pk)
     
+    # Track changes for activity logging
+    old_is_active = contract.is_active
+    old_customer = contract.customer
+    old_customer_name = contract.customer.name if contract.customer else None
+    
     # Update fields from form
     contract.name = request.POST.get('name', '')
     contract.reference = request.POST.get('reference', '')
@@ -1122,22 +1127,54 @@ def contract_update(request, pk):
         contract.next_run_date = datetime.strptime(next_run_date_str, '%Y-%m-%d').date()
     
     # Update is_active flag
-    contract.is_active = request.POST.get('is_active') == 'on'
+    new_is_active = request.POST.get('is_active') == 'on'
+    contract.is_active = new_is_active
     
     # Save the contract
     contract.save()
     
-    # Log activity
-    ActivityStreamService.add(
-        company=contract.company,
-        domain='ORDER',
-        activity_type='CONTRACT_UPDATED',
-        title=f'Vertrag aktualisiert: {contract.name}',
-        description=f'Kunde: {contract.customer.name}' if contract.customer else None,
-        target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
-        actor=request.user,
-        severity='INFO'
-    )
+    # Log specific activities for business-relevant changes
+    
+    # 1. Log status change if it occurred
+    if old_is_active != new_is_active:
+        status_text = 'aktiviert' if new_is_active else 'deaktiviert'
+        ActivityStreamService.add(
+            company=contract.company,
+            domain='ORDER',
+            activity_type='CONTRACT_STATUS_CHANGED',
+            title=f'Vertragsstatus geändert: {contract.name}',
+            description=f'Status: {status_text} (vorher: {"aktiv" if old_is_active else "inaktiv"})',
+            target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
+    
+    # 2. Log customer assignment change if it occurred
+    if old_customer != contract.customer:
+        new_customer_name = contract.customer.name if contract.customer else None
+        ActivityStreamService.add(
+            company=contract.company,
+            domain='ORDER',
+            activity_type='CONTRACT_CUSTOMER_CHANGED',
+            title=f'Kunde geändert: {contract.name}',
+            description=f'Neuer Kunde: {new_customer_name}, Vorheriger Kunde: {old_customer_name}',
+            target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
+    
+    # 3. Log general update (if no specific change was logged)
+    if old_is_active == new_is_active and old_customer == contract.customer:
+        ActivityStreamService.add(
+            company=contract.company,
+            domain='ORDER',
+            activity_type='CONTRACT_UPDATED',
+            title=f'Vertrag aktualisiert: {contract.name}',
+            description=f'Kunde: {contract.customer.name}' if contract.customer else None,
+            target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+            actor=request.user,
+            severity='INFO'
+        )
     
     # Redirect to detail view
     return redirect('auftragsverwaltung:contract_detail', pk=contract.pk)

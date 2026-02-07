@@ -26,6 +26,7 @@ from auftragsverwaltung.models import (
     SalesDocumentLine,
 )
 from auftragsverwaltung.services.document_calculation import DocumentCalculationService
+from core.services.activity_stream import ActivityStreamService
 
 
 class ContractBillingService:
@@ -104,6 +105,18 @@ class ContractBillingService:
                 contract.last_run_date = contract.next_run_date
                 contract.next_run_date = contract.advance_next_run_date()
                 contract.save(update_fields=['last_run_date', 'next_run_date'])
+                
+                # Log successful invoice generation
+                ActivityStreamService.add(
+                    company=contract.company,
+                    domain='ORDER',
+                    activity_type='CONTRACT_INVOICE_GENERATED',
+                    title=f'Rechnung aus Vertrag erstellt: {contract.name}',
+                    description=f'Rechnung {document.number} für {contract.customer.name if contract.customer else "N/A"}',
+                    target_url=f'/auftragsverwaltung/documents/{document.pk}/',
+                    actor=None,  # Automated process
+                    severity='INFO'
+                )
             
             return run
         
@@ -115,6 +128,19 @@ class ContractBillingService:
                 status='FAILED',
                 message=str(e)
             )
+            
+            # Log failed invoice generation
+            ActivityStreamService.add(
+                company=contract.company,
+                domain='ORDER',
+                activity_type='CONTRACT_INVOICE_FAILED',
+                title=f'Rechnungserstellung fehlgeschlagen: {contract.name}',
+                description=f'Fehler: {str(e)[:200]}',
+                target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
+                actor=None,  # Automated process
+                severity='ERROR'
+            )
+            
             return run
     
     @classmethod
