@@ -26,7 +26,7 @@
         <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'home' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Domus ist die lateinische Übersetzung für Haus, Besitz, Heim, Anwesen">
                 <img src="{% static 'images/logo.webp' %}" alt="Domus Logo" width="30" height="30" class="d-inline-block align-text-top me-2">
-                <span class="fw-bold">Domus v1.0</span>                
+                <span class="fw-bold">GIS v4.0</span>                
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -44,13 +44,17 @@
                                 <i class="bi bi-building"></i> Gebäude
                             </a>
                         </li>
-                    {% endif %}
+                   <li class="nav-item">
+                        <a class="nav-link" href="{% url 'auftragsverwaltung:home' %}">
+                            <i class="bi bi-file-earmark-text"></i> Auftragsverwaltung
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'home' %}">
                             <i class="bi bi-cash-coin"></i> Finanzen
                         </a>
                     </li>
-                    {% if user.is_authenticated %}
+                   
                         <li class="nav-item">
                             <a class="nav-link {% if 'items' in request.path or 'mailtemplate' in request.path or 'smtp' in request.path or 'mandant' in request.path %}active{% endif %}" href="{% url 'item_management' %}">
                                 <i class="bi bi-gear"></i> Verwaltung
@@ -61,19 +65,7 @@
                                 <i class="bi bi-headset"></i> Support Portal
                             </a>
                         </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="mailDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-envelope"></i> E-Mail
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="mailDropdown">
-                                <li><a class="dropdown-item" href="{% url 'mailtemplate_list' %}">
-                                    <i class="bi bi-file-earmark-text"></i> Templates
-                                </a></li>
-                                <li><a class="dropdown-item" href="{% url 'smtp_settings' %}">
-                                    <i class="bi bi-envelope-gear"></i> SMTP Einstellungen
-                                </a></li>
-                            </ul>
-                        </li>
+                    
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-person-circle"></i> {{ user.username }}
@@ -123,13 +115,13 @@
             <div class="row">
                 <div class="col-md-6">
                     <p class="mb-0">
-                        <strong>Domus</strong> - Immobilien, Besitz, Finanzen
+                        <strong>GIS v4.0</strong> - GDS Informations System
                     </p>
                     
                 </div>
                 <div class="col-md-6 text-md-end">
                     <p class="mb-0">
-                        &copy; {% now "Y" %} Domus
+                        &copy; {% now "Y" %} GIS v4.0 Christian Angermeier, Alle Rechte vorbehalten.
                     </p>
                 </div>
             </div>

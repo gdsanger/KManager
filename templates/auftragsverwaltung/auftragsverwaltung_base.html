@@ -21,13 +21,12 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Top Navigation -->
+    <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'home' %}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Domus ist die lateinische Übersetzung für Haus, Besitz, Heim, Anwesen">
                 <img src="{% static 'images/logo.webp' %}" alt="Domus Logo" width="30" height="30" class="d-inline-block align-text-top me-2">
-                <span class="fw-bold">Domus v1.0</span>
-                
+                <span class="fw-bold">GIS v4.0</span>                
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -35,35 +34,60 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'home' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">
                             <i class="bi bi-house-door"></i> Home
                         </a>
                     </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
-                            <a class="nav-link active" href="{% url 'auftragsverwaltung:home' %}">
-                                <i class="bi bi-file-earmark-text"></i> Auftragsverwaltung
+                            <a class="nav-link {% if 'vermietung' in request.path %}active{% endif %}" href="{% url 'vermietung:home' %}">
+                                <i class="bi bi-building"></i> Gebäude
                             </a>
                         </li>
-                    {% endif %}
+                   <li class="nav-item">
+                        <a class="nav-link" href="{% url 'auftragsverwaltung:home' %}">
+                            <i class="bi bi-file-earmark-text"></i> Auftragsverwaltung
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'home' %}">
                             <i class="bi bi-cash-coin"></i> Finanzen
                         </a>
                     </li>
-                    {% if user.is_authenticated %}
+                   
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'logout' %}">
-                                <i class="bi bi-box-arrow-right"></i> Abmelden ({{ user.username }})
+                            <a class="nav-link {% if 'items' in request.path or 'mailtemplate' in request.path or 'smtp' in request.path or 'mandant' in request.path %}active{% endif %}" href="{% url 'item_management' %}">
+                                <i class="bi bi-gear"></i> Verwaltung
                             </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
+                                <i class="bi bi-headset"></i> Support Portal
+                            </a>
+                        </li>
+                    
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-person-circle"></i> {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{% url 'profile' %}">
+                                    <i class="bi bi-person-badge"></i> Profil
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                    <i class="bi bi-box-arrow-right"></i> Abmelden
+                                </a></li>
+                            </ul>
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'login' %}">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'login' %}active{% endif %}" href="{% url 'login' %}">
                                 <i class="bi bi-box-arrow-in-right"></i> Anmelden
                             </a>
                         </li>
                     {% endif %}
+                    {% block nav_items %}{% endblock %}
                 </ul>
             </div>
         </div>
