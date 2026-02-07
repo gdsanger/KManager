@@ -23,9 +23,11 @@ Fixed three critical issues in the SalesDocument DetailView that affected all do
 **Fix**: Modified validation logic to:
 - Allow completely empty positions (all fields empty or zero)
 - Only enforce validation when user has started entering content (has text or non-zero price)
+- Handle negative prices correctly (treat as content)
+- Use parsed numeric value for validation instead of string
 - Still require tax_rate_id as it has a default value
 
-**Files Changed**: `auftragsverwaltung/views.py` (lines 600-632)
+**Files Changed**: `auftragsverwaltung/views.py` (lines 599-620)
 
 ### Issue 3: Console Error and Totals Not Updating ✅
 **Problem**: 
@@ -42,8 +44,9 @@ Fixed three critical issues in the SalesDocument DetailView that affected all do
 - Added comprehensive null checks before accessing DOM elements
 - Added separate description change handler
 - Kept only the `updateLineField()` approach which properly handles totals update
+- Added clarifying comments for empty value handling
 
-**Files Changed**: `templates/auftragsverwaltung/documents/detail.html` (lines 1172-1703)
+**Files Changed**: `templates/auftragsverwaltung/documents/detail.html` (lines 1666-1705)
 
 ## Testing
 
@@ -53,10 +56,24 @@ The fixes ensure:
 3. ✅ No console errors when changing quantity/price
 4. ✅ Totals update correctly via AJAX
 5. ✅ All existing functionality preserved
+6. ✅ Negative prices handled correctly
+7. ✅ No security vulnerabilities (CodeQL scan passed)
 
 ## Code Quality
 
-- Minimal changes approach followed
-- Added defensive null checks
-- Removed code duplication
-- Improved user experience without breaking existing behavior
+- ✅ Minimal changes approach followed
+- ✅ Added defensive null checks
+- ✅ Removed code duplication
+- ✅ Improved user experience without breaking existing behavior
+- ✅ All code review feedback addressed
+- ✅ Proper error handling for invalid numeric inputs
+- ✅ Security scan passed (0 vulnerabilities)
+
+## Security Summary
+
+CodeQL security scan completed successfully with **0 vulnerabilities** found. The changes:
+- Include proper input validation
+- Use try-except blocks for safe type conversion
+- Maintain existing security measures
+- No new security risks introduced
+
