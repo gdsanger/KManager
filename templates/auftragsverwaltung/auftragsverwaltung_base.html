@@ -219,6 +219,21 @@
                             </ul>
                         </li>
 
+                        <!-- Stammdaten Section (NEW) -->
+                        <li class="nav-item nav-section">
+                            <a class="nav-link nav-category" href="#stammdatenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'items' in request.path %}true{% else %}false{% endif %}">
+                                <i class="bi bi-database"></i> <span class="sidebar-text">Stammdaten</span>
+                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
+                            </a>
+                            <ul class="collapse nav flex-column ms-3 {% if 'items' in request.path %}show{% endif %}" id="stammdatenMenu">
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'items' in request.path %}active{% endif %}" href="{% url 'item_management' %}">
+                                        <i class="bi bi-box-seam"></i> <span class="sidebar-text">Artikelverwaltung</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+
                         <!-- Einstellungen Section (NEW) -->
                         <li class="nav-item nav-section">
                             <a class="nav-link nav-category" href="#einstellungenMenu" data-bs-toggle="collapse" aria-expanded="{% if request.resolver_match.url_name == 'mailtemplate_list' or request.resolver_match.url_name == 'smtp_settings' %}true{% else %}false{% endif %}">

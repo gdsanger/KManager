@@ -41,6 +41,23 @@ class ItemTable(tables.Table):
         order_by='item_group__name'
     )
     
+    actions = tables.Column(
+        verbose_name='Aktionen',
+        orderable=False,
+        empty_values=(),
+        attrs={'td': {'class': 'text-center'}}
+    )
+    
+    def render_actions(self, record):
+        """Render action buttons for each item."""
+        return format_html(
+            '<button type="button" class="btn btn-sm btn-outline-primary edit-item-btn" '
+            'data-item-id="{}" title="Bearbeiten">'
+            '<i class="bi bi-pencil"></i>'
+            '</button>',
+            record.pk
+        )
+    
     def render_article_no(self, value, record):
         """Render article_no as a link to select the item."""
         # Link includes the current filters + selected item
@@ -84,7 +101,8 @@ class ItemTable(tables.Table):
             'item_type',
             'net_price',
             'item_group',
-            'is_active'
+            'is_active',
+            'actions'
         )
         attrs = {
             'class': 'table table-dark table-hover',

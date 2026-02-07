@@ -5,12 +5,6 @@
 
 {% block page_title %}<i class="bi bi-box-seam"></i> Artikelverwaltung{% endblock %}
 
-{% block page_actions %}
-<span class="form-dirty-indicator" id="dirtyIndicator">
-    <i class="bi bi-exclamation-triangle"></i> Ungespeicherte Änderungen
-</span>
-{% endblock %}
-
 {% block extra_css %}
 <style>
 .item-management-container {
@@ -32,14 +26,6 @@
 }
 
 .list-section {
-    flex: 0 0 50%;
-    overflow-y: auto;
-    border-bottom: 1px solid #495057;
-    padding-bottom: 15px;
-    margin-bottom: 15px;
-}
-
-.detail-section {
     flex: 1;
     overflow-y: auto;
 }
@@ -82,15 +68,15 @@
     color: #fff;
 }
 
-.form-dirty-indicator {
-    display: none;
-    color: #ffc107;
-    font-size: 0.9em;
-    margin-left: 10px;
+.group-actions {
+    display: inline-flex;
+    gap: 5px;
+    margin-left: 5px;
 }
 
-.form-dirty .form-dirty-indicator {
-    display: inline;
+.group-action-btn {
+    padding: 2px 6px;
+    font-size: 0.8em;
 }
 </style>
 {% endblock %}
@@ -101,31 +87,57 @@
     <div class="row item-management-container">
         <!-- Left Panel: Item Group Tree -->
         <div class="col-md-3 tree-panel">
-            <h5 class="mb-3">Warengruppen</h5>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Warengruppen</h5>
+                <button type="button" class="btn btn-sm btn-success" id="createMainGroupBtn" title="Neue Hauptwarengruppe">
+                    <i class="bi bi-plus-circle"></i>
+                </button>
+            </div>
             <ul class="group-tree">
                 <li>
                     <a href="{% url 'item_management' %}" 
-                       class="group-link navigation-link {% if not selected_group_id %}active{% endif %}"
-                       data-target-url="{% url 'item_management' %}">
+                       class="group-link {% if not selected_group_id %}active{% endif %}">
                         <i class="bi bi-house"></i> Alle Artikel
                     </a>
                 </li>
                 {% for main_group in main_groups %}
                 <li class="main-group">
-                    <a href="?group={{ main_group.pk }}" 
-                       class="group-link navigation-link {% if selected_group_id == main_group.pk|stringformat:'s' %}active{% endif %}"
-                       data-target-url="?group={{ main_group.pk }}">
-                        <i class="bi bi-folder"></i> {{ main_group.name }}
-                    </a>
+                    <div class="d-flex align-items-center">
+                        <a href="?group={{ main_group.pk }}" 
+                           class="group-link flex-grow-1 {% if selected_group_id == main_group.pk|stringformat:'s' %}active{% endif %}">
+                            <i class="bi bi-folder"></i> {{ main_group.name }}
+                        </a>
+                        <div class="group-actions">
+                            <button type="button" class="btn btn-sm btn-outline-secondary group-action-btn edit-group-btn" 
+                                    data-group-id="{{ main_group.pk }}" data-group-name="{{ main_group.name }}" 
+                                    data-group-type="MAIN" title="Bearbeiten">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success group-action-btn create-sub-group-btn" 
+                                    data-parent-id="{{ main_group.pk }}" data-parent-name="{{ main_group.name }}" 
+                                    title="Neue Unterwarengruppe">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                    </div>
                     {% if main_group.children.all %}
                     <ul class="group-tree sub-group">
                         {% for sub_group in main_group.children.all %}
                         <li>
-                            <a href="?group={{ sub_group.pk }}" 
-                               class="group-link navigation-link {% if selected_group_id == sub_group.pk|stringformat:'s' %}active{% endif %}"
-                               data-target-url="?group={{ sub_group.pk }}">
-                                <i class="bi bi-folder-fill"></i> {{ sub_group.name }}
-                            </a>
+                            <div class="d-flex align-items-center">
+                                <a href="?group={{ sub_group.pk }}" 
+                                   class="group-link flex-grow-1 {% if selected_group_id == sub_group.pk|stringformat:'s' %}active{% endif %}">
+                                    <i class="bi bi-folder-fill"></i> {{ sub_group.name }}
+                                </a>
+                                <div class="group-actions">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary group-action-btn edit-group-btn" 
+                                            data-group-id="{{ sub_group.pk }}" data-group-name="{{ sub_group.name }}" 
+                                            data-group-type="SUB" data-parent-id="{{ main_group.pk }}" 
+                                            title="Bearbeiten">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </li>
                         {% endfor %}
                     </ul>
@@ -135,16 +147,12 @@
             </ul>
         </div>
 
-        <!-- Right Panel: List + Detail -->
+        <!-- Right Panel: List -->
         <div class="col-md-9 content-panel">
             <!-- List Section -->
             <div class="list-section">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5>Artikelliste</h5>
-                    <button type="button" class="btn btn-success btn-sm navigation-link" 
-                            data-target-url="{% url 'item_create_new' %}">
-                        <i class="bi bi-plus-circle"></i> Neuer Artikel
-                    </button>
                 </div>
 
                 <!-- Filters -->
@@ -188,135 +196,79 @@
                     <span class="text-muted">{{ table.paginator.count }} Artikel</span>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
 
-            <!-- Detail Section -->
-            <div class="detail-section">
-                {% if form %}
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            {% if selected_item %}
-                            <i class="bi bi-pencil"></i> Artikel bearbeiten: {{ selected_item.article_no }}
-                            {% else %}
-                            <i class="bi bi-plus-circle"></i> Neuer Artikel
-                            {% endif %}
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <form method="post" action="{% url 'item_save' %}" id="itemForm">
-                            {% csrf_token %}
-                            {% if selected_item %}
-                            <input type="hidden" name="item_id" value="{{ selected_item.pk }}">
-                            {% endif %}
-                            <input type="hidden" name="next" id="nextUrl" value="">
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="{{ form.article_no.id_for_label }}" class="form-label">{{ form.article_no.label }}</label>
-                                        {{ form.article_no }}
-                                        {% if form.article_no.errors %}
-                                        <div class="text-danger">{{ form.article_no.errors }}</div>
-                                        {% endif %}
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.short_text_1.id_for_label }}" class="form-label">{{ form.short_text_1.label }}</label>
-                                        {{ form.short_text_1 }}
-                                        {% if form.short_text_1.errors %}
-                                        <div class="text-danger">{{ form.short_text_1.errors }}</div>
-                                        {% endif %}
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.short_text_2.id_for_label }}" class="form-label">{{ form.short_text_2.label }}</label>
-                                        {{ form.short_text_2 }}
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.long_text.id_for_label }}" class="form-label">{{ form.long_text.label }}</label>
-                                        {{ form.long_text }}
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.item_type.id_for_label }}" class="form-label">{{ form.item_type.label }}</label>
-                                        {{ form.item_type }}
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.item_group.id_for_label }}" class="form-label">{{ form.item_group.label }}</label>
-                                        {{ form.item_group }}
-                                    </div>
-                                </div>
-
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="{{ form.net_price.id_for_label }}" class="form-label">{{ form.net_price.label }}</label>
-                                        <div class="input-group">
-                                            {{ form.net_price }}
-                                            <span class="input-group-text">€</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.purchase_price.id_for_label }}" class="form-label">{{ form.purchase_price.label }}</label>
-                                        <div class="input-group">
-                                            {{ form.purchase_price }}
-                                            <span class="input-group-text">€</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.tax_rate.id_for_label }}" class="form-label">{{ form.tax_rate.label }}</label>
-                                        {{ form.tax_rate }}
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.cost_type_1.id_for_label }}" class="form-label">{{ form.cost_type_1.label }}</label>
-                                        {{ form.cost_type_1 }}
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="{{ form.cost_type_2.id_for_label }}" class="form-label">{{ form.cost_type_2.label }}</label>
-                                        {{ form.cost_type_2 }}
-                                    </div>
-
-                                    <div class="mb-3 form-check">
-                                        {{ form.is_discountable }}
-                                        <label for="{{ form.is_discountable.id_for_label }}" class="form-check-label">{{ form.is_discountable.label }}</label>
-                                    </div>
-
-                                    <div class="mb-3 form-check">
-                                        {{ form.is_active }}
-                                        <label for="{{ form.is_active.id_for_label }}" class="form-check-label">{{ form.is_active.label }}</label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="d-flex justify-content-end gap-2">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-save"></i> Speichern
-                                </button>
-                                {% if selected_item %}
-                                <a href="{% url 'item_management' %}" class="btn btn-secondary navigation-link" data-target-url="{% url 'item_management' %}">
-                                    <i class="bi bi-x"></i> Abbrechen
-                                </a>
-                                {% endif %}
-                            </div>
-                        </form>
+<!-- Item Edit Modal -->
+<div class="modal fade" id="itemEditModal" tabindex="-1" aria-labelledby="itemEditModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="itemEditModalLabel">
+                    <i class="bi bi-pencil"></i> Artikel bearbeiten
+                </h5>
+                <button type="button" class="btn-close" id="itemModalClose" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="itemModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Laden...</span>
                     </div>
                 </div>
-                {% else %}
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> Wählen Sie einen Artikel aus der Liste oder erstellen Sie einen neuen Artikel.
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Unsaved Changes Modal -->
+<!-- Item Group Modal -->
+<div class="modal fade" id="itemGroupModal" tabindex="-1" aria-labelledby="itemGroupModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="itemGroupModalLabel">Warengruppe</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="itemGroupForm">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <input type="hidden" id="groupId" name="group_id">
+                    <input type="hidden" id="groupType" name="group_type">
+                    <input type="hidden" id="parentId" name="parent_id">
+                    
+                    <div class="mb-3">
+                        <label for="groupCode" class="form-label">Code *</label>
+                        <input type="text" class="form-control" id="groupCode" name="code" required>
+                        <div class="invalid-feedback" id="groupCodeError"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="groupName" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="groupName" name="name" required>
+                        <div class="invalid-feedback" id="groupNameError"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="groupDescription" class="form-label">Beschreibung</label>
+                        <textarea class="form-control" id="groupDescription" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="alert alert-danger d-none" id="groupFormError"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x"></i> Abbrechen
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Speichern
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Unsaved Changes Confirmation Modal -->
 <div class="modal fade" id="unsavedChangesModal" tabindex="-1" aria-labelledby="unsavedChangesModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -327,17 +279,14 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Sie haben ungespeicherte Änderungen. Was möchten Sie tun?</p>
+                <p>Sie haben ungespeicherte Änderungen. Möchten Sie diese verwerfen?</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle"></i> Abbrechen
                 </button>
-                <button type="button" class="btn btn-danger" id="discardChanges">
-                    <i class="bi bi-trash"></i> Verwerfen & Wechseln
-                </button>
-                <button type="button" class="btn btn-success" id="saveAndSwitch">
-                    <i class="bi bi-save"></i> Speichern & Wechseln
+                <button type="button" class="btn btn-danger" id="discardChangesBtn">
+                    <i class="bi bi-trash"></i> Verwerfen
                 </button>
             </div>
         </div>
@@ -349,77 +298,256 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Modal instances
+    const itemEditModal = new bootstrap.Modal(document.getElementById('itemEditModal'));
+    const itemGroupModal = new bootstrap.Modal(document.getElementById('itemGroupModal'));
+    const unsavedChangesModal = new bootstrap.Modal(document.getElementById('unsavedChangesModal'));
+    
     let formDirty = false;
-    let pendingNavigationUrl = null;
-    const form = document.getElementById('itemForm');
-    const modal = new bootstrap.Modal(document.getElementById('unsavedChangesModal'));
-    const dirtyIndicator = document.getElementById('dirtyIndicator');
-
-    // Track form changes
-    if (form) {
+    let currentItemId = null;
+    
+    // Handle edit item button clicks
+    document.querySelectorAll('.edit-item-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const itemId = this.getAttribute('data-item-id');
+            loadItemInModal(itemId);
+        });
+    });
+    
+    // Load item in modal
+    function loadItemInModal(itemId) {
+        currentItemId = itemId;
+        formDirty = false;
+        
+        // Show modal with loading state
+        document.getElementById('itemModalBody').innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Laden...</span>
+                </div>
+            </div>
+        `;
+        itemEditModal.show();
+        
+        // Load item form via AJAX
+        fetch(`/items/edit/${itemId}/`)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('itemModalBody').innerHTML = html;
+                attachFormHandlers();
+            })
+            .catch(error => {
+                document.getElementById('itemModalBody').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Fehler beim Laden des Artikels.
+                    </div>
+                `;
+            });
+    }
+    
+    // Attach form change handlers
+    function attachFormHandlers() {
+        const form = document.getElementById('itemEditForm');
+        if (!form) return;
+        
         const formInputs = form.querySelectorAll('input, select, textarea');
         formInputs.forEach(input => {
-            input.addEventListener('change', function() {
-                formDirty = true;
-                form.classList.add('form-dirty');
-            });
-            // Also track typing in text fields
+            input.addEventListener('change', () => { formDirty = true; });
             if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
-                input.addEventListener('input', function() {
-                    formDirty = true;
-                    form.classList.add('form-dirty');
-                });
+                input.addEventListener('input', () => { formDirty = true; });
             }
         });
-
-        // Reset dirty flag on successful save
-        form.addEventListener('submit', function() {
-            formDirty = false;
-            form.classList.remove('form-dirty');
+        
+        // Handle form submission
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveItem();
         });
     }
-
-    // Intercept navigation clicks
-    document.querySelectorAll('.navigation-link').forEach(link => {
-        link.addEventListener('click', function(e) {
-            if (formDirty) {
-                e.preventDefault();
-                pendingNavigationUrl = this.getAttribute('data-target-url') || this.getAttribute('href');
-                modal.show();
+    
+    // Save item via AJAX
+    function saveItem() {
+        const form = document.getElementById('itemEditForm');
+        const formData = new FormData(form);
+        
+        fetch(`/items/save/`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
             }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                formDirty = false;
+                itemEditModal.hide();
+                // Reload page to update table
+                window.location.reload();
+            } else {
+                // Display errors
+                displayFormErrors(data.errors);
+            }
+        })
+        .catch(error => {
+            alert('Fehler beim Speichern: ' + error);
         });
+    }
+    
+    // Display form errors
+    function displayFormErrors(errors) {
+        // Clear previous errors
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        document.querySelectorAll('.invalid-feedback').forEach(el => el.textContent = '');
+        
+        // Display new errors
+        for (const [field, messages] of Object.entries(errors)) {
+            const input = document.querySelector(`[name="${field}"]`);
+            if (input) {
+                input.classList.add('is-invalid');
+                const feedback = input.nextElementSibling;
+                if (feedback && feedback.classList.contains('invalid-feedback')) {
+                    feedback.textContent = messages.join(', ');
+                }
+            }
+        }
+    }
+    
+    // Handle modal close with unsaved changes check
+    document.getElementById('itemModalClose').addEventListener('click', function() {
+        if (formDirty) {
+            unsavedChangesModal.show();
+        } else {
+            itemEditModal.hide();
+        }
     });
-
-    // Handle "Discard & Switch"
-    document.getElementById('discardChanges').addEventListener('click', function() {
+    
+    // Handle discard changes
+    document.getElementById('discardChangesBtn').addEventListener('click', function() {
         formDirty = false;
-        if (form) {
-            form.classList.remove('form-dirty');
-        }
-        modal.hide();
-        if (pendingNavigationUrl) {
-            window.location.href = pendingNavigationUrl;
-        }
+        unsavedChangesModal.hide();
+        itemEditModal.hide();
     });
-
-    // Handle "Save & Switch"
-    document.getElementById('saveAndSwitch').addEventListener('click', function() {
-        if (form && pendingNavigationUrl) {
-            document.getElementById('nextUrl').value = pendingNavigationUrl;
-            form.submit();
-        }
+    
+    // Item Group Management
+    const itemGroupForm = document.getElementById('itemGroupForm');
+    
+    // Create main group
+    document.getElementById('createMainGroupBtn').addEventListener('click', function() {
+        openGroupModal('create', 'MAIN');
     });
-
-    // Intercept item links in table
-    document.querySelectorAll('.item-link').forEach(link => {
-        link.addEventListener('click', function(e) {
-            if (formDirty) {
-                e.preventDefault();
-                pendingNavigationUrl = this.getAttribute('href');
-                modal.show();
-            }
+    
+    // Create sub group
+    document.querySelectorAll('.create-sub-group-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const parentId = this.getAttribute('data-parent-id');
+            const parentName = this.getAttribute('data-parent-name');
+            openGroupModal('create', 'SUB', null, parentId, parentName);
         });
     });
+    
+    // Edit group
+    document.querySelectorAll('.edit-group-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const groupId = this.getAttribute('data-group-id');
+            const groupName = this.getAttribute('data-group-name');
+            const groupType = this.getAttribute('data-group-type');
+            const parentId = this.getAttribute('data-parent-id');
+            openGroupModal('edit', groupType, groupId, parentId, null, groupName);
+        });
+    });
+    
+    function openGroupModal(mode, groupType, groupId = null, parentId = null, parentName = null, groupName = null) {
+        // Reset form
+        itemGroupForm.reset();
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        document.getElementById('groupFormError').classList.add('d-none');
+        
+        // Set title
+        let title = 'Neue Hauptwarengruppe';
+        if (mode === 'edit') {
+            title = 'Warengruppe bearbeiten';
+        } else if (groupType === 'SUB') {
+            title = `Neue Unterwarengruppe unter "${parentName}"`;
+        }
+        document.getElementById('itemGroupModalLabel').textContent = title;
+        
+        // Set hidden fields
+        document.getElementById('groupId').value = groupId || '';
+        document.getElementById('groupType').value = groupType;
+        document.getElementById('parentId').value = parentId || '';
+        
+        // Load group data if editing
+        if (mode === 'edit' && groupId) {
+            fetch(`/items/groups/${groupId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('groupCode').value = data.code;
+                    document.getElementById('groupName').value = data.name;
+                    document.getElementById('groupDescription').value = data.description || '';
+                });
+        }
+        
+        itemGroupModal.show();
+    }
+    
+    // Handle group form submission
+    itemGroupForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        
+        fetch('/items/groups/save/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                itemGroupModal.hide();
+                // Reload page to update tree
+                window.location.reload();
+            } else {
+                // Display errors
+                displayGroupFormErrors(data.errors);
+            }
+        })
+        .catch(error => {
+            document.getElementById('groupFormError').textContent = 'Fehler beim Speichern: ' + error;
+            document.getElementById('groupFormError').classList.remove('d-none');
+        });
+    });
+    
+    function displayGroupFormErrors(errors) {
+        // Clear previous errors
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        document.querySelectorAll('.invalid-feedback').forEach(el => el.textContent = '');
+        document.getElementById('groupFormError').classList.add('d-none');
+        
+        if (typeof errors === 'string') {
+            document.getElementById('groupFormError').textContent = errors;
+            document.getElementById('groupFormError').classList.remove('d-none');
+            return;
+        }
+        
+        // Display field-specific errors
+        for (const [field, messages] of Object.entries(errors)) {
+            if (field === 'code') {
+                document.getElementById('groupCode').classList.add('is-invalid');
+                document.getElementById('groupCodeError').textContent = messages.join(', ');
+            } else if (field === 'name') {
+                document.getElementById('groupName').classList.add('is-invalid');
+                document.getElementById('groupNameError').textContent = messages.join(', ');
+            } else {
+                // General error
+                document.getElementById('groupFormError').textContent = messages.join(', ');
+                document.getElementById('groupFormError').classList.remove('d-none');
+            }
+        }
+    }
 });
 </script>
 {% endblock %}
