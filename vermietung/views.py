@@ -231,6 +231,88 @@ def _log_vertrag_stream_event(vertrag, event_type, actor=None, description=None,
         )
 
 
+# Helper functions for Adresse ActivityStream integration
+def _get_mandant_for_adresse(adresse=None):
+    """
+    Get Mandant for an Adresse.
+    
+    Since Adresse doesn't have a direct mandant field, we return the first available.
+    In multi-tenant setups, this should be based on the user's company.
+    
+    Args:
+        adresse: Adresse instance (optional, not used currently)
+        
+    Returns:
+        Mandant instance or None if no mandant can be determined
+    """
+    # Fallback: get first available mandant
+    # In a multi-tenant setup, this would be based on the user's company
+    return Mandant.objects.first()
+
+
+def _get_adresse_target_url(adresse):
+    """
+    Generate target URL for an Adresse based on its type.
+    
+    Args:
+        adresse: Adresse instance
+        
+    Returns:
+        str: Relative URL to the adresse detail page
+    """
+    # Route to appropriate detail view based on address type
+    if adresse.adressen_type == 'KUNDE':
+        return reverse('vermietung:kunde_detail', args=[adresse.pk])
+    elif adresse.adressen_type == 'STANDORT':
+        return reverse('vermietung:standort_detail', args=[adresse.pk])
+    elif adresse.adressen_type == 'LIEFERANT':
+        return reverse('vermietung:lieferant_detail', args=[adresse.pk])
+    else:  # 'Adresse' or other types
+        return reverse('vermietung:adresse_detail', args=[adresse.pk])
+
+
+def _log_adresse_stream_event(adresse, event_type, actor=None, description=None, severity='INFO'):
+    """
+    Log an ActivityStream event for an Adresse.
+    
+    Args:
+        adresse: Adresse instance
+        event_type: str, event type (e.g., 'address.created', 'address.updated', 'address.deleted')
+        actor: User instance who performed the action (optional)
+        description: str, additional description (optional)
+        severity: str, severity level (default: 'INFO')
+    """
+    mandant = _get_mandant_for_adresse(adresse)
+    
+    # If no mandant, cannot create stream event
+    if not mandant:
+        logger.warning(
+            f"Cannot create ActivityStream event for Adresse {adresse.pk}: "
+            f"No Mandant found"
+        )
+        return
+    
+    # Create title based on address type
+    type_display = adresse.get_adressen_type_display()
+    title = f'{type_display}: {adresse.full_name()}'
+    
+    try:
+        ActivityStreamService.add(
+            company=mandant,
+            domain='RENTAL',
+            activity_type=event_type,
+            title=title,
+            description=description or '',
+            target_url=_get_adresse_target_url(adresse),
+            actor=actor,
+            severity=severity
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to create ActivityStream event for Adresse {adresse.pk}: {e}"
+        )
+
+
 @login_required
 def download_dokument(request, dokument_id):
     """
@@ -432,6 +514,15 @@ def kunde_create(request):
         form = AdresseKundeForm(request.POST)
         if form.is_valid():
             kunde = form.save()
+            
+            # Log ActivityStream event for customer creation
+            _log_adresse_stream_event(
+                adresse=kunde,
+                event_type='customer.created',
+                actor=request.user,
+                description=f'Neuer Kunde angelegt: {kunde.strasse}, {kunde.plz} {kunde.ort}'
+            )
+            
             messages.success(request, f'Kunde "{kunde.full_name()}" wurde erfolgreich angelegt.')
             return redirect('vermietung:kunde_detail', pk=kunde.pk)
     else:
@@ -456,6 +547,15 @@ def kunde_edit(request, pk):
         form = AdresseKundeForm(request.POST, instance=kunde)
         if form.is_valid():
             kunde = form.save()
+            
+            # Log ActivityStream event for customer update
+            _log_adresse_stream_event(
+                adresse=kunde,
+                event_type='customer.updated',
+                actor=request.user,
+                description=f'Kunde aktualisiert: {kunde.strasse}, {kunde.plz} {kunde.ort}'
+            )
+            
             messages.success(request, f'Kunde "{kunde.full_name()}" wurde erfolgreich aktualisiert.')
             return redirect('vermietung:kunde_detail', pk=kunde.pk)
     else:
@@ -479,6 +579,14 @@ def kunde_delete(request, pk):
     """
     kunde = get_object_or_404(Adresse, pk=pk, adressen_type='KUNDE')
     kunde_name = kunde.full_name()
+    
+    # Log ActivityStream event before deletion
+    _log_adresse_stream_event(
+        adresse=kunde,
+        event_type='customer.deleted',
+        actor=request.user,
+        description=f'Kunde gelöscht: {kunde.strasse}, {kunde.plz} {kunde.ort}'
+    )
     
     try:
         kunde.delete()
@@ -558,6 +666,15 @@ def standort_create(request):
         form = AdresseStandortForm(request.POST)
         if form.is_valid():
             standort = form.save()
+            
+            # Log ActivityStream event for location creation
+            _log_adresse_stream_event(
+                adresse=standort,
+                event_type='location.created',
+                actor=request.user,
+                description=f'Neuer Standort angelegt: {standort.strasse}, {standort.plz} {standort.ort}'
+            )
+            
             messages.success(request, f'Standort "{standort.name}" wurde erfolgreich angelegt.')
             return redirect('vermietung:standort_detail', pk=standort.pk)
     else:
@@ -582,6 +699,15 @@ def standort_edit(request, pk):
         form = AdresseStandortForm(request.POST, instance=standort)
         if form.is_valid():
             standort = form.save()
+            
+            # Log ActivityStream event for location update
+            _log_adresse_stream_event(
+                adresse=standort,
+                event_type='location.updated',
+                actor=request.user,
+                description=f'Standort aktualisiert: {standort.strasse}, {standort.plz} {standort.ort}'
+            )
+            
             messages.success(request, f'Standort "{standort.name}" wurde erfolgreich aktualisiert.')
             return redirect('vermietung:standort_detail', pk=standort.pk)
     else:
@@ -610,6 +736,14 @@ def standort_delete(request, pk):
     if standort.mietobjekt_set.exists():
         messages.error(request, f'Standort "{standort_name}" kann nicht gelöscht werden, da es noch Mietobjekte an diesem Standort gibt.')
         return redirect('vermietung:standort_detail', pk=pk)
+    
+    # Log ActivityStream event before deletion
+    _log_adresse_stream_event(
+        adresse=standort,
+        event_type='location.deleted',
+        actor=request.user,
+        description=f'Standort gelöscht: {standort.strasse}, {standort.plz} {standort.ort}'
+    )
     
     try:
         standort.delete()
@@ -691,6 +825,15 @@ def lieferant_create(request):
         form = AdresseLieferantForm(request.POST)
         if form.is_valid():
             lieferant = form.save()
+            
+            # Log ActivityStream event for supplier creation
+            _log_adresse_stream_event(
+                adresse=lieferant,
+                event_type='supplier.created',
+                actor=request.user,
+                description=f'Neuer Lieferant angelegt: {lieferant.strasse}, {lieferant.plz} {lieferant.ort}'
+            )
+            
             messages.success(request, f'Lieferant "{lieferant.full_name()}" wurde erfolgreich angelegt.')
             return redirect('vermietung:lieferant_detail', pk=lieferant.pk)
     else:
@@ -715,6 +858,15 @@ def lieferant_edit(request, pk):
         form = AdresseLieferantForm(request.POST, instance=lieferant)
         if form.is_valid():
             lieferant = form.save()
+            
+            # Log ActivityStream event for supplier update
+            _log_adresse_stream_event(
+                adresse=lieferant,
+                event_type='supplier.updated',
+                actor=request.user,
+                description=f'Lieferant aktualisiert: {lieferant.strasse}, {lieferant.plz} {lieferant.ort}'
+            )
+            
             messages.success(request, f'Lieferant "{lieferant.full_name()}" wurde erfolgreich aktualisiert.')
             return redirect('vermietung:lieferant_detail', pk=lieferant.pk)
     else:
@@ -738,6 +890,14 @@ def lieferant_delete(request, pk):
     """
     lieferant = get_object_or_404(Adresse, pk=pk, adressen_type='LIEFERANT')
     lieferant_name = lieferant.full_name()
+    
+    # Log ActivityStream event before deletion
+    _log_adresse_stream_event(
+        adresse=lieferant,
+        event_type='supplier.deleted',
+        actor=request.user,
+        description=f'Lieferant gelöscht: {lieferant.strasse}, {lieferant.plz} {lieferant.ort}'
+    )
     
     try:
         lieferant.delete()
@@ -818,6 +978,15 @@ def adresse_create(request):
         form = AdresseForm(request.POST)
         if form.is_valid():
             adresse = form.save()
+            
+            # Log ActivityStream event for address creation
+            _log_adresse_stream_event(
+                adresse=adresse,
+                event_type='address.created',
+                actor=request.user,
+                description=f'Neue Adresse angelegt: {adresse.strasse}, {adresse.plz} {adresse.ort}'
+            )
+            
             messages.success(request, f'Adresse "{adresse.full_name()}" wurde erfolgreich angelegt.')
             return redirect('vermietung:adresse_detail', pk=adresse.pk)
     else:
@@ -842,6 +1011,15 @@ def adresse_edit(request, pk):
         form = AdresseForm(request.POST, instance=adresse)
         if form.is_valid():
             adresse = form.save()
+            
+            # Log ActivityStream event for address update
+            _log_adresse_stream_event(
+                adresse=adresse,
+                event_type='address.updated',
+                actor=request.user,
+                description=f'Adresse aktualisiert: {adresse.strasse}, {adresse.plz} {adresse.ort}'
+            )
+            
             messages.success(request, f'Adresse "{adresse.full_name()}" wurde erfolgreich aktualisiert.')
             return redirect('vermietung:adresse_detail', pk=adresse.pk)
     else:
@@ -865,6 +1043,14 @@ def adresse_delete(request, pk):
     """
     adresse = get_object_or_404(Adresse, pk=pk, adressen_type='Adresse')
     adresse_name = adresse.full_name()
+    
+    # Log ActivityStream event before deletion
+    _log_adresse_stream_event(
+        adresse=adresse,
+        event_type='address.deleted',
+        actor=request.user,
+        description=f'Adresse gelöscht: {adresse.strasse}, {adresse.plz} {adresse.ort}'
+    )
     
     try:
         adresse.delete()
