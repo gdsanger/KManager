@@ -127,7 +127,31 @@
                                 <i class="bi bi-speedometer2"></i> <span class="sidebar-text">Dashboard</span>
                             </a>
                         </li>
-                        
+                        <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
+                                        <i class="bi bi-geo-alt"></i> <span class="sidebar-text">Standorte</span>
+                                    </a>
+                                </li>
+                           <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
+                                        <i class="bi bi-house-door"></i> <span class="sidebar-text">Objekte</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'vertraege' in request.path or 'vertrag' in request.path %}active{% endif %}" href="{% url 'vermietung:vertrag_list' %}">
+                                        <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Verträge</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
+                                        <i class="bi bi-clipboard-check"></i> <span class="sidebar-text">Übergabeprotokolle</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'eingangsrechnung' in request.path %}active{% endif %}" href="{% url 'vermietung:eingangsrechnung_list' %}">
+                                        <i class="bi bi-receipt"></i> <span class="sidebar-text">Eingangsrechnungen</span>
+                                    </a>
+                                </li>
                         <!-- Adressen Section -->
                         <li class="nav-item nav-section">
                             <a class="nav-link nav-category" href="#adressenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}true{% else %}false{% endif %}">
@@ -182,83 +206,7 @@
                                 </li>
                             </ul>
                         </li>
-
-                        <!-- Gebäude Section (activities removed) -->
-                        <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#vermietungMenu" data-bs-toggle="collapse" aria-expanded="{% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'eingangsrechnung' in request.path %}true{% else %}false{% endif %}">
-                                <i class="bi bi-building"></i> <span class="sidebar-text">Gebäude</span>
-                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
-                            </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'standort' in request.path or 'mietobjekt' in request.path or 'vertrag' in request.path or 'uebergabe' in request.path or 'eingangsrechnung' in request.path %}show{% endif %}" id="vermietungMenu">
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'standort' in request.path %}active{% endif %}" href="{% url 'vermietung:standort_list' %}">
-                                        <i class="bi bi-geo-alt"></i> <span class="sidebar-text">Standorte</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'mietobjekt' in request.path %}active{% endif %}" href="{% url 'vermietung:mietobjekt_list' %}">
-                                        <i class="bi bi-house-door"></i> <span class="sidebar-text">Objekte</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'vertraege' in request.path or 'vertrag' in request.path %}active{% endif %}" href="{% url 'vermietung:vertrag_list' %}">
-                                        <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Verträge</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'uebergabe' in request.path %}active{% endif %}" href="{% url 'vermietung:uebergabeprotokoll_list' %}">
-                                        <i class="bi bi-clipboard-check"></i> <span class="sidebar-text">Übergabeprotokolle</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'eingangsrechnung' in request.path %}active{% endif %}" href="{% url 'vermietung:eingangsrechnung_list' %}">
-                                        <i class="bi bi-receipt"></i> <span class="sidebar-text">Eingangsrechnungen</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-
-                        <!-- Finanzen Section -->
-                        <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#finanzenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'kostenarten' in request.path %}true{% else %}false{% endif %}">
-                                <i class="bi bi-cash-coin"></i> <span class="sidebar-text">Finanzen</span>
-                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
-                            </a>
-                            <ul class="collapse nav flex-column ms-3 {% if 'kostenarten' in request.path %}show{% endif %}" id="finanzenMenu">
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if 'kostenarten' in request.path %}active{% endif %}" href="{% url 'vermietung:kostenarten_list' %}">
-                                        <i class="bi bi-tags"></i> <span class="sidebar-text">Kostenarten</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-
-                        <!-- Einstellungen Section (NEW) -->
-                        <li class="nav-item nav-section">
-                            <a class="nav-link nav-category" href="#einstellungenMenu" data-bs-toggle="collapse" aria-expanded="{% if request.resolver_match.url_name == 'mailtemplate_list' or request.resolver_match.url_name == 'smtp_settings' %}true{% else %}false{% endif %}">
-                                <i class="bi bi-gear"></i> <span class="sidebar-text">Einstellungen</span>
-                                <i class="bi bi-chevron-down ms-auto sidebar-text"></i>
-                            </a>
-                            <ul class="collapse nav flex-column ms-3 {% if request.resolver_match.url_name == 'mailtemplate_list' or request.resolver_match.url_name == 'smtp_settings' %}show{% endif %}" id="einstellungenMenu">
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'mailtemplate_list' %}active{% endif %}" href="{% url 'mailtemplate_list' %}">
-                                        <i class="bi bi-file-earmark-text"></i> <span class="sidebar-text">Template-Einstellungen</span>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'smtp_settings' %}active{% endif %}" href="{% url 'smtp_settings' %}">
-                                        <i class="bi bi-envelope-gear"></i> <span class="sidebar-text">E-Mail-Einstellungen</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-
-                        <!-- Support Link (NEW - always visible as last entry) -->
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'support_portal' %}active{% endif %}" href="{% url 'support_portal' %}">
-                                <i class="bi bi-headset"></i> <span class="sidebar-text">Support</span>
-                            </a>
-                        </li>
+                        
                     </ul>
                 </div>
             </nav>
