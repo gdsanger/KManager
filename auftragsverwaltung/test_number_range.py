@@ -28,16 +28,8 @@ class NumberRangeModelTestCase(TestCase):
             plz="54321",
             ort="Test City 2"
         )
-        self.doc_type_invoice = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="R"
-        )
-        self.doc_type_quote = DocumentType.objects.create(
-            key="quote",
-            name="Quote",
-            prefix="A"
-        )
+        self.doc_type_invoice = DocumentType.objects.get(key="invoice")
+        self.doc_type_quote = DocumentType.objects.get(key="quote")
     
     def test_create_number_range(self):
         """Test creating a number range"""
@@ -63,7 +55,7 @@ class NumberRangeModelTestCase(TestCase):
             reset_policy='YEARLY'
         )
         
-        expected = "Test Company 1 - Invoice (YEARLY)"
+        expected = "Test Company 1 - Rechnung (YEARLY)"
         self.assertEqual(str(nr), expected)
     
     def test_unique_constraint_company_document_type(self):
@@ -128,16 +120,8 @@ class NumberRangeServiceTestCase(TestCase):
             plz="12345",
             ort="Test City"
         )
-        self.doc_type_invoice = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="R"
-        )
-        self.doc_type_quote = DocumentType.objects.create(
-            key="quote",
-            name="Quote",
-            prefix="A"
-        )
+        self.doc_type_invoice = DocumentType.objects.get(key="invoice")
+        self.doc_type_quote = DocumentType.objects.get(key="quote")
     
     def test_get_next_number_auto_creates_number_range(self):
         """Test that get_next_number auto-creates a NumberRange if it doesn't exist"""
@@ -240,9 +224,9 @@ class NumberRangeServiceTestCase(TestCase):
         self.assertEqual(inv1, "R26-00001")
         self.assertEqual(inv2, "R26-00002")
         
-        # Quote numbers with prefix "A"
-        self.assertEqual(quote1, "A26-00001")
-        self.assertEqual(quote2, "A26-00002")
+        # Quote numbers with prefix "AN" (as per migration)
+        self.assertEqual(quote1, "AN26-00001")
+        self.assertEqual(quote2, "AN26-00002")
     
     def test_custom_format_string(self):
         """Test that custom format strings are respected"""
@@ -302,11 +286,7 @@ class NumberRangeConcurrencyTestCase(TestCase):
             plz="12345",
             ort="Test City"
         )
-        self.doc_type_invoice = DocumentType.objects.create(
-            key="invoice",
-            name="Invoice",
-            prefix="R"
-        )
+        self.doc_type_invoice = DocumentType.objects.get(key="invoice")
     
     def test_concurrent_number_generation(self):
         """Test that concurrent calls to get_next_number produce unique, sequential numbers"""
@@ -338,11 +318,7 @@ class NumberRangeConcurrencyTestCase(TestCase):
     
     def test_concurrent_access_different_document_types(self):
         """Test concurrent access with different document types"""
-        doc_type_quote = DocumentType.objects.create(
-            key="quote",
-            name="Quote",
-            prefix="A"
-        )
+        doc_type_quote = DocumentType.objects.get(key="quote")
         
         num_threads = 5
         test_date = date(2026, 1, 15)
@@ -380,4 +356,4 @@ class NumberRangeConcurrencyTestCase(TestCase):
             self.assertTrue(num.startswith("R26-"))
         
         for num in quote_numbers:
-            self.assertTrue(num.startswith("A26-"))
+            self.assertTrue(num.startswith("AN26-"))

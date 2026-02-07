@@ -16,27 +16,19 @@ class Command(BaseCommand):
         
         # Seed data according to requirements
         # key, name, prefix, is_invoice, is_correction, requires_due_date
+        # Keys must match those used in URLs (quote, order, invoice, delivery, credit)
         seed_data = [
             {
-                'key': 'angebot',
+                'key': 'quote',
                 'name': 'Angebot',
-                'prefix': 'A',
+                'prefix': 'AN',
                 'is_invoice': False,
                 'is_correction': False,
                 'requires_due_date': False,
                 'is_active': True,
             },
             {
-                'key': 'rechnung',
-                'name': 'Rechnung',
-                'prefix': 'R',
-                'is_invoice': True,
-                'is_correction': False,
-                'requires_due_date': True,
-                'is_active': True,
-            },
-            {
-                'key': 'auftrag',
+                'key': 'order',
                 'name': 'Auftragsbestätigung',
                 'prefix': 'AB',
                 'is_invoice': False,
@@ -45,7 +37,16 @@ class Command(BaseCommand):
                 'is_active': True,
             },
             {
-                'key': 'lieferschein',
+                'key': 'invoice',
+                'name': 'Rechnung',
+                'prefix': 'R',
+                'is_invoice': True,
+                'is_correction': False,
+                'requires_due_date': True,
+                'is_active': True,
+            },
+            {
+                'key': 'delivery',
                 'name': 'Lieferschein',
                 'prefix': 'LS',
                 'is_invoice': False,
@@ -54,12 +55,12 @@ class Command(BaseCommand):
                 'is_active': True,
             },
             {
-                'key': 'gutschrift',
-                'name': 'Rechnungskorrektur',
-                'prefix': 'RK',
-                'is_invoice': True,
+                'key': 'credit',
+                'name': 'Gutschrift',
+                'prefix': 'GS',
+                'is_invoice': False,
                 'is_correction': True,
-                'requires_due_date': True,
+                'requires_due_date': False,
                 'is_active': True,
             },
         ]
