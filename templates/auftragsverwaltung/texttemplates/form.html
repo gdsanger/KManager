@@ -1,4 +1,5 @@
 {% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load static %}
 
 {% block title %}{% if template %}Textbaustein bearbeiten{% else %}Textbaustein erstellen{% endif %} - Domus{% endblock %}
 
@@ -6,7 +7,7 @@
 
 {% block extra_css %}
 <!-- Quill CSS -->
-<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
 <style>
     #editor-container {
         height: 300px;
@@ -115,7 +116,7 @@
 
 {% block extra_js %}
 <!-- Quill JS -->
-<script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+<script src="{% static 'quill/quill.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize Quill editor with toolbar configuration
