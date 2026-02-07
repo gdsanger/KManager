@@ -1,0 +1,193 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load static %}
+
+{% block title %}{{ entry.document_number }} - Rechnungsausgangsjournal - Domus{% endblock %}
+
+{% block page_title %}Rechnungsausgangsjournal: {{ entry.document_number }}{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="{% url 'auftragsverwaltung:journal_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Zurück zur Liste
+    </a>
+    {% if entry.document %}
+    <a href="{% url 'auftragsverwaltung:document_detail' entry.document.document_type.key entry.document.pk %}" class="btn btn-outline-info">
+        <i class="bi bi-file-earmark-text"></i> Zum Dokument
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Read-only Info Banner -->
+<div class="alert alert-secondary mb-3" role="alert">
+    <i class="bi bi-info-circle"></i>
+    <strong>Hinweis:</strong> Dies ist eine schreibgeschützte Ansicht. Journaleinträge können nicht bearbeitet werden.
+</div>
+
+<!-- Main Content Grid -->
+<div class="row">
+    <!-- Left Column: Document Information -->
+    <div class="col-lg-8">
+        <!-- Document Header Section -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Dokumentinformationen</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Mandant</label>
+                        <div class="fw-bold">{{ entry.company.name }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Belegnummer</label>
+                        <div class="fw-bold">{{ entry.document_number }}</div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Belegdatum</label>
+                        <div>{{ entry.document_date|date:"d.m.Y" }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Belegart</label>
+                        <div>
+                            {% if entry.document_kind == 'INVOICE' %}
+                                <span class="badge bg-primary">{{ entry.get_document_kind_display }}</span>
+                            {% elif entry.document_kind == 'CREDIT_NOTE' %}
+                                <span class="badge bg-warning">{{ entry.get_document_kind_display }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ entry.get_document_kind_display }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Kundenname</label>
+                        <div>{{ entry.customer_name }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Debitorennummer</label>
+                        <div>{{ entry.debtor_number|default:"—" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Amounts Section -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Beträge nach Steuersatz</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-dark table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Steuersatz</th>
+                            <th class="text-end">Nettobetrag</th>
+                            <th class="text-end">Erlöskonto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if entry.net_0 > 0 %}
+                        <tr>
+                            <td>0%</td>
+                            <td class="text-end">{{ entry.net_0|floatformat:2 }} €</td>
+                            <td class="text-end">{{ entry.revenue_account_0|default:"—" }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if entry.net_7 > 0 %}
+                        <tr>
+                            <td>7%</td>
+                            <td class="text-end">{{ entry.net_7|floatformat:2 }} €</td>
+                            <td class="text-end">{{ entry.revenue_account_7|default:"—" }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if entry.net_19 > 0 %}
+                        <tr>
+                            <td>19%</td>
+                            <td class="text-end">{{ entry.net_19|floatformat:2 }} €</td>
+                            <td class="text-end">{{ entry.revenue_account_19|default:"—" }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="table-secondary">
+                            <td><strong>Gesamt Netto</strong></td>
+                            <td class="text-end"><strong>{{ total_net|floatformat:2 }} €</strong></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>Steuerbetrag</td>
+                            <td class="text-end">{{ entry.tax_amount|floatformat:2 }} €</td>
+                            <td></td>
+                        </tr>
+                        <tr class="table-primary">
+                            <td><strong>Bruttobetrag</strong></td>
+                            <td class="text-end"><strong>{{ entry.gross_amount|floatformat:2 }} €</strong></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Export Status & Meta -->
+    <div class="col-lg-4">
+        <!-- Export Status Section -->
+        <div class="card bg-dark border-secondary mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-upload"></i> Export-Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Status</label>
+                    <div>
+                        {% if entry.export_status == 'OPEN' %}
+                            <span class="badge bg-warning">{{ entry.get_export_status_display }}</span>
+                        {% elif entry.export_status == 'EXPORTED' %}
+                            <span class="badge bg-success">{{ entry.get_export_status_display }}</span>
+                        {% elif entry.export_status == 'ERROR' %}
+                            <span class="badge bg-danger">{{ entry.get_export_status_display }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ entry.get_export_status_display }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Exportiert am</label>
+                    <div>{{ entry.exported_at|date:"d.m.Y H:i"|default:"—" }}</div>
+                </div>
+                <div>
+                    <label class="form-label text-muted small">Export-Batch-ID</label>
+                    <div>{{ entry.export_batch_id|default:"—" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Meta Information Section -->
+        <div class="card bg-dark border-secondary">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Meta-Informationen</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Erstellt am</label>
+                    <div>{{ entry.created_at|date:"d.m.Y H:i" }}</div>
+                </div>
+                {% if entry.document %}
+                <div>
+                    <label class="form-label text-muted small">Verknüpftes Dokument</label>
+                    <div>
+                        <a href="{% url 'auftragsverwaltung:document_detail' entry.document.document_type.key entry.document.pk %}" class="text-decoration-none">
+                            {{ entry.document.number }}
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

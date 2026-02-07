@@ -9,8 +9,8 @@ from django_tables2 import RequestConfig
 import json
 
 from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, TextTemplate
-from .tables import SalesDocumentTable, ContractTable, TextTemplateTable
-from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter
+from .tables import SalesDocumentTable, ContractTable, TextTemplateTable, OutgoingInvoiceJournalTable
+from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter, OutgoingInvoiceJournalFilter
 from .services import (
     DocumentCalculationService,
     TaxDeterminationService,
@@ -20,6 +20,7 @@ from .services import (
 from .utils import sanitize_html
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit
 from core.services.activity_stream import ActivityStreamService
+from finanzen.models import OutgoingInvoiceJournalEntry
 
 
 def normalize_foreign_key_id(value):
@@ -1656,4 +1657,79 @@ def texttemplate_delete(request, pk):
     }
     
     return render(request, 'auftragsverwaltung/texttemplates/delete_confirm.html', context)
+
+
+# ===============================================================================
+# Outgoing Invoice Journal Views (Read-Only)
+# ===============================================================================
+
+@login_required
+def journal_list(request):
+    """
+    List view for Outgoing Invoice Journal Entries (read-only).
+    
+    Displays a filterable, sortable, paginated list of journal entries.
+    This is a read-only view - no create/update/delete operations.
+    """
+    # Get the default company (for now, we'll use the first available)
+    try:
+        company = Mandant.objects.first()
+    except Mandant.DoesNotExist:
+        company = None
+    
+    # Base queryset with optimized select/prefetch
+    queryset = OutgoingInvoiceJournalEntry.objects.select_related(
+        'company', 'document'
+    )
+    
+    # Filter by company if available
+    if company:
+        queryset = queryset.filter(company=company)
+    
+    # Apply filters
+    filter_set = OutgoingInvoiceJournalFilter(request.GET, queryset=queryset)
+    
+    # Create table with filtered data
+    table = OutgoingInvoiceJournalTable(filter_set.qs)
+    
+    # Set default ordering to -document_number (descending)
+    table.order_by = request.GET.get('sort', '-document_number')
+    
+    # Configure pagination (25 per page)
+    RequestConfig(request, paginate={'per_page': 25}).configure(table)
+    
+    # Prepare context
+    context = {
+        'table': table,
+        'filter': filter_set,
+    }
+    
+    return render(request, 'auftragsverwaltung/journal/list.html', context)
+
+
+@login_required
+def journal_detail(request, pk):
+    """
+    Detail view for an Outgoing Invoice Journal Entry (read-only).
+    
+    Shows all journal entry fields in a read-only format.
+    No edit capabilities - this is a pure display view.
+    
+    Args:
+        pk: Primary key of the journal entry
+    """
+    entry = get_object_or_404(
+        OutgoingInvoiceJournalEntry.objects.select_related('company', 'document'),
+        pk=pk
+    )
+    
+    # Calculate total net amount for display
+    total_net = entry.net_0 + entry.net_7 + entry.net_19
+    
+    context = {
+        'entry': entry,
+        'total_net': total_net,
+    }
+    
+    return render(request, 'auftragsverwaltung/journal/detail.html', context)
 
