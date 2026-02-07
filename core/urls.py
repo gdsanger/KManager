@@ -34,6 +34,7 @@ urlpatterns = [
     path('items/new/', views.item_create_new, name='item_create_new'),
     path('items/new-ajax/', views.item_new_ajax, name='item_new_ajax'),
     path('items/edit/<int:pk>/', views.item_edit_ajax, name='item_edit_ajax'),
+    path('items/cost-type-2-options/', views.cost_type_2_options, name='cost_type_2_options'),
     path('items/groups/<int:pk>/', views.item_group_get, name='item_group_get'),
     path('items/groups/save/', views.item_group_save, name='item_group_save'),
 ]

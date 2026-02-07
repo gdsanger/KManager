@@ -185,7 +185,7 @@ class ItemForm(forms.ModelForm):
             'net_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'tax_rate': forms.Select(attrs={'class': 'form-select'}),
-            'cost_type_1': forms.Select(attrs={'class': 'form-select'}),
+            'cost_type_1': forms.Select(attrs={'class': 'form-select', 'hx-get': '/items/cost-type-2-options/', 'hx-target': '#cost-type-2-wrapper', 'hx-trigger': 'change'}),
             'cost_type_2': forms.Select(attrs={'class': 'form-select'}),
             'item_group': forms.Select(attrs={'class': 'form-select'}),
             'item_type': forms.Select(attrs={'class': 'form-select'}),
@@ -200,8 +200,8 @@ class ItemForm(forms.ModelForm):
             'net_price': 'Verkaufspreis netto *',
             'purchase_price': 'Einkaufspreis netto *',
             'tax_rate': 'Steuersatz *',
-            'cost_type_1': 'Kostenart 1 *',
-            'cost_type_2': 'Kostenart 2',
+            'cost_type_1': 'Kostenart 1 (Hauptkostenart) *',
+            'cost_type_2': 'Kostenart 2 (Unterkostenart)',
             'item_group': 'Warengruppe',
             'item_type': 'Artikeltyp *',
             'is_discountable': 'Rabattfähig',
@@ -213,7 +213,62 @@ class ItemForm(forms.ModelForm):
             'short_text_2': 'Optionaler zweiter Kurztext',
             'long_text': 'Detaillierte Beschreibung',
             'item_group': 'Optional: Zuordnung zu einer Warengruppe',
+            'cost_type_1': 'Wählen Sie eine Hauptkostenart',
+            'cost_type_2': 'Optional: Unterkostenart der gewählten Hauptkostenart',
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filter cost_type_1 to only show Hauptkostenarten (parent=None)
+        self.fields['cost_type_1'].queryset = Kostenart.objects.filter(parent__isnull=True)
+        
+        # Filter cost_type_2 based on selected cost_type_1
+        if self.instance and self.instance.pk and self.instance.cost_type_1:
+            # Edit mode: filter by the saved cost_type_1
+            self.fields['cost_type_2'].queryset = Kostenart.objects.filter(
+                parent=self.instance.cost_type_1
+            )
+        elif self.data.get('cost_type_1'):
+            # Form submission with data: filter by submitted cost_type_1
+            try:
+                cost_type_1_id = self.data.get('cost_type_1')
+                self.fields['cost_type_2'].queryset = Kostenart.objects.filter(
+                    parent_id=cost_type_1_id
+                )
+            except (ValueError, TypeError):
+                self.fields['cost_type_2'].queryset = Kostenart.objects.none()
+        else:
+            # New item or no cost_type_1 selected: empty queryset
+            self.fields['cost_type_2'].queryset = Kostenart.objects.none()
+        
+        # Make cost_type_2 not required
+        self.fields['cost_type_2'].required = False
+    
+    def clean(self):
+        """Validate cost type selections"""
+        cleaned_data = super().clean()
+        cost_type_1 = cleaned_data.get('cost_type_1')
+        cost_type_2 = cleaned_data.get('cost_type_2')
+        
+        # Validate that cost_type_1 is a Hauptkostenart (no parent)
+        if cost_type_1 and cost_type_1.parent is not None:
+            raise forms.ValidationError({
+                'cost_type_1': 'Kostenart 1 muss eine Hauptkostenart sein (keine Unterkostenart).'
+            })
+        
+        # Validate that cost_type_2 (if set) is a child of cost_type_1
+        if cost_type_2:
+            if not cost_type_1:
+                raise forms.ValidationError({
+                    'cost_type_2': 'Kostenart 2 kann nur gewählt werden, wenn Kostenart 1 gesetzt ist.'
+                })
+            if cost_type_2.parent != cost_type_1:
+                raise forms.ValidationError({
+                    'cost_type_2': f'Kostenart 2 muss eine Unterkostenart von "{cost_type_1.name}" sein.'
+                })
+        
+        return cleaned_data
 
 
 class ItemGroupForm(forms.ModelForm):

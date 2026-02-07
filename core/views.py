@@ -597,3 +597,34 @@ def item_group_save(request):
     except Exception as e:
         return JsonResponse({'success': False, 'errors': f'Fehler beim Speichern: {str(e)}'})
 
+
+@login_required
+def cost_type_2_options(request):
+    """
+    HTMX endpoint to get filtered cost_type_2 options based on selected cost_type_1.
+    Returns HTML partial with updated select options.
+    """
+    from core.models import Kostenart
+    
+    cost_type_1_id = request.GET.get('cost_type_1', '')
+    
+    # Create a temporary form to render the cost_type_2 field
+    form = ItemForm()
+    
+    # Filter cost_type_2 options based on cost_type_1
+    if cost_type_1_id:
+        try:
+            form.fields['cost_type_2'].queryset = Kostenart.objects.filter(
+                parent_id=cost_type_1_id
+            )
+        except (ValueError, TypeError):
+            form.fields['cost_type_2'].queryset = Kostenart.objects.none()
+    else:
+        form.fields['cost_type_2'].queryset = Kostenart.objects.none()
+    
+    # Disable the field if no cost_type_1 is selected
+    if not cost_type_1_id:
+        form.fields['cost_type_2'].widget.attrs['disabled'] = 'disabled'
+    
+    return render(request, 'core/partials/cost_type_2_select.html', {'form': form})
+
