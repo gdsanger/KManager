@@ -232,16 +232,13 @@ def _log_vertrag_stream_event(vertrag, event_type, actor=None, description=None,
 
 
 # Helper functions for Adresse ActivityStream integration
-def _get_mandant_for_adresse(adresse=None):
+def _get_mandant_for_adresse():
     """
     Get Mandant for an Adresse.
     
     Since Adresse doesn't have a direct mandant field, we return the first available.
     In multi-tenant setups, this should be based on the user's company.
     
-    Args:
-        adresse: Adresse instance (optional, not used currently)
-        
     Returns:
         Mandant instance or None if no mandant can be determined
     """
@@ -275,14 +272,16 @@ def _log_adresse_stream_event(adresse, event_type, actor=None, description=None,
     """
     Log an ActivityStream event for an Adresse.
     
+    Auto-generates a description if not provided based on the event type.
+    
     Args:
         adresse: Adresse instance
         event_type: str, event type (e.g., 'address.created', 'address.updated', 'address.deleted')
         actor: User instance who performed the action (optional)
-        description: str, additional description (optional)
+        description: str, additional description (optional, auto-generated if not provided)
         severity: str, severity level (default: 'INFO')
     """
-    mandant = _get_mandant_for_adresse(adresse)
+    mandant = _get_mandant_for_adresse()
     
     # If no mandant, cannot create stream event
     if not mandant:
@@ -296,13 +295,34 @@ def _log_adresse_stream_event(adresse, event_type, actor=None, description=None,
     type_display = adresse.get_adressen_type_display()
     title = f'{type_display}: {adresse.full_name()}'
     
+    # Auto-generate description if not provided
+    if description is None:
+        action_map = {
+            'created': 'angelegt',
+            'updated': 'aktualisiert',
+            'deleted': 'gelöscht',
+        }
+        # Extract action from event_type (e.g., 'address.created' -> 'created')
+        action = event_type.split('.')[-1]
+        action_verb = action_map.get(action, action)
+        
+        # Generate description based on address type
+        type_name_map = {
+            'Adresse': 'Adresse',
+            'KUNDE': 'Kunde',
+            'STANDORT': 'Standort',
+            'LIEFERANT': 'Lieferant',
+        }
+        type_name = type_name_map.get(adresse.adressen_type, 'Adresse')
+        description = f'{type_name} {action_verb}: {adresse.strasse}, {adresse.plz} {adresse.ort}'
+    
     try:
         ActivityStreamService.add(
             company=mandant,
             domain='RENTAL',
             activity_type=event_type,
             title=title,
-            description=description or '',
+            description=description,
             target_url=_get_adresse_target_url(adresse),
             actor=actor,
             severity=severity
@@ -519,8 +539,7 @@ def kunde_create(request):
             _log_adresse_stream_event(
                 adresse=kunde,
                 event_type='customer.created',
-                actor=request.user,
-                description=f'Neuer Kunde angelegt: {kunde.strasse}, {kunde.plz} {kunde.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Kunde "{kunde.full_name()}" wurde erfolgreich angelegt.')
@@ -552,8 +571,7 @@ def kunde_edit(request, pk):
             _log_adresse_stream_event(
                 adresse=kunde,
                 event_type='customer.updated',
-                actor=request.user,
-                description=f'Kunde aktualisiert: {kunde.strasse}, {kunde.plz} {kunde.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Kunde "{kunde.full_name()}" wurde erfolgreich aktualisiert.')
@@ -584,8 +602,7 @@ def kunde_delete(request, pk):
     _log_adresse_stream_event(
         adresse=kunde,
         event_type='customer.deleted',
-        actor=request.user,
-        description=f'Kunde gelöscht: {kunde.strasse}, {kunde.plz} {kunde.ort}'
+        actor=request.user
     )
     
     try:
@@ -671,8 +688,7 @@ def standort_create(request):
             _log_adresse_stream_event(
                 adresse=standort,
                 event_type='location.created',
-                actor=request.user,
-                description=f'Neuer Standort angelegt: {standort.strasse}, {standort.plz} {standort.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Standort "{standort.name}" wurde erfolgreich angelegt.')
@@ -704,8 +720,7 @@ def standort_edit(request, pk):
             _log_adresse_stream_event(
                 adresse=standort,
                 event_type='location.updated',
-                actor=request.user,
-                description=f'Standort aktualisiert: {standort.strasse}, {standort.plz} {standort.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Standort "{standort.name}" wurde erfolgreich aktualisiert.')
@@ -741,8 +756,7 @@ def standort_delete(request, pk):
     _log_adresse_stream_event(
         adresse=standort,
         event_type='location.deleted',
-        actor=request.user,
-        description=f'Standort gelöscht: {standort.strasse}, {standort.plz} {standort.ort}'
+        actor=request.user
     )
     
     try:
@@ -830,8 +844,7 @@ def lieferant_create(request):
             _log_adresse_stream_event(
                 adresse=lieferant,
                 event_type='supplier.created',
-                actor=request.user,
-                description=f'Neuer Lieferant angelegt: {lieferant.strasse}, {lieferant.plz} {lieferant.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Lieferant "{lieferant.full_name()}" wurde erfolgreich angelegt.')
@@ -863,8 +876,7 @@ def lieferant_edit(request, pk):
             _log_adresse_stream_event(
                 adresse=lieferant,
                 event_type='supplier.updated',
-                actor=request.user,
-                description=f'Lieferant aktualisiert: {lieferant.strasse}, {lieferant.plz} {lieferant.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Lieferant "{lieferant.full_name()}" wurde erfolgreich aktualisiert.')
@@ -895,8 +907,7 @@ def lieferant_delete(request, pk):
     _log_adresse_stream_event(
         adresse=lieferant,
         event_type='supplier.deleted',
-        actor=request.user,
-        description=f'Lieferant gelöscht: {lieferant.strasse}, {lieferant.plz} {lieferant.ort}'
+        actor=request.user
     )
     
     try:
@@ -983,8 +994,7 @@ def adresse_create(request):
             _log_adresse_stream_event(
                 adresse=adresse,
                 event_type='address.created',
-                actor=request.user,
-                description=f'Neue Adresse angelegt: {adresse.strasse}, {adresse.plz} {adresse.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Adresse "{adresse.full_name()}" wurde erfolgreich angelegt.')
@@ -1016,8 +1026,7 @@ def adresse_edit(request, pk):
             _log_adresse_stream_event(
                 adresse=adresse,
                 event_type='address.updated',
-                actor=request.user,
-                description=f'Adresse aktualisiert: {adresse.strasse}, {adresse.plz} {adresse.ort}'
+                actor=request.user
             )
             
             messages.success(request, f'Adresse "{adresse.full_name()}" wurde erfolgreich aktualisiert.')
@@ -1048,8 +1057,7 @@ def adresse_delete(request, pk):
     _log_adresse_stream_event(
         adresse=adresse,
         event_type='address.deleted',
-        actor=request.user,
-        description=f'Adresse gelöscht: {adresse.strasse}, {adresse.plz} {adresse.ort}'
+        actor=request.user
     )
     
     try:
