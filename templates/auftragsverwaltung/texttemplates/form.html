@@ -120,7 +120,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize Quill editor with toolbar configuration
-    var quill = new Quill('#editor-container', {
+    const quill = new Quill('#editor-container', {
         theme: 'snow',
         modules: {
             toolbar: [
@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Load initial content from template if exists
-    var initialContent = {% if template %}'{{ template.content|escapejs }}'{% else %}''{% endif %};
+    const initialContent = {% if template %}'{{ template.content|escapejs }}'{% else %}''{% endif %};
     if (initialContent) {
         // Set HTML content in Quill
         quill.root.innerHTML = initialContent;
@@ -142,18 +142,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update hidden field on text change
     quill.on('text-change', function() {
-        var html = quill.root.innerHTML;
-        document.getElementById('content').value = html;
+        document.getElementById('content').value = quill.root.innerHTML;
     });
     
     // Set initial value in hidden field
     document.getElementById('content').value = quill.root.innerHTML;
-    
-    // Before form submit, ensure hidden field is updated
-    var form = document.querySelector('form');
-    form.addEventListener('submit', function(e) {
-        document.getElementById('content').value = quill.root.innerHTML;
-    });
 });
 </script>
 {% endblock %}

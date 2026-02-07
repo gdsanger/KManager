@@ -1458,7 +1458,6 @@ def texttemplate_create(request):
         key = request.POST.get('key', '').strip()
         title = request.POST.get('title', '').strip()
         type = request.POST.get('type', '').strip()
-        content = request.POST.get('content', '').strip()
         is_active = request.POST.get('is_active') == 'on'
         
         try:
@@ -1466,16 +1465,13 @@ def texttemplate_create(request):
         except (ValueError, TypeError):
             sort_order = 0
         
-        # Sanitize HTML content
-        sanitized_content = sanitize_html(content)
-        
-        # Create text template
+        # Create text template with sanitized HTML content
         template = TextTemplate.objects.create(
             company=company,
             key=key,
             title=title,
             type=type,
-            content=sanitized_content,
+            content=sanitize_html(request.POST.get('content', '').strip()),
             is_active=is_active,
             sort_order=sort_order
         )
@@ -1502,7 +1498,6 @@ def texttemplate_update(request, pk):
         template.key = request.POST.get('key', '').strip()
         template.title = request.POST.get('title', '').strip()
         template.type = request.POST.get('type', '').strip()
-        content = request.POST.get('content', '').strip()
         template.is_active = request.POST.get('is_active') == 'on'
         
         try:
@@ -1511,7 +1506,7 @@ def texttemplate_update(request, pk):
             template.sort_order = 0
         
         # Sanitize HTML content
-        template.content = sanitize_html(content)
+        template.content = sanitize_html(request.POST.get('content', '').strip())
         
         template.save()
         

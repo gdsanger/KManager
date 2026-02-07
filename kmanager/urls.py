@@ -22,7 +22,7 @@ from django.conf.urls.static import static
 from .views import CustomLogoutView
 
 urlpatterns = [
-    path('admin/', admin.site.urls'),
+    path('admin/', admin.site.urls),
     path('login/', auth_views.LoginView.as_view(), name='login'),
     path('logout/', CustomLogoutView.as_view(), name='logout'),
     
