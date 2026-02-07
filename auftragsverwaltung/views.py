@@ -18,7 +18,7 @@ from .services import (
     get_next_number
 )
 from .utils import sanitize_html
-from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart
+from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit
 from core.services.activity_stream import ActivityStreamService
 
 
@@ -209,6 +209,7 @@ def document_detail(request, doc_key, pk):
     tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
     companies = Mandant.objects.all().order_by('name')
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
+    units = Unit.objects.all().order_by('name')  # All available units
     
     # Get document lines (ordered by position_no)
     lines = document.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2').order_by('position_no')
@@ -236,6 +237,7 @@ def document_detail(request, doc_key, pk):
         'payment_terms': payment_terms,
         'tax_rates': tax_rates,
         'kostenarten1': kostenarten1,
+        'units': units,
         'lines': lines,
         'header_templates': header_templates,
         'footer_templates': footer_templates,
@@ -334,6 +336,7 @@ def document_create(request, doc_key):
     companies = Mandant.objects.all().order_by('name')
     tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
+    units = Unit.objects.all().order_by('name')  # All available units
     
     # Get available text templates for this company
     header_templates = TextTemplate.objects.filter(
@@ -357,6 +360,7 @@ def document_create(request, doc_key):
         'payment_terms': payment_terms,
         'tax_rates': tax_rates,
         'kostenarten1': kostenarten1,
+        'units': units,
         'is_create': True,
         'header_templates': header_templates,
         'footer_templates': footer_templates,
@@ -642,6 +646,19 @@ def ajax_add_line(request, doc_key, pk):
         max_position = document.lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
         position_no = max_position + 1
         
+        # Get unit and discount if provided
+        unit_id = data.get('unit_id')
+        discount = data.get('discount')
+        
+        # Safely convert discount to Decimal
+        if discount not in (None, ''):
+            try:
+                discount_value = Decimal(str(discount))
+            except (ValueError, TypeError):
+                discount_value = Decimal('0.00')
+        else:
+            discount_value = Decimal('0.00')
+        
         # Create line
         line = SalesDocumentLine.objects.create(
             document=document,
@@ -655,7 +672,9 @@ def ajax_add_line(request, doc_key, pk):
             long_text=long_text,
             description=description,
             quantity=quantity,
+            unit_id=normalize_foreign_key_id(unit_id),
             unit_price_net=unit_price_net,
+            discount=discount_value,
             is_discountable=is_discountable,
             kostenart1_id=normalize_foreign_key_id(kostenart1_id),
             kostenart2_id=normalize_foreign_key_id(kostenart2_id),
@@ -676,7 +695,9 @@ def ajax_add_line(request, doc_key, pk):
                 'long_text': line.long_text,
                 'description': line.description,
                 'quantity': str(line.quantity),
+                'unit_id': line.unit.pk if line.unit else None,
                 'unit_price_net': str(line.unit_price_net),
+                'discount': str(line.discount),
                 'tax_rate': str(line.tax_rate.rate),
                 'tax_rate_id': line.tax_rate.pk,
                 'line_net': str(line.line_net),
@@ -736,6 +757,17 @@ def ajax_update_line(request, doc_key, pk, line_id):
             line.tax_rate = get_object_or_404(TaxRate, pk=data['tax_rate_id'])
         if 'is_selected' in data:
             line.is_selected = data['is_selected']
+        if 'unit_id' in data:
+            line.unit_id = normalize_foreign_key_id(data['unit_id'])
+        if 'discount' in data:
+            discount_value = data['discount']
+            if discount_value not in (None, ''):
+                try:
+                    line.discount = Decimal(str(discount_value))
+                except (ValueError, TypeError):
+                    line.discount = Decimal('0.00')
+            else:
+                line.discount = Decimal('0.00')
         if 'kostenart1_id' in data:
             line.kostenart1_id = normalize_foreign_key_id(data['kostenart1_id'])
         if 'kostenart2_id' in data:
@@ -755,7 +787,9 @@ def ajax_update_line(request, doc_key, pk, line_id):
                 'short_text_2': line.short_text_2,
                 'long_text': line.long_text,
                 'quantity': str(line.quantity),
+                'unit_id': line.unit.pk if line.unit else None,
                 'unit_price_net': str(line.unit_price_net),
+                'discount': str(line.discount),
                 'description': line.description,
                 'line_net': str(line.line_net),
                 'line_tax': str(line.line_tax),
