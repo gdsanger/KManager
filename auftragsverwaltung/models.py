@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from decimal import Decimal
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
+from core.models import Unit, TaxRate, Kostenart
 
 
 class DocumentType(models.Model):
@@ -612,6 +613,16 @@ class SalesDocumentLine(models.Model):
         verbose_name="Beschreibung",
         help_text="Positionsbeschreibung (generiert aus Kurztexten)"
     )
+    unit = models.ForeignKey(
+        Unit,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_document_lines',
+        verbose_name="Mengeneinheit"
+    )
+
+
     quantity = models.DecimalField(
         max_digits=12,
         decimal_places=4,
