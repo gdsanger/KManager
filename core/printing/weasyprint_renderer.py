@@ -13,8 +13,10 @@ _weasyprint_import_error = None
 try:
     from weasyprint import HTML, CSS
     from weasyprint.text.fonts import FontConfiguration
-except Exception as e:
-    # Allow imports to succeed even if WeasyPrint is not installed
+except (ImportError, OSError) as e:
+    # Allow imports to succeed even if WeasyPrint is not installed or has missing dependencies
+    # ImportError: Module not found or import failed
+    # OSError: Missing system dependencies (e.g., Pango, Cairo, GDK-PixBuf)
     # This allows the module to be imported during migrations, etc.
     # Store the actual error for better diagnostics
     _weasyprint_import_error = e
@@ -46,26 +48,35 @@ class WeasyPrintRenderer(IPdfRenderer):
             additional_css: Optional additional CSS to apply
         """
         if HTML is None:
-            # Provide detailed error message with the actual import error
-            error_msg = "WeasyPrint could not be imported."
+            # Build detailed error message with the actual import error
+            error_parts = ["WeasyPrint could not be imported."]
             
             if _weasyprint_import_error is not None:
                 # Include the actual error that occurred
-                error_msg += f"\n\nActual error: {type(_weasyprint_import_error).__name__}: {_weasyprint_import_error}"
+                error_parts.append(
+                    f"\nActual error: {type(_weasyprint_import_error).__name__}: "
+                    f"{_weasyprint_import_error}"
+                )
                 
                 # Add helpful hints based on error type
                 if isinstance(_weasyprint_import_error, ModuleNotFoundError):
-                    error_msg += "\n\nWeasyPrint is not installed. Install it with: pip install weasyprint"
+                    error_parts.append(
+                        "\nWeasyPrint is not installed. "
+                        "Install it with: pip install weasyprint"
+                    )
                 else:
-                    error_msg += "\n\nWeasyPrint is installed but failed to load. This may be due to:"
-                    error_msg += "\n- Missing system dependencies (e.g., Pango, Cairo, GDK-PixBuf)"
-                    error_msg += "\n- Incompatible Python version"
-                    error_msg += "\n- Corrupted installation"
-                    error_msg += "\n\nTry reinstalling: pip install --force-reinstall weasyprint"
+                    error_parts.extend([
+                        "\nWeasyPrint is installed but failed to load. "
+                        "This may be due to:",
+                        "\n- Missing system dependencies (e.g., Pango, Cairo, GDK-PixBuf)",
+                        "\n- Incompatible Python version",
+                        "\n- Corrupted installation",
+                        "\n\nTry reinstalling: pip install --force-reinstall weasyprint"
+                    ])
             else:
-                error_msg += "\n\nInstall it with: pip install weasyprint"
+                error_parts.append("\nInstall it with: pip install weasyprint")
             
-            raise ImportError(error_msg)
+            raise ImportError("".join(error_parts))
         
         self.additional_css = additional_css
         self._font_config = FontConfiguration()
