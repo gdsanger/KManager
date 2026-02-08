@@ -575,3 +575,65 @@ class ContractPreviewCalculationTestCase(TestCase):
         self.assertEqual(Decimal(totals['total_net']), Decimal('350.00'))
         self.assertEqual(Decimal(totals['total_tax']), Decimal('48.50'))
         self.assertEqual(Decimal(totals['total_gross']), Decimal('398.50'))
+    
+    def test_contract_list_shows_multiple_companies(self):
+        """Test that contract list shows contracts from multiple companies (Issue #336)"""
+        # Create a second company
+        company2 = Mandant.objects.create(
+            name='Second Company GmbH',
+            adresse='Andere Strasse 2',
+            plz='54321',
+            ort='Andere Stadt',
+            land='Deutschland',
+            steuernummer='987/654/32109',
+            ust_id_nr='DE987654321'
+        )
+        
+        # Create NumberRange for second company
+        NumberRange.objects.create(
+            company=company2,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}'
+        )
+        
+        # Create a second customer
+        customer2 = Adresse.objects.create(
+            adressen_type='KUNDE',
+            name='Customer Two',
+            anrede='Frau',
+            strasse='Customer Street 2',
+            plz='98765',
+            ort='Customer City 2',
+            land='DE'
+        )
+        
+        # Create contract for second company
+        contract2 = Contract.objects.create(
+            company=company2,
+            customer=customer2,
+            document_type=self.document_type,
+            payment_term=self.payment_term,
+            name='Contract for Company 2',
+            currency='EUR',
+            interval='MONTHLY',
+            start_date=date(2026, 2, 1),
+            next_run_date=date(2026, 2, 1),
+            is_active=True
+        )
+        
+        # Get the contract list
+        url = reverse('auftragsverwaltung:contract_list')
+        response = self.client.get(url)
+        
+        # Should show contracts from BOTH companies
+        self.assertEqual(response.status_code, 200)
+        table = response.context['table']
+        
+        # Should have at least 2 contracts (1 from each company)
+        self.assertGreaterEqual(len(table.data), 2)
+        
+        # Verify that both companies' contracts are present
+        contract_names = [c.name for c in table.data.data]
+        self.assertIn('Test Monthly Contract', contract_names)  # company1
+        self.assertIn('Contract for Company 2', contract_names)  # company2
