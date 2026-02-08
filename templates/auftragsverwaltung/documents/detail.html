@@ -454,11 +454,11 @@ Neues {{ document_type.name }}
                                         <div class="row g-1">
                                             <div class="col-12">
                                                 <textarea class="form-control form-control-sm line-long-text" 
+                                                          name="long_text"
                                                           rows="2" 
                                                           placeholder="Langtext"
                                                           hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                           hx-trigger="change, keyup changed delay:500ms"
-                                                          hx-vals='js:{"long_text": this.value}'
                                                           hx-swap="none">{{ line.long_text }}</textarea>
                                             </div>
                                         </div>
