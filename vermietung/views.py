@@ -3395,7 +3395,6 @@ def eingangsrechnung_mark_paid(request, pk):
         if zahlungsdatum_str:
             try:
                 zahlungsdatum = datetime.strptime(zahlungsdatum_str, '%Y-%m-%d').date()
-                old_status = rechnung.status
                 rechnung.mark_as_paid(zahlungsdatum)
                 
                 # Log ActivityStream event for marking as paid
