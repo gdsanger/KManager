@@ -1,8 +1,9 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum, Max
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
+from django.conf import settings
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django_tables2 import RequestConfig
@@ -19,8 +20,10 @@ from .services import (
     get_next_number
 )
 from .utils import sanitize_html
+from .printing import SalesDocumentInvoiceContextBuilder
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit
 from core.services.activity_stream import ActivityStreamService
+from core.printing import PdfRenderService
 from finanzen.models import OutgoingInvoiceJournalEntry
 
 # Initialize logger
@@ -1784,4 +1787,67 @@ def journal_detail(request, pk):
     }
     
     return render(request, 'auftragsverwaltung/journal/detail.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def document_pdf(request, pk):
+    """
+    Generate and download PDF for a SalesDocument.
+    
+    Generates a PDF invoice using the Core Printing Framework and returns it
+    as a downloadable file.
+    
+    Args:
+        request: HTTP request
+        pk: Primary key of the SalesDocument
+        
+    Returns:
+        HttpResponse with PDF content
+    """
+    # Get document with related data
+    document = get_object_or_404(
+        SalesDocument.objects.select_related(
+            'company',
+            'customer',
+            'document_type'
+        ),
+        pk=pk
+    )
+    
+    # Note: Company-level permission checks should be added in a future enhancement
+    # to ensure users can only access documents from their authorized companies.
+    # For now, we rely on @login_required decorator which is consistent
+    # with other views in this module.
+    
+    # Build context using context builder
+    context_builder = SalesDocumentInvoiceContextBuilder()
+    context = context_builder.build_context(document)
+    template_name = context_builder.get_template_name(document)
+    
+    # Get base URL for static assets
+    static_root = settings.BASE_DIR / 'static'
+    base_url = f'file://{static_root}/'
+    
+    # Generate PDF
+    pdf_service = PdfRenderService()
+    
+    # Sanitize document number for filename (remove/replace unsafe characters)
+    safe_number = ''.join(c if c.isalnum() or c in ('-', '_') else '_' for c in document.number)
+    
+    result = pdf_service.render(
+        template_name=template_name,
+        context=context,
+        base_url=base_url,
+        filename=f'Rechnung_{safe_number}.pdf'
+    )
+    
+    # Return PDF as HTTP response
+    response = HttpResponse(result.pdf_bytes, content_type=result.content_type)
+    response['Content-Disposition'] = f'inline; filename="{result.filename}"'
+    
+    logger.info(f"Generated PDF for document {document.number} ({len(result.pdf_bytes)} bytes)")
+    
+    return response
+
 
