@@ -7,12 +7,17 @@ Infrastructure adapter for WeasyPrint rendering engine.
 from typing import Optional
 import logging
 
+# Store the import error for better diagnostics
+_weasyprint_import_error = None
+
 try:
     from weasyprint import HTML, CSS
     from weasyprint.text.fonts import FontConfiguration
-except ImportError:
+except Exception as e:
     # Allow imports to succeed even if WeasyPrint is not installed
     # This allows the module to be imported during migrations, etc.
+    # Store the actual error for better diagnostics
+    _weasyprint_import_error = e
     HTML = None
     CSS = None
     FontConfiguration = None
@@ -41,10 +46,26 @@ class WeasyPrintRenderer(IPdfRenderer):
             additional_css: Optional additional CSS to apply
         """
         if HTML is None:
-            raise ImportError(
-                "WeasyPrint is not installed. "
-                "Install it with: pip install weasyprint"
-            )
+            # Provide detailed error message with the actual import error
+            error_msg = "WeasyPrint could not be imported."
+            
+            if _weasyprint_import_error is not None:
+                # Include the actual error that occurred
+                error_msg += f"\n\nActual error: {type(_weasyprint_import_error).__name__}: {_weasyprint_import_error}"
+                
+                # Add helpful hints based on error type
+                if isinstance(_weasyprint_import_error, ModuleNotFoundError):
+                    error_msg += "\n\nWeasyPrint is not installed. Install it with: pip install weasyprint"
+                else:
+                    error_msg += "\n\nWeasyPrint is installed but failed to load. This may be due to:"
+                    error_msg += "\n- Missing system dependencies (e.g., Pango, Cairo, GDK-PixBuf)"
+                    error_msg += "\n- Incompatible Python version"
+                    error_msg += "\n- Corrupted installation"
+                    error_msg += "\n\nTry reinstalling: pip install --force-reinstall weasyprint"
+            else:
+                error_msg += "\n\nInstall it with: pip install weasyprint"
+            
+            raise ImportError(error_msg)
         
         self.additional_css = additional_css
         self._font_config = FontConfiguration()
