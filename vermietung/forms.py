@@ -580,6 +580,12 @@ class VertragForm(forms.ModelForm):
         
         # Order mandanten by name
         self.fields['mandant'].queryset = Mandant.objects.all().order_by('name')
+        
+        # Set default mandant if not set (for new contracts)
+        if not self.instance.pk and not self.initial.get('mandant'):
+            first_mandant = Mandant.objects.first()
+            if first_mandant:
+                self.initial['mandant'] = first_mandant.pk
 
 
 class VertragEndForm(forms.Form):
