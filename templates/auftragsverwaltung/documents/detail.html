@@ -1894,11 +1894,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
     
-    // Mark initial load as complete after a short delay to ensure all initialization is done
-    // This prevents initial value setting from triggering dirty state
+    // Mark initial load as complete after all synchronous initialization is done
+    // We use setTimeout to ensure any pending async events (e.g., Quill text-change)
+    // triggered during initialization are processed before we start tracking dirty state
     setTimeout(function() {
         isInitialLoad = false;
-    }, 100);
+    }, 0);
 });
 </script>
 {% endblock %}
