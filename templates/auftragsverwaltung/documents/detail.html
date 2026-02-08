@@ -747,7 +747,9 @@ Neues {{ document_type.name }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let isDirty = false;
-    let isInitialLoad = true;  // Track initial load state
+    // Track initial load state to prevent false dirty state during initialization
+    // This flag is cleared after all initialization is complete (see end of this function)
+    let isInitialLoad = true;
     const unsavedIndicator = document.getElementById('unsavedIndicator');
     
     // ============================================================================
@@ -1894,9 +1896,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
     
-    // Mark initial load as complete after all synchronous initialization is done
-    // We use setTimeout to ensure any pending async events (e.g., Quill text-change)
-    // triggered during initialization are processed before we start tracking dirty state
+    // Mark initial load as complete
+    // We use setTimeout(0) to defer this until after all synchronous initialization code
+    // and any immediately-queued events have been processed. This prevents:
+    // 1. Initial Quill content loading from triggering dirty state (also protected by source === 'user' check)
+    // 2. Form field initialization from triggering change events
+    // 3. Payment term auto-calculation during page load from setting dirty state
     setTimeout(function() {
         isInitialLoad = false;
     }, 0);
