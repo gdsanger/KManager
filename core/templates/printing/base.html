@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dokument{% endblock %}</title>
+    
+    {# Load print CSS - WeasyPrint resolves this via base_url #}
+    <link rel="stylesheet" href="/static/printing/print.css">
+    
+    {# Allow additional stylesheets in subtemplate #}
+    {% block extra_css %}{% endblock %}
+    
+    {# Inline styles for quick overrides #}
+    <style>
+        {% block inline_styles %}{% endblock %}
+    </style>
+</head>
+<body>
+    {# Header for first page (can be overridden) #}
+    <div class="first-page-header">
+        {% block first_page_header %}
+        {# Default: empty. Override in document-specific templates #}
+        {% endblock %}
+    </div>
+    
+    {# Main content #}
+    <div class="content">
+        {% block content %}
+        {# Document-specific content goes here #}
+        {% endblock %}
+    </div>
+    
+    {# 
+        Footer is defined in CSS using @page rules.
+        See print.css for running footer implementation.
+        
+        You can customize footer content by overriding CSS variables
+        or by defining custom @page rules in your template.
+    #}
+</body>
+</html>
