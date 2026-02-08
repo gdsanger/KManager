@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -195,7 +196,45 @@ BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 # Logging configuration
 # Create logs directory in BASE_DIR
 LOGS_DIR = BASE_DIR / 'logs'
-LOGS_DIR.mkdir(exist_ok=True)
+
+# Try to create logs directory and check if we can write to it
+# If we can't, we'll use console-only logging
+_can_write_logs = False
+try:
+    LOGS_DIR.mkdir(exist_ok=True)
+    # Test if we can write to the directory by creating a temporary file
+    _test_file = LOGS_DIR / '.write_test'
+    _test_file.touch()
+    _test_file.unlink()
+    _can_write_logs = True
+except (OSError, PermissionError):
+    # If we can't create the directory or write to it, we'll use console-only logging
+    print(f"Warning: Cannot write to logs directory {LOGS_DIR}. Using console-only logging.", file=sys.stderr)
+    _can_write_logs = False
+
+# Build handlers list based on whether we can write logs
+_logging_handlers = {
+    'console': {
+        'level': 'INFO',
+        'class': 'logging.StreamHandler',
+        'formatter': 'simple',
+    },
+}
+
+if _can_write_logs:
+    _logging_handlers['file'] = {
+        'level': 'DEBUG',
+        'class': 'logging.handlers.TimedRotatingFileHandler',
+        'filename': LOGS_DIR / 'kmanager.log',
+        'when': 'midnight',
+        'interval': 1,
+        'backupCount': 7,
+        'formatter': 'verbose',
+        'encoding': 'utf-8',
+    }
+    _handlers = ['file', 'console']
+else:
+    _handlers = ['console']
 
 LOGGING = {
     'version': 1,
@@ -215,40 +254,24 @@ LOGGING = {
             'class': 'django.utils.log.RequireDebugFalse',
         },
     },
-    'handlers': {
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': LOGS_DIR / 'kmanager.log',
-            'when': 'midnight',
-            'interval': 1,
-            'backupCount': 7,
-            'formatter': 'verbose',
-            'encoding': 'utf-8',
-        },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
-    },
+    'handlers': _logging_handlers,
     'root': {
-        'handlers': ['file', 'console'],
+        'handlers': _handlers,
         'level': 'DEBUG',
     },
     'loggers': {
         'django': {
-            'handlers': ['file', 'console'],
+            'handlers': _handlers,
             'level': 'INFO',
             'propagate': False,
         },
         'vermietung': {
-            'handlers': ['file', 'console'],
+            'handlers': _handlers,
             'level': 'DEBUG',
             'propagate': False,
         },
         'core': {
-            'handlers': ['file', 'console'],
+            'handlers': _handlers,
             'level': 'DEBUG',
             'propagate': False,
         },
