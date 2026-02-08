@@ -468,6 +468,22 @@ def _get_uebergabeprotokoll_target_url(uebergabeprotokoll):
     return reverse('vermietung:uebergabeprotokoll_detail', args=[uebergabeprotokoll.pk])
 
 
+def _format_uebergabeprotokoll_description(uebergabeprotokoll):
+    """
+    Format a description string for an Uebergabeprotokoll with key details.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        
+    Returns:
+        str: Formatted description with typ, object, and date
+    """
+    typ_display = uebergabeprotokoll.get_typ_display()
+    mietobjekt_name = uebergabeprotokoll.mietobjekt.name if uebergabeprotokoll.mietobjekt else 'Unbekannt'
+    uebergabetag = uebergabeprotokoll.uebergabetag.strftime('%d.%m.%Y') if uebergabeprotokoll.uebergabetag else 'Unbekannt'
+    return f'Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}'
+
+
 def _log_uebergabeprotokoll_stream_event(uebergabeprotokoll, event_type, actor=None, description=None, severity='INFO'):
     """
     Log an ActivityStream event for an Uebergabeprotokoll.
@@ -492,7 +508,9 @@ def _log_uebergabeprotokoll_stream_event(uebergabeprotokoll, event_type, actor=N
     
     # Generate a descriptive title
     typ_display = uebergabeprotokoll.get_typ_display()
-    title = f'Übergabeprotokoll: {typ_display} - {uebergabeprotokoll.vertrag.vertragsnummer}'
+    # Handle case where vertrag might be None
+    vertrag_nummer = uebergabeprotokoll.vertrag.vertragsnummer if uebergabeprotokoll.vertrag else 'Unbekannt'
+    title = f'Übergabeprotokoll: {typ_display} - {vertrag_nummer}'
     
     # Call ActivityStreamService directly without try-except to let errors propagate
     ActivityStreamService.add(
@@ -1902,14 +1920,11 @@ def uebergabeprotokoll_create(request):
                 
                 # Log ActivityStream event for handover protocol creation
                 try:
-                    typ_display = protokoll.get_typ_display()
-                    mietobjekt_name = protokoll.mietobjekt.name if protokoll.mietobjekt else 'Unbekannt'
-                    uebergabetag = protokoll.uebergabetag.strftime('%d.%m.%Y') if protokoll.uebergabetag else 'Unbekannt'
                     _log_uebergabeprotokoll_stream_event(
                         uebergabeprotokoll=protokoll,
                         event_type='handover.created',
                         actor=request.user,
-                        description=f'Neues Übergabeprotokoll erstellt. Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}'
+                        description=f'Neues Übergabeprotokoll erstellt. {_format_uebergabeprotokoll_description(protokoll)}'
                     )
                 except RuntimeError as e:
                     # Activity stream logging failed - show warning but don't block the operation
@@ -1956,14 +1971,11 @@ def uebergabeprotokoll_create_from_vertrag(request, vertrag_pk):
                 
                 # Log ActivityStream event for handover protocol creation
                 try:
-                    typ_display = protokoll.get_typ_display()
-                    mietobjekt_name = protokoll.mietobjekt.name if protokoll.mietobjekt else 'Unbekannt'
-                    uebergabetag = protokoll.uebergabetag.strftime('%d.%m.%Y') if protokoll.uebergabetag else 'Unbekannt'
                     _log_uebergabeprotokoll_stream_event(
                         uebergabeprotokoll=protokoll,
                         event_type='handover.created',
                         actor=request.user,
-                        description=f'Neues Übergabeprotokoll erstellt. Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}'
+                        description=f'Neues Übergabeprotokoll erstellt. {_format_uebergabeprotokoll_description(protokoll)}'
                     )
                 except RuntimeError as e:
                     # Activity stream logging failed - show warning but don't block the operation
@@ -2082,14 +2094,11 @@ def uebergabeprotokoll_delete(request, pk):
     
     # Log ActivityStream event before deletion
     try:
-        typ_display = protokoll.get_typ_display()
-        mietobjekt_name = protokoll.mietobjekt.name if protokoll.mietobjekt else 'Unbekannt'
-        uebergabetag = protokoll.uebergabetag.strftime('%d.%m.%Y') if protokoll.uebergabetag else 'Unbekannt'
         _log_uebergabeprotokoll_stream_event(
             uebergabeprotokoll=protokoll,
             event_type='handover.deleted',
             actor=request.user,
-            description=f'Übergabeprotokoll gelöscht. Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}',
+            description=f'Übergabeprotokoll gelöscht. {_format_uebergabeprotokoll_description(protokoll)}',
             severity='WARNING'
         )
     except RuntimeError as e:
