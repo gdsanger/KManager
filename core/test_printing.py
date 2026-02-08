@@ -159,7 +159,8 @@ class BaseTemplateTest(TestCase):
         html = render_to_string('printing/base.html', context)
         
         self.assertIn('<!DOCTYPE html>', html)
-        self.assertIn('/static/printing/print.css', html)
+        # Check for relative CSS path (changed from absolute path for WeasyPrint compatibility)
+        self.assertIn('printing/print.css', html)
 
 
 class WeasyPrintRendererTest(TestCase):
