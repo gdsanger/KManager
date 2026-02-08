@@ -770,8 +770,13 @@ def ajax_update_line(request, doc_key, pk, line_id):
         document = get_object_or_404(SalesDocument, pk=pk)
         line = get_object_or_404(SalesDocumentLine, pk=line_id, document=document)
         
-        # Parse JSON body
-        data = json.loads(request.body)
+        # Parse request data - support both JSON and form-encoded data
+        # HTMX with hx-vals sends form-encoded data, while tests send JSON
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except (json.JSONDecodeError, ValueError):
+            # Fall back to form-encoded data (from HTMX hx-vals)
+            data = request.POST.dict()
         
         # Update fields
         if 'quantity' in data:

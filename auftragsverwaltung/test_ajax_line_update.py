@@ -307,3 +307,38 @@ class AjaxLineUpdateTestCase(TestCase):
         
         quote_line.refresh_from_db()
         self.assertEqual(quote_line.long_text, 'Updated quote long text')
+    
+    def test_ajax_update_line_form_encoded_data(self):
+        """Test updating with form-encoded data (simulates real HTMX hx-vals behavior)"""
+        url = reverse('auftragsverwaltung:ajax_update_line',
+                     kwargs={'doc_key': 'invoice', 'pk': self.document.pk, 'line_id': self.line.pk})
+        
+        # Simulate HTMX hx-vals sending form-encoded data
+        new_long_text = 'Form-encoded long text from HTMX'
+        data = {
+            'long_text': new_long_text
+        }
+        
+        response = self.client.post(
+            url,
+            data=data,  # Send as form-encoded, not JSON
+            # Do NOT set content_type='application/json' - simulate HTMX default behavior
+        )
+        
+        # Check response status
+        self.assertEqual(response.status_code, 200, 
+                        f"Expected 200 but got {response.status_code}. Response: {response.content}")
+        
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data.get('success'), 
+                       f"Expected success=True in response. Got: {response_data}")
+        
+        # Check that long_text was updated in database
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.long_text, new_long_text)
+        
+        # Check that totals are correct
+        self.document.refresh_from_db()
+        self.assertEqual(self.document.total_net, Decimal('100.00'))
+        self.assertEqual(self.document.total_tax, Decimal('19.00'))
+        self.assertEqual(self.document.total_gross, Decimal('119.00'))
