@@ -68,6 +68,9 @@ logs/
 # Document storage (uploaded files)
 data/
 
+# Temporary files and demo outputs
+tmp/
+
 # Flask stuff:
 instance/
 .webassets-cache
