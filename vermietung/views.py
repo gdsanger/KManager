@@ -118,32 +118,32 @@ def _log_aktivitaet_stream_event(aktivitaet, event_type, actor=None, description
         event_type: str, event type (e.g., 'activity.created', 'activity.status_changed')
         actor: User instance who performed the action (optional)
         description: str, additional description (optional)
+        
+    Raises:
+        RuntimeError: If no Mandant can be found for the Aktivitaet
     """
     mandant = _get_mandant_for_aktivitaet(aktivitaet)
     
-    # If no mandant, cannot create stream event
+    # If no mandant, cannot create stream event - raise error instead of silently failing
     if not mandant:
-        logger.warning(
+        error_msg = (
             f"Cannot create ActivityStream event for Aktivitaet {aktivitaet.pk}: "
-            f"No Mandant found"
+            f"No Mandant found. Please ensure at least one Mandant exists in the system."
         )
-        return
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     
-    try:
-        ActivityStreamService.add(
-            company=mandant,
-            domain='RENTAL',
-            activity_type=event_type,
-            title=f'Aktivität: {aktivitaet.titel}',
-            description=description or '',
-            target_url=_get_aktivitaet_target_url(aktivitaet),
-            actor=actor,
-            severity='INFO'
-        )
-    except Exception as e:
-        logger.error(
-            f"Failed to create ActivityStream event for Aktivitaet {aktivitaet.pk}: {e}"
-        )
+    # Call ActivityStreamService directly without try-except to let errors propagate
+    ActivityStreamService.add(
+        company=mandant,
+        domain='RENTAL',
+        activity_type=event_type,
+        title=f'Aktivität: {aktivitaet.titel}',
+        description=description or '',
+        target_url=_get_aktivitaet_target_url(aktivitaet),
+        actor=actor,
+        severity='INFO'
+    )
 
 
 # Helper functions for Vertrag ActivityStream integration
@@ -203,32 +203,32 @@ def _log_vertrag_stream_event(vertrag, event_type, actor=None, description=None,
         actor: User instance who performed the action (optional)
         description: str, additional description (optional)
         severity: str, severity level (default: 'INFO')
+        
+    Raises:
+        RuntimeError: If no Mandant can be found for the Vertrag
     """
     mandant = _get_mandant_for_vertrag(vertrag)
     
-    # If no mandant, cannot create stream event
+    # If no mandant, cannot create stream event - raise error instead of silently failing
     if not mandant:
-        logger.warning(
+        error_msg = (
             f"Cannot create ActivityStream event for Vertrag {vertrag.pk}: "
-            f"No Mandant found"
+            f"No Mandant found. Please ensure at least one Mandant exists in the system."
         )
-        return
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     
-    try:
-        ActivityStreamService.add(
-            company=mandant,
-            domain='RENTAL',
-            activity_type=event_type,
-            title=f'Vertrag: {vertrag.vertragsnummer}',
-            description=description or '',
-            target_url=_get_vertrag_target_url(vertrag),
-            actor=actor,
-            severity=severity
-        )
-    except Exception as e:
-        logger.error(
-            f"Failed to create ActivityStream event for Vertrag {vertrag.pk}: {e}"
-        )
+    # Call ActivityStreamService directly without try-except to let errors propagate
+    ActivityStreamService.add(
+        company=mandant,
+        domain='RENTAL',
+        activity_type=event_type,
+        title=f'Vertrag: {vertrag.vertragsnummer}',
+        description=description or '',
+        target_url=_get_vertrag_target_url(vertrag),
+        actor=actor,
+        severity=severity
+    )
 
 
 @login_required
@@ -1207,13 +1207,22 @@ def vertrag_create(request):
                 vertrag.update_mietobjekte_availability()
                 
                 # Log ActivityStream event for contract creation
-                mieter_name = vertrag.mieter.full_name() if vertrag.mieter else 'Unbekannt'
-                _log_vertrag_stream_event(
-                    vertrag=vertrag,
-                    event_type='contract.created',
-                    actor=request.user,
-                    description=f'Neuer Vertrag erstellt für Mieter: {mieter_name}. Status: {_get_vertrag_status_display_name(vertrag.status)}'
-                )
+                try:
+                    mieter_name = vertrag.mieter.full_name() if vertrag.mieter else 'Unbekannt'
+                    _log_vertrag_stream_event(
+                        vertrag=vertrag,
+                        event_type='contract.created',
+                        actor=request.user,
+                        description=f'Neuer Vertrag erstellt für Mieter: {mieter_name}. Status: {_get_vertrag_status_display_name(vertrag.status)}'
+                    )
+                except RuntimeError as e:
+                    # Activity stream logging failed - show warning but don't block the operation
+                    logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
+                    messages.warning(
+                        request,
+                        'Vertrag wurde erstellt, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
+                        'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+                    )
                 
                 messages.success(
                     request,
@@ -1272,14 +1281,23 @@ def vertrag_edit(request, pk):
                 # Log ActivityStream event for status change
                 new_status = vertrag.status
                 if old_status != new_status:
-                    old_status_display = _get_vertrag_status_display_name(old_status)
-                    new_status_display = _get_vertrag_status_display_name(new_status)
-                    _log_vertrag_stream_event(
-                        vertrag=vertrag,
-                        event_type='contract.status_changed',
-                        actor=request.user,
-                        description=f'Status geändert: {old_status_display} → {new_status_display}'
-                    )
+                    try:
+                        old_status_display = _get_vertrag_status_display_name(old_status)
+                        new_status_display = _get_vertrag_status_display_name(new_status)
+                        _log_vertrag_stream_event(
+                            vertrag=vertrag,
+                            event_type='contract.status_changed',
+                            actor=request.user,
+                            description=f'Status geändert: {old_status_display} → {new_status_display}'
+                        )
+                    except RuntimeError as e:
+                        # Activity stream logging failed - show warning but don't block the operation
+                        logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
+                        messages.warning(
+                            request,
+                            'Statusänderung wurde gespeichert, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
+                            'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+                        )
                 
                 messages.success(
                     request,
@@ -1339,18 +1357,27 @@ def vertrag_end(request, pk):
                 vertrag.save()
                 
                 # Log ActivityStream event for contract ending
-                status_info = ''
-                if old_status != vertrag.status:
-                    old_status_display = _get_vertrag_status_display_name(old_status)
-                    new_status_display = _get_vertrag_status_display_name(vertrag.status)
-                    status_info = f' Status: {old_status_display} → {new_status_display}.'
-                
-                _log_vertrag_stream_event(
-                    vertrag=vertrag,
-                    event_type='contract.ended',
-                    actor=request.user,
-                    description=f'Vertrag wurde auf den {vertrag.ende.strftime("%d.%m.%Y")} beendet.{status_info}'
-                )
+                try:
+                    status_info = ''
+                    if old_status != vertrag.status:
+                        old_status_display = _get_vertrag_status_display_name(old_status)
+                        new_status_display = _get_vertrag_status_display_name(vertrag.status)
+                        status_info = f' Status: {old_status_display} → {new_status_display}.'
+                    
+                    _log_vertrag_stream_event(
+                        vertrag=vertrag,
+                        event_type='contract.ended',
+                        actor=request.user,
+                        description=f'Vertrag wurde auf den {vertrag.ende.strftime("%d.%m.%Y")} beendet.{status_info}'
+                    )
+                except RuntimeError as e:
+                    # Activity stream logging failed - show warning but don't block the operation
+                    logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
+                    messages.warning(
+                        request,
+                        'Vertrag wurde beendet, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
+                        'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+                    )
                 
                 messages.success(
                     request,
@@ -1394,15 +1421,24 @@ def vertrag_cancel(request, pk):
         vertrag.save()
         
         # Log ActivityStream event for contract cancellation
-        old_status_display = _get_vertrag_status_display_name(old_status)
-        new_status_display = _get_vertrag_status_display_name(vertrag.status)
-        _log_vertrag_stream_event(
-            vertrag=vertrag,
-            event_type='contract.cancelled',
-            actor=request.user,
-            description=f'Vertrag wurde storniert. Status: {old_status_display} → {new_status_display}',
-            severity='WARNING'
-        )
+        try:
+            old_status_display = _get_vertrag_status_display_name(old_status)
+            new_status_display = _get_vertrag_status_display_name(vertrag.status)
+            _log_vertrag_stream_event(
+                vertrag=vertrag,
+                event_type='contract.cancelled',
+                actor=request.user,
+                description=f'Vertrag wurde storniert. Status: {old_status_display} → {new_status_display}',
+                severity='WARNING'
+            )
+        except RuntimeError as e:
+            # Activity stream logging failed - show warning but don't block the operation
+            logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
+            messages.warning(
+                request,
+                'Vertrag wurde storniert, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
+                'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+            )
         
         messages.success(
             request,
