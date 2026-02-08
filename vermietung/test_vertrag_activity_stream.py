@@ -439,3 +439,59 @@ class VertragActivityStreamTest(TestCase):
             activity_type='contract.cancelled'
         ).latest('created_at')
         self.assertEqual(event.company, self.mandant)  # Should use fallback
+    
+    def test_no_mandant_shows_warning_message(self):
+        """Test that when no Mandant exists, user sees a warning message."""
+        # Delete MietObjekt first (it references Mandant with PROTECT)
+        MietObjekt.objects.all().delete()
+        
+        # Now delete all Mandants to simulate the problem scenario
+        Mandant.objects.all().delete()
+        
+        # Create a new MietObjekt without mandant for testing
+        mietobjekt = MietObjekt.objects.create(
+            name='Test Büro',
+            type='RAUM',
+            beschreibung='Test',
+            standort=self.standort,
+            mietpreis=Decimal('500.00'),
+            kaution=Decimal('1500.00'),
+            verfuegbare_einheiten=1,
+            mandant=None  # No mandant
+        )
+        
+        # Create vertrag via POST
+        response = self.client.post(
+            reverse('vermietung:vertrag_create'),
+            {
+                'mieter': self.kunde.pk,
+                'start': date.today().isoformat(),
+                'miete': '500.00',
+                'kaution': '1500.00',
+                'status': 'active',
+                'umsatzsteuer_satz': '19',
+                'auto_total': 'on',
+                # mandant is omitted
+                # VertragsObjekt formset data
+                'vertragsobjekte-TOTAL_FORMS': '1',
+                'vertragsobjekte-INITIAL_FORMS': '0',
+                'vertragsobjekte-MIN_NUM_FORMS': '0',
+                'vertragsobjekte-MAX_NUM_FORMS': '1000',
+                'vertragsobjekte-0-mietobjekt': mietobjekt.pk,
+                'vertragsobjekte-0-anzahl': '1',
+                'vertragsobjekte-0-preis': '500.00',
+                'vertragsobjekte-0-status': 'AKTIV',
+            },
+            follow=True  # Follow redirect to see messages
+        )
+        
+        # Verify that the response contains a warning about activity logging failure
+        messages = list(response.context.get('messages', []))
+        warning_found = any(
+            'Aktivitätsprotokollierung' in str(msg) and 'fehlgeschlagen' in str(msg)
+            for msg in messages
+        )
+        self.assertTrue(
+            warning_found,
+            'Expected warning message about activity logging failure when no Mandant exists'
+        )
