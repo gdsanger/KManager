@@ -221,3 +221,4 @@ cookies.txt
 csrf.txt
 node_modules/
 package-lock.json
+test_invoice_manual.py

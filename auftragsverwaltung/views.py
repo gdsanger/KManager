@@ -7,7 +7,6 @@ from django.conf import settings
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django_tables2 import RequestConfig
-from io import BytesIO
 import json
 import logging
 
@@ -1816,8 +1815,10 @@ def document_pdf(request, pk):
         pk=pk
     )
     
-    # TODO: Add permission check (company context, user permissions)
-    # For now, we rely on @login_required
+    # Note: Company-level permission checks should be added in a future enhancement
+    # to ensure users can only access documents from their authorized companies.
+    # For now, we rely on @login_required decorator which is consistent
+    # with other views in this module.
     
     # Build context using context builder
     context_builder = SalesDocumentInvoiceContextBuilder()
@@ -1830,11 +1831,15 @@ def document_pdf(request, pk):
     
     # Generate PDF
     pdf_service = PdfRenderService()
+    
+    # Sanitize document number for filename (remove/replace unsafe characters)
+    safe_number = ''.join(c if c.isalnum() or c in ('-', '_') else '_' for c in document.number)
+    
     result = pdf_service.render(
         template_name=template_name,
         context=context,
         base_url=base_url,
-        filename=f'Rechnung_{document.number}.pdf'
+        filename=f'Rechnung_{safe_number}.pdf'
     )
     
     # Return PDF as HTTP response
