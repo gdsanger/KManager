@@ -4,7 +4,7 @@ from django.db.models import Q, Sum, Max
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from datetime import datetime, timedelta, date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
 
@@ -802,27 +802,17 @@ def ajax_update_line(request, doc_key, pk, line_id):
         if 'kostenart2_id' in data:
             line.kostenart2_id = normalize_foreign_key_id(data['kostenart2_id'])
         
-        line.save()
-        
-        # Recalculate document totals (this updates all lines in-memory but doesn't persist line totals)
-        DocumentCalculationService.recalculate(document, persist=True)
-        
-        # Manually recalculate and save this line's totals
-        # Use the same calculation logic as DocumentCalculationService
-        line_net = (line.quantity * line.unit_price_net).quantize(
-            Decimal('0.01'), rounding=ROUND_HALF_UP
-        )
-        line_tax = (line_net * line.tax_rate.rate).quantize(
-            Decimal('0.01'), rounding=ROUND_HALF_UP
-        )
-        line_gross = (line_net + line_tax).quantize(
-            Decimal('0.01'), rounding=ROUND_HALF_UP
-        )
-        
+        # Recalculate line totals using the service before saving
+        line_net, line_tax, line_gross = DocumentCalculationService.calculate_line_totals(line)
         line.line_net = line_net
         line.line_tax = line_tax
         line.line_gross = line_gross
-        line.save(update_fields=['line_net', 'line_tax', 'line_gross'])
+        
+        # Save all line changes in a single database write
+        line.save()
+        
+        # Recalculate and persist document totals
+        DocumentCalculationService.recalculate(document, persist=True)
         
         # Return updated line data
         return JsonResponse({
