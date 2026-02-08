@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -208,12 +209,10 @@ try:
     _can_write_logs = True
 except (OSError, PermissionError):
     # If we can't create the directory or write to it, we'll use console-only logging
-    import sys
     print(f"Warning: Cannot write to logs directory {LOGS_DIR}. Using console-only logging.", file=sys.stderr)
     _can_write_logs = False
 
 # Build handlers list based on whether we can write logs
-_handlers = ['console']
 _logging_handlers = {
     'console': {
         'level': 'INFO',
@@ -223,7 +222,6 @@ _logging_handlers = {
 }
 
 if _can_write_logs:
-    _handlers.insert(0, 'file')
     _logging_handlers['file'] = {
         'level': 'DEBUG',
         'class': 'logging.handlers.TimedRotatingFileHandler',
@@ -234,6 +232,9 @@ if _can_write_logs:
         'formatter': 'verbose',
         'encoding': 'utf-8',
     }
+    _handlers = ['file', 'console']
+else:
+    _handlers = ['console']
 
 LOGGING = {
     'version': 1,
