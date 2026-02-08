@@ -1785,3 +1785,64 @@ def journal_detail(request, pk):
     
     return render(request, 'auftragsverwaltung/journal/detail.html', context)
 
+
+@login_required
+def document_pdf_download(request, pk):
+    """
+    Download PDF for a sales document.
+    
+    Generates and returns a PDF file for the given sales document.
+    Currently supports invoice documents.
+    
+    Args:
+        pk: Primary key of the sales document
+    
+    Returns:
+        HTTP response with PDF file
+    """
+    from django.http import HttpResponse, HttpResponseForbidden
+    from core.services.reporting import ReportService
+    from auftragsverwaltung.printing import SalesDocumentInvoiceContextBuilder
+    
+    # Get document with related objects
+    document = get_object_or_404(
+        SalesDocument.objects.select_related(
+            'company', 'customer', 'document_type', 'payment_term'
+        ),
+        pk=pk
+    )
+    
+    # Permission check: User must have access to the company
+    # For MVP, we assume if user is logged in, they have access
+    # In production, you would check company membership here
+    # if not request.user.has_perm('view_document', document):
+    #     return HttpResponseForbidden("Sie haben keine Berechtigung, dieses Dokument anzuzeigen.")
+    
+    # Check if document is an invoice
+    if not document.document_type.is_invoice:
+        return HttpResponseForbidden("PDF-Download ist nur für Rechnungen verfügbar.")
+    
+    try:
+        # Build context
+        context_builder = SalesDocumentInvoiceContextBuilder(document)
+        context = context_builder.build()
+        
+        # Render PDF
+        pdf_bytes = ReportService.render('invoice.v1', context)
+        
+        # Generate filename
+        filename = f"Rechnung_{document.number}.pdf".replace('/', '-')
+        
+        # Create response
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to generate PDF for document {pk}: {str(e)}", exc_info=True)
+        return HttpResponse(
+            f"Fehler beim Generieren der PDF: {str(e)}",
+            status=500
+        )
+
