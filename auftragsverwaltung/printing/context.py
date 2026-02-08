@@ -150,7 +150,7 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
                 lines.append({
                     'pos': line.position_no,
                     'qty': line.quantity,
-                    'unit': line.unit.short if line.unit else '',
+                    'unit': line.unit.symbol if line.unit else '',
                     'short_text': line.short_text_1 or '',
                     'long_text': line.long_text or '',
                     'unit_price_net': line.unit_price_net,
@@ -183,10 +183,10 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
                 if rate == Decimal('0.00'):
                     net_0 += line.line_net
                     tax_0 += line.line_tax
-                elif rate == Decimal('7.00'):
+                elif rate == Decimal('0.07'):
                     net_7 += line.line_net
                     tax_7 += line.line_tax
-                elif rate == Decimal('19.00'):
+                elif rate == Decimal('0.19'):
                     net_19 += line.line_net
                     tax_19 += line.line_tax
         
