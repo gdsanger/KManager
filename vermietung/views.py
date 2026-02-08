@@ -38,7 +38,31 @@ from .filters import EingangsrechnungFilter
 logger = logging.getLogger(__name__)
 
 
+# Constants for ActivityStream integration
+ACTIVITY_LOGGING_FAILED_MESSAGE = (
+    'Die Aktivitätsprotokollierung ist fehlgeschlagen. '
+    'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+)
+
+
 # Helper functions for ActivityStream integration
+def _create_no_mandant_error(entity_type, entity_id):
+    """
+    Create a standardized error message for missing Mandant.
+    
+    Args:
+        entity_type: str, type of entity (e.g., 'Vertrag', 'Aktivitaet')
+        entity_id: int, ID of the entity
+        
+    Returns:
+        str: Error message
+    """
+    return (
+        f"Cannot create ActivityStream event for {entity_type} {entity_id}: "
+        f"No Mandant found. Please ensure at least one Mandant exists in the system."
+    )
+
+
 def _get_mandant_for_aktivitaet(aktivitaet):
     """
     Get Mandant for an Aktivitaet from its context.
@@ -126,10 +150,7 @@ def _log_aktivitaet_stream_event(aktivitaet, event_type, actor=None, description
     
     # If no mandant, cannot create stream event - raise error instead of silently failing
     if not mandant:
-        error_msg = (
-            f"Cannot create ActivityStream event for Aktivitaet {aktivitaet.pk}: "
-            f"No Mandant found. Please ensure at least one Mandant exists in the system."
-        )
+        error_msg = _create_no_mandant_error('Aktivitaet', aktivitaet.pk)
         logger.error(error_msg)
         raise RuntimeError(error_msg)
     
@@ -211,10 +232,7 @@ def _log_vertrag_stream_event(vertrag, event_type, actor=None, description=None,
     
     # If no mandant, cannot create stream event - raise error instead of silently failing
     if not mandant:
-        error_msg = (
-            f"Cannot create ActivityStream event for Vertrag {vertrag.pk}: "
-            f"No Mandant found. Please ensure at least one Mandant exists in the system."
-        )
+        error_msg = _create_no_mandant_error('Vertrag', vertrag.pk)
         logger.error(error_msg)
         raise RuntimeError(error_msg)
     
@@ -1220,8 +1238,7 @@ def vertrag_create(request):
                     logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
                     messages.warning(
                         request,
-                        'Vertrag wurde erstellt, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
-                        'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+                        f'Vertrag wurde erstellt, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
                     )
                 
                 messages.success(
@@ -1295,8 +1312,7 @@ def vertrag_edit(request, pk):
                         logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
                         messages.warning(
                             request,
-                            'Statusänderung wurde gespeichert, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
-                            'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+                            f'Statusänderung wurde gespeichert, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
                         )
                 
                 messages.success(
@@ -1375,8 +1391,7 @@ def vertrag_end(request, pk):
                     logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
                     messages.warning(
                         request,
-                        'Vertrag wurde beendet, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
-                        'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+                        f'Vertrag wurde beendet, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
                     )
                 
                 messages.success(
@@ -1436,8 +1451,7 @@ def vertrag_cancel(request, pk):
             logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
             messages.warning(
                 request,
-                'Vertrag wurde storniert, aber die Aktivitätsprotokollierung ist fehlgeschlagen. '
-                'Bitte stellen Sie sicher, dass ein Mandant im System konfiguriert ist.'
+                f'Vertrag wurde storniert, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
             )
         
         messages.success(
