@@ -275,16 +275,17 @@ class SalesDocumentListViewTestCase(TestCase):
         self.assertContains(response, 'Erika Beispiel')
     
     def test_customer_column_position(self):
-        """Test that customer column is in second position after number"""
+        """Test that customer column is in third position after number and company"""
         url = reverse('auftragsverwaltung:quotes')
         response = self.client.get(url)
         
         table = response.context['table']
         column_names = [col.name for col in table.columns]
         
-        # Check that customer is the second column (index 1)
+        # Check column ordering: number, company, customer
         self.assertEqual(column_names[0], 'number')
-        self.assertEqual(column_names[1], 'customer')
+        self.assertEqual(column_names[1], 'company')
+        self.assertEqual(column_names[2], 'customer')
     
     def test_customer_filter(self):
         """Test the customer filter"""
@@ -386,4 +387,62 @@ class SalesDocumentListViewTestCase(TestCase):
         # Query count should not increase proportionally with more rows
         # Allow for some variation but ensure no N+1
         self.assertLessEqual(new_query_count, initial_query_count + 2)
+    
+    def test_multiple_companies_visible(self):
+        """Test that documents from multiple companies are visible in the list view (Issue #336)"""
+        # Create a second company
+        company2 = Mandant.objects.create(
+            name='Second Company GmbH',
+            adresse='Andere Strasse 2',
+            plz='54321',
+            ort='Andere Stadt',
+            land='Deutschland',
+            steuernummer='987/654/32109',
+            ust_id_nr='DE987654321'
+        )
+        
+        # Create documents for the second company
+        doc_company2_1 = SalesDocument.objects.create(
+            company=company2,
+            document_type=self.doc_type_quote,
+            number='AN-2024-100',
+            status='DRAFT',
+            issue_date=timezone.now().date(),
+            subject='Quote from Company 2',
+            total_gross=Decimal('3000.00')
+        )
+        
+        doc_company2_2 = SalesDocument.objects.create(
+            company=company2,
+            document_type=self.doc_type_quote,
+            number='AN-2024-101',
+            status='SENT',
+            issue_date=timezone.now().date(),
+            subject='Another Quote from Company 2',
+            total_gross=Decimal('4000.00')
+        )
+        
+        # Get the quotes list
+        url = reverse('auftragsverwaltung:quotes')
+        response = self.client.get(url)
+        
+        # Should show ALL quotes from BOTH companies
+        table = response.context['table']
+        self.assertEqual(len(table.data), 4)  # 2 from company1 + 2 from company2
+        
+        # Verify that both companies' documents are present
+        document_numbers = [doc.number for doc in table.data.data]
+        self.assertIn('AN-2024-001', document_numbers)  # company1
+        self.assertIn('AN-2024-002', document_numbers)  # company1
+        self.assertIn('AN-2024-100', document_numbers)  # company2
+        self.assertIn('AN-2024-101', document_numbers)  # company2
+        
+        # Verify company field exists in table
+        column_names = [col.name for col in table.columns]
+        self.assertIn('company', column_names)
+        
+        # Verify both companies are represented in the data
+        company_names = [doc.company.name for doc in table.data.data]
+        self.assertIn('Test Company GmbH', company_names)
+        self.assertIn('Second Company GmbH', company_names)
 

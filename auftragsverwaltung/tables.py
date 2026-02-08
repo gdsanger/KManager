@@ -16,6 +16,12 @@ class SalesDocumentTable(tables.Table):
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
+    company = tables.Column(
+        verbose_name='Mandant',
+        accessor='company.name',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
     customer = tables.Column(
         verbose_name='Kunde',
         accessor='customer.name',
@@ -105,6 +111,7 @@ class SalesDocumentTable(tables.Table):
         template_name = 'django_tables2/bootstrap5-dark.html'
         fields = (
             'number',
+            'company',
             'customer',
             'subject',
             'issue_date',
@@ -126,6 +133,12 @@ class ContractTable(tables.Table):
     name = tables.Column(
         verbose_name='Vertragsname',
         attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 200px;'}}
+    )
+    
+    company = tables.Column(
+        verbose_name='Mandant',
+        accessor='company.name',
+        attrs={'td': {'class': 'text-nowrap'}}
     )
     
     customer = tables.Column(
@@ -216,6 +229,7 @@ class ContractTable(tables.Table):
         template_name = 'django_tables2/bootstrap5-dark.html'
         fields = (
             'name',
+            'company',
             'customer',
             'interval',
             'start_date',

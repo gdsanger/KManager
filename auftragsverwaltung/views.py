@@ -109,69 +109,49 @@ def auftragsverwaltung_home(request):
     - Open sales documents table
     - Latest 10 documents
     - Activity stream (last 25 entries)
+    
+    All metrics and data are shown across ALL companies.
     """
-    # Get the default company (for now, we'll use the first available)
-    # In a multi-tenant setup, this would be based on the user's company
-    company = Mandant.objects.first()
+    # KPI 1: Count of open documents (DRAFT, SENT, APPROVED) - across all companies
+    kpi_open_documents = SalesDocument.objects.filter(
+        status__in=['DRAFT', 'SENT', 'APPROVED']
+    ).count()
     
-    # Initialize KPIs
-    kpi_open_documents = 0
-    kpi_unpaid_invoices = 0
-    kpi_new_documents_30d = 0
-    kpi_open_amount = Decimal('0.00')
+    # KPI 2: Count of unpaid invoices (documents marked as invoice, not paid, not cancelled)
+    kpi_unpaid_invoices = SalesDocument.objects.filter(
+        document_type__is_invoice=True,
+        paid_at__isnull=True,
+        status__in=['SENT', 'APPROVED', 'OVERDUE']
+    ).exclude(status='CANCELLED').count()
     
-    open_sales_documents = []
-    latest_documents = []
+    # KPI 3: New documents in the last 30 days
+    thirty_days_ago = datetime.now() - timedelta(days=30)
+    kpi_new_documents_30d = SalesDocument.objects.filter(
+        issue_date__gte=thirty_days_ago.date()
+    ).count()
     
-    if company:
-        # KPI 1: Count of open documents (DRAFT, SENT, APPROVED)
-        kpi_open_documents = SalesDocument.objects.filter(
-            company=company,
-            status__in=['DRAFT', 'SENT', 'APPROVED']
-        ).count()
-        
-        # KPI 2: Count of unpaid invoices (documents marked as invoice, not paid, not cancelled)
-        kpi_unpaid_invoices = SalesDocument.objects.filter(
-            company=company,
-            document_type__is_invoice=True,
-            paid_at__isnull=True,
-            status__in=['SENT', 'APPROVED', 'OVERDUE']
-        ).exclude(status='CANCELLED').count()
-        
-        # KPI 3: New documents in the last 30 days
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-        kpi_new_documents_30d = SalesDocument.objects.filter(
-            company=company,
-            issue_date__gte=thirty_days_ago.date()
-        ).count()
-        
-        # KPI 4: Total open amount (sum of unpaid invoices)
-        open_amount_aggregate = SalesDocument.objects.filter(
-            company=company,
-            document_type__is_invoice=True,
-            paid_at__isnull=True,
-            status__in=['SENT', 'APPROVED', 'OVERDUE']
-        ).exclude(status='CANCELLED').aggregate(total=Sum('total_gross'))
-        
-        kpi_open_amount = open_amount_aggregate['total'] or Decimal('0.00')
-        
-        # Get open sales documents (DRAFT, SENT, APPROVED)
-        open_sales_documents = SalesDocument.objects.filter(
-            company=company,
-            status__in=['DRAFT', 'SENT', 'APPROVED']
-        ).select_related('document_type').order_by('-issue_date')[:20]
-        
-        # Get latest 10 documents
-        latest_documents = SalesDocument.objects.filter(
-            company=company
-        ).select_related('document_type').order_by('-issue_date', '-id')[:10]
+    # KPI 4: Total open amount (sum of unpaid invoices)
+    open_amount_aggregate = SalesDocument.objects.filter(
+        document_type__is_invoice=True,
+        paid_at__isnull=True,
+        status__in=['SENT', 'APPROVED', 'OVERDUE']
+    ).exclude(status='CANCELLED').aggregate(total=Sum('total_gross'))
     
-    # Get activity stream (last 25 activities from ALL domains)
-    # Show global activities across all modules
-    if company:
-        activities = ActivityStreamService.latest(n=25, company=company)
-    else:
-        activities = []
+    kpi_open_amount = open_amount_aggregate['total'] or Decimal('0.00')
+    
+    # Get open sales documents (DRAFT, SENT, APPROVED) - across all companies
+    open_sales_documents = SalesDocument.objects.filter(
+        status__in=['DRAFT', 'SENT', 'APPROVED']
+    ).select_related('document_type', 'company').order_by('-issue_date')[:20]
+    
+    # Get latest 10 documents - across all companies
+    latest_documents = SalesDocument.objects.select_related(
+        'document_type', 'company'
+    ).order_by('-issue_date', '-id')[:10]
+    
+    # Get activity stream (last 25 activities from ALL domains and ALL companies)
+    # Show global activities across all modules and all companies
+    activities = ActivityStreamService.latest(n=25)
     
     context = {
         'kpi_open_documents': kpi_open_documents,
@@ -199,22 +179,13 @@ def document_list(request, doc_key):
     # Get the document type or 404
     document_type = get_object_or_404(DocumentType, key=doc_key, is_active=True)
     
-    # Get the default company (for now, we'll use the first available)
-    try:
-        company = Mandant.objects.first()
-    except Mandant.DoesNotExist:
-        company = None
-    
     # Base queryset with optimized select/prefetch
+    # Show documents from ALL companies (all users can work with all companies)
     queryset = SalesDocument.objects.select_related(
         'document_type', 'company', 'customer'
     ).filter(
         document_type=document_type
     )
-    
-    # Filter by company if available
-    if company:
-        queryset = queryset.filter(company=company)
     
     # Apply filters
     filter_set = SalesDocumentFilter(request.GET, queryset=queryset)
@@ -939,20 +910,11 @@ def contract_list(request):
     
     Displays a filterable, sortable, paginated list of recurring billing contracts.
     """
-    # Get the default company (for now, we'll use the first available)
-    try:
-        company = Mandant.objects.first()
-    except Mandant.DoesNotExist:
-        company = None
-    
     # Base queryset with optimized select/prefetch
+    # Show contracts from ALL companies (all users can work with all companies)
     queryset = Contract.objects.select_related(
         'customer', 'company'
     )
-    
-    # Filter by company if available
-    if company:
-        queryset = queryset.filter(company=company)
     
     # Apply filters
     filter_set = ContractFilter(request.GET, queryset=queryset)
@@ -1616,20 +1578,10 @@ def texttemplate_list(request):
     List view for text templates (Textbausteine).
     
     Displays a filterable, sortable, paginated list of text templates.
-    Only shows templates for the user's company.
+    Shows templates for all companies (all users can work with all companies).
     """
-    # Get the default company
-    try:
-        company = Mandant.objects.first()
-    except Mandant.DoesNotExist:
-        company = None
-    
-    # Base queryset
+    # Base queryset - show text templates from ALL companies
     queryset = TextTemplate.objects.select_related('company')
-    
-    # Filter by company if available
-    if company:
-        queryset = queryset.filter(company=company)
     
     # Apply filters
     filter_set = TextTemplateFilter(request.GET, queryset=queryset)
@@ -1762,21 +1714,12 @@ def journal_list(request):
     
     Displays a filterable, sortable, paginated list of journal entries.
     This is a read-only view - no create/update/delete operations.
+    Shows journal entries from all companies (all users can work with all companies).
     """
-    # Get the default company (for now, we'll use the first available)
-    try:
-        company = Mandant.objects.first()
-    except Mandant.DoesNotExist:
-        company = None
-    
-    # Base queryset with optimized select/prefetch
+    # Base queryset with optimized select/prefetch - from ALL companies
     queryset = OutgoingInvoiceJournalEntry.objects.select_related(
         'company', 'document'
     )
-    
-    # Filter by company if available
-    if company:
-        queryset = queryset.filter(company=company)
     
     # Apply filters
     filter_set = OutgoingInvoiceJournalFilter(request.GET, queryset=queryset)
