@@ -267,8 +267,8 @@ class UtilsTest(TestCase):
         url_path = urllib.parse.urlparse(base_url).path
         self.assertTrue(Path(url_path).exists())
     
-    def test_get_static_base_url_finds_print_css(self):
-        """Test that the base_url can be used to locate print.css."""
+    def test_get_static_base_url_constructs_correct_css_path(self):
+        """Test that the base_url constructs the correct path to print.css."""
         from pathlib import Path
         import urllib.parse
         
@@ -280,7 +280,10 @@ class UtilsTest(TestCase):
         # or at base_url/printing/print.css (if staticfiles is used after collectstatic)
         css_path = Path(url_path) / 'printing' / 'print.css'
         
-        # Note: In development, we expect to find the file
-        # In CI or test environments without collectstatic, this might not exist
-        # So we just verify the path is constructed correctly
+        # Verify the path is constructed correctly
         self.assertTrue(str(css_path).endswith('printing/print.css'))
+        
+        # In development environments, the file should actually exist
+        # In CI without collectstatic, this might not be true, so we don't fail
+        if css_path.exists():
+            self.assertTrue(css_path.is_file())
