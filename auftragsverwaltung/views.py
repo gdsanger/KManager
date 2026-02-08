@@ -23,7 +23,7 @@ from .utils import sanitize_html
 from .printing import SalesDocumentInvoiceContextBuilder
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit
 from core.services.activity_stream import ActivityStreamService
-from core.printing import PdfRenderService
+from core.printing import PdfRenderService, get_static_base_url
 from finanzen.models import OutgoingInvoiceJournalEntry
 
 # Initialize logger
@@ -1825,9 +1825,9 @@ def document_pdf(request, pk):
     context = context_builder.build_context(document)
     template_name = context_builder.get_template_name(document)
     
-    # Get base URL for static assets
-    static_root = settings.BASE_DIR / 'static'
-    base_url = f'file://{static_root}/'
+    # Get base URL for static assets using the utility function
+    # This handles both development (with app-specific static dirs) and production (with STATIC_ROOT)
+    base_url = get_static_base_url()
     
     # Generate PDF
     pdf_service = PdfRenderService()
