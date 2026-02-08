@@ -81,6 +81,23 @@ class InvoiceTemplateV1:
     }
     """
     
+    # Table column widths for line items table
+    COL_WIDTH_POS = 1*cm
+    COL_WIDTH_QTY = 1.5*cm
+    COL_WIDTH_UNIT = 1.5*cm
+    COL_WIDTH_DESCRIPTION = 7*cm
+    COL_WIDTH_PRICE = 2.5*cm
+    COL_WIDTH_TAX = 1.5*cm
+    COL_WIDTH_TOTAL = 2*cm
+    
+    # Metadata table column widths
+    COL_WIDTH_META_LABEL = 4*cm
+    COL_WIDTH_META_VALUE = 10*cm
+    
+    # Totals table column widths
+    COL_WIDTH_TOTALS_LABEL = 8*cm
+    COL_WIDTH_TOTALS_VALUE = 4*cm
+    
     def build_story(self, context):
         """
         Build the invoice content as a list of Flowables.
@@ -270,7 +287,7 @@ class InvoiceTemplateV1:
             ])
         
         if meta_data:
-            meta_table = Table(meta_data, colWidths=[4*cm, 10*cm])
+            meta_table = Table(meta_data, colWidths=[self.COL_WIDTH_META_LABEL, self.COL_WIDTH_META_VALUE])
             meta_table.setStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('TOPPADDING', (0, 0), (-1, -1), 2),
@@ -346,7 +363,15 @@ class InvoiceTemplateV1:
         # Create table
         table = Table(
             table_data,
-            colWidths=[1*cm, 1.5*cm, 1.5*cm, 7*cm, 2.5*cm, 1.5*cm, 2*cm],
+            colWidths=[
+                self.COL_WIDTH_POS,
+                self.COL_WIDTH_QTY,
+                self.COL_WIDTH_UNIT,
+                self.COL_WIDTH_DESCRIPTION,
+                self.COL_WIDTH_PRICE,
+                self.COL_WIDTH_TAX,
+                self.COL_WIDTH_TOTAL,
+            ],
             repeatRows=1  # Repeat header on each page
         )
         
@@ -451,7 +476,11 @@ class InvoiceTemplateV1:
         ])
         
         # Create table (right-aligned on page)
-        totals_table = Table(totals_data, colWidths=[8*cm, 4*cm], hAlign='RIGHT')
+        totals_table = Table(
+            totals_data,
+            colWidths=[self.COL_WIDTH_TOTALS_LABEL, self.COL_WIDTH_TOTALS_VALUE],
+            hAlign='RIGHT'
+        )
         totals_table.setStyle([
             ('ALIGN', (0, 0), (0, -1), 'LEFT'),
             ('ALIGN', (1, 0), (1, -1), 'RIGHT'),

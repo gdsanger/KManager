@@ -344,7 +344,12 @@ class SalesDocumentInvoiceContextBuilder:
         return asdict(context)
     
     def _format_currency(self, amount: Decimal) -> str:
-        """Format currency amount"""
+        """
+        Format currency amount in German number format.
+        
+        Converts from: 1234.56 (Decimal internal format)
+        To: 1.234,56 (German display format with thousands separator and decimal comma)
+        """
         return f"{amount:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     
     def _format_percentage(self, rate: Decimal) -> str:
