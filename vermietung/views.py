@@ -1667,7 +1667,24 @@ def vertrag_edit(request, pk):
                 # Update availability of all affected mietobjekte
                 vertrag.update_mietobjekte_availability()
                 
-                # Log ActivityStream event for status change
+                # Log ActivityStream event for contract update
+                try:
+                    mieter_name = vertrag.mieter.full_name() if vertrag.mieter else 'Unbekannt'
+                    _log_vertrag_stream_event(
+                        vertrag=vertrag,
+                        event_type='contract.updated',
+                        actor=request.user,
+                        description=f'Vertrag aktualisiert für Mieter: {mieter_name}'
+                    )
+                except RuntimeError as e:
+                    # Activity stream logging failed - show warning but don't block the operation
+                    logger.error(f"Activity stream logging failed for Vertrag {vertrag.pk}: {e}")
+                    messages.warning(
+                        request,
+                        f'Vertrag wurde aktualisiert, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
+                    )
+                
+                # Additionally log status change if status was changed
                 new_status = vertrag.status
                 if old_status != new_status:
                     try:

@@ -312,7 +312,7 @@ class VertragActivityStreamTest(TestCase):
         self.assertIn('Storniert', event.description)
     
     def test_no_event_when_status_unchanged(self):
-        """Test that no status_changed event is created when status doesn't change."""
+        """Test that contract.updated event is created but no status_changed event when status doesn't change."""
         # Create vertrag
         vertrag = Vertrag.objects.create(
             mieter=self.kunde,
@@ -332,9 +332,14 @@ class VertragActivityStreamTest(TestCase):
         )
         
         # Count initial events
-        initial_count = Activity.objects.filter(
+        initial_status_changed_count = Activity.objects.filter(
             company=self.mandant,
             activity_type='contract.status_changed'
+        ).count()
+        
+        initial_updated_count = Activity.objects.filter(
+            company=self.mandant,
+            activity_type='contract.updated'
         ).count()
         
         # Update vertrag without changing status
@@ -369,7 +374,19 @@ class VertragActivityStreamTest(TestCase):
             activity_type='contract.status_changed'
         ).count()
         
-        self.assertEqual(status_changed, initial_count)
+        self.assertEqual(status_changed, initial_status_changed_count)
+        
+        # Verify that a contract.updated event WAS created
+        updated_events = Activity.objects.filter(
+            company=self.mandant,
+            activity_type='contract.updated'
+        )
+        self.assertEqual(updated_events.count(), initial_updated_count + 1)
+        
+        # Verify event details
+        event = updated_events.latest('created_at')
+        self.assertEqual(event.actor, self.user)
+        self.assertIn('aktualisiert', event.description)
     
     def test_event_has_valid_target_url(self):
         """Test that all events have a valid target_url pointing to the contract."""
