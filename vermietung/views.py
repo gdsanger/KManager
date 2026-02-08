@@ -432,6 +432,81 @@ def _log_eingangsrechnung_stream_event(eingangsrechnung, event_type, actor=None,
     )
 
 
+# Helper functions for Uebergabeprotokoll ActivityStream integration
+def _get_mandant_for_uebergabeprotokoll(uebergabeprotokoll):
+    """
+    Get Mandant for an Uebergabeprotokoll from its context.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        
+    Returns:
+        Mandant instance or None if no mandant can be determined
+    """
+    # Try to get mandant from vertrag
+    if uebergabeprotokoll.vertrag and uebergabeprotokoll.vertrag.mandant:
+        return uebergabeprotokoll.vertrag.mandant
+    
+    # Try to get mandant from mietobjekt
+    if uebergabeprotokoll.mietobjekt and uebergabeprotokoll.mietobjekt.mandant:
+        return uebergabeprotokoll.mietobjekt.mandant
+    
+    # Fallback: get first available mandant or return None
+    return Mandant.objects.first()
+
+
+def _get_uebergabeprotokoll_target_url(uebergabeprotokoll):
+    """
+    Generate target URL for an Uebergabeprotokoll.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        
+    Returns:
+        str: Relative URL to the uebergabeprotokoll detail page
+    """
+    return reverse('vermietung:uebergabeprotokoll_detail', args=[uebergabeprotokoll.pk])
+
+
+def _log_uebergabeprotokoll_stream_event(uebergabeprotokoll, event_type, actor=None, description=None, severity='INFO'):
+    """
+    Log an ActivityStream event for an Uebergabeprotokoll.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        event_type: str, event type (e.g., 'handover.created', 'handover.updated', 'handover.deleted')
+        actor: User instance who performed the action (optional)
+        description: str, additional description (optional)
+        severity: str, severity level (default: 'INFO')
+        
+    Raises:
+        RuntimeError: If no Mandant can be found for the Uebergabeprotokoll
+    """
+    mandant = _get_mandant_for_uebergabeprotokoll(uebergabeprotokoll)
+    
+    # If no mandant, cannot create stream event - raise error instead of silently failing
+    if not mandant:
+        error_msg = _create_no_mandant_error('Uebergabeprotokoll', uebergabeprotokoll.pk)
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+    
+    # Generate a descriptive title
+    typ_display = uebergabeprotokoll.get_typ_display()
+    title = f'Übergabeprotokoll: {typ_display} - {uebergabeprotokoll.vertrag.vertragsnummer}'
+    
+    # Call ActivityStreamService directly without try-except to let errors propagate
+    ActivityStreamService.add(
+        company=mandant,
+        domain='RENTAL',
+        activity_type=event_type,
+        title=title,
+        description=description or '',
+        target_url=_get_uebergabeprotokoll_target_url(uebergabeprotokoll),
+        actor=actor,
+        severity=severity
+    )
+
+
 @login_required
 def download_dokument(request, dokument_id):
     """
@@ -1824,6 +1899,26 @@ def uebergabeprotokoll_create(request):
         if form.is_valid():
             try:
                 protokoll = form.save()
+                
+                # Log ActivityStream event for handover protocol creation
+                try:
+                    typ_display = protokoll.get_typ_display()
+                    mietobjekt_name = protokoll.mietobjekt.name if protokoll.mietobjekt else 'Unbekannt'
+                    uebergabetag = protokoll.uebergabetag.strftime('%d.%m.%Y') if protokoll.uebergabetag else 'Unbekannt'
+                    _log_uebergabeprotokoll_stream_event(
+                        uebergabeprotokoll=protokoll,
+                        event_type='handover.created',
+                        actor=request.user,
+                        description=f'Neues Übergabeprotokoll erstellt. Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}'
+                    )
+                except RuntimeError as e:
+                    # Activity stream logging failed - show warning but don't block the operation
+                    logger.error(f"Activity stream logging failed for Uebergabeprotokoll {protokoll.pk}: {e}")
+                    messages.warning(
+                        request,
+                        ACTIVITY_LOGGING_FAILED_MESSAGE
+                    )
+                
                 messages.success(
                     request,
                     f'Übergabeprotokoll wurde erfolgreich angelegt.'
@@ -1858,6 +1953,26 @@ def uebergabeprotokoll_create_from_vertrag(request, vertrag_pk):
         if form.is_valid():
             try:
                 protokoll = form.save()
+                
+                # Log ActivityStream event for handover protocol creation
+                try:
+                    typ_display = protokoll.get_typ_display()
+                    mietobjekt_name = protokoll.mietobjekt.name if protokoll.mietobjekt else 'Unbekannt'
+                    uebergabetag = protokoll.uebergabetag.strftime('%d.%m.%Y') if protokoll.uebergabetag else 'Unbekannt'
+                    _log_uebergabeprotokoll_stream_event(
+                        uebergabeprotokoll=protokoll,
+                        event_type='handover.created',
+                        actor=request.user,
+                        description=f'Neues Übergabeprotokoll erstellt. Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}'
+                    )
+                except RuntimeError as e:
+                    # Activity stream logging failed - show warning but don't block the operation
+                    logger.error(f"Activity stream logging failed for Uebergabeprotokoll {protokoll.pk}: {e}")
+                    messages.warning(
+                        request,
+                        ACTIVITY_LOGGING_FAILED_MESSAGE
+                    )
+                
                 messages.success(
                     request,
                     f'Übergabeprotokoll wurde erfolgreich angelegt.'
@@ -1894,11 +2009,46 @@ def uebergabeprotokoll_edit(request, pk):
     """
     protokoll = get_object_or_404(Uebergabeprotokoll, pk=pk)
     
+    # Track original values for meaningful change detection
+    old_typ = protokoll.typ
+    old_uebergabetag = protokoll.uebergabetag
+    
     if request.method == 'POST':
         form = UebergabeprotokollForm(request.POST, instance=protokoll)
         if form.is_valid():
             try:
                 protokoll = form.save()
+                
+                # Check if there were meaningful business changes
+                changes = []
+                if old_typ != protokoll.typ:
+                    old_typ_display = dict(protokoll._meta.get_field('typ').choices).get(old_typ, old_typ)
+                    new_typ_display = protokoll.get_typ_display()
+                    changes.append(f'Typ: {old_typ_display} → {new_typ_display}')
+                
+                if old_uebergabetag != protokoll.uebergabetag:
+                    old_date = old_uebergabetag.strftime('%d.%m.%Y') if old_uebergabetag else 'Unbekannt'
+                    new_date = protokoll.uebergabetag.strftime('%d.%m.%Y') if protokoll.uebergabetag else 'Unbekannt'
+                    changes.append(f'Datum: {old_date} → {new_date}')
+                
+                # Log ActivityStream event only if there were meaningful changes
+                if changes:
+                    try:
+                        description = f'Übergabeprotokoll aktualisiert. Änderungen: {", ".join(changes)}'
+                        _log_uebergabeprotokoll_stream_event(
+                            uebergabeprotokoll=protokoll,
+                            event_type='handover.updated',
+                            actor=request.user,
+                            description=description
+                        )
+                    except RuntimeError as e:
+                        # Activity stream logging failed - show warning but don't block the operation
+                        logger.error(f"Activity stream logging failed for Uebergabeprotokoll {protokoll.pk}: {e}")
+                        messages.warning(
+                            request,
+                            ACTIVITY_LOGGING_FAILED_MESSAGE
+                        )
+                
                 messages.success(
                     request,
                     f'Übergabeprotokoll wurde erfolgreich aktualisiert.'
@@ -1929,6 +2079,26 @@ def uebergabeprotokoll_delete(request, pk):
     """
     protokoll = get_object_or_404(Uebergabeprotokoll, pk=pk)
     protokoll_info = str(protokoll)
+    
+    # Log ActivityStream event before deletion
+    try:
+        typ_display = protokoll.get_typ_display()
+        mietobjekt_name = protokoll.mietobjekt.name if protokoll.mietobjekt else 'Unbekannt'
+        uebergabetag = protokoll.uebergabetag.strftime('%d.%m.%Y') if protokoll.uebergabetag else 'Unbekannt'
+        _log_uebergabeprotokoll_stream_event(
+            uebergabeprotokoll=protokoll,
+            event_type='handover.deleted',
+            actor=request.user,
+            description=f'Übergabeprotokoll gelöscht. Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}',
+            severity='WARNING'
+        )
+    except RuntimeError as e:
+        # Activity stream logging failed - show warning but don't block the operation
+        logger.error(f"Activity stream logging failed for Uebergabeprotokoll {protokoll.pk}: {e}")
+        messages.warning(
+            request,
+            ACTIVITY_LOGGING_FAILED_MESSAGE
+        )
     
     try:
         protokoll.delete()
