@@ -3,7 +3,7 @@ from django import forms
 from .models import (
     MietObjekt, Vertrag, VertragsObjekt, Uebergabeprotokoll, Dokument, Aktivitaet, AktivitaetsBereich,
     OBJEKT_TYPE, VERTRAG_STATUS, DOKUMENT_ENTITY_TYPES, AKTIVITAET_STATUS, AKTIVITAET_PRIORITAET,
-    Eingangsrechnung, EingangsrechnungAufteilung
+    Eingangsrechnung, EingangsrechnungAufteilung, UEBERGABE_TYP
 )
 from core.models import Adresse, Mandant
 from core.services.activity_stream import ActivityStreamService
@@ -156,6 +156,102 @@ def _log_vertrag_stream_event_admin(vertrag, event_type, actor=None, description
     except Exception as e:
         logger.error(
             f"Failed to create ActivityStream event for Vertrag {vertrag.pk}: {e}"
+        )
+
+
+# Helper functions for Uebergabeprotokoll ActivityStream integration in Admin
+def _get_mandant_for_uebergabeprotokoll(uebergabeprotokoll):
+    """
+    Get Mandant for an Uebergabeprotokoll from its context.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        
+    Returns:
+        Mandant instance or None if no mandant can be determined
+    """
+    # Try to get mandant from vertrag
+    if uebergabeprotokoll.vertrag and uebergabeprotokoll.vertrag.mandant:
+        return uebergabeprotokoll.vertrag.mandant
+    
+    # Try to get mandant from mietobjekt
+    if uebergabeprotokoll.mietobjekt and uebergabeprotokoll.mietobjekt.mandant:
+        return uebergabeprotokoll.mietobjekt.mandant
+    
+    # Fallback: get first available mandant or return None
+    return Mandant.objects.first()
+
+
+def _get_uebergabeprotokoll_target_url(uebergabeprotokoll):
+    """
+    Generate target URL for an Uebergabeprotokoll.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        
+    Returns:
+        str: Relative URL to the uebergabeprotokoll detail page
+    """
+    return reverse('vermietung:uebergabeprotokoll_detail', args=[uebergabeprotokoll.pk])
+
+
+def _format_uebergabeprotokoll_description(uebergabeprotokoll):
+    """
+    Format a description string for an Uebergabeprotokoll with key details.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        
+    Returns:
+        str: Formatted description with typ, object, and date
+    """
+    typ_display = uebergabeprotokoll.get_typ_display()
+    mietobjekt_name = uebergabeprotokoll.mietobjekt.name if uebergabeprotokoll.mietobjekt else 'Unbekannt'
+    uebergabetag = uebergabeprotokoll.uebergabetag.strftime('%d.%m.%Y') if uebergabeprotokoll.uebergabetag else 'Unbekannt'
+    return f'Typ: {typ_display}, Objekt: {mietobjekt_name}, Datum: {uebergabetag}'
+
+
+def _log_uebergabeprotokoll_stream_event_admin(uebergabeprotokoll, event_type, actor=None, description=None, severity='INFO'):
+    """
+    Log an ActivityStream event for an Uebergabeprotokoll from Django Admin.
+    
+    Args:
+        uebergabeprotokoll: Uebergabeprotokoll instance
+        event_type: str, event type (e.g., 'handover.created', 'handover.updated')
+        actor: User instance who performed the action (optional)
+        description: str, additional description (optional)
+        severity: str, severity level (default: 'INFO')
+    """
+    mandant = _get_mandant_for_uebergabeprotokoll(uebergabeprotokoll)
+    
+    # If no mandant, cannot create stream event
+    if not mandant:
+        logger.warning(
+            f"Cannot create ActivityStream event for Uebergabeprotokoll {uebergabeprotokoll.pk}: "
+            f"No Mandant found"
+        )
+        return
+    
+    # Generate a descriptive title
+    typ_display = uebergabeprotokoll.get_typ_display()
+    # Handle case where vertrag might be None
+    vertrag_nummer = uebergabeprotokoll.vertrag.vertragsnummer if uebergabeprotokoll.vertrag else 'Unbekannt'
+    title = f'Übergabeprotokoll: {typ_display} - {vertrag_nummer}'
+    
+    try:
+        ActivityStreamService.add(
+            company=mandant,
+            domain='RENTAL',
+            activity_type=event_type,
+            title=title,
+            description=description or '',
+            target_url=_get_uebergabeprotokoll_target_url(uebergabeprotokoll),
+            actor=actor,
+            severity=severity
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to create ActivityStream event for Uebergabeprotokoll {uebergabeprotokoll.pk}: {e}"
         )
 
 
@@ -418,6 +514,65 @@ class UebergabeprotokollAdmin(admin.ModelAdmin):
         """Optimize queries by prefetching related objects."""
         queryset = super().get_queryset(request)
         return queryset.select_related('vertrag', 'mietobjekt')
+    
+    def save_model(self, request, obj, form, change):
+        """
+        Override save_model to log ActivityStream events for create and edit operations.
+        
+        Args:
+            request: HTTP request
+            obj: Uebergabeprotokoll instance being saved
+            form: ModelForm instance
+            change: Boolean indicating if this is a change (True) or creation (False)
+        """
+        # Store old values before save to detect meaningful changes
+        old_typ = None
+        old_uebergabetag = None
+        if change and obj.pk:
+            try:
+                old_instance = Uebergabeprotokoll.objects.get(pk=obj.pk)
+                old_typ = old_instance.typ
+                old_uebergabetag = old_instance.uebergabetag
+            except Uebergabeprotokoll.DoesNotExist:
+                pass
+        
+        # Save the object
+        super().save_model(request, obj, form, change)
+        
+        # Log ActivityStream events
+        if not change:
+            # New handover protocol created
+            description = f'Neues Übergabeprotokoll erstellt. {_format_uebergabeprotokoll_description(obj)} (via Admin)'
+            _log_uebergabeprotokoll_stream_event_admin(
+                uebergabeprotokoll=obj,
+                event_type='handover.created',
+                actor=request.user,
+                description=description,
+                severity='INFO'
+            )
+        else:
+            # Handover protocol edited - check if there were meaningful changes
+            changes = []
+            if old_typ and old_typ != obj.typ:
+                old_typ_display = dict(UEBERGABE_TYP).get(old_typ, old_typ)
+                new_typ_display = obj.get_typ_display()
+                changes.append(f'Typ: {old_typ_display} → {new_typ_display}')
+            
+            if old_uebergabetag and old_uebergabetag != obj.uebergabetag:
+                old_date = old_uebergabetag.strftime('%d.%m.%Y')
+                new_date = obj.uebergabetag.strftime('%d.%m.%Y') if obj.uebergabetag else 'Unbekannt'
+                changes.append(f'Datum: {old_date} → {new_date}')
+            
+            # Only log if there were meaningful changes
+            if changes:
+                description = f'Übergabeprotokoll aktualisiert. Änderungen: {", ".join(changes)} (via Admin)'
+                _log_uebergabeprotokoll_stream_event_admin(
+                    uebergabeprotokoll=obj,
+                    event_type='handover.updated',
+                    actor=request.user,
+                    description=description,
+                    severity='INFO'
+                )
 
 
 class DokumentAdminForm(forms.ModelForm):
