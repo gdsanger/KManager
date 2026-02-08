@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
+import logging
 
 from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, TextTemplate
 from .tables import SalesDocumentTable, ContractTable, TextTemplateTable, OutgoingInvoiceJournalTable
@@ -21,6 +22,9 @@ from .utils import sanitize_html
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit
 from core.services.activity_stream import ActivityStreamService
 from finanzen.models import OutgoingInvoiceJournalEntry
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 
 def normalize_foreign_key_id(value):
@@ -840,6 +844,7 @@ def ajax_update_line(request, doc_key, pk, line_id):
             }
         })
     except Exception as e:
+        logger.exception(f"Error updating line {line_id} in document {pk}: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
 
