@@ -15,7 +15,7 @@
 /* Default page settings for all pages */
 @page {
     size: A4;
-    margin: 2.5cm 2cm 3cm 2cm; /* top, right, bottom, left */
+    margin: 2.5cm 2cm 3cm 1.5cm; /* top, right, bottom, left */
     
     /* Running footer on all pages */
     @bottom-center {
