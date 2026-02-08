@@ -39,9 +39,8 @@ def main():
     print("✓ Context prepared")
     
     # Get base_url for static assets
-    from django.conf import settings
-    static_root = settings.BASE_DIR / 'static'
-    base_url = f'file://{static_root}/'
+    from core.printing import get_static_base_url
+    base_url = get_static_base_url()
     print(f"✓ Base URL: {base_url}")
     
     # Render PDF

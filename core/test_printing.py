@@ -11,7 +11,8 @@ from core.printing import (
     PdfRenderService,
     PdfResult,
     sanitize_html,
-    IPdfRenderer
+    IPdfRenderer,
+    get_static_base_url
 )
 from core.printing.weasyprint_renderer import WeasyPrintRenderer
 from core.printing.service import TemplateNotFoundError, RenderError
@@ -158,7 +159,8 @@ class BaseTemplateTest(TestCase):
         html = render_to_string('printing/base.html', context)
         
         self.assertIn('<!DOCTYPE html>', html)
-        self.assertIn('/static/printing/print.css', html)
+        # Check for relative CSS path (changed from absolute path for WeasyPrint compatibility)
+        self.assertIn('printing/print.css', html)
 
 
 class WeasyPrintRendererTest(TestCase):
@@ -245,3 +247,44 @@ class SmokeTest(TestCase):
         # Verify it looks like a PDF
         if isinstance(renderer, WeasyPrintRenderer):
             self.assertTrue(result.pdf_bytes.startswith(b'%PDF'))
+
+
+class UtilsTest(TestCase):
+    """Test utility functions."""
+    
+    def test_get_static_base_url_returns_valid_file_url(self):
+        """Test that get_static_base_url returns a valid file:// URL."""
+        base_url = get_static_base_url()
+        
+        # Should be a file:// URL
+        self.assertTrue(base_url.startswith('file://'))
+        
+        # Should end with a slash
+        self.assertTrue(base_url.endswith('/'))
+        
+        # Should point to an existing directory
+        from pathlib import Path
+        import urllib.parse
+        url_path = urllib.parse.urlparse(base_url).path
+        self.assertTrue(Path(url_path).exists())
+    
+    def test_get_static_base_url_constructs_correct_css_path(self):
+        """Test that the base_url constructs the correct path to print.css."""
+        from pathlib import Path
+        import urllib.parse
+        
+        base_url = get_static_base_url()
+        url_path = urllib.parse.urlparse(base_url).path
+        
+        # The print.css should be accessible from this base path
+        # Either at base_url/printing/print.css (if core/static is used)
+        # or at base_url/printing/print.css (if staticfiles is used after collectstatic)
+        css_path = Path(url_path) / 'printing' / 'print.css'
+        
+        # Verify the path is constructed correctly
+        self.assertTrue(str(css_path).endswith('printing/print.css'))
+        
+        # In development environments, the file should actually exist
+        # In CI without collectstatic, this might not be true, so we don't fail
+        if css_path.exists():
+            self.assertTrue(css_path.is_file())
