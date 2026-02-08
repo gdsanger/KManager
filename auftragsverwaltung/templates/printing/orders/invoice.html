@@ -1,0 +1,384 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Rechnung {{ doc.number }}{% endblock %}
+
+{% block inline_styles %}
+/* Invoice-specific styles */
+.address-block {
+    margin-bottom: 24pt;
+}
+
+.address-block .sender {
+    font-size: 7pt;
+    border-bottom: 1pt solid #ccc;
+    padding-bottom: 3pt;
+    margin-bottom: 6pt;
+}
+
+.address-block .recipient {
+    font-size: 10pt;
+    line-height: 1.3;
+}
+
+.doc-header {
+    margin-bottom: 16pt;
+}
+
+.doc-header h1 {
+    font-size: 16pt;
+    margin-bottom: 8pt;
+}
+
+.doc-meta-table {
+    width: 100%;
+    margin-bottom: 16pt;
+    border: none;
+}
+
+.doc-meta-table td {
+    border: none;
+    padding: 2pt 8pt 2pt 0;
+    font-size: 9pt;
+}
+
+.doc-meta-table .label {
+    font-weight: bold;
+    width: 150pt;
+}
+
+.header-text {
+    margin: 16pt 0;
+    font-size: 10pt;
+}
+
+.positions-table {
+    margin: 16pt 0;
+}
+
+.positions-table thead th {
+    background-color: #f5f5f5;
+    font-size: 8pt;
+    padding: 4pt 6pt;
+}
+
+.positions-table tbody td {
+    font-size: 9pt;
+    padding: 4pt 6pt;
+    vertical-align: top;
+}
+
+.positions-table .col-pos { width: 30pt; text-align: center; }
+.positions-table .col-qty { width: 50pt; text-align: right; }
+.positions-table .col-unit { width: 40pt; }
+.positions-table .col-desc { width: auto; }
+.positions-table .col-price { width: 70pt; text-align: right; }
+.positions-table .col-discount { width: 50pt; text-align: right; }
+.positions-table .col-net { width: 80pt; text-align: right; }
+
+.long-text {
+    font-size: 8pt;
+    color: #555;
+    margin-top: 2pt;
+    white-space: pre-wrap;
+}
+
+.totals-section {
+    margin-top: 24pt;
+    page-break-inside: avoid;
+}
+
+.totals-table {
+    width: 100%;
+    max-width: 400pt;
+    margin-left: auto;
+    border: none;
+}
+
+.totals-table td {
+    border: none;
+    padding: 3pt 8pt;
+    font-size: 9pt;
+}
+
+.totals-table .label {
+    text-align: right;
+    font-weight: normal;
+}
+
+.totals-table .amount {
+    text-align: right;
+    font-weight: normal;
+    width: 100pt;
+}
+
+.totals-table .total-row {
+    border-top: 1pt solid #000;
+    font-weight: bold;
+    font-size: 10pt;
+}
+
+.tax-notes {
+    margin-top: 16pt;
+    padding: 8pt;
+    background-color: #f9f9f9;
+    border: 1pt solid #ddd;
+    font-size: 9pt;
+    page-break-inside: avoid;
+}
+
+.footer-text {
+    margin-top: 16pt;
+    font-size: 9pt;
+    color: #555;
+}
+
+.payment-term {
+    margin-top: 12pt;
+    font-size: 9pt;
+    font-weight: bold;
+}
+
+/* Footer on every page (via @page) */
+@page {
+    @bottom-left {
+        content: "{{ company.name }}";
+        font-size: 7pt;
+        color: #666;
+    }
+    @bottom-center {
+        content: "Seite " counter(page) " von " counter(pages);
+        font-size: 8pt;
+        color: #666;
+    }
+    @bottom-right {
+        content: "{{ doc.number }}";
+        font-size: 7pt;
+        color: #666;
+    }
+}
+
+/* First page specific header */
+@page :first {
+    margin-top: 8cm; /* Space for address window */
+}
+{% endblock %}
+
+{% block first_page_header %}
+<!-- Address block positioned for window envelope -->
+<div class="address-block">
+    <div class="sender">
+        {{ company.name }} &bull; {{ company.address_lines.0|default:"" }} &bull; {{ company.address_lines.1|default:"" }}
+    </div>
+    {% if customer %}
+    <div class="recipient">
+        {% for line in customer.address_lines %}
+        {{ line }}<br>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Document header -->
+<div class="doc-header">
+    <h1>Rechnung</h1>
+</div>
+
+<!-- Document metadata -->
+<table class="doc-meta-table">
+    <tr>
+        <td class="label">Rechnungsnummer:</td>
+        <td>{{ doc.number }}</td>
+    </tr>
+    <tr>
+        <td class="label">Rechnungsdatum:</td>
+        <td>{{ doc.issue_date|date:"d.m.Y" }}</td>
+    </tr>
+    {% if doc.due_date %}
+    <tr>
+        <td class="label">Fälligkeitsdatum:</td>
+        <td>{{ doc.due_date|date:"d.m.Y" }}</td>
+    </tr>
+    {% endif %}
+    {% if customer %}
+    <tr>
+        <td class="label">Kunde:</td>
+        <td>{{ customer.name }}</td>
+    </tr>
+    {% endif %}
+    {% if customer.vat_id %}
+    <tr>
+        <td class="label">USt-IdNr. Kunde:</td>
+        <td>{{ customer.vat_id }}</td>
+    </tr>
+    {% endif %}
+    {% if doc.reference_number %}
+    <tr>
+        <td class="label">Referenznummer:</td>
+        <td>{{ doc.reference_number }}</td>
+    </tr>
+    {% endif %}
+    {% if doc.subject %}
+    <tr>
+        <td class="label">Betreff:</td>
+        <td>{{ doc.subject }}</td>
+    </tr>
+    {% endif %}
+</table>
+
+<!-- Header text (from Quill editor) -->
+{% if doc.header_html %}
+<div class="header-text">
+    {{ doc.header_html|safe }}
+</div>
+{% endif %}
+
+<!-- Positions table -->
+<table class="positions-table">
+    <thead>
+        <tr>
+            <th class="col-pos">Pos.</th>
+            <th class="col-qty">Menge</th>
+            <th class="col-unit">Einheit</th>
+            <th class="col-desc">Beschreibung</th>
+            <th class="col-price">Einzelpreis</th>
+            <th class="col-discount">Rabatt</th>
+            <th class="col-net">Gesamt netto</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in lines %}
+        <tr>
+            <td class="col-pos">{{ line.pos }}</td>
+            <td class="col-qty">{{ line.qty|floatformat:2 }}</td>
+            <td class="col-unit">{{ line.unit }}</td>
+            <td class="col-desc">
+                {{ line.short_text }}
+                {% if line.long_text %}
+                <div class="long-text">{{ line.long_text }}</div>
+                {% endif %}
+            </td>
+            <td class="col-price">{{ line.unit_price_net|floatformat:2 }} €</td>
+            <td class="col-discount">
+                {% if line.discount_percent > 0 %}
+                {{ line.discount_percent|floatformat:2 }}%
+                {% else %}
+                -
+                {% endif %}
+            </td>
+            <td class="col-net">{{ line.net|floatformat:2 }} €</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Totals section -->
+<div class="totals-section">
+    <table class="totals-table">
+        {% if totals.net_19 > 0 %}
+        <tr>
+            <td class="label">Nettobetrag (19% MwSt.):</td>
+            <td class="amount">{{ totals.net_19|floatformat:2 }} €</td>
+        </tr>
+        <tr>
+            <td class="label">Umsatzsteuer 19%:</td>
+            <td class="amount">{{ totals.tax_19|floatformat:2 }} €</td>
+        </tr>
+        {% endif %}
+        {% if totals.net_7 > 0 %}
+        <tr>
+            <td class="label">Nettobetrag (7% MwSt.):</td>
+            <td class="amount">{{ totals.net_7|floatformat:2 }} €</td>
+        </tr>
+        <tr>
+            <td class="label">Umsatzsteuer 7%:</td>
+            <td class="amount">{{ totals.tax_7|floatformat:2 }} €</td>
+        </tr>
+        {% endif %}
+        {% if totals.net_0 > 0 %}
+        <tr>
+            <td class="label">Nettobetrag (0% MwSt.):</td>
+            <td class="amount">{{ totals.net_0|floatformat:2 }} €</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td class="label">Gesamtnettobetrag:</td>
+            <td class="amount">{{ totals.net_total|floatformat:2 }} €</td>
+        </tr>
+        <tr>
+            <td class="label">Gesamtsteuerbetrag:</td>
+            <td class="amount">{{ totals.tax_total|floatformat:2 }} €</td>
+        </tr>
+        <tr class="total-row">
+            <td class="label">Gesamtbruttobetrag:</td>
+            <td class="amount">{{ totals.gross_total|floatformat:2 }} €</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Tax notes (EU/Reverse Charge) -->
+{% if tax_notes.reverse_charge_text or tax_notes.export_text %}
+<div class="tax-notes">
+    {% if tax_notes.reverse_charge_text %}
+    <p><strong>Hinweis:</strong> {{ tax_notes.reverse_charge_text }}</p>
+    {% endif %}
+    {% if tax_notes.export_text %}
+    <p><strong>Hinweis:</strong> {{ tax_notes.export_text }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Payment term -->
+{% if doc.paymentterm_text %}
+<div class="payment-term">
+    {{ doc.paymentterm_text }}
+</div>
+{% endif %}
+
+<!-- Footer text (from Quill editor) -->
+{% if doc.footer_html %}
+<div class="footer-text">
+    {{ doc.footer_html|safe }}
+</div>
+{% endif %}
+
+<!-- Public notes -->
+{% if doc.notes_public %}
+<div class="footer-text">
+    <strong>Hinweise:</strong><br>
+    {{ doc.notes_public }}
+</div>
+{% endif %}
+
+<!-- Company footer information -->
+<div class="footer-note">
+    <p>
+        <strong>{{ company.name }}</strong><br>
+        {% for line in company.address_lines %}
+        {{ line }}{% if not forloop.last %} &bull; {% endif %}
+        {% endfor %}
+    </p>
+    {% if company.phone or company.email %}
+    <p>
+        {% if company.phone %}Tel: {{ company.phone }}{% endif %}
+        {% if company.phone and company.email %} &bull; {% endif %}
+        {% if company.email %}E-Mail: {{ company.email }}{% endif %}
+    </p>
+    {% endif %}
+    {% if company.tax_number or company.vat_id %}
+    <p>
+        {% if company.tax_number %}Steuernummer: {{ company.tax_number }}{% endif %}
+        {% if company.tax_number and company.vat_id %} &bull; {% endif %}
+        {% if company.vat_id %}USt-IdNr: {{ company.vat_id }}{% endif %}
+    </p>
+    {% endif %}
+    {% if company.bank_info %}
+    <p>
+        {% for info in company.bank_info %}
+        {{ info }}{% if not forloop.last %} &bull; {% endif %}
+        {% endfor %}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}
