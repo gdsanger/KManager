@@ -134,6 +134,28 @@
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
     
+    <!-- Configure HTMX to send CSRF token with every request -->
+    <script>
+        // Get CSRF token from cookie
+        function getCookie(name) {
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (const cookie of cookies) {
+                    const trimmedCookie = cookie.trim();
+                    if (trimmedCookie.startsWith(name + '=')) {
+                        return decodeURIComponent(trimmedCookie.substring(name.length + 1));
+                    }
+                }
+            }
+            return null;
+        }
+        
+        // Configure HTMX to include CSRF token in all requests
+        document.body.addEventListener('htmx:configRequest', (event) => {
+            event.detail.headers['X-CSRFToken'] = getCookie('csrftoken');
+        });
+    </script>
+    
     <!-- Initialize Bootstrap tooltips -->
     <script>
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
