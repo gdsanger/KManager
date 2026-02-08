@@ -747,6 +747,9 @@ Neues {{ document_type.name }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let isDirty = false;
+    // Track initial load state to prevent false dirty state during initialization
+    // This flag is cleared after all initialization is complete (see end of this function)
+    let isInitialLoad = true;
     const unsavedIndicator = document.getElementById('unsavedIndicator');
     
     // ============================================================================
@@ -842,19 +845,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Update hidden fields when Quill content changes
-    headerQuill.on('text-change', function() {
+    headerQuill.on('text-change', function(delta, oldDelta, source) {
         document.getElementById('header_text').value = headerQuill.root.innerHTML;
-        isDirty = true;
-        if (unsavedIndicator) {
-            unsavedIndicator.classList.add('show');
+        // Only set dirty on user changes, not on initial load or API changes
+        if (source === 'user' && !isInitialLoad) {
+            isDirty = true;
+            if (unsavedIndicator) {
+                unsavedIndicator.classList.add('show');
+            }
         }
     });
     
-    footerQuill.on('text-change', function() {
+    footerQuill.on('text-change', function(delta, oldDelta, source) {
         document.getElementById('footer_text').value = footerQuill.root.innerHTML;
-        isDirty = true;
-        if (unsavedIndicator) {
-            unsavedIndicator.classList.add('show');
+        // Only set dirty on user changes, not on initial load or API changes
+        if (source === 'user' && !isInitialLoad) {
+            isDirty = true;
+            if (unsavedIndicator) {
+                unsavedIndicator.classList.add('show');
+            }
         }
     });
     
@@ -868,10 +877,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Mark form as dirty on any change (excluding HTMX auto-saved fields)
     document.querySelectorAll('input:not([hx-post]), textarea:not([hx-post]), select:not([hx-post])').forEach(el => {
-        el.addEventListener('change', function() {
-            isDirty = true;
-            if (unsavedIndicator) {
-                unsavedIndicator.classList.add('show');
+        el.addEventListener('change', function(event) {
+            // Only set dirty on user changes (after initial load)
+            if (!isInitialLoad) {
+                isDirty = true;
+                if (unsavedIndicator) {
+                    unsavedIndicator.classList.add('show');
+                }
             }
         });
     });
@@ -950,9 +962,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.due_date) {
                 dueDateInput.value = data.due_date;
                 paymentTermTextDisplay.textContent = data.payment_term_text;
-                isDirty = true;
-                if (unsavedIndicator) {
-                    unsavedIndicator.classList.add('show');
+                // Only set dirty if this is a user-triggered change (not during initial load)
+                if (!isInitialLoad) {
+                    isDirty = true;
+                    if (unsavedIndicator) {
+                        unsavedIndicator.classList.add('show');
+                    }
                 }
             }
         })
@@ -1880,6 +1895,16 @@ document.addEventListener('DOMContentLoaded', function() {
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
+    
+    // Mark initial load as complete
+    // We use setTimeout(0) to defer this until after all synchronous initialization code
+    // and any immediately-queued events have been processed. This prevents:
+    // 1. Initial Quill content loading from triggering dirty state (also protected by source === 'user' check)
+    // 2. Form field initialization from triggering change events
+    // 3. Payment term auto-calculation during page load from setting dirty state
+    setTimeout(function() {
+        isInitialLoad = false;
+    }, 0);
 });
 </script>
 {% endblock %}
