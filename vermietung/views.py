@@ -351,6 +351,87 @@ def _log_adresse_stream_event(adresse, event_type, actor=None, description=None,
         )
 
 
+# Helper functions for Eingangsrechnung ActivityStream integration
+def _get_mandant_for_eingangsrechnung(eingangsrechnung):
+    """
+    Get Mandant for an Eingangsrechnung from its MietObjekt.
+    
+    Args:
+        eingangsrechnung: Eingangsrechnung instance
+        
+    Returns:
+        Mandant instance or None if no mandant can be determined
+    """
+    # Try to get mandant from mietobjekt
+    if eingangsrechnung.mietobjekt and eingangsrechnung.mietobjekt.mandant:
+        return eingangsrechnung.mietobjekt.mandant
+    
+    # Fallback: get first available mandant or return None
+    return Mandant.objects.first()
+
+
+def _get_eingangsrechnung_target_url(eingangsrechnung):
+    """
+    Generate target URL for an Eingangsrechnung.
+    
+    Args:
+        eingangsrechnung: Eingangsrechnung instance
+        
+    Returns:
+        str: Relative URL to the eingangsrechnung detail page
+    """
+    return reverse('vermietung:eingangsrechnung_detail', args=[eingangsrechnung.pk])
+
+
+def _get_eingangsrechnung_status_display_name(status):
+    """
+    Get display name for an Eingangsrechnung status.
+    
+    Args:
+        status: str, status code (e.g., 'NEU', 'BEZAHLT', 'OFFEN')
+        
+    Returns:
+        str: Display name from EINGANGSRECHNUNG_STATUS choices
+    """
+    status_dict = dict(EINGANGSRECHNUNG_STATUS)
+    return status_dict.get(status, status)
+
+
+def _log_eingangsrechnung_stream_event(eingangsrechnung, event_type, actor=None, description=None, severity='INFO'):
+    """
+    Log an ActivityStream event for an Eingangsrechnung.
+    
+    Args:
+        eingangsrechnung: Eingangsrechnung instance
+        event_type: str, event type (e.g., 'eingangsrechnung.created', 'eingangsrechnung.status_changed')
+        actor: User instance who performed the action (optional)
+        description: str, additional description (optional)
+        severity: str, severity level (default: 'INFO')
+        
+    Raises:
+        RuntimeError: If no Mandant can be found for the Eingangsrechnung
+    """
+    mandant = _get_mandant_for_eingangsrechnung(eingangsrechnung)
+    
+    # If no mandant, cannot create stream event - raise error instead of silently failing
+    if not mandant:
+        error_msg = _create_no_mandant_error('Eingangsrechnung', eingangsrechnung.pk)
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+    
+    # Call ActivityStreamService directly without try-except to let errors propagate
+    ActivityStreamService.add(
+        company=mandant,
+        domain='RENTAL',
+        activity_type=event_type,
+        title=f'Eingangsrechnung: {eingangsrechnung.belegnummer}',
+        description=description or '',
+        target_url=_get_eingangsrechnung_target_url(eingangsrechnung),
+        actor=actor,
+        severity=severity
+    )
+
+
 @login_required
 def download_dokument(request, dokument_id):
     """
@@ -2863,6 +2944,25 @@ def eingangsrechnung_create(request):
             rechnung = form.save()
             formset.instance = rechnung
             formset.save()
+            
+            # Log ActivityStream event for invoice creation
+            try:
+                lieferant_name = rechnung.lieferant.full_name() if rechnung.lieferant else 'Unbekannt'
+                status_name = _get_eingangsrechnung_status_display_name(rechnung.status)
+                _log_eingangsrechnung_stream_event(
+                    eingangsrechnung=rechnung,
+                    event_type='eingangsrechnung.created',
+                    actor=request.user,
+                    description=f'Neue Eingangsrechnung erstellt für Lieferant: {lieferant_name}. Status: {status_name}. Bruttobetrag: {rechnung.bruttobetrag} EUR'
+                )
+            except RuntimeError as e:
+                # Activity stream logging failed - show warning but don't block the operation
+                logger.error(f"Activity stream logging failed for Eingangsrechnung {rechnung.pk}: {e}")
+                messages.warning(
+                    request,
+                    f'Eingangsrechnung wurde erstellt, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
+                )
+            
             messages.success(
                 request,
                 f'Eingangsrechnung "{rechnung.belegnummer}" wurde erfolgreich angelegt.'
@@ -3126,6 +3226,24 @@ def eingangsrechnung_create_from_pdf(request):
                     'Bitte manuell aktualisieren!'
                 )
             
+            # Log ActivityStream event for invoice creation
+            try:
+                lieferant_name = rechnung.lieferant.full_name() if rechnung.lieferant else 'Unbekannt'
+                status_name = _get_eingangsrechnung_status_display_name(rechnung.status)
+                _log_eingangsrechnung_stream_event(
+                    eingangsrechnung=rechnung,
+                    event_type='eingangsrechnung.created',
+                    actor=request.user,
+                    description=f'Neue Eingangsrechnung erstellt aus PDF für Lieferant: {lieferant_name}. Status: {status_name}. Bruttobetrag: {rechnung.bruttobetrag} EUR'
+                )
+            except RuntimeError as e:
+                # Activity stream logging failed - show warning but don't block the operation
+                logger.error(f"Activity stream logging failed for Eingangsrechnung {rechnung.pk}: {e}")
+                messages.warning(
+                    request,
+                    f'Eingangsrechnung wurde erstellt, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
+                )
+            
             messages.success(
                 request,
                 f'Eingangsrechnung "{rechnung.belegnummer}" wurde erfolgreich angelegt und PDF hochgeladen.'
@@ -3166,12 +3284,47 @@ def eingangsrechnung_edit(request, pk):
     rechnung = get_object_or_404(Eingangsrechnung, pk=pk)
     
     if request.method == 'POST':
+        # Store old status before update to detect changes
+        old_status = rechnung.status
+        
         form = EingangsrechnungForm(request.POST, instance=rechnung)
         formset = EingangsrechnungAufteilungFormSet(request.POST, instance=rechnung)
         
         if form.is_valid() and formset.is_valid():
             rechnung = form.save()
             formset.save()
+            
+            # Check if status changed
+            status_changed = old_status != rechnung.status
+            
+            # Log ActivityStream events
+            try:
+                if status_changed:
+                    # Log status change event
+                    old_status_name = _get_eingangsrechnung_status_display_name(old_status)
+                    new_status_name = _get_eingangsrechnung_status_display_name(rechnung.status)
+                    _log_eingangsrechnung_stream_event(
+                        eingangsrechnung=rechnung,
+                        event_type='eingangsrechnung.status_changed',
+                        actor=request.user,
+                        description=f'Status geändert von "{old_status_name}" zu "{new_status_name}"'
+                    )
+                else:
+                    # Log general update event (only if status didn't change to avoid double-logging)
+                    _log_eingangsrechnung_stream_event(
+                        eingangsrechnung=rechnung,
+                        event_type='eingangsrechnung.updated',
+                        actor=request.user,
+                        description=f'Eingangsrechnung aktualisiert. Bruttobetrag: {rechnung.bruttobetrag} EUR'
+                    )
+            except RuntimeError as e:
+                # Activity stream logging failed - show warning but don't block the operation
+                logger.error(f"Activity stream logging failed for Eingangsrechnung {rechnung.pk}: {e}")
+                messages.warning(
+                    request,
+                    f'Eingangsrechnung wurde aktualisiert, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
+                )
+            
             messages.success(
                 request,
                 f'Eingangsrechnung "{rechnung.belegnummer}" wurde erfolgreich aktualisiert.'
@@ -3199,6 +3352,19 @@ def eingangsrechnung_delete(request, pk):
     """
     rechnung = get_object_or_404(Eingangsrechnung, pk=pk)
     belegnummer = rechnung.belegnummer
+    lieferant_name = rechnung.lieferant.full_name() if rechnung.lieferant else 'Unbekannt'
+    
+    # Log ActivityStream event before deletion (while we still have the object)
+    try:
+        _log_eingangsrechnung_stream_event(
+            eingangsrechnung=rechnung,
+            event_type='eingangsrechnung.deleted',
+            actor=request.user,
+            description=f'Eingangsrechnung gelöscht. Lieferant: {lieferant_name}. Belegnummer: {belegnummer}'
+        )
+    except RuntimeError as e:
+        # Activity stream logging failed - log error but continue with deletion
+        logger.error(f"Activity stream logging failed for Eingangsrechnung {rechnung.pk} deletion: {e}")
     
     try:
         rechnung.delete()
@@ -3229,7 +3395,25 @@ def eingangsrechnung_mark_paid(request, pk):
         if zahlungsdatum_str:
             try:
                 zahlungsdatum = datetime.strptime(zahlungsdatum_str, '%Y-%m-%d').date()
+                old_status = rechnung.status
                 rechnung.mark_as_paid(zahlungsdatum)
+                
+                # Log ActivityStream event for marking as paid
+                try:
+                    _log_eingangsrechnung_stream_event(
+                        eingangsrechnung=rechnung,
+                        event_type='eingangsrechnung.paid',
+                        actor=request.user,
+                        description=f'Eingangsrechnung als bezahlt markiert. Zahlungsdatum: {zahlungsdatum.strftime("%d.%m.%Y")}. Bruttobetrag: {rechnung.bruttobetrag} EUR'
+                    )
+                except RuntimeError as e:
+                    # Activity stream logging failed - show warning but don't block the operation
+                    logger.error(f"Activity stream logging failed for Eingangsrechnung {rechnung.pk} paid: {e}")
+                    messages.warning(
+                        request,
+                        f'Rechnung wurde als bezahlt markiert, aber {ACTIVITY_LOGGING_FAILED_MESSAGE}'
+                    )
+                
                 messages.success(
                     request,
                     f'Eingangsrechnung "{rechnung.belegnummer}" wurde als bezahlt markiert.'
