@@ -802,9 +802,16 @@ def ajax_update_line(request, doc_key, pk, line_id):
         if 'kostenart2_id' in data:
             line.kostenart2_id = normalize_foreign_key_id(data['kostenart2_id'])
         
+        # Recalculate line totals using the service before saving
+        line_net, line_tax, line_gross = DocumentCalculationService.calculate_line_totals(line)
+        line.line_net = line_net
+        line.line_tax = line_tax
+        line.line_gross = line_gross
+        
+        # Save all line changes in a single database write
         line.save()
         
-        # Recalculate document totals
+        # Recalculate and persist document totals
         DocumentCalculationService.recalculate(document, persist=True)
         
         # Return updated line data

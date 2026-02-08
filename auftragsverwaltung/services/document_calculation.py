@@ -46,6 +46,28 @@ class DocumentCalculationService:
     TWO_PLACES = Decimal('0.01')
     
     @classmethod
+    def calculate_line_totals(cls, line) -> tuple[Decimal, Decimal, Decimal]:
+        """
+        Calculate line totals with proper rounding (public method)
+        
+        Calculation steps (as per requirements):
+        1. line_net = round(quantity * unit_price_net, 2)
+        2. line_tax = round(line_net * tax_rate.rate, 2)
+        3. line_gross = line_net + line_tax (optionally round to 2)
+        
+        Args:
+            line: SalesDocumentLine instance
+            
+        Returns:
+            tuple: (line_net, line_tax, line_gross) as Decimal values
+            
+        Example:
+            >>> from auftragsverwaltung.services.document_calculation import DocumentCalculationService
+            >>> line_net, line_tax, line_gross = DocumentCalculationService.calculate_line_totals(line)
+        """
+        return cls._calculate_line_totals(line)
+    
+    @classmethod
     def recalculate(cls, document, persist: bool = False) -> TotalsResult:
         """
         Recalculate totals for a sales document based on its lines
