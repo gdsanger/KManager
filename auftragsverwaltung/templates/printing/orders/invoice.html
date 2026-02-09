@@ -185,6 +185,13 @@
             </div>
         </td>
         <td style="vertical-align: top;padding-left: 20mm;">
+            <!-- Company Logo (top right) -->
+            {% if company.logo_url %}
+            <div style="text-align: right; margin-bottom: 12pt;">
+                <img src="{{ company.logo_url }}" alt="Logo" style="max-width: 150pt; max-height: 80pt;">
+            </div>
+            {% endif %}
+            
             <!-- Document metadata -->
             <table class="doc-meta-table">
                 <tr>

@@ -248,8 +248,59 @@ class SalesDocumentInvoiceContextBuilderTest(TestCase):
         
         # Should have export text
         self.assertIsNotNone(tax_notes['export_text'])
-        self.assertIn('Ausfuhrlieferung', tax_notes['export_text'])
+        self.assertIn('Ausfuhr', tax_notes['export_text'])
         self.assertIsNone(tax_notes['reverse_charge_text'])
+    
+    def test_build_context_company_logo_url_not_set(self):
+        """Test company context with no logo"""
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+        
+        company_ctx = context['company']
+        
+        # No logo should result in None
+        self.assertIsNone(company_ctx['logo_url'])
+    
+    def test_build_context_company_logo_url_with_logo(self):
+        """Test company context with logo file"""
+        import os
+        from io import BytesIO
+        from PIL import Image
+        
+        # Create a test logo file
+        test_logo_dir = os.path.join(settings.MEDIA_ROOT, 'mandants')
+        os.makedirs(test_logo_dir, exist_ok=True)
+        
+        logo_filename = 'test_logo.png'
+        logo_relative_path = os.path.join('mandants', logo_filename)
+        logo_full_path = os.path.join(settings.MEDIA_ROOT, logo_relative_path)
+        
+        # Create a simple test image
+        img = Image.new('RGB', (100, 100), color='blue')
+        img.save(logo_full_path, 'PNG')
+        
+        try:
+            # Set logo path on company
+            self.company.logo_path = logo_relative_path
+            self.company.save()
+            
+            # Build context
+            builder = SalesDocumentInvoiceContextBuilder()
+            context = builder.build_context(self.document)
+            
+            company_ctx = context['company']
+            
+            # Logo URL should be set as file:// URL for WeasyPrint
+            self.assertIsNotNone(company_ctx['logo_url'])
+            self.assertTrue(company_ctx['logo_url'].startswith('file://'))
+            self.assertIn(logo_relative_path, company_ctx['logo_url'])
+        
+        finally:
+            # Clean up test file
+            if os.path.exists(logo_full_path):
+                os.remove(logo_full_path)
+            if os.path.exists(test_logo_dir) and not os.listdir(test_logo_dir):
+                os.rmdir(test_logo_dir)
     
     def test_get_template_name(self):
         """Test template name retrieval"""

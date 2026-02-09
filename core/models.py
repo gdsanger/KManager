@@ -245,6 +245,14 @@ class Mandant(models.Model):
     iban = models.CharField(max_length=34, blank=True, verbose_name="IBAN")
     bic = models.CharField(max_length=11, blank=True, verbose_name="BIC")
     kontoinhaber = models.CharField(max_length=200, blank=True, verbose_name="Kontoinhaber")
+    
+    # Logo
+    logo_path = models.CharField(
+        max_length=255, 
+        blank=True, 
+        verbose_name="Logo Pfad",
+        help_text="Relativer Pfad zum Logo im Media-Verzeichnis"
+    )
 
     class Meta:
         verbose_name = "Mandant"
