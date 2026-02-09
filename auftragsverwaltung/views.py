@@ -759,10 +759,16 @@ def ajax_update_line(request, doc_key, pk, line_id):
     AJAX endpoint to update an existing line
     
     POST parameters (JSON):
+        - item_id: Item/Article ID (optional)
         - quantity: New quantity
         - unit_price_net: New unit price
+        - short_text_1: Short text 1
+        - short_text_2: Short text 2
+        - long_text: Long text
         - description: New description
         - tax_rate_id: New tax rate ID
+        - unit_id: New unit ID
+        - discount: Discount percentage
         - kostenart1_id: New kostenart1 ID
         - kostenart2_id: New kostenart2 ID
     
@@ -782,6 +788,12 @@ def ajax_update_line(request, doc_key, pk, line_id):
             data = request.POST.dict()
         
         # Update fields
+        if 'item_id' in data:
+            item_id = normalize_foreign_key_id(data['item_id'])
+            if item_id is not None:
+                line.item = get_object_or_404(Item, pk=item_id)
+            else:
+                line.item = None
         if 'quantity' in data:
             line.quantity = Decimal(data['quantity'])
         if 'unit_price_net' in data:
@@ -833,6 +845,7 @@ def ajax_update_line(request, doc_key, pk, line_id):
             'success': True,
             'line': {
                 'id': line.pk,
+                'item_id': line.item.pk if line.item else None,
                 'short_text_1': line.short_text_1,
                 'short_text_2': line.short_text_2,
                 'long_text': line.long_text,
