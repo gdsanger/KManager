@@ -141,14 +141,24 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
         """Build document metadata context."""
         # Get document type display name with fallback logic
         # Priority: DocumentType.name → DocumentType.key → "Dokument"
-        document_type_name = "Dokument"  # Default fallback
+        document_type_name = None
+        
         if document.document_type:
             # Try name first (preferred)
             if hasattr(document.document_type, 'name') and document.document_type.name:
-                document_type_name = document.document_type.name.strip() or document_type_name
-            # Fallback to key if name is empty/whitespace
-            if document_type_name == "Dokument" and hasattr(document.document_type, 'key') and document.document_type.key:
-                document_type_name = document.document_type.key.strip() or document_type_name
+                stripped_name = document.document_type.name.strip()
+                if stripped_name:
+                    document_type_name = stripped_name
+            
+            # Fallback to key if name was not found or empty
+            if not document_type_name and hasattr(document.document_type, 'key') and document.document_type.key:
+                stripped_key = document.document_type.key.strip()
+                if stripped_key:
+                    document_type_name = stripped_key
+        
+        # Final fallback if nothing was found
+        if not document_type_name:
+            document_type_name = "Dokument"
         
         return {
             'number': document.number,
