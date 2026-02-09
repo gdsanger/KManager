@@ -157,6 +157,11 @@
                                         <i class="bi bi-file-text"></i> <span class="sidebar-text">Verträge</span>
                                     </a>
                                 </li>
+                                <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'timeentries' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:timeentry_list' %}">
+                                        <i class="bi bi-clock-history"></i> <span class="sidebar-text">Zeiterfassung</span>
+                                    </a>
+                                </li>
                                   <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'items' in request.path %}active{% endif %}" href="{% url 'item_management' %}">
                                         <i class="bi bi-box-seam"></i> <span class="sidebar-text">Artikelverwaltung</span>

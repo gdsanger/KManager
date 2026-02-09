@@ -1,0 +1,148 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+
+{% block title %}
+{% if is_create %}Neue Zeiterfassung{% else %}Zeiterfassung bearbeiten{% endif %} - Domus
+{% endblock %}
+
+{% block page_title %}
+{% if is_create %}
+Neue Zeiterfassung
+{% else %}
+Zeiterfassung bearbeiten
+{% endif %}
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="submit" form="timeentryForm" class="btn btn-primary">
+        <i class="bi bi-save"></i> Speichern
+    </button>
+    <a href="{% if is_create %}{% url 'auftragsverwaltung:timeentry_list' %}{% else %}{% url 'auftragsverwaltung:timeentry_detail' pk=timeentry.pk %}{% endif %}" class="btn btn-outline-secondary">
+        <i class="bi bi-x"></i> Abbrechen
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle"></i> {{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+<form method="post" id="timeentryForm">
+    {% csrf_token %}
+    
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">Grunddaten</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="company_id" class="form-label">Mandant <span class="text-danger">*</span></label>
+                    <select class="form-select" id="company_id" name="company_id" required>
+                        {% for company in companies %}
+                        <option value="{{ company.pk }}" {% if is_create and company == default_company %}selected{% elif not is_create and company == timeentry.company %}selected{% endif %}>
+                            {{ company.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="service_date" class="form-label">Leistungsdatum <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="service_date" name="service_date" 
+                           value="{% if is_create %}{{ default_date }}{% else %}{{ timeentry.service_date|date:'Y-m-d' }}{% endif %}" required>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="customer_id" class="form-label">Kunde <span class="text-danger">*</span></label>
+                    <select class="form-select" id="customer_id" name="customer_id" required>
+                        <option value="">-- Bitte wählen --</option>
+                        {% for customer in customers %}
+                        <option value="{{ customer.pk }}" {% if not is_create and customer == timeentry.customer %}selected{% endif %}>
+                            {{ customer.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="order_id" class="form-label">Auftrag <span class="text-danger">*</span></label>
+                    <select class="form-select" id="order_id" name="order_id" required>
+                        <option value="">-- Bitte wählen --</option>
+                        {% for order in orders %}
+                        <option value="{{ order.pk }}" {% if not is_create and order == timeentry.order %}selected{% endif %}>
+                            {{ order.number }} - {{ order.subject|truncatewords:10 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Nur Aufträge vom Typ ORDER werden angezeigt</div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="performed_by_id" class="form-label">Ausgeführt von <span class="text-danger">*</span></label>
+                    <select class="form-select" id="performed_by_id" name="performed_by_id" required>
+                        {% for user in users %}
+                        <option value="{{ user.pk }}" {% if is_create and user == default_user %}selected{% elif not is_create and user == timeentry.performed_by %}selected{% endif %}>
+                            {{ user.username }}{% if user.get_full_name %} ({{ user.get_full_name }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="duration_minutes" class="form-label">Dauer (Minuten) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="duration_minutes" name="duration_minutes" 
+                           value="{% if not is_create %}{{ timeentry.duration_minutes }}{% else %}60{% endif %}" 
+                           min="1" step="1" required>
+                    <div class="form-text">Dauer in Minuten (z.B. 60 für 1 Stunde, 90 für 1,5 Stunden)</div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label for="description" class="form-label">Beschreibung <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="description" name="description" rows="4" required>{% if not is_create %}{{ timeentry.description }}{% endif %}</textarea>
+                    <div class="form-text">Beschreibung der durchgeführten Tätigkeit</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_travel_cost" name="is_travel_cost" 
+                               {% if not is_create and timeentry.is_travel_cost %}checked{% endif %}>
+                        <label class="form-check-label" for="is_travel_cost">
+                            Anfahrt
+                        </label>
+                        <div class="form-text">Handelt es sich um Anfahrtszeit?</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_billed" name="is_billed" 
+                               {% if not is_create and timeentry.is_billed %}checked{% endif %}>
+                        <label class="form-check-label" for="is_billed">
+                            Abgerechnet
+                        </label>
+                        <div class="form-text">Wurde diese Leistung bereits abgerechnet?</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+        <a href="{% if is_create %}{% url 'auftragsverwaltung:timeentry_list' %}{% else %}{% url 'auftragsverwaltung:timeentry_detail' pk=timeentry.pk %}{% endif %}" class="btn btn-outline-secondary">
+            <i class="bi bi-x"></i> Abbrechen
+        </a>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save"></i> Speichern
+        </button>
+    </div>
+</form>
+{% endblock %}

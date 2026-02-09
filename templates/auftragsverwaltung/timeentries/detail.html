@@ -1,0 +1,124 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+
+{% block title %}Zeiterfassung {{ timeentry.service_date }} - Domus{% endblock %}
+
+{% block page_title %}Zeiterfassung: {{ timeentry.service_date|date:"d.m.Y" }}{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="{% url 'auftragsverwaltung:timeentry_update' pk=timeentry.pk %}" class="btn btn-primary">
+        <i class="bi bi-pencil"></i> Bearbeiten
+    </a>
+    <a href="{% url 'auftragsverwaltung:timeentry_list' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-list"></i> Zurück zur Liste
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <!-- Main Details Card -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">Zeiterfassungsdetails</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="text-muted small">Mandant</label>
+                        <p class="mb-0">{{ timeentry.company.name }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="text-muted small">Leistungsdatum</label>
+                        <p class="mb-0">{{ timeentry.service_date|date:"d.m.Y" }}</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="text-muted small">Kunde</label>
+                        <p class="mb-0">{{ timeentry.customer.name }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="text-muted small">Auftrag</label>
+                        {% if timeentry.order %}
+                        <p class="mb-0">
+                            {{ timeentry.order.number }}
+                            {% if timeentry.order.subject %}
+                            - {{ timeentry.order.subject }}
+                            {% endif %}
+                        </p>
+                        {% else %}
+                        <p class="mb-0 text-muted">—</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="text-muted small">Ausgeführt von</label>
+                        <p class="mb-0">{{ timeentry.performed_by.username }} {% if timeentry.performed_by.get_full_name %}({{ timeentry.performed_by.get_full_name }}){% endif %}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="text-muted small">Dauer</label>
+                        <p class="mb-0">{{ timeentry.duration_minutes }} Minuten ({{ timeentry.get_duration_hours|floatformat:2 }}h)</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="text-muted small">Beschreibung</label>
+                        <p class="mb-0">{{ timeentry.description|linebreaks }}</p>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="text-muted small">Anfahrt</label>
+                        <p class="mb-0">
+                            {% if timeentry.is_travel_cost %}
+                                <span class="badge bg-primary">Ja</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Nein</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="text-muted small">Abgerechnet</label>
+                        <p class="mb-0">
+                            {% if timeentry.is_billed %}
+                                <span class="badge bg-success">Ja</span>
+                                {% if timeentry.billed_at %}
+                                <br><small class="text-muted">am {{ timeentry.billed_at|date:"d.m.Y H:i" }}</small>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-warning">Nein</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Metadata Card -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Metadaten</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="text-muted small">Erstellt am</label>
+                    <p class="mb-0">{{ timeentry.created_at|date:"d.m.Y H:i" }}</p>
+                </div>
+                <div class="mb-0">
+                    <label class="text-muted small">Aktualisiert am</label>
+                    <p class="mb-0">{{ timeentry.updated_at|date:"d.m.Y H:i" }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

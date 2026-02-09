@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
 from decimal import Decimal
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -1253,4 +1254,159 @@ class TextTemplate(models.Model):
     
     def __str__(self):
         return f"{self.title} ({self.get_type_display()})"
+
+
+class TimeEntry(models.Model):
+    """
+    Time Entry (Zeiterfassung) - time tracking for billable services
+    
+    Tracks billable service time entries related to customer orders (SalesDocument type ORDER).
+    Each entry records who performed the work, when it was performed, how long it took,
+    and whether it was travel time or has been billed.
+    
+    Scope: Tenant-specific (company FK required)
+    """
+    
+    # Mandatory Foreign Keys
+    company = models.ForeignKey(
+        'core.Mandant',
+        on_delete=models.PROTECT,
+        related_name='time_entries',
+        verbose_name="Mandant"
+    )
+    customer = models.ForeignKey(
+        'core.Adresse',
+        on_delete=models.PROTECT,
+        related_name='time_entries',
+        verbose_name="Kunde",
+        help_text="Kunde für diese Zeiterfassung"
+    )
+    order = models.ForeignKey(
+        SalesDocument,
+        on_delete=models.PROTECT,
+        related_name='time_entries',
+        verbose_name="Auftrag",
+        help_text="Auftrag (SalesDocument vom Typ ORDER)"
+    )
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='time_entries',
+        verbose_name="Ausführender Benutzer",
+        help_text="Benutzer der die Arbeit ausgeführt hat"
+    )
+    
+    # Time Tracking Fields
+    service_date = models.DateField(
+        db_index=True,
+        verbose_name="Leistungsdatum",
+        help_text="Datum der Leistungserbringung"
+    )
+    duration_minutes = models.IntegerField(
+        verbose_name="Dauer (Minuten)",
+        help_text="Dauer der Leistung in Minuten (muss > 0 sein)"
+    )
+    
+    # Description
+    description = models.TextField(
+        verbose_name="Tätigkeitsbeschreibung",
+        help_text="Beschreibung der durchgeführten Tätigkeit"
+    )
+    
+    # Flags
+    is_travel_cost = models.BooleanField(
+        default=False,
+        verbose_name="Anfahrt",
+        help_text="Handelt es sich um Anfahrtszeit?"
+    )
+    is_billed = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Abgerechnet",
+        help_text="Wurde diese Leistung bereits abgerechnet?"
+    )
+    
+    # Optional Fields
+    billed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Abgerechnet am",
+        help_text="Zeitpunkt der Abrechnung"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am"
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Aktualisiert am"
+    )
+    
+    class Meta:
+        verbose_name = "Zeiterfassung"
+        verbose_name_plural = "Zeiterfassungen"
+        ordering = ['-service_date', '-created_at']
+        indexes = [
+            models.Index(fields=['company', 'service_date']),
+            models.Index(fields=['customer']),
+            models.Index(fields=['order']),
+            models.Index(fields=['performed_by', 'service_date']),
+            models.Index(fields=['-service_date', '-created_at']),
+            models.Index(fields=['is_billed']),
+        ]
+    
+    def __str__(self):
+        return f"{self.service_date} - {self.customer.name} - {self.duration_minutes} min"
+    
+    def clean(self):
+        """Validate time entry data
+        
+        Business rules:
+        1. duration_minutes must be > 0
+        2. order must be of type ORDER
+        3. order.customer must match customer
+        4. order.company must match company (if order has company)
+        """
+        super().clean()
+        
+        # Validation 1: duration_minutes > 0
+        if self.duration_minutes is not None and self.duration_minutes <= 0:
+            raise ValidationError({
+                'duration_minutes': 'Die Dauer muss größer als 0 sein.'
+            })
+        
+        # Validation 2-4: Order validations (only if order is set)
+        if self.order:
+            # Validation 2: order must be of type ORDER
+            if self.order.document_type.key.upper() != 'ORDER':
+                raise ValidationError({
+                    'order': f'Der Auftrag muss vom Typ ORDER sein, ist aber vom Typ {self.order.document_type.key}.'
+                })
+            
+            # Validation 3: order.customer must match customer
+            if self.customer and self.order.customer and self.order.customer != self.customer:
+                raise ValidationError({
+                    'order': 'Der Kunde des Auftrags stimmt nicht mit dem ausgewählten Kunden überein.',
+                    'customer': 'Der Kunde muss mit dem Kunden des Auftrags übereinstimmen.'
+                })
+            
+            # Validation 4: order.company must match company (if order has company)
+            if self.company and self.order.company and self.order.company != self.company:
+                raise ValidationError({
+                    'order': 'Der Mandant des Auftrags stimmt nicht mit dem ausgewählten Mandanten überein.',
+                    'company': 'Der Mandant muss mit dem Mandanten des Auftrags übereinstimmen.'
+                })
+    
+    def get_duration_hours(self):
+        """
+        Get duration in hours as a decimal
+        
+        Returns:
+            Decimal: Duration in hours (e.g., 1.5 for 90 minutes)
+        """
+        if self.duration_minutes:
+            return Decimal(self.duration_minutes) / Decimal(60)
+        return Decimal(0)
 
