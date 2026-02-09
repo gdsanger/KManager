@@ -522,3 +522,327 @@ class MultiPagePdfTest(TestCase):
         
         # Should be valid PDF (check magic bytes)
         self.assertTrue(result.pdf_bytes.startswith(b'%PDF'))
+
+
+class GenericTemplateDocumentTypeTest(TestCase):
+    """Tests for generic invoice.html template with dynamic document type heading"""
+    
+    def setUp(self):
+        """Set up test data for multiple document types"""
+        # Create company
+        self.company = Mandant.objects.create(
+            name='Test GmbH',
+            adresse='Teststraße 1',
+            plz='12345',
+            ort='Berlin'
+        )
+        
+        # Create customer
+        self.customer = Adresse.objects.create(
+            firma='Kunde GmbH',
+            name='Max Mustermann',
+            strasse='Kundenstraße 10',
+            plz='54321',
+            ort='Hamburg',
+            land='Deutschland'
+        )
+        
+        # Create multiple document types
+        self.doc_type_invoice = DocumentType.objects.create(
+            key='rechnung',
+            name='Rechnung',
+            prefix='R',
+            is_invoice=True
+        )
+        
+        self.doc_type_quote = DocumentType.objects.create(
+            key='angebot',
+            name='Angebot',
+            prefix='A',
+            is_invoice=False
+        )
+        
+        self.doc_type_order = DocumentType.objects.create(
+            key='auftrag',
+            name='Auftragsbestätigung',
+            prefix='AB',
+            is_invoice=False
+        )
+        
+        # Create tax rate
+        self.tax_19 = TaxRate.objects.create(code='normal', name='Normal 19%', rate=Decimal('0.19'))
+        
+        # Create unit
+        self.unit = Unit.objects.create(code='STK', name='Stück', symbol='Stk')
+    
+    def _create_document(self, doc_type, number_suffix):
+        """Helper to create a test document with a given document type"""
+        document = SalesDocument.objects.create(
+            company=self.company,
+            document_type=doc_type,
+            customer=self.customer,
+            number=f'{doc_type.prefix}26-{number_suffix:05d}',
+            status='OPEN',
+            issue_date=date.today(),
+            subject=f'Test {doc_type.name}',
+            total_net=Decimal('100.00'),
+            total_tax=Decimal('19.00'),
+            total_gross=Decimal('119.00')
+        )
+        
+        # Create at least one line
+        SalesDocumentLine.objects.create(
+            document=document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            short_text_1='Test Artikel',
+            description='Test Artikel',
+            unit=self.unit,
+            quantity=Decimal('1.00'),
+            unit_price_net=Decimal('100.00'),
+            discount=Decimal('0.00'),
+            line_net=Decimal('100.00'),
+            line_tax=Decimal('19.00'),
+            line_gross=Decimal('119.00'),
+            tax_rate=self.tax_19
+        )
+        
+        return document
+    
+    def test_context_includes_document_type_name_for_invoice(self):
+        """Test that context includes document_type_name for invoice"""
+        document = self._create_document(self.doc_type_invoice, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        self.assertIn('doc', context)
+        self.assertIn('document_type_name', context['doc'])
+        self.assertEqual(context['doc']['document_type_name'], 'Rechnung')
+    
+    def test_context_includes_document_type_name_for_quote(self):
+        """Test that context includes document_type_name for quote"""
+        document = self._create_document(self.doc_type_quote, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        self.assertIn('doc', context)
+        self.assertIn('document_type_name', context['doc'])
+        self.assertEqual(context['doc']['document_type_name'], 'Angebot')
+    
+    def test_context_includes_document_type_name_for_order(self):
+        """Test that context includes document_type_name for order confirmation"""
+        document = self._create_document(self.doc_type_order, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        self.assertIn('doc', context)
+        self.assertIn('document_type_name', context['doc'])
+        self.assertEqual(context['doc']['document_type_name'], 'Auftragsbestätigung')
+    
+    def test_html_output_contains_correct_heading_for_invoice(self):
+        """Test that rendered HTML contains correct heading for invoice"""
+        document = self._create_document(self.doc_type_invoice, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+        
+        # Check that heading is present
+        self.assertIn('<h1>Rechnung</h1>', html)
+        # Ensure old hardcoded heading is not duplicated
+        self.assertEqual(html.count('<h1>Rechnung</h1>'), 1)
+    
+    def test_html_output_contains_correct_heading_for_quote(self):
+        """Test that rendered HTML contains correct heading for quote"""
+        document = self._create_document(self.doc_type_quote, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+        
+        # Check that heading is present and correct
+        self.assertIn('<h1>Angebot</h1>', html)
+        # Ensure invoice heading is NOT present
+        self.assertNotIn('<h1>Rechnung</h1>', html)
+    
+    def test_html_output_contains_correct_heading_for_order(self):
+        """Test that rendered HTML contains correct heading for order confirmation"""
+        document = self._create_document(self.doc_type_order, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+        
+        # Check that heading is present and correct
+        self.assertIn('<h1>Auftragsbestätigung</h1>', html)
+        # Ensure invoice heading is NOT present
+        self.assertNotIn('<h1>Rechnung</h1>', html)
+    
+    def test_fallback_to_key_when_name_is_empty(self):
+        """Test fallback to key when name is empty"""
+        # Create a document type with empty name
+        doc_type_no_name = DocumentType.objects.create(
+            key='special',
+            name='',  # Empty name
+            prefix='SP',
+            is_invoice=False
+        )
+        
+        document = self._create_document(doc_type_no_name, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        # Should fall back to key
+        self.assertEqual(context['doc']['document_type_name'], 'special')
+    
+    def test_fallback_to_key_when_name_is_whitespace(self):
+        """Test fallback to key when name is only whitespace"""
+        # Create a document type with whitespace-only name
+        doc_type_whitespace_name = DocumentType.objects.create(
+            key='whitespace',
+            name='   ',  # Whitespace only
+            prefix='WS',
+            is_invoice=False
+        )
+        
+        document = self._create_document(doc_type_whitespace_name, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        # Should fall back to key
+        self.assertEqual(context['doc']['document_type_name'], 'whitespace')
+    
+    def test_fallback_to_dokument_when_name_and_key_are_empty(self):
+        """Test fallback to 'Dokument' when both name and key are problematic"""
+        # Create a document type with empty name and key
+        # Note: This scenario is unlikely in practice due to model validation,
+        # but we test the fallback logic
+        doc_type_empty = DocumentType.objects.create(
+            key='k',
+            name='',
+            prefix='X',
+            is_invoice=False
+        )
+        # Manually set empty key to test fallback (bypassing validation)
+        doc_type_empty.key = ''
+        doc_type_empty.save(update_fields=['key'])
+        
+        document = self._create_document(doc_type_empty, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(document)
+        
+        # Should fall back to "Dokument"
+        self.assertEqual(context['doc']['document_type_name'], 'Dokument')
+    
+    def test_fallback_when_document_type_is_none(self):
+        """Test fallback to 'Dokument' when document_type is None"""
+        # Create a document without document_type
+        # This requires bypassing the NOT NULL constraint, so we'll use a mock
+        from unittest.mock import Mock
+        
+        # Create a mock document with None document_type
+        mock_document = Mock()
+        mock_document.document_type = None
+        mock_document.number = 'TEST-001'
+        mock_document.subject = ''
+        mock_document.issue_date = date.today()
+        mock_document.due_date = None
+        mock_document.payment_term_text = ''
+        mock_document.header_text = ''
+        mock_document.footer_text = ''
+        mock_document.reference_number = ''
+        mock_document.notes_public = ''
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder._build_document_context(mock_document)
+        
+        # Should fall back to "Dokument"
+        self.assertEqual(context['document_type_name'], 'Dokument')
+    
+    def test_no_exception_with_missing_attributes(self):
+        """Test that no exception is raised when attributes are missing"""
+        from unittest.mock import Mock
+        
+        # Create a mock document with missing attributes
+        mock_document = Mock()
+        mock_document.document_type = Mock()
+        # Don't set name or key attributes
+        del mock_document.document_type.name
+        del mock_document.document_type.key
+        mock_document.number = 'TEST-001'
+        mock_document.subject = ''
+        mock_document.issue_date = date.today()
+        mock_document.due_date = None
+        mock_document.payment_term_text = ''
+        mock_document.header_text = ''
+        mock_document.footer_text = ''
+        mock_document.reference_number = ''
+        mock_document.notes_public = ''
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        
+        # Should not raise exception
+        try:
+            context = builder._build_document_context(mock_document)
+            # Should fall back to "Dokument"
+            self.assertEqual(context['document_type_name'], 'Dokument')
+        except Exception as e:
+            self.fail(f"Expected no exception, but got: {e}")
+    
+    def test_pdf_generation_for_different_document_types(self):
+        """Test that PDF generation works for different document types"""
+        # Test invoice
+        invoice_doc = self._create_document(self.doc_type_invoice, 1)
+        
+        builder = SalesDocumentInvoiceContextBuilder()
+        context_invoice = builder.build_context(invoice_doc)
+        
+        pdf_service = PdfRenderService()
+        static_root = settings.BASE_DIR / 'static'
+        base_url = f'file://{static_root}/'
+        
+        result_invoice = pdf_service.render(
+            template_name='printing/orders/invoice.html',
+            context=context_invoice,
+            base_url=base_url,
+            filename='test-invoice.pdf'
+        )
+        
+        # Should generate valid PDF
+        self.assertIsNotNone(result_invoice.pdf_bytes)
+        self.assertTrue(result_invoice.pdf_bytes.startswith(b'%PDF'))
+        
+        # Test quote
+        quote_doc = self._create_document(self.doc_type_quote, 2)
+        
+        context_quote = builder.build_context(quote_doc)
+        
+        result_quote = pdf_service.render(
+            template_name='printing/orders/invoice.html',
+            context=context_quote,
+            base_url=base_url,
+            filename='test-quote.pdf'
+        )
+        
+        # Should generate valid PDF
+        self.assertIsNotNone(result_quote.pdf_bytes)
+        self.assertTrue(result_quote.pdf_bytes.startswith(b'%PDF'))
+        
+        # PDFs should be different (different content)
+        self.assertNotEqual(result_invoice.pdf_bytes, result_quote.pdf_bytes)

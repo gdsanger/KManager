@@ -241,7 +241,7 @@
 {% block content %}
 <!-- Document header -->
 <div class="doc-header">
-    <h1>Rechnung</h1>
+    <h1>{{ doc.document_type_name|default:"Dokument" }}</h1>
     <p>{% if doc.subject %}{{ doc.subject }}{% endif %}</p>
 </div>
 
