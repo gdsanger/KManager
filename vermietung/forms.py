@@ -1101,7 +1101,7 @@ class AktivitaetForm(forms.ModelForm):
         instance = super().save(commit=False)
         
         # For new activities, ensure ersteller is set
-        if not instance.pk and not instance.ersteller_id and self.current_user:
+        if not instance.pk and not instance.ersteller_id and hasattr(self, 'current_user') and self.current_user:
             instance.ersteller = self.current_user
         
         # For existing activities, prevent clearing ersteller
@@ -1114,7 +1114,7 @@ class AktivitaetForm(forms.ModelForm):
                     instance.ersteller = original.ersteller
             except Aktivitaet.DoesNotExist:
                 # If original doesn't exist (shouldn't happen), try to set current_user
-                if self.current_user:
+                if hasattr(self, 'current_user') and self.current_user:
                     instance.ersteller = self.current_user
         
         if commit:

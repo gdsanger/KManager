@@ -137,3 +137,43 @@ class AktivitaetFormErstellerTest(TestCase):
         
         # ersteller should be preserved (not cleared)
         self.assertEqual(activity.ersteller, other_user)
+    
+    def test_form_works_without_current_user(self):
+        """Test that form works when current_user is not provided."""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': 'Test description',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+            'ersteller': self.user.pk,  # Explicitly set ersteller
+            'privat': False,
+        }
+        
+        # Create form without current_user parameter
+        form = AktivitaetForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        
+        activity = form.save()
+        
+        # ersteller should be the explicitly set user
+        self.assertEqual(activity.ersteller, self.user)
+    
+    def test_form_creates_activity_without_ersteller_when_no_current_user(self):
+        """Test that form can create activity without ersteller if current_user not provided."""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': 'Test description',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+            # No ersteller provided
+            'privat': False,
+        }
+        
+        # Create form without current_user parameter
+        form = AktivitaetForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        
+        activity = form.save()
+        
+        # ersteller will be None since current_user wasn't provided
+        self.assertIsNone(activity.ersteller)
