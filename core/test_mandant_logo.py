@@ -364,3 +364,26 @@ class MandantLogoUploadTestCase(TestCase):
         
         # Check that file was deleted
         self.assertFalse(os.path.exists(logo_full_path))
+    
+    def test_mandant_form_includes_handelsregister_field(self):
+        """Test that MandantForm includes the handelsregister field"""
+        form = MandantForm()
+        
+        # Check that handelsregister is in the form fields
+        self.assertIn('handelsregister', form.fields)
+        
+        # Test that the field can be saved with data
+        form = MandantForm(
+            data={
+                'name': 'Test Company',
+                'adresse': 'Test Street 123',
+                'plz': '12345',
+                'ort': 'Test City',
+                'land': 'Deutschland',
+                'handelsregister': 'HRB 12345'
+            }
+        )
+        
+        self.assertTrue(form.is_valid(), form.errors)
+        mandant = form.save()
+        self.assertEqual(mandant.handelsregister, 'HRB 12345')
