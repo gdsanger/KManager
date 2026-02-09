@@ -102,7 +102,7 @@ class AktivitaetFormErstellerTest(TestCase):
         # ersteller should remain the original user
         self.assertEqual(activity.ersteller, other_user)
     
-    def test_form_preserves_ersteller_when_not_in_form_data(self):
+    def test_form_preserves_ersteller_when_cleared(self):
         """Test that ersteller is preserved even if cleared in form data during edit."""
         other_user = User.objects.create_user(
             username='otheruser',
@@ -135,8 +135,5 @@ class AktivitaetFormErstellerTest(TestCase):
         
         activity = form.save()
         
-        # ersteller should remain the original user (not cleared, not set to current_user)
-        # This is because our save() override only sets ersteller for new activities (not instance.pk)
-        # For existing activities, we let the form data control it
-        # If this behavior is undesired, we should handle it differently
-        self.assertIsNone(activity.ersteller)  # This is the current behavior
+        # ersteller should be preserved (not cleared)
+        self.assertEqual(activity.ersteller, other_user)

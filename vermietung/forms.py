@@ -1094,14 +1094,28 @@ class AktivitaetForm(forms.ModelForm):
     
     def save(self, commit=True):
         """
-        Override save to ensure ersteller is set for new activities.
-        For new activities without ersteller, use current_user if available.
+        Override save to ensure ersteller is set for activities.
+        - For new activities without ersteller, use current_user if available
+        - For existing activities, prevent clearing ersteller (preserve existing value)
         """
         instance = super().save(commit=False)
         
         # For new activities, ensure ersteller is set
         if not instance.pk and not instance.ersteller_id and self.current_user:
             instance.ersteller = self.current_user
+        
+        # For existing activities, prevent clearing ersteller
+        # If ersteller would be set to None, preserve the original value
+        if instance.pk and not instance.ersteller_id:
+            # Get the original instance to preserve ersteller
+            try:
+                original = Aktivitaet.objects.get(pk=instance.pk)
+                if original.ersteller_id:
+                    instance.ersteller = original.ersteller
+            except Aktivitaet.DoesNotExist:
+                # If original doesn't exist (shouldn't happen), try to set current_user
+                if self.current_user:
+                    instance.ersteller = self.current_user
         
         if commit:
             instance.save()
