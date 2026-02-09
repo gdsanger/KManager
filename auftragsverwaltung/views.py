@@ -1851,3 +1851,70 @@ def document_pdf(request, pk):
     return response
 
 
+@login_required
+@require_http_methods(["GET"])
+def document_preview(request, pk):
+    """
+    Generate and preview PDF for a SalesDocument (read-only, no side effects).
+    
+    Generates a PDF preview using the Core Printing Framework and returns it
+    for inline display in a new browser tab. This is a read-only operation with
+    no side effects:
+    - No finalization (no status change)
+    - No number assignment
+    - No snapshot creation/storage
+    - No database writes
+    
+    Args:
+        request: HTTP request
+        pk: Primary key of the SalesDocument
+        
+    Returns:
+        HttpResponse with PDF content for inline preview
+    """
+    # Get document with related data (read-only)
+    document = get_object_or_404(
+        SalesDocument.objects.select_related(
+            'company',
+            'customer',
+            'document_type'
+        ),
+        pk=pk
+    )
+    
+    # Note: Company-level permission checks should be added in a future enhancement
+    # to ensure users can only access documents from their authorized companies.
+    # For now, we rely on @login_required decorator which is consistent
+    # with other views in this module.
+    
+    # Build context using context builder (read-only)
+    context_builder = SalesDocumentInvoiceContextBuilder()
+    context = context_builder.build_context(document)
+    template_name = context_builder.get_template_name(document)
+    
+    # Get base URL for static assets using the utility function
+    # This handles both development (with app-specific static dirs) and production (with STATIC_ROOT)
+    base_url = get_static_base_url()
+    
+    # Generate PDF (read-only, no persistence)
+    pdf_service = PdfRenderService()
+    
+    # Build filename using document type name and ID (no number assignment)
+    filename = f"{document.document_type.name}_{document.id}.pdf"
+    
+    result = pdf_service.render(
+        template_name=template_name,
+        context=context,
+        base_url=base_url,
+        filename=filename
+    )
+    
+    # Return PDF as HTTP response with inline disposition for browser preview
+    response = HttpResponse(result.pdf_bytes, content_type=result.content_type)
+    response['Content-Disposition'] = f'inline; filename="{result.filename}"'
+    
+    logger.info(f"Generated preview PDF for document ID {document.id} ({len(result.pdf_bytes)} bytes)")
+    
+    return response
+
+
