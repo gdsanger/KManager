@@ -1091,6 +1091,22 @@ class AktivitaetForm(forms.ModelForm):
                 raise ValidationError('Das angegebene Kontextobjekt existiert nicht.')
         
         return cleaned_data
+    
+    def save(self, commit=True):
+        """
+        Override save to ensure ersteller is set for new activities.
+        For new activities without ersteller, use current_user if available.
+        """
+        instance = super().save(commit=False)
+        
+        # For new activities, ensure ersteller is set
+        if not instance.pk and not instance.ersteller_id and self.current_user:
+            instance.ersteller = self.current_user
+        
+        if commit:
+            instance.save()
+        
+        return instance
 
 
 class AktivitaetsBereichForm(forms.ModelForm):

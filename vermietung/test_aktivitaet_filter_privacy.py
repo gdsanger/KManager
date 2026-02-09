@@ -176,6 +176,72 @@ class AktivitaetFilterTest(TestCase):
         self.assertNotIn(self.activity_4.id, aktivitaeten_ids)
         
         self.assertEqual(response.context['filter_mode'], 'responsible')
+    
+    def test_kanban_filter_with_null_ersteller(self):
+        """Test that activities with NULL ersteller don't appear in 'created' filter."""
+        # Create activity with no ersteller
+        activity_no_creator = Aktivitaet.objects.create(
+            titel='Activity without creator',
+            beschreibung='No ersteller set',
+            status='OFFEN',
+            prioritaet='NORMAL',
+            ersteller=None,  # Explicitly NULL
+            assigned_user=self.user_a,
+            privat=False
+        )
+        
+        response = self.client.get(reverse('vermietung:aktivitaet_kanban') + '?filter=created')
+        self.assertEqual(response.status_code, 200)
+        
+        aktivitaeten_ids = []
+        for status_key in ['aktivitaeten_offen', 'aktivitaeten_in_bearbeitung', 
+                          'aktivitaeten_erledigt', 'aktivitaeten_abgebrochen']:
+            aktivitaeten_ids.extend([a.id for a in response.context[status_key]])
+        
+        # Activity without ersteller should NOT appear
+        self.assertNotIn(activity_no_creator.id, aktivitaeten_ids)
+        
+        # But it SHOULD appear in 'responsible' filter since assigned_user is set
+        response = self.client.get(reverse('vermietung:aktivitaet_kanban') + '?filter=responsible')
+        aktivitaeten_ids = []
+        for status_key in ['aktivitaeten_offen', 'aktivitaeten_in_bearbeitung', 
+                          'aktivitaeten_erledigt', 'aktivitaeten_abgebrochen']:
+            aktivitaeten_ids.extend([a.id for a in response.context[status_key]])
+        
+        self.assertIn(activity_no_creator.id, aktivitaeten_ids)
+    
+    def test_kanban_filter_with_null_assigned_user(self):
+        """Test that activities with NULL assigned_user don't appear in 'responsible' filter."""
+        # Create activity with no assigned_user
+        activity_no_assignee = Aktivitaet.objects.create(
+            titel='Activity without assignee',
+            beschreibung='No assigned_user set',
+            status='OFFEN',
+            prioritaet='NORMAL',
+            ersteller=self.user_a,
+            assigned_user=None,  # Explicitly NULL
+            privat=False
+        )
+        
+        response = self.client.get(reverse('vermietung:aktivitaet_kanban') + '?filter=responsible')
+        self.assertEqual(response.status_code, 200)
+        
+        aktivitaeten_ids = []
+        for status_key in ['aktivitaeten_offen', 'aktivitaeten_in_bearbeitung', 
+                          'aktivitaeten_erledigt', 'aktivitaeten_abgebrochen']:
+            aktivitaeten_ids.extend([a.id for a in response.context[status_key]])
+        
+        # Activity without assigned_user should NOT appear
+        self.assertNotIn(activity_no_assignee.id, aktivitaeten_ids)
+        
+        # But it SHOULD appear in 'created' filter since ersteller is set
+        response = self.client.get(reverse('vermietung:aktivitaet_kanban') + '?filter=created')
+        aktivitaeten_ids = []
+        for status_key in ['aktivitaeten_offen', 'aktivitaeten_in_bearbeitung', 
+                          'aktivitaeten_erledigt', 'aktivitaeten_abgebrochen']:
+            aktivitaeten_ids.extend([a.id for a in response.context[status_key]])
+        
+        self.assertIn(activity_no_assignee.id, aktivitaeten_ids)
 
 
 class AktivitaetPrivacyTest(TestCase):
