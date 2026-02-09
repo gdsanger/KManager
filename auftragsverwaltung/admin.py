@@ -10,6 +10,7 @@ from auftragsverwaltung.models import (
     ContractLine,
     ContractRun,
     TextTemplate,
+    TimeEntry,
 )
 from auftragsverwaltung.services import DocumentCalculationService
 
@@ -498,3 +499,76 @@ class TextTemplateAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(TimeEntry)
+class TimeEntryAdmin(admin.ModelAdmin):
+    """Admin interface for TimeEntry"""
+    list_display = (
+        'service_date',
+        'company',
+        'customer',
+        'order_info',
+        'performed_by',
+        'duration_display',
+        'is_travel_cost',
+        'is_billed',
+        'created_at',
+    )
+    list_filter = (
+        'company',
+        'is_travel_cost',
+        'is_billed',
+        'service_date',
+        'performed_by',
+    )
+    search_fields = (
+        'description',
+        'company__name',
+        'customer__name',
+        'customer__firma',
+        'order__number',
+        'order__subject',
+        'performed_by__username',
+        'performed_by__first_name',
+        'performed_by__last_name',
+    )
+    ordering = ('-service_date', '-created_at')
+    date_hierarchy = 'service_date'
+    
+    fieldsets = (
+        ('Zuordnung', {
+            'fields': ('company', 'customer', 'order', 'performed_by')
+        }),
+        ('Zeiterfassung', {
+            'fields': ('service_date', 'duration_minutes', 'description')
+        }),
+        ('Flags', {
+            'fields': ('is_travel_cost', 'is_billed', 'billed_at')
+        }),
+        ('Metadaten', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def order_info(self, obj):
+        """Show order number and subject"""
+        if obj.order:
+            return f"{obj.order.number} - {obj.order.subject[:30]}..."
+        return "—"
+    order_info.short_description = "Auftrag"
+    
+    def duration_display(self, obj):
+        """Show duration in a friendly format"""
+        hours = obj.duration_minutes // 60
+        minutes = obj.duration_minutes % 60
+        if hours > 0 and minutes > 0:
+            return f"{hours}h {minutes}min"
+        elif hours > 0:
+            return f"{hours}h"
+        else:
+            return f"{minutes}min"
+    duration_display.short_description = "Dauer"
