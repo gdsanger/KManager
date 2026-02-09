@@ -1007,6 +1007,10 @@ class AktivitaetForm(forms.ModelForm):
         self.context_id = kwargs.pop('context_id', None)
         self.current_user = kwargs.pop('current_user', None)
         
+        # Store original ersteller value before parent init for protection logic
+        instance = kwargs.get('instance')
+        self._original_ersteller_id = instance.ersteller_id if instance and instance.pk else None
+        
         super().__init__(*args, **kwargs)
         
         # Fix date field formatting for HTML5 date input
@@ -1101,21 +1105,18 @@ class AktivitaetForm(forms.ModelForm):
         instance = super().save(commit=False)
         
         # For new activities, ensure ersteller is set
-        if not instance.pk and not instance.ersteller_id and hasattr(self, 'current_user') and self.current_user:
+        is_new_activity = not instance.pk
+        has_current_user = hasattr(self, 'current_user') and self.current_user
+        needs_ersteller = not instance.ersteller_id
+        
+        if is_new_activity and needs_ersteller and has_current_user:
             instance.ersteller = self.current_user
         
         # For existing activities, prevent clearing ersteller
         # If ersteller would be set to None, preserve the original value
-        if instance.pk and not instance.ersteller_id:
-            # Get the original instance to preserve ersteller
-            try:
-                original = Aktivitaet.objects.get(pk=instance.pk)
-                if original.ersteller_id:
-                    instance.ersteller = original.ersteller
-            except Aktivitaet.DoesNotExist:
-                # If original doesn't exist (shouldn't happen), try to set current_user
-                if hasattr(self, 'current_user') and self.current_user:
-                    instance.ersteller = self.current_user
+        if not is_new_activity and needs_ersteller and self._original_ersteller_id:
+            # Restore the original ersteller using the ID we stored in __init__
+            instance.ersteller_id = self._original_ersteller_id
         
         if commit:
             instance.save()
