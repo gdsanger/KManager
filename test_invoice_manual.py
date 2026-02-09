@@ -41,10 +41,14 @@ def create_test_data():
             'land': 'Deutschland',
             'steuernummer': '12/345/67890',
             'ust_id_nr': 'DE123456789',
+            'geschaeftsfuehrer': 'Max Mustermann, Dr. Erika Musterfrau',
+            'handelsregister': 'HRB 12345 B, Amtsgericht Berlin-Charlottenburg',
             'kreditinstitut': 'Demo Bank',
             'iban': 'DE89370400440532013000',
             'bic': 'COBADEFFXXX',
+            'kontoinhaber': 'KManager Demo GmbH',
             'telefon': '030-12345678',
+            'fax': '030-12345679',
             'email': 'info@kmanager-demo.de',
             'internet': 'https://www.kmanager-demo.de'
         }
