@@ -160,19 +160,14 @@
     width: 25%;
     vertical-align: top;
     padding-right: 8pt;
+    padding-top: 8pt;
     font-size: 7pt;
     line-height: 1.4;
+    border-top: 1pt solid #666;
 }
 
 .footer-column:last-child {
     padding-right: 0;
-}
-
-.footer-column-title {
-    font-weight: bold;
-    font-size: 8pt;
-    margin-bottom: 6pt;
-    color: #333;
 }
 
 .footer-item {
@@ -211,9 +206,16 @@
 {% endblock %}
 
 {% block first_page_header %}
-<table>
+<!-- Company Logo (top right) -->
+{% if company.logo_url %}
+<div style="text-align: right; margin-bottom: 12pt;">
+    <img src="{{ company.logo_url }}" alt="Logo" style="max-width: 150pt; max-height: 80pt;">
+</div>
+{% endif %}
+
+<table style="border: none;">
     <tr>
-        <td style="width:50%">
+        <td style="width:50%; border: none;">
             <!-- Address block positioned for window envelope -->
             <div class="address-block">
                 <div class="sender">
@@ -228,14 +230,7 @@
                 {% endif %}
             </div>
         </td>
-        <td style="vertical-align: top;padding-left: 20mm;">
-            <!-- Company Logo (top right) -->
-            {% if company.logo_url %}
-            <div style="text-align: right; margin-bottom: 12pt;">
-                <img src="{{ company.logo_url }}" alt="Logo" style="max-width: 150pt; max-height: 80pt;">
-            </div>
-            {% endif %}
-            
+        <td style="vertical-align: top; padding-left: 20mm; border: none;">
             <!-- Document metadata -->
             <table class="doc-meta-table">
                 <tr>
@@ -418,9 +413,6 @@
     <div class="footer-columns">
         <!-- Column 1: Name & Address -->
         <div class="footer-column">
-            <div class="footer-column-title">
-                <span class="footer-icon">🏢</span> Anschrift
-            </div>
             {% if company.name %}
             <div class="footer-item"><strong>{{ company.name }}</strong></div>
             {% endif %}
@@ -437,9 +429,6 @@
         
         <!-- Column 2: Contact Details -->
         <div class="footer-column">
-            <div class="footer-column-title">
-                <span class="footer-icon">📞</span> Kontakt
-            </div>
             {% if company.phone %}
             <div class="footer-item">
                 <span class="footer-icon">☎</span> {{ company.phone }}
@@ -464,9 +453,6 @@
         
         <!-- Column 3: Legal Information -->
         <div class="footer-column">
-            <div class="footer-column-title">
-                <span class="footer-icon">⚖</span> Rechtliches
-            </div>
             {% if company.tax_number %}
             <div class="footer-item">Steuernr.: {{ company.tax_number }}</div>
             {% endif %}
@@ -483,9 +469,6 @@
         
         <!-- Column 4: Bank Details -->
         <div class="footer-column">
-            <div class="footer-column-title">
-                <span class="footer-icon">🏦</span> Bankverbindung
-            </div>
             {% if company.bank_name %}
             <div class="footer-item">{{ company.bank_name }}</div>
             {% endif %}
