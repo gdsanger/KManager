@@ -32,7 +32,7 @@
                     <div class="mb-4">
                         {% if mandant.logo_path %}
                         <div class="mb-3">
-                            <img src="/data/{{ mandant.logo_path }}" alt="Logo" style="max-width: 300px; max-height: 150px;" class="border rounded">
+                            <img src="{{ MEDIA_URL }}{{ mandant.logo_path }}" alt="Logo" style="max-width: 300px; max-height: 150px;" class="border rounded">
                         </div>
                         <form method="post" style="display: inline;">
                             {% csrf_token %}

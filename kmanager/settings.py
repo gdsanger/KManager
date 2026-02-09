@@ -84,6 +84,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.media',
             ],
         },
     },
@@ -162,6 +163,7 @@ STATICFILES_DIRS = [
 # Document storage configuration
 # Documents are stored in filesystem under <APP_ROOT>/data/vermietung/
 MEDIA_ROOT = BASE_DIR / 'data'
+MEDIA_URL = '/data/'
 VERMIETUNG_DOCUMENTS_ROOT = MEDIA_ROOT / 'vermietung'
 
 # Default primary key field type
