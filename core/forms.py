@@ -134,7 +134,7 @@ class MandantForm(forms.ModelForm):
         fields = [
             'name', 'adresse', 'plz', 'ort', 'land',
             'telefon', 'fax', 'email', 'internet',
-            'steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 
+            'steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 'handelsregister',
             'kreditinstitut', 'iban', 'bic', 'kontoinhaber'
         ]
         widgets = {
@@ -150,6 +150,7 @@ class MandantForm(forms.ModelForm):
             'steuernummer': forms.TextInput(attrs={'class': 'form-control'}),
             'ust_id_nr': forms.TextInput(attrs={'class': 'form-control'}),
             'geschaeftsfuehrer': forms.TextInput(attrs={'class': 'form-control'}),
+            'handelsregister': forms.TextInput(attrs={'class': 'form-control'}),
             'kreditinstitut': forms.TextInput(attrs={'class': 'form-control'}),
             'iban': forms.TextInput(attrs={'class': 'form-control'}),
             'bic': forms.TextInput(attrs={'class': 'form-control'}),
@@ -168,6 +169,7 @@ class MandantForm(forms.ModelForm):
             'steuernummer': 'Steuernummer',
             'ust_id_nr': 'UStIdNr',
             'geschaeftsfuehrer': 'Geschäftsführer',
+            'handelsregister': 'Handelsregister',
             'kreditinstitut': 'Kreditinstitut',
             'iban': 'IBAN',
             'bic': 'BIC',
