@@ -10,9 +10,9 @@ from django_tables2 import RequestConfig
 import json
 import logging
 
-from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, TextTemplate
-from .tables import SalesDocumentTable, ContractTable, TextTemplateTable, OutgoingInvoiceJournalTable
-from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter, OutgoingInvoiceJournalFilter
+from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, TextTemplate, TimeEntry
+from .tables import SalesDocumentTable, ContractTable, TextTemplateTable, OutgoingInvoiceJournalTable, TimeEntryTable
+from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter, OutgoingInvoiceJournalFilter, TimeEntryFilter
 from .services import (
     DocumentCalculationService,
     TaxDeterminationService,
@@ -1916,5 +1916,279 @@ def document_preview(request, pk):
     logger.info(f"Generated preview PDF for document ID {document.id} ({len(result.pdf_bytes)} bytes)")
     
     return response
+
+
+# TimeEntry (Zeiterfassung) Views
+
+@login_required
+def timeentry_list(request):
+    """
+    List view for time entries with filtering, sorting, and pagination.
+    
+    Displays a filterable, sortable, paginated list of time entries for billable services.
+    """
+    # Base queryset with optimized select/prefetch
+    queryset = TimeEntry.objects.select_related(
+        'customer', 'order', 'order__document_type', 'performed_by', 'company'
+    )
+    
+    # Apply filters
+    filter_set = TimeEntryFilter(request.GET, queryset=queryset)
+    
+    # Create table with filtered data
+    table = TimeEntryTable(filter_set.qs)
+    
+    # Set default ordering to -service_date, -created_at
+    table.order_by = request.GET.get('sort', '-service_date')
+    
+    # Configure pagination (25 per page)
+    RequestConfig(request, paginate={'per_page': 25}).configure(table)
+    
+    # Prepare context
+    context = {
+        'table': table,
+        'filter': filter_set,
+    }
+    
+    return render(request, 'auftragsverwaltung/timeentries/list.html', context)
+
+
+@login_required
+def timeentry_detail(request, pk):
+    """
+    Detail view for a time entry
+    
+    Shows time entry details and provides edit capabilities.
+    
+    Args:
+        pk: Primary key of the time entry
+    """
+    timeentry = get_object_or_404(TimeEntry.objects.select_related(
+        'customer', 'order', 'order__document_type', 'performed_by', 'company'
+    ), pk=pk)
+    
+    context = {
+        'timeentry': timeentry,
+    }
+    
+    return render(request, 'auftragsverwaltung/timeentries/detail.html', context)
+
+
+@login_required
+def timeentry_create(request):
+    """
+    Create a new time entry
+    
+    GET: Show empty form for creating a new time entry
+    POST: Create the time entry and redirect to detail view
+    """
+    company = Mandant.objects.first()
+    
+    if request.method == 'POST':
+        # Get company from form
+        company_id = request.POST.get('company_id')
+        if company_id:
+            company = get_object_or_404(Mandant, pk=company_id)
+        else:
+            company = Mandant.objects.first()
+        
+        # Create new time entry from POST data
+        timeentry = TimeEntry(
+            company=company,
+            is_travel_cost=False,
+            is_billed=False,
+        )
+        
+        # Set customer if provided
+        customer_id = normalize_foreign_key_id(request.POST.get('customer_id'))
+        if customer_id:
+            timeentry.customer = get_object_or_404(Adresse, pk=customer_id)
+        
+        # Set order if provided
+        order_id = normalize_foreign_key_id(request.POST.get('order_id'))
+        if order_id:
+            timeentry.order = get_object_or_404(SalesDocument, pk=order_id)
+        
+        # Set performed_by (user)
+        performed_by_id = normalize_foreign_key_id(request.POST.get('performed_by_id'))
+        if performed_by_id:
+            from django.contrib.auth.models import User
+            timeentry.performed_by = get_object_or_404(User, pk=performed_by_id)
+        else:
+            # Default to current user if not specified
+            timeentry.performed_by = request.user
+        
+        # Set service_date
+        service_date_str = request.POST.get('service_date')
+        if service_date_str:
+            timeentry.service_date = datetime.strptime(service_date_str, '%Y-%m-%d').date()
+        else:
+            timeentry.service_date = date.today()
+        
+        # Set duration_minutes
+        duration_minutes_str = request.POST.get('duration_minutes', '0')
+        try:
+            timeentry.duration_minutes = int(duration_minutes_str)
+        except ValueError:
+            timeentry.duration_minutes = 0
+        
+        # Set description
+        timeentry.description = request.POST.get('description', '')
+        
+        # Set flags
+        timeentry.is_travel_cost = request.POST.get('is_travel_cost') == 'on'
+        timeentry.is_billed = request.POST.get('is_billed') == 'on'
+        
+        # Validate and save
+        try:
+            timeentry.full_clean()
+            timeentry.save()
+            
+            # Log activity
+            ActivityStreamService.add(
+                company=company,
+                domain='TIMEENTRY',
+                activity_type='TIMEENTRY_CREATED',
+                title=f'Zeiterfassung erstellt: {timeentry.service_date} - {timeentry.customer.name}',
+                target_url=f'/auftragsverwaltung/timeentries/{timeentry.pk}/',
+                actor=request.user
+            )
+            
+            return redirect('auftragsverwaltung:timeentry_detail', pk=timeentry.pk)
+        except Exception as e:
+            logger.error(f"Error creating time entry: {str(e)}")
+            # Re-render form with error
+            context = {
+                'error': str(e),
+                'timeentry': timeentry,
+                'companies': Mandant.objects.all().order_by('name'),
+                'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+                'orders': SalesDocument.objects.filter(
+                    document_type__key__iexact='order'
+                ).order_by('-issue_date'),
+                'users': User.objects.all().order_by('username'),
+                'is_create': True,
+            }
+            return render(request, 'auftragsverwaltung/timeentries/form.html', context)
+    
+    # GET: Show empty form
+    from django.contrib.auth.models import User
+    context = {
+        'companies': Mandant.objects.all().order_by('name'),
+        'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+        'orders': SalesDocument.objects.filter(
+            document_type__key__iexact='order'
+        ).order_by('-issue_date'),
+        'users': User.objects.all().order_by('username'),
+        'is_create': True,
+        'default_company': company,
+        'default_user': request.user,
+        'default_date': date.today().strftime('%Y-%m-%d'),
+    }
+    
+    return render(request, 'auftragsverwaltung/timeentries/form.html', context)
+
+
+@login_required
+def timeentry_update(request, pk):
+    """
+    Update an existing time entry
+    
+    GET: Show form with current time entry data
+    POST: Update the time entry and redirect to detail view
+    
+    Args:
+        pk: Primary key of the time entry
+    """
+    timeentry = get_object_or_404(TimeEntry, pk=pk)
+    
+    if request.method == 'POST':
+        # Update company if changed
+        company_id = request.POST.get('company_id')
+        if company_id:
+            timeentry.company = get_object_or_404(Mandant, pk=company_id)
+        
+        # Update customer if changed
+        customer_id = normalize_foreign_key_id(request.POST.get('customer_id'))
+        if customer_id:
+            timeentry.customer = get_object_or_404(Adresse, pk=customer_id)
+        
+        # Update order if changed
+        order_id = normalize_foreign_key_id(request.POST.get('order_id'))
+        if order_id:
+            timeentry.order = get_object_or_404(SalesDocument, pk=order_id)
+        
+        # Update performed_by if changed
+        performed_by_id = normalize_foreign_key_id(request.POST.get('performed_by_id'))
+        if performed_by_id:
+            from django.contrib.auth.models import User
+            timeentry.performed_by = get_object_or_404(User, pk=performed_by_id)
+        
+        # Update service_date
+        service_date_str = request.POST.get('service_date')
+        if service_date_str:
+            timeentry.service_date = datetime.strptime(service_date_str, '%Y-%m-%d').date()
+        
+        # Update duration_minutes
+        duration_minutes_str = request.POST.get('duration_minutes', '0')
+        try:
+            timeentry.duration_minutes = int(duration_minutes_str)
+        except ValueError:
+            timeentry.duration_minutes = 0
+        
+        # Update description
+        timeentry.description = request.POST.get('description', '')
+        
+        # Update flags
+        timeentry.is_travel_cost = request.POST.get('is_travel_cost') == 'on'
+        timeentry.is_billed = request.POST.get('is_billed') == 'on'
+        
+        # Validate and save
+        try:
+            timeentry.full_clean()
+            timeentry.save()
+            
+            # Log activity
+            ActivityStreamService.add(
+                company=timeentry.company,
+                domain='TIMEENTRY',
+                activity_type='TIMEENTRY_UPDATED',
+                title=f'Zeiterfassung aktualisiert: {timeentry.service_date} - {timeentry.customer.name}',
+                target_url=f'/auftragsverwaltung/timeentries/{timeentry.pk}/',
+                actor=request.user
+            )
+            
+            return redirect('auftragsverwaltung:timeentry_detail', pk=timeentry.pk)
+        except Exception as e:
+            logger.error(f"Error updating time entry: {str(e)}")
+            # Re-render form with error
+            from django.contrib.auth.models import User
+            context = {
+                'error': str(e),
+                'timeentry': timeentry,
+                'companies': Mandant.objects.all().order_by('name'),
+                'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+                'orders': SalesDocument.objects.filter(
+                    document_type__key__iexact='order'
+                ).order_by('-issue_date'),
+                'users': User.objects.all().order_by('username'),
+                'is_create': False,
+            }
+            return render(request, 'auftragsverwaltung/timeentries/form.html', context)
+    
+    # GET: Show form with current data
+    from django.contrib.auth.models import User
+    context = {
+        'timeentry': timeentry,
+        'companies': Mandant.objects.all().order_by('name'),
+        'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+        'orders': SalesDocument.objects.filter(
+            document_type__key__iexact='order'
+        ).order_by('-issue_date'),
+        'users': User.objects.all().order_by('username'),
+        'is_create': False,
+    }
+    
+    return render(request, 'auftragsverwaltung/timeentries/form.html', context)
 
 

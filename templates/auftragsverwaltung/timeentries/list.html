@@ -1,0 +1,117 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+{% load django_tables2 %}
+
+{% block title %}Zeiterfassung - Domus{% endblock %}
+
+{% block page_title %}Zeiterfassung{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="{% url 'auftragsverwaltung:timeentry_create' %}" class="btn btn-primary" title="Neue Zeiterfassung erstellen">
+        <i class="bi bi-plus-circle"></i> Neu erstellen
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filters Section -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <form method="get" action="">
+            <div class="row g-2">
+                <!-- Search Field -->
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        {{ filter.form.q }}
+                    </div>
+                </div>
+                
+                <!-- Customer Filter -->
+                <div class="col-md-2">
+                    {{ filter.form.customer }}
+                </div>
+                
+                <!-- Billed Filter -->
+                <div class="col-md-2">
+                    {{ filter.form.is_billed }}
+                </div>
+                
+                <!-- Filter Actions -->
+                <div class="col-md-2">
+                    <div class="btn-group w-100" role="group">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="bi bi-funnel"></i> Filter
+                        </button>
+                        {% if request.GET %}
+                        <a href="{% url 'auftragsverwaltung:timeentry_list' %}" class="btn btn-outline-secondary" title="Filter zurücksetzen">
+                            <i class="bi bi-x"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Advanced Filters Toggle -->
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false" aria-controls="advancedFilters">
+                        <i class="bi bi-funnel-fill"></i> Erweitert
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Advanced Filters (Collapsible) -->
+            <div class="collapse mt-2" id="advancedFilters">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.service_date_from.id_for_label }}" class="form-label small">{{ filter.form.service_date_from.label }}</label>
+                        {{ filter.form.service_date_from }}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.service_date_to.id_for_label }}" class="form-label small">{{ filter.form.service_date_to.label }}</label>
+                        {{ filter.form.service_date_to }}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.order.id_for_label }}" class="form-label small">{{ filter.form.order.label }}</label>
+                        {{ filter.form.order }}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.performed_by.id_for_label }}" class="form-label small">{{ filter.form.performed_by.label }}</label>
+                        {{ filter.form.performed_by }}
+                    </div>
+                    <div class="col-md-3">
+                        <label for="{{ filter.form.is_travel_cost.id_for_label }}" class="form-label small">{{ filter.form.is_travel_cost.label }}</label>
+                        {{ filter.form.is_travel_cost }}
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Result Count -->
+<div class="row mb-2">
+    <div class="col text-end">
+        <span class="text-muted">{{ table.paginator.count }} Zeiterfassung{{ table.paginator.count|pluralize:"en" }}</span>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="table-responsive">
+    {% render_table table %}
+</div>
+
+<!-- Help Text -->
+{% if table.paginator.count == 0 %}
+<div class="alert alert-info mt-3" role="alert">
+    <i class="bi bi-info-circle"></i>
+    {% if request.GET %}
+        Keine Zeiterfassungen gefunden, die den Filterkriterien entsprechen.
+        <a href="{% url 'auftragsverwaltung:timeentry_list' %}" class="alert-link">Filter zurücksetzen</a>
+    {% else %}
+        Es sind noch keine Zeiterfassungen vorhanden.
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

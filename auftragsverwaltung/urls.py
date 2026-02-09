@@ -56,4 +56,10 @@ urlpatterns = [
     # Outgoing Invoice Journal (Read-Only)
     path('buchhaltung/rechnungsausgangsjournal/', views.journal_list, name='journal_list'),
     path('buchhaltung/rechnungsausgangsjournal/<int:pk>/', views.journal_detail, name='journal_detail'),
+    
+    # TimeEntry (Zeiterfassung) views
+    path('timeentries/', views.timeentry_list, name='timeentry_list'),
+    path('timeentries/create/', views.timeentry_create, name='timeentry_create'),
+    path('timeentries/<int:pk>/', views.timeentry_detail, name='timeentry_detail'),
+    path('timeentries/<int:pk>/update/', views.timeentry_update, name='timeentry_update'),
 ]
