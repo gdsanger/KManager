@@ -5,6 +5,20 @@
 {% block page_title %}Aktivitäten{% endblock %}
 
 {% block page_actions %}
+<div class="btn-group me-2" role="group" aria-label="Aktivitäten-Filter">
+    <a href="{% url 'vermietung:aktivitaet_kanban' %}?filter=responsible" 
+       class="btn btn-sm {% if filter_mode == 'responsible' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <i class="bi bi-person-check"></i> Verantwortlich
+    </a>
+    <a href="{% url 'vermietung:aktivitaet_kanban' %}?filter=created" 
+       class="btn btn-sm {% if filter_mode == 'created' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <i class="bi bi-plus-circle"></i> Erstellt
+    </a>
+    <a href="{% url 'vermietung:aktivitaet_kanban' %}?filter=all" 
+       class="btn btn-sm {% if filter_mode == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <i class="bi bi-list-ul"></i> Alle
+    </a>
+</div>
 <a href="{% url 'vermietung:aktivitaet_list' %}" class="btn btn-outline-secondary">
     <i class="bi bi-list-ul"></i> Listenansicht
 </a>
