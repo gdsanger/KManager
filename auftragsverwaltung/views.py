@@ -795,7 +795,9 @@ def ajax_update_line(request, doc_key, pk, line_id):
         if 'description' in data:
             line.description = data['description']
         if 'tax_rate_id' in data:
-            line.tax_rate = get_object_or_404(TaxRate, pk=data['tax_rate_id'])
+            tax_rate_id = normalize_foreign_key_id(data['tax_rate_id'])
+            if tax_rate_id is not None:
+                line.tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
         if 'is_selected' in data:
             line.is_selected = data['is_selected']
         if 'unit_id' in data:
@@ -836,8 +838,10 @@ def ajax_update_line(request, doc_key, pk, line_id):
                 'long_text': line.long_text,
                 'quantity': str(line.quantity),
                 'unit_id': line.unit.pk if line.unit else None,
+                'unit_symbol': line.unit.symbol if line.unit else '',
                 'unit_price_net': str(line.unit_price_net),
                 'discount': str(line.discount),
+                'tax_rate_id': line.tax_rate.pk if line.tax_rate else None,
                 'description': line.description,
                 'line_net': str(line.line_net),
                 'line_tax': str(line.line_tax),

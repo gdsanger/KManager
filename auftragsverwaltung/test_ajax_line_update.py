@@ -342,3 +342,61 @@ class AjaxLineUpdateTestCase(TestCase):
         self.assertEqual(self.document.total_net, Decimal('100.00'))
         self.assertEqual(self.document.total_tax, Decimal('19.00'))
         self.assertEqual(self.document.total_gross, Decimal('119.00'))
+    
+    def test_ajax_update_line_tax_rate_null_string(self):
+        """Test updating with tax_rate_id='null' (string) doesn't cause error"""
+        url = reverse('auftragsverwaltung:ajax_update_line',
+                     kwargs={'doc_key': 'invoice', 'pk': self.document.pk, 'line_id': self.line.pk})
+        
+        # Simulate frontend sending 'null' as a string
+        data = {
+            'tax_rate_id': 'null'
+        }
+        
+        response = self.client.post(
+            url,
+            data=data,  # Send as form-encoded
+        )
+        
+        # Check response status - should succeed, not return 500
+        self.assertEqual(response.status_code, 200, 
+                        f"Expected 200 but got {response.status_code}. Response: {response.content}")
+        
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data.get('success'), 
+                       f"Expected success=True in response. Got: {response_data}")
+        
+        # Check that tax_rate was not changed (remains the original)
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.tax_rate, self.tax_rate)
+    
+    def test_ajax_update_line_unit_null_string(self):
+        """Test updating with unit_id='null' (string) doesn't cause error"""
+        url = reverse('auftragsverwaltung:ajax_update_line',
+                     kwargs={'doc_key': 'invoice', 'pk': self.document.pk, 'line_id': self.line.pk})
+        
+        # Simulate frontend sending 'null' as a string
+        data = {
+            'unit_id': 'null'
+        }
+        
+        response = self.client.post(
+            url,
+            data=data,  # Send as form-encoded
+        )
+        
+        # Check response status - should succeed
+        self.assertEqual(response.status_code, 200, 
+                        f"Expected 200 but got {response.status_code}. Response: {response.content}")
+        
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data.get('success'), 
+                       f"Expected success=True in response. Got: {response_data}")
+        
+        # Check that unit was set to None
+        self.line.refresh_from_db()
+        self.assertIsNone(self.line.unit)
+        
+        # Check that response includes unit_id as None and empty unit_symbol
+        self.assertIsNone(response_data['line']['unit_id'])
+        self.assertEqual(response_data['line']['unit_symbol'], '')
