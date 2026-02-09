@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ title }} - Domus{% endblock %}
 
@@ -40,7 +41,7 @@
                                 {% if mandant.logo_path %}
                                 <div class="mb-3">
                                     <label class="form-label">Aktuelles Logo:</label><br>
-                                    <img src="/data/{{ mandant.logo_path }}" alt="Logo" style="max-width: 200px; max-height: 100px;" class="border rounded">
+                                    <img src="{{ MEDIA_URL }}{{ mandant.logo_path }}" alt="Logo" style="max-width: 200px; max-height: 100px;" class="border rounded">
                                 </div>
                                 {% endif %}
                                 <label for="{{ form.logo.id_for_label }}" class="form-label">{{ form.logo.label }}</label>
