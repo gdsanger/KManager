@@ -1007,7 +1007,9 @@ class AktivitaetForm(forms.ModelForm):
         self.context_id = kwargs.pop('context_id', None)
         self.current_user = kwargs.pop('current_user', None)
         
-        # Store original ersteller value before parent init for protection logic
+        # Store original ersteller ID to prevent it from being cleared during edits
+        # This is necessary because super().__init__ will bind form data to the instance,
+        # potentially clearing the ersteller field if it's not in the submitted data
         instance = kwargs.get('instance')
         self._original_ersteller_id = instance.ersteller_id if instance and instance.pk else None
         
@@ -1107,14 +1109,14 @@ class AktivitaetForm(forms.ModelForm):
         # Determine if this is a creation (new activity) vs edit (existing activity)
         is_creating_activity = not instance.pk
         has_current_user = hasattr(self, 'current_user') and self.current_user
-        needs_ersteller = not instance.ersteller_id
+        ersteller_was_cleared = not instance.ersteller_id
         
-        if is_creating_activity and needs_ersteller and has_current_user:
+        if is_creating_activity and ersteller_was_cleared and has_current_user:
             instance.ersteller = self.current_user
         
         # For existing activities, prevent clearing ersteller
-        # If ersteller would be set to None, preserve the original value
-        if not is_creating_activity and needs_ersteller and self._original_ersteller_id:
+        # If ersteller would be set to None, restore the original value
+        if not is_creating_activity and ersteller_was_cleared and self._original_ersteller_id:
             # Restore the original ersteller using the ID we stored in __init__
             instance.ersteller_id = self._original_ersteller_id
         
