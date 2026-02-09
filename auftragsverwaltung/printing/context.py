@@ -62,6 +62,9 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
     
     def _build_company_context(self, company) -> dict:
         """Build company/letterhead context."""
+        from django.conf import settings
+        import os
+        
         address_lines = []
         if company.adresse:
             address_lines.append(company.adresse)
@@ -81,10 +84,19 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
         if company.kontoinhaber and company.kontoinhaber != company.name:
             bank_info.append(f"Kontoinhaber: {company.kontoinhaber}")
         
+        # Logo URL - construct absolute file path for WeasyPrint
+        logo_url = None
+        if company.logo_path:
+            # WeasyPrint needs an absolute file path or URL
+            logo_file_path = os.path.join(settings.MEDIA_ROOT, company.logo_path)
+            if os.path.exists(logo_file_path):
+                # Use file:// URL for WeasyPrint
+                logo_url = f"file://{logo_file_path}"
+        
         return {
             'name': company.name,
             'address_lines': address_lines,
-            'logo_url': None,  # Could be added later
+            'logo_url': logo_url,
             'tax_number': company.steuernummer or '',
             'vat_id': company.ust_id_nr or '',
             'bank_info': bank_info if bank_info else None,

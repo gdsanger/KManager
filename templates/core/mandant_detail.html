@@ -27,6 +27,39 @@
                     <h5 class="mb-0"><i class="bi bi-building"></i> {{ mandant.name }}</h5>
                 </div>
                 <div class="card-body">
+                    <!-- Logo Section -->
+                    <h6 class="text-uppercase text-muted mb-3"><i class="bi bi-image"></i> Firmenlogo</h6>
+                    <div class="mb-4">
+                        {% if mandant.logo_path %}
+                        <div class="mb-3">
+                            <img src="/data/{{ mandant.logo_path }}" alt="Logo" style="max-width: 300px; max-height: 150px;" class="border rounded">
+                        </div>
+                        <form method="post" style="display: inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="delete_logo" value="1">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Möchten Sie das Logo wirklich löschen?')">
+                                <i class="bi bi-trash"></i> Logo löschen
+                            </button>
+                        </form>
+                        {% else %}
+                        <p class="text-muted">Kein Logo vorhanden</p>
+                        {% endif %}
+                        
+                        <!-- Logo Upload Form -->
+                        <form method="post" enctype="multipart/form-data" class="mt-3">
+                            {% csrf_token %}
+                            <div class="input-group">
+                                <input type="file" name="logo" class="form-control" accept=".jpg,.jpeg,.png,.gif">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-upload"></i> {% if mandant.logo_path %}Neues Logo hochladen{% else %}Logo hochladen{% endif %}
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Nur .jpg, .png oder .gif Dateien (max. 5MB)</small>
+                        </form>
+                    </div>
+
+                    <hr class="my-4">
+
                     <!-- Basisdaten -->
                     <h6 class="text-uppercase text-muted mb-3"><i class="bi bi-info-circle"></i> Basisdaten</h6>
                     <dl class="row mb-4">

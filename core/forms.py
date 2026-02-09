@@ -121,6 +121,13 @@ class CustomPasswordChangeForm(PasswordChangeForm):
 class MandantForm(forms.ModelForm):
     """Form for Mandant entity"""
     
+    logo = forms.FileField(
+        required=False,
+        label='Logo',
+        help_text='Nur .jpg, .png oder .gif Dateien (max. 5MB)',
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.jpg,.jpeg,.png,.gif'})
+    )
+    
     class Meta:
         model = Mandant
         fields = [
@@ -165,6 +172,27 @@ class MandantForm(forms.ModelForm):
             'bic': 'BIC',
             'kontoinhaber': 'Kontoinhaber',
         }
+    
+    def clean_logo(self):
+        """Validate uploaded logo file"""
+        logo = self.cleaned_data.get('logo')
+        
+        if logo:
+            # Check file size (max 5MB)
+            if logo.size > 5 * 1024 * 1024:
+                raise forms.ValidationError('Die Datei ist zu groß. Maximale Größe: 5MB.')
+            
+            # Check file extension
+            import os
+            ext = os.path.splitext(logo.name)[1].lower()
+            allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif']
+            
+            if ext not in allowed_extensions:
+                raise forms.ValidationError(
+                    f'Ungültige Dateiendung "{ext}". Nur .jpg, .png und .gif sind erlaubt.'
+                )
+        
+        return logo
 
 
 class ItemForm(forms.ModelForm):
