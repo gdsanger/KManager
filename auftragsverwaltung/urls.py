@@ -29,6 +29,9 @@ urlpatterns = [
     # Document PDF download endpoint
     path('documents/<int:pk>/pdf/', views.document_pdf, name='document_pdf'),
     
+    # Document PDF preview endpoint (read-only, no side effects)
+    path('documents/<int:pk>/preview/', views.document_preview, name='document_preview'),
+    
     # AJAX endpoints
     path('ajax/calculate-payment-term/', views.ajax_calculate_payment_term, name='ajax_calculate_payment_term'),
     path('ajax/search-articles/', views.ajax_search_articles, name='ajax_search_articles'),

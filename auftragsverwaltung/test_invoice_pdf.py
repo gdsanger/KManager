@@ -425,6 +425,151 @@ class DocumentPdfViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class DocumentPreviewViewTest(TestCase):
+    """Tests for document PDF preview endpoint (read-only, no side effects)"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create user
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.client = Client()
+        
+        # Create company
+        self.company = Mandant.objects.create(
+            name='Test GmbH',
+            adresse='Teststraße 1',
+            plz='12345',
+            ort='Berlin'
+        )
+        
+        # Create customer
+        self.customer = Adresse.objects.create(
+            firma='Kunde GmbH',
+            name='Max Mustermann',
+            strasse='Kundenstraße 10',
+            plz='54321',
+            ort='Hamburg',
+            land='Deutschland'
+        )
+        
+        # Create document type
+        self.doc_type = DocumentType.objects.create(
+            key='rechnung',
+            name='Rechnung',
+            prefix='R',
+            is_invoice=True
+        )
+        
+        # Create tax rate
+        self.tax_19 = TaxRate.objects.create(code='normal', name='Normal 19%', rate=Decimal('0.19'))
+        
+        # Create unit
+        self.unit = Unit.objects.create(code='STK', name='Stück', symbol='Stk')
+        
+        # Create document
+        self.document = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doc_type,
+            customer=self.customer,
+            number='R26-00001',
+            status='OPEN',
+            issue_date=date.today(),
+            subject='Test Rechnung',
+            total_net=Decimal('100.00'),
+            total_tax=Decimal('19.00'),
+            total_gross=Decimal('119.00')
+        )
+        
+        # Create at least one line
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            short_text_1='Test Artikel',
+            description='Test Artikel',
+            unit=self.unit,
+            quantity=Decimal('1.00'),
+            unit_price_net=Decimal('100.00'),
+            discount=Decimal('0.00'),
+            line_net=Decimal('100.00'),
+            line_tax=Decimal('19.00'),
+            line_gross=Decimal('119.00'),
+            tax_rate=self.tax_19
+        )
+    
+    def test_preview_endpoint_requires_login(self):
+        """Test that preview endpoint requires authentication"""
+        url = reverse('auftragsverwaltung:document_preview', kwargs={'pk': self.document.pk})
+        response = self.client.get(url)
+        
+        # Should redirect to login
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login/', response.url)
+    
+    def test_preview_endpoint_generates_pdf(self):
+        """Test that preview endpoint generates a valid PDF"""
+        self.client.login(username='testuser', password='testpass')
+        url = reverse('auftragsverwaltung:document_preview', kwargs={'pk': self.document.pk})
+        
+        response = self.client.get(url)
+        
+        # Should return 200
+        self.assertEqual(response.status_code, 200)
+        
+        # Should have PDF content type
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        
+        # Should have inline content disposition
+        self.assertIn('inline', response['Content-Disposition'])
+        self.assertIn('filename=', response['Content-Disposition'])
+        
+        # Filename should use document type name and ID (not number)
+        self.assertIn(f'{self.doc_type.name}_{self.document.id}.pdf', response['Content-Disposition'])
+        
+        # Should have PDF content (check magic bytes)
+        content = b''.join(response.streaming_content) if hasattr(response, 'streaming_content') else response.content
+        self.assertTrue(len(content) > 0)
+        self.assertTrue(content.startswith(b'%PDF'))
+    
+    def test_preview_endpoint_404_for_invalid_document(self):
+        """Test that preview endpoint returns 404 for non-existent document"""
+        self.client.login(username='testuser', password='testpass')
+        url = reverse('auftragsverwaltung:document_preview', kwargs={'pk': 99999})
+        
+        response = self.client.get(url)
+        
+        # Should return 404
+        self.assertEqual(response.status_code, 404)
+    
+    def test_preview_has_no_side_effects(self):
+        """Test that preview does not modify the document or create snapshots"""
+        self.client.login(username='testuser', password='testpass')
+        
+        # Store original document state
+        original_status = self.document.status
+        original_number = self.document.number
+        original_updated_at = self.document.updated_at
+        
+        # Call preview endpoint
+        url = reverse('auftragsverwaltung:document_preview', kwargs={'pk': self.document.pk})
+        response = self.client.get(url)
+        
+        # Should return 200
+        self.assertEqual(response.status_code, 200)
+        
+        # Reload document from database
+        self.document.refresh_from_db()
+        
+        # Verify no changes to document
+        self.assertEqual(self.document.status, original_status)
+        self.assertEqual(self.document.number, original_number)
+        self.assertEqual(self.document.updated_at, original_updated_at)
+        
+        # Note: This test verifies basic read-only behavior.
+        # Additional checks for snapshots would require snapshot model implementation.
+
+
 class MultiPagePdfTest(TestCase):
     """Tests for multi-page PDF generation"""
     

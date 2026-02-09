@@ -20,6 +20,9 @@ Neues {{ document_type.name }}
     <button type="button" class="btn btn-primary" id="saveButton">
         <i class="bi bi-save"></i> Speichern
     </button>
+    <a href="{% url 'auftragsverwaltung:document_preview' document.id %}" target="_blank" class="btn btn-outline-secondary">
+        <i class="bi bi-file-pdf"></i> PDF voransehen
+    </a>
     <button type="button" class="btn btn-outline-secondary" onclick="window.location='{% url 'auftragsverwaltung:document_list' doc_key %}'">
         <i class="bi bi-x"></i> Abbrechen
     </button>
