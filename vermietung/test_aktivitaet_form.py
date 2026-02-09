@@ -158,8 +158,8 @@ class AktivitaetFormErstellerTest(TestCase):
         # ersteller should be the explicitly set user
         self.assertEqual(activity.ersteller, self.user)
     
-    def test_form_allows_null_ersteller_without_current_user(self):
-        """Test that form can create activity without ersteller if current_user not provided."""
+    def test_form_creates_null_ersteller_when_current_user_missing(self):
+        """Test fallback: form creates activity without ersteller when current_user not provided."""
         form_data = {
             'titel': 'Test Activity',
             'beschreibung': 'Test description',

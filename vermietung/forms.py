@@ -1104,17 +1104,17 @@ class AktivitaetForm(forms.ModelForm):
         """
         instance = super().save(commit=False)
         
-        # For new activities, ensure ersteller is set
-        is_new_activity = not instance.pk
+        # Determine if this is a creation (new activity) vs edit (existing activity)
+        is_creating_activity = not instance.pk
         has_current_user = hasattr(self, 'current_user') and self.current_user
         needs_ersteller = not instance.ersteller_id
         
-        if is_new_activity and needs_ersteller and has_current_user:
+        if is_creating_activity and needs_ersteller and has_current_user:
             instance.ersteller = self.current_user
         
         # For existing activities, prevent clearing ersteller
         # If ersteller would be set to None, preserve the original value
-        if not is_new_activity and needs_ersteller and self._original_ersteller_id:
+        if not is_creating_activity and needs_ersteller and self._original_ersteller_id:
             # Restore the original ersteller using the ID we stored in __init__
             instance.ersteller_id = self._original_ersteller_id
         
