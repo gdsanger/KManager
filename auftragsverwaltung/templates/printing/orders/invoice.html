@@ -206,7 +206,7 @@
 
 /* First page specific header */
 @page :first {
-    margin-top: 1cm; /* Reduced from 6cm to allow logo at very top */
+    margin-top: 1cm; /* Reduced from original 6cm - address positioning now handled by table margin */
 }
 {% endblock %}
 
@@ -218,10 +218,11 @@
 </div>
 {% endif %}
 
+<!-- Address positioning: 5cm margin + 1cm page margin = 6cm absolute position for envelope window -->
 <table style="border: none; margin-top: 5cm;">
     <tr>
         <td style="width:50%; border: none;">
-            <!-- Address block positioned at absolute 6cm from top (1cm page margin + 5cm additional margin) -->
+            <!-- Address block for standard window envelope (DIN 676, top edge at 6cm) -->
             <div class="address-block">
                 <div class="sender">
                     {{ company.name }} &bull; {{ company.address_lines.0|default:"" }} &bull; {{ company.address_lines.1|default:"" }}
