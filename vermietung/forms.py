@@ -1007,6 +1007,12 @@ class AktivitaetForm(forms.ModelForm):
         self.context_id = kwargs.pop('context_id', None)
         self.current_user = kwargs.pop('current_user', None)
         
+        # Store original ersteller ID to prevent it from being cleared during edits
+        # This is necessary because super().__init__ will bind form data to the instance,
+        # potentially clearing the ersteller field if it's not in the submitted data
+        instance = kwargs.get('instance')
+        self._original_ersteller_id = instance.ersteller_id if instance and instance.pk else None
+        
         super().__init__(*args, **kwargs)
         
         # Fix date field formatting for HTML5 date input
@@ -1091,6 +1097,33 @@ class AktivitaetForm(forms.ModelForm):
                 raise ValidationError('Das angegebene Kontextobjekt existiert nicht.')
         
         return cleaned_data
+    
+    def save(self, commit=True):
+        """
+        Override save to ensure ersteller is set for activities.
+        - For new activities without ersteller, use current_user if available
+        - For existing activities, prevent clearing ersteller (preserve existing value)
+        """
+        instance = super().save(commit=False)
+        
+        # Determine if this is a creation (new activity) vs edit (existing activity)
+        is_creating_activity = not instance.pk
+        has_current_user = hasattr(self, 'current_user') and self.current_user
+        ersteller_was_cleared = not instance.ersteller_id
+        
+        if is_creating_activity and ersteller_was_cleared and has_current_user:
+            instance.ersteller = self.current_user
+        
+        # For existing activities, prevent clearing ersteller
+        # If ersteller would be set to None, restore the original value
+        if not is_creating_activity and ersteller_was_cleared and self._original_ersteller_id:
+            # Restore the original ersteller using the ID we stored in __init__
+            instance.ersteller_id = self._original_ersteller_id
+        
+        if commit:
+            instance.save()
+        
+        return instance
 
 
 class AktivitaetsBereichForm(forms.ModelForm):
