@@ -139,6 +139,17 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
     
     def _build_document_context(self, document) -> dict:
         """Build document metadata context."""
+        # Get document type display name with fallback logic
+        # Priority: DocumentType.name → DocumentType.key → "Dokument"
+        document_type_name = "Dokument"  # Default fallback
+        if document.document_type:
+            # Try name first (preferred)
+            if hasattr(document.document_type, 'name') and document.document_type.name:
+                document_type_name = document.document_type.name.strip() or document_type_name
+            # Fallback to key if name is empty/whitespace
+            if document_type_name == "Dokument" and hasattr(document.document_type, 'key') and document.document_type.key:
+                document_type_name = document.document_type.key.strip() or document_type_name
+        
         return {
             'number': document.number,
             'subject': document.subject or '',
@@ -149,6 +160,7 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
             'footer_html': document.footer_text or '',
             'reference_number': document.reference_number or '',
             'notes_public': document.notes_public or '',
+            'document_type_name': document_type_name,
         }
     
     def _build_lines_context(self, document) -> list:
