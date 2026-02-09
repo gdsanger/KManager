@@ -141,6 +141,50 @@
     font-weight: bold;
 }
 
+/* 4-Column Footer Styles */
+.company-footer {
+    margin-top: 24pt;
+    padding-top: 16pt;
+    border-top: 2pt solid #333;
+    page-break-inside: avoid;
+}
+
+.footer-columns {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.footer-column {
+    display: table-cell;
+    width: 25%;
+    vertical-align: top;
+    padding-right: 8pt;
+    font-size: 7pt;
+    line-height: 1.4;
+}
+
+.footer-column:last-child {
+    padding-right: 0;
+}
+
+.footer-column-title {
+    font-weight: bold;
+    font-size: 8pt;
+    margin-bottom: 6pt;
+    color: #333;
+}
+
+.footer-item {
+    margin-bottom: 3pt;
+}
+
+.footer-icon {
+    display: inline-block;
+    width: 12pt;
+    color: #666;
+}
+
 /* Footer on every page (via @page) */
 @page {
     @bottom-left {
@@ -370,33 +414,91 @@
 {% endif %}
 
 <!-- Company footer information -->
-<div class="footer-note">
-    <p>
-        <strong>{{ company.name }}</strong><br>
-        {% for line in company.address_lines %}
-        {{ line }}{% if not forloop.last %} &bull; {% endif %}
-        {% endfor %}
-    </p>
-    {% if company.phone or company.email %}
-    <p>
-        {% if company.phone %}Tel: {{ company.phone }}{% endif %}
-        {% if company.phone and company.email %} &bull; {% endif %}
-        {% if company.email %}E-Mail: {{ company.email }}{% endif %}
-    </p>
-    {% endif %}
-    {% if company.tax_number or company.vat_id %}
-    <p>
-        {% if company.tax_number %}Steuernummer: {{ company.tax_number }}{% endif %}
-        {% if company.tax_number and company.vat_id %} &bull; {% endif %}
-        {% if company.vat_id %}USt-IdNr: {{ company.vat_id }}{% endif %}
-    </p>
-    {% endif %}
-    {% if company.bank_info %}
-    <p>
-        {% for info in company.bank_info %}
-        {{ info }}{% if not forloop.last %} &bull; {% endif %}
-        {% endfor %}
-    </p>
-    {% endif %}
+<div class="company-footer">
+    <div class="footer-columns">
+        <!-- Column 1: Name & Address -->
+        <div class="footer-column">
+            <div class="footer-column-title">
+                <span class="footer-icon">🏢</span> Anschrift
+            </div>
+            {% if company.name %}
+            <div class="footer-item"><strong>{{ company.name }}</strong></div>
+            {% endif %}
+            {% if company.address_lines.0 %}
+            <div class="footer-item">{{ company.address_lines.0 }}</div>
+            {% endif %}
+            {% if company.address_lines.1 %}
+            <div class="footer-item">{{ company.address_lines.1 }}</div>
+            {% endif %}
+            {% if company.address_lines.2 %}
+            <div class="footer-item">{{ company.address_lines.2 }}</div>
+            {% endif %}
+        </div>
+        
+        <!-- Column 2: Contact Details -->
+        <div class="footer-column">
+            <div class="footer-column-title">
+                <span class="footer-icon">📞</span> Kontakt
+            </div>
+            {% if company.phone %}
+            <div class="footer-item">
+                <span class="footer-icon">☎</span> {{ company.phone }}
+            </div>
+            {% endif %}
+            {% if company.fax %}
+            <div class="footer-item">
+                <span class="footer-icon">📠</span> {{ company.fax }}
+            </div>
+            {% endif %}
+            {% if company.email %}
+            <div class="footer-item">
+                <span class="footer-icon">✉</span> {{ company.email }}
+            </div>
+            {% endif %}
+            {% if company.internet %}
+            <div class="footer-item">
+                <span class="footer-icon">🌐</span> {{ company.internet }}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Column 3: Legal Information -->
+        <div class="footer-column">
+            <div class="footer-column-title">
+                <span class="footer-icon">⚖</span> Rechtliches
+            </div>
+            {% if company.tax_number %}
+            <div class="footer-item">Steuernr.: {{ company.tax_number }}</div>
+            {% endif %}
+            {% if company.vat_id %}
+            <div class="footer-item">USt-IdNr.: {{ company.vat_id }}</div>
+            {% endif %}
+            {% if company.managing_director %}
+            <div class="footer-item">GF: {{ company.managing_director }}</div>
+            {% endif %}
+            {% if company.commercial_register %}
+            <div class="footer-item">{{ company.commercial_register }}</div>
+            {% endif %}
+        </div>
+        
+        <!-- Column 4: Bank Details -->
+        <div class="footer-column">
+            <div class="footer-column-title">
+                <span class="footer-icon">🏦</span> Bankverbindung
+            </div>
+            {% if company.bank_name %}
+            <div class="footer-item">{{ company.bank_name }}</div>
+            {% endif %}
+            {% if company.iban %}
+            <div class="footer-item">IBAN: {{ company.iban }}</div>
+            {% endif %}
+            {% if company.bic %}
+            <div class="footer-item">BIC: {{ company.bic }}</div>
+            {% endif %}
+            {% if company.account_holder and company.account_holder != company.name %}
+            <div class="footer-item">Inhaber: {{ company.account_holder }}</div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}

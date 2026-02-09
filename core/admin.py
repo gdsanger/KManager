@@ -134,7 +134,7 @@ class MandantAdmin(admin.ModelAdmin):
             'fields': ('telefon', 'fax', 'email', 'internet')
         }),
         ('Rechtliches', {
-            'fields': ('steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 'kreditinstitut', 'iban', 'bic', 'kontoinhaber')
+            'fields': ('steuernummer', 'ust_id_nr', 'geschaeftsfuehrer', 'handelsregister', 'kreditinstitut', 'iban', 'bic', 'kontoinhaber')
         }),
     )
 
