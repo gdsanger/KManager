@@ -4,7 +4,7 @@ Django Tables2 table definitions for the auftragsverwaltung app.
 import django_tables2 as tables
 from django.urls import reverse
 from django.utils.html import format_html
-from .models import SalesDocument, Contract, TextTemplate
+from .models import SalesDocument, Contract, TextTemplate, TimeEntry
 from finanzen.models import OutgoingInvoiceJournalEntry
 
 
@@ -399,6 +399,115 @@ class OutgoingInvoiceJournalTable(tables.Table):
             'customer_name',
             'amounts',
             'export_status',
+        )
+        attrs = {
+            'class': 'table table-dark table-hover',
+            'thead': {'class': 'table-dark'}
+        }
+        per_page = 25
+
+
+class TimeEntryTable(tables.Table):
+    """Table for displaying Time Entries (Zeiterfassungen)."""
+    
+    service_date = tables.DateColumn(
+        verbose_name='Datum',
+        format='d.m.Y',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    customer = tables.Column(
+        verbose_name='Kunde',
+        accessor='customer.name',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    order_info = tables.Column(
+        verbose_name='Auftrag',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 250px;'}}
+    )
+    
+    performed_by = tables.Column(
+        verbose_name='Benutzer',
+        accessor='performed_by.username',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+    
+    duration = tables.Column(
+        verbose_name='Dauer',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-nowrap text-end'}}
+    )
+    
+    is_travel_cost = tables.BooleanColumn(
+        verbose_name='Anfahrt',
+        attrs={'td': {'class': 'text-center'}}
+    )
+    
+    is_billed = tables.BooleanColumn(
+        verbose_name='Abgerechnet',
+        attrs={'td': {'class': 'text-center'}}
+    )
+    
+    aktionen = tables.Column(
+        verbose_name='Aktionen',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-end text-nowrap'}}
+    )
+    
+    def render_service_date(self, value, record):
+        """Render service_date as a link to detail view."""
+        url = reverse('auftragsverwaltung:timeentry_detail', kwargs={'pk': record.pk})
+        return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value.strftime('%d.%m.%Y'))
+    
+    def render_order_info(self, record):
+        """Render order number and subject."""
+        if record.order:
+            return f"{record.order.number} - {record.order.subject[:30]}{'...' if len(record.order.subject) > 30 else ''}"
+        return '—'
+    
+    def render_duration(self, record):
+        """Render duration in a friendly format (hours and minutes)."""
+        hours = record.duration_minutes // 60
+        minutes = record.duration_minutes % 60
+        if hours > 0 and minutes > 0:
+            return f"{hours}h {minutes}min"
+        elif hours > 0:
+            return f"{hours}h"
+        else:
+            return f"{minutes}min"
+    
+    def render_aktionen(self, record):
+        """Render action buttons."""
+        detail_url = reverse('auftragsverwaltung:timeentry_detail', kwargs={'pk': record.pk})
+        edit_url = reverse('auftragsverwaltung:timeentry_update', kwargs={'pk': record.pk})
+        return format_html(
+            '<div class="btn-group btn-group-sm" role="group">'
+            '<a href="{}" class="btn btn-outline-info" title="Details">'
+            '<i class="bi bi-eye"></i></a>'
+            '<a href="{}" class="btn btn-outline-primary" title="Bearbeiten">'
+            '<i class="bi bi-pencil"></i></a>'
+            '</div>',
+            detail_url,
+            edit_url
+        )
+    
+    class Meta:
+        model = TimeEntry
+        template_name = 'django_tables2/bootstrap5-dark.html'
+        fields = (
+            'service_date',
+            'customer',
+            'order_info',
+            'performed_by',
+            'duration',
+            'is_travel_cost',
+            'is_billed',
+            'aktionen',
         )
         attrs = {
             'class': 'table table-dark table-hover',
