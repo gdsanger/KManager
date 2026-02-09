@@ -62,17 +62,7 @@
                     </div>
                     <div class="col-md-6">
                         <label class="text-muted small">Dauer</label>
-                        <p class="mb-0">
-                            {% if timeentry.duration_minutes >= 60 %}
-                                {{ timeentry.duration_minutes|floatformat:0|add:"0"|divisibleby:60|yesno:",0" }}{% if timeentry.duration_minutes >= 60 %}{{ timeentry.duration_minutes|floatformat:0|add:"0"|divisibleby:60|yesno:"h," }}{% endif %}
-                                {% with minutes=timeentry.duration_minutes|add:"0"|divisibleby:60 %}
-                                {% if minutes %}{{ minutes }}min{% endif %}
-                                {% endwith %}
-                            {% else %}
-                                {{ timeentry.duration_minutes }} min
-                            {% endif %}
-                            ({{ timeentry.get_duration_hours|floatformat:2 }} h)
-                        </p>
+                        <p class="mb-0">{{ timeentry.duration_minutes }} Minuten ({{ timeentry.get_duration_hours|floatformat:2 }}h)</p>
                     </div>
                 </div>
 
