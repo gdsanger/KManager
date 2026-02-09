@@ -159,7 +159,7 @@
     }
     @bottom-center {
         content: "Seite " counter(page) " von " counter(pages);
-        font-size: 6pt;
+        font-size: 5pt;
         color: #666;
     }
 }
@@ -206,7 +206,7 @@
 
 /* First page specific header */
 @page :first {
-    margin-top: 1cm; /* Reduced margin for logo at top */
+    margin-top: 1cm; /* Reduced from 6cm to allow logo at very top */
 }
 {% endblock %}
 
@@ -221,7 +221,7 @@
 <table style="border: none; margin-top: 5cm;">
     <tr>
         <td style="width:50%; border: none;">
-            <!-- Address block positioned at 6cm from top for window envelope -->
+            <!-- Address block positioned at absolute 6cm from top (1cm page margin + 5cm additional margin) -->
             <div class="address-block">
                 <div class="sender">
                     {{ company.name }} &bull; {{ company.address_lines.0|default:"" }} &bull; {{ company.address_lines.1|default:"" }}
