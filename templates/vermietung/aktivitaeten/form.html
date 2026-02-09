@@ -249,10 +249,29 @@
                         {% endif %}
                     </div>
 
+                    <hr class="my-4">
+
+                    <!-- Section 5: Sichtbarkeit (Privacy) -->
+                    <h5 class="mb-3"><i class="bi bi-eye-slash"></i> Sichtbarkeit</h5>
+                    <div class="mb-3 form-check">
+                        {{ form.privat }}
+                        <label class="form-check-label" for="{{ form.privat.id_for_label }}">
+                            {{ form.privat.label }}
+                        </label>
+                        {% if form.privat.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.privat.errors }}
+                        </div>
+                        {% endif %}
+                        {% if form.privat.help_text %}
+                        <div class="form-text">{{ form.privat.help_text }}</div>
+                        {% endif %}
+                    </div>
+
                     {% if not context_obj %}
                     <hr class="my-4">
 
-                    <!-- Section 5: Kontext/Zuordnung (Context/Reference) -->
+                    <!-- Section 6: Kontext/Zuordnung (Context/Reference) -->
                     <h5 class="mb-3"><i class="bi bi-link-45deg"></i> Kontext/Zuordnung</h5>
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i>

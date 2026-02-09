@@ -2100,6 +2100,13 @@ class Aktivitaet(models.Model):
         help_text="Benutzer, die zur Kontrolle/Information über diese Aktivität benachrichtigt werden"
     )
     
+    # Privacy flag - restricts visibility to assigned_user and ersteller
+    privat = models.BooleanField(
+        default=False,
+        verbose_name="Privat",
+        help_text="Private Aktivitäten sind nur für den Ersteller und Verantwortlichen sichtbar"
+    )
+    
     class Meta:
         verbose_name = "Aktivität"
         verbose_name_plural = "Aktivitäten"
@@ -2114,6 +2121,7 @@ class Aktivitaet(models.Model):
             models.Index(fields=['serien_id']),
             models.Index(fields=['reminder_sent_at']),
             models.Index(fields=['bereich']),
+            models.Index(fields=['privat']),
         ]
     
     def __str__(self):

@@ -2403,12 +2403,47 @@ def aktivitaet_kanban(request):
     """
     Kanban view for all activities grouped by status.
     This is the default view for activities accessible from main navigation.
+    
+    Supports URL-based filtering via 'filter' query parameter:
+    - 'responsible': Activities where current user is assigned_user (default)
+    - 'created': Activities where current user is ersteller
+    - 'all': All activities (with standard visibility)
+    
+    Privacy enforcement: Activities with privat=True are only visible to
+    assigned_user and ersteller, regardless of filter mode.
     """
-    # Get all activities with related data
+    # Get filter parameter from URL (default: 'responsible')
+    filter_mode = request.GET.get('filter', 'responsible')
+    
+    # Validate filter mode - fallback to 'responsible' for invalid values
+    if filter_mode not in ['responsible', 'created', 'all']:
+        filter_mode = 'responsible'
+    
+    # Get base queryset with related data
     aktivitaeten = Aktivitaet.objects.select_related(
-        'assigned_user', 'assigned_supplier', 
+        'assigned_user', 'assigned_supplier', 'ersteller',
         'mietobjekt', 'vertrag', 'kunde'
     ).all()
+    
+    # Apply user-based filter
+    if filter_mode == 'responsible':
+        # Show activities where current user is assigned_user
+        aktivitaeten = aktivitaeten.filter(assigned_user=request.user)
+    elif filter_mode == 'created':
+        # Show activities where current user is ersteller
+        aktivitaeten = aktivitaeten.filter(ersteller=request.user)
+    # else: filter_mode == 'all' - no additional user filter
+    
+    # Apply privacy filter: privat=True activities only visible to assigned_user and ersteller
+    # Use Q objects to build complex query:
+    # Show activities where:
+    # - privat=False (everyone can see based on other filters), OR
+    # - privat=True AND (user is assigned_user OR user is ersteller)
+    aktivitaeten = aktivitaeten.filter(
+        Q(privat=False) |
+        Q(privat=True, assigned_user=request.user) |
+        Q(privat=True, ersteller=request.user)
+    )
     
     # Group by status
     aktivitaeten_offen = aktivitaeten.filter(status='OFFEN').order_by('-prioritaet', 'faellig_am')
@@ -2421,6 +2456,7 @@ def aktivitaet_kanban(request):
         'aktivitaeten_in_bearbeitung': aktivitaeten_in_bearbeitung,
         'aktivitaeten_erledigt': aktivitaeten_erledigt,
         'aktivitaeten_abgebrochen': aktivitaeten_abgebrochen,
+        'filter_mode': filter_mode,  # Pass to template for UI state
     }
     
     return render(request, 'vermietung/aktivitaeten/kanban.html', context)
@@ -2430,6 +2466,7 @@ def aktivitaet_kanban(request):
 def aktivitaet_list(request):
     """
     List view for all activities with search and filtering.
+    Enforces privacy: privat=True activities only visible to assigned_user and ersteller.
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
@@ -2439,9 +2476,16 @@ def aktivitaet_list(request):
     
     # Base queryset with related data
     aktivitaeten = Aktivitaet.objects.select_related(
-        'assigned_user', 'assigned_supplier',
+        'assigned_user', 'assigned_supplier', 'ersteller',
         'mietobjekt', 'vertrag', 'kunde'
     ).all()
+    
+    # Apply privacy filter: privat=True activities only visible to assigned_user and ersteller
+    aktivitaeten = aktivitaeten.filter(
+        Q(privat=False) |
+        Q(privat=True, assigned_user=request.user) |
+        Q(privat=True, ersteller=request.user)
+    )
     
     # Apply search filter
     if search_query:
@@ -2486,6 +2530,7 @@ def aktivitaet_assigned_list(request):
     """
     List view for activities assigned to the current user.
     Shows only non-completed and non-cancelled activities.
+    Enforces privacy: privat=True activities only visible to assigned_user and ersteller.
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
@@ -2500,6 +2545,13 @@ def aktivitaet_assigned_list(request):
         assigned_user=request.user
     ).exclude(
         status__in=['ERLEDIGT', 'ABGEBROCHEN']
+    )
+    
+    # Apply privacy filter: privat=True activities only visible to assigned_user and ersteller
+    aktivitaeten = aktivitaeten.filter(
+        Q(privat=False) |
+        Q(privat=True, assigned_user=request.user) |
+        Q(privat=True, ersteller=request.user)
     )
     
     # Apply search filter
@@ -2542,6 +2594,7 @@ def aktivitaet_created_list(request):
     """
     List view for activities created by the current user.
     Shows only non-completed and non-cancelled activities by default.
+    Enforces privacy: privat=True activities only visible to assigned_user and ersteller.
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
@@ -2557,6 +2610,13 @@ def aktivitaet_created_list(request):
         ersteller=request.user
     ).exclude(
         status__in=['ERLEDIGT', 'ABGEBROCHEN']
+    )
+    
+    # Apply privacy filter: privat=True activities only visible to assigned_user and ersteller
+    aktivitaeten = aktivitaeten.filter(
+        Q(privat=False) |
+        Q(privat=True, assigned_user=request.user) |
+        Q(privat=True, ersteller=request.user)
     )
     
     # Apply search filter

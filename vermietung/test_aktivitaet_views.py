@@ -293,9 +293,11 @@ class AktivitaetViewTest(TestCase):
     
     def test_kanban_groups_by_status(self):
         """Test that Kanban view properly groups activities by status."""
-        # Create activities with different statuses
+        # Create activities with different statuses, assigned to self.user
+        # so they show up in the default 'responsible' filter
         Aktivitaet.objects.create(
             ersteller=self.user,
+            assigned_user=self.user,  # Assign to user so it shows in default filter
             titel='Offen 1',
             vertrag=self.vertrag,
             status='OFFEN',
@@ -303,6 +305,7 @@ class AktivitaetViewTest(TestCase):
         )
         Aktivitaet.objects.create(
             ersteller=self.user,
+            assigned_user=self.user,  # Assign to user so it shows in default filter
             titel='In Bearbeitung 1',
             vertrag=self.vertrag,
             status='IN_BEARBEITUNG',
@@ -310,6 +313,7 @@ class AktivitaetViewTest(TestCase):
         )
         Aktivitaet.objects.create(
             ersteller=self.user,
+            assigned_user=self.user,  # Assign to user so it shows in default filter
             titel='Erledigt 1',
             vertrag=self.vertrag,
             status='ERLEDIGT',
