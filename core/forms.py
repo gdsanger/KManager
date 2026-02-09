@@ -1,6 +1,7 @@
 """
 Forms for core mailing functionality and user profile management
 """
+import os
 from django import forms
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -183,7 +184,6 @@ class MandantForm(forms.ModelForm):
                 raise forms.ValidationError('Die Datei ist zu groß. Maximale Größe: 5MB.')
             
             # Check file extension
-            import os
             ext = os.path.splitext(logo.name)[1].lower()
             allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif']
             

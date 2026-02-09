@@ -187,22 +187,19 @@ def mandant_create(request):
     if request.method == 'POST':
         form = MandantForm(request.POST, request.FILES)
         if form.is_valid():
-            mandant = form.save(commit=False)
+            # Save mandant first to get a valid pk
+            mandant = form.save()
             
-            # Handle logo upload
+            # Handle logo upload after save
             logo_file = form.cleaned_data.get('logo')
             if logo_file:
-                # Save the file
-                from django.core.files.storage import default_storage
-                import os
-                
                 # Create mandants directory if it doesn't exist
                 mandants_dir = os.path.join(settings.MEDIA_ROOT, 'mandants')
                 os.makedirs(mandants_dir, exist_ok=True)
                 
-                # Generate unique filename
+                # Generate unique filename using the saved mandant pk
                 ext = os.path.splitext(logo_file.name)[1]
-                filename = f"mandant_{mandant.pk or 'new'}_{logo_file.name}"
+                filename = f"mandant_{mandant.pk}_{logo_file.name}"
                 relative_path = os.path.join('mandants', filename)
                 full_path = os.path.join(settings.MEDIA_ROOT, relative_path)
                 
@@ -211,10 +208,10 @@ def mandant_create(request):
                     for chunk in logo_file.chunks():
                         destination.write(chunk)
                 
-                # Store relative path
+                # Update mandant with logo path
                 mandant.logo_path = relative_path
+                mandant.save()
             
-            mandant.save()
             messages.success(request, 'Mandant erfolgreich erstellt.')
             return redirect('mandant_list')
     else:
@@ -238,8 +235,6 @@ def mandant_edit(request, pk):
             # Handle logo upload
             logo_file = form.cleaned_data.get('logo')
             if logo_file:
-                import os
-                
                 # Delete old logo if exists
                 if mandant.logo_path:
                     old_logo_path = os.path.join(settings.MEDIA_ROOT, mandant.logo_path)
@@ -285,9 +280,6 @@ def mandant_detail(request, pk):
     
     # Handle logo upload from detail view
     if request.method == 'POST' and 'logo' in request.FILES:
-        import os
-        from django import forms
-        
         logo_file = request.FILES['logo']
         
         # Validate file size (max 5MB)
@@ -332,8 +324,6 @@ def mandant_detail(request, pk):
     
     # Handle logo deletion
     if request.method == 'POST' and 'delete_logo' in request.POST:
-        import os
-        
         if mandant.logo_path:
             logo_path = os.path.join(settings.MEDIA_ROOT, mandant.logo_path)
             if os.path.exists(logo_path):
@@ -354,8 +344,6 @@ def mandant_delete(request, pk):
     mandant = get_object_or_404(Mandant, pk=pk)
     
     if request.method == 'POST':
-        import os
-        
         mandant_name = mandant.name
         
         # Delete logo file if exists

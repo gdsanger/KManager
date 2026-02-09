@@ -4,8 +4,10 @@ Context builders for SalesDocument PDF rendering.
 Builds stable, DTO-like contexts for invoice templates.
 """
 
+import os
 from decimal import Decimal
 from typing import Any, Optional
+from django.conf import settings
 from core.printing.interfaces import IContextBuilder
 
 
@@ -62,9 +64,6 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
     
     def _build_company_context(self, company) -> dict:
         """Build company/letterhead context."""
-        from django.conf import settings
-        import os
-        
         address_lines = []
         if company.adresse:
             address_lines.append(company.adresse)
