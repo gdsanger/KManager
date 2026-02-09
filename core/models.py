@@ -241,6 +241,7 @@ class Mandant(models.Model):
     steuernummer = models.CharField(max_length=50, blank=True, verbose_name="Steuernummer")
     ust_id_nr = models.CharField(max_length=50, blank=True, verbose_name="UStIdNr")
     geschaeftsfuehrer = models.CharField(max_length=200, blank=True, verbose_name="Geschäftsführer")
+    handelsregister = models.CharField(max_length=200, blank=True, verbose_name="Handelsregister")
     kreditinstitut = models.CharField(max_length=200, blank=True, verbose_name="Kreditinstitut")
     iban = models.CharField(max_length=34, blank=True, verbose_name="IBAN")
     bic = models.CharField(max_length=11, blank=True, verbose_name="BIC")
