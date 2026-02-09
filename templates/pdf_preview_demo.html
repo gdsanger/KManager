@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Preview Button - SalesDocument Detail View</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .page-title {
+            margin: 0;
+            color: #333;
+        }
+        .btn-group {
+            gap: 8px;
+        }
+        .highlight-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .highlight-box h5 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        .highlight-box ul {
+            margin-bottom: 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Rechnung: R26-00001</h1>
+                <p class="text-muted mb-0">SalesDocument Detail View</p>
+            </div>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Speichern
+                </button>
+                <a href="#" class="btn btn-outline-secondary" style="border: 2px solid #0d6efd; background: #e7f3ff;">
+                    <i class="bi bi-file-pdf"></i> PDF voransehen
+                </a>
+                <button type="button" class="btn btn-outline-secondary">
+                    <i class="bi bi-x"></i> Abbrechen
+                </button>
+            </div>
+        </div>
+        
+        <div class="highlight-box">
+            <h5><i class="bi bi-info-circle-fill"></i> New Feature: PDF Preview Button</h5>
+            <ul>
+                <li><strong>Location:</strong> SalesDocument Detail View page actions (top right)</li>
+                <li><strong>Button Label:</strong> "PDF voransehen" (PDF Preview)</li>
+                <li><strong>Icon:</strong> <i class="bi bi-file-pdf"></i> PDF file icon</li>
+                <li><strong>Behavior:</strong> Opens PDF preview in a new browser tab (<code>target="_blank"</code>)</li>
+                <li><strong>Endpoint:</strong> <code>/auftragsverwaltung/documents/{id}/preview/</code></li>
+                <li><strong>Read-only:</strong> No status changes, no number assignment, no snapshots</li>
+                <li><strong>Filename:</strong> <code>{document_type.name}_{id}.pdf</code> (e.g., "Rechnung_1.pdf")</li>
+            </ul>
+        </div>
+        
+        <div class="alert alert-info mt-4">
+            <h6 class="alert-heading"><i class="bi bi-check-circle-fill"></i> Implementation Complete</h6>
+            <p class="mb-0">
+                The PDF preview button has been successfully added to the SalesDocument detail view. 
+                It appears between the "Speichern" (Save) and "Abbrechen" (Cancel) buttons in the page actions area.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
