@@ -480,19 +480,6 @@
             return groupsWithActive;
         }
         
-        /**
-         * Ensure menu groups with active children are opened on page load
-         */
-        menuGroups.forEach(function(menuGroup) {
-            if (menuGroup.id && hasActiveChild(menuGroup)) {
-                // Use Bootstrap's Collapse API to show the menu
-                const bsCollapse = new bootstrap.Collapse(menuGroup, {
-                    toggle: false
-                });
-                bsCollapse.show();
-            }
-        });
-        
         // Restore expanded state from localStorage and ensure active children groups are open
         if (validMenuGroupIds.length > 0) {
             const storedExpandedIds = readExpandedGroupIds();
