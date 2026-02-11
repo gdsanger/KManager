@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (!urlParams.has('filter') && !urlParams.has('completed')) {
                     const currentFilterMode = '{{ filter_mode }}';
-                    const currentCompleted = {{ completed_filter|yesno:"true,false" }};
+                    const currentCompleted = {% if completed_filter %}true{% else %}false{% endif %};
                     // Redirect if stored filters differ from current state
                     if (filters.filter_mode !== currentFilterMode || filters.completed !== currentCompleted) {
                         window.location.href = buildFilterUrl(filters.filter_mode, filters.completed);
@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Save current state to localStorage
-    saveFiltersToStorage('{{ filter_mode }}', {{ completed_filter|yesno:"true,false" }});
+    saveFiltersToStorage('{{ filter_mode }}', {% if completed_filter %}true{% else %}false{% endif %});
     
     // Add drag and drop functionality
     const cards = document.querySelectorAll('.kanban-card');
