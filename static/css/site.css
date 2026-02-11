@@ -339,11 +339,13 @@ a:hover {
         width: 280px;
         transform: translateX(-100%);
         box-shadow: none;
+        pointer-events: none; /* Disable interaction when hidden */
     }
     
     .sidebar.show {
         transform: translateX(0);
         box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+        pointer-events: auto; /* Enable interaction when visible */
     }
 }
 
@@ -352,6 +354,12 @@ a:hover {
     .sidebar {
         width: 25%; /* col-md-3 */
         transform: none;
+        pointer-events: auto; /* Always interactive on desktop */
+    }
+    
+    /* Hide mobile menu toggle button on desktop */
+    #mobileMenuToggle {
+        display: none !important;
     }
 }
 
