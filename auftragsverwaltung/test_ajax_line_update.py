@@ -12,7 +12,7 @@ import json
 from auftragsverwaltung.models import (
     SalesDocument, SalesDocumentLine, DocumentType, NumberRange
 )
-from core.models import Mandant, Adresse, TaxRate, PaymentTerm
+from core.models import Mandant, Adresse, TaxRate, PaymentTerm, Unit
 
 User = get_user_model()
 
@@ -400,3 +400,41 @@ class AjaxLineUpdateTestCase(TestCase):
         # Check that response includes unit_id as None and empty unit_symbol
         self.assertIsNone(response_data['line']['unit_id'])
         self.assertEqual(response_data['line']['unit_symbol'], '')
+    
+    def test_ajax_update_line_unit_id(self):
+        """Test updating unit_id field and verify response includes unit info"""
+        # Create test unit
+        unit = Unit.objects.create(
+            code='STK',
+            name='Stück',
+            symbol='Stk.'
+        )
+        
+        url = reverse('auftragsverwaltung:ajax_update_line',
+                     kwargs={'doc_key': 'invoice', 'pk': self.document.pk, 'line_id': self.line.pk})
+        
+        # Update unit_id
+        data = {
+            'unit_id': str(unit.pk)
+        }
+        
+        response = self.client.post(
+            url,
+            data=data,  # Send as form-encoded
+        )
+        
+        # Check response status
+        self.assertEqual(response.status_code, 200, 
+                        f"Expected 200 but got {response.status_code}. Response: {response.content}")
+        
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data.get('success'), 
+                       f"Expected success=True in response. Got: {response_data}")
+        
+        # Check that unit was updated in database
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.unit, unit)
+        
+        # Check that response includes unit_id and unit_symbol
+        self.assertEqual(response_data['line']['unit_id'], unit.pk)
+        self.assertEqual(response_data['line']['unit_symbol'], 'Stk.')
