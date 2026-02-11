@@ -61,6 +61,7 @@ if aktivitaet.assigned_user != request.user and aktivitaet.ersteller != request.
 - Users who can change status:
   - `assigned_user` - The user assigned to the activity
   - `ersteller` - The user who created the activity
+  - `cc_users` - Users who are copied/informed on the activity
 - Returns HTTP 403 Forbidden for unauthorized users
 - Error message is displayed to the user via JavaScript alert
 
