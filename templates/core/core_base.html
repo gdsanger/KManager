@@ -383,8 +383,79 @@
             }
         });
 
+        // Menu Group Expansion Persistence
+        const NAV_EXPANDED_MENU_GROUP_IDS_KEY = 'nav.expandedMenuGroupIds';
+        
+        /**
+         * Helper function to safely access localStorage
+         */
+        function isLocalStorageAvailable() {
+            try {
+                const test = '__localStorage_test__';
+                localStorage.setItem(test, test);
+                localStorage.removeItem(test);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+        
+        /**
+         * Read expanded group IDs from localStorage
+         * @returns {Array} Array of expanded group IDs, or empty array if none/error
+         */
+        function readExpandedGroupIds() {
+            if (!isLocalStorageAvailable()) {
+                return [];
+            }
+            
+            try {
+                const stored = localStorage.getItem(NAV_EXPANDED_MENU_GROUP_IDS_KEY);
+                if (!stored) {
+                    return [];
+                }
+                const parsed = JSON.parse(stored);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                console.warn('Failed to read expanded menu groups from localStorage:', e);
+                return [];
+            }
+        }
+        
+        /**
+         * Write expanded group IDs to localStorage
+         * @param {Array} ids - Array of group IDs to save
+         */
+        function writeExpandedGroupIds(ids) {
+            if (!isLocalStorageAvailable()) {
+                return;
+            }
+            
+            try {
+                if (ids.length === 0) {
+                    // Remove key when empty for cleaner storage
+                    localStorage.removeItem(NAV_EXPANDED_MENU_GROUP_IDS_KEY);
+                } else {
+                    localStorage.setItem(NAV_EXPANDED_MENU_GROUP_IDS_KEY, JSON.stringify(ids));
+                }
+            } catch (e) {
+                console.warn('Failed to write expanded menu groups to localStorage:', e);
+            }
+        }
+        
+        /**
+         * Sanitize stored IDs against valid menu group IDs
+         * @param {Array} storedIds - IDs from localStorage
+         * @param {Array} validIds - Valid menu group IDs in current page
+         * @returns {Array} Cleaned array of valid IDs
+         */
+        function sanitizeExpandedGroupIds(storedIds, validIds) {
+            return storedIds.filter(id => validIds.includes(id));
+        }
+
         // Get all collapsible menu groups
         const menuGroups = document.querySelectorAll('.sidebar .collapse');
+        const validMenuGroupIds = Array.from(menuGroups).map(group => group.id).filter(id => id);
         
         /**
          * Check if a menu group contains an active nav item
@@ -393,6 +464,20 @@
          */
         function hasActiveChild(menuGroup) {
             return menuGroup.querySelector('.nav-link.active') !== null;
+        }
+        
+        /**
+         * Get IDs of menu groups that should be expanded (have active children)
+         * @returns {Array} Array of menu group IDs with active children
+         */
+        function getGroupsWithActiveChildren() {
+            const groupsWithActive = [];
+            menuGroups.forEach(function(menuGroup) {
+                if (menuGroup.id && hasActiveChild(menuGroup)) {
+                    groupsWithActive.push(menuGroup.id);
+                }
+            });
+            return groupsWithActive;
         }
         
         /**
@@ -408,15 +493,55 @@
             }
         });
         
-        // Prevent closing accordion groups that contain active items
+        // Restore expanded state from localStorage and ensure active children groups are open
+        if (validMenuGroupIds.length > 0) {
+            const storedExpandedIds = readExpandedGroupIds();
+            const groupsWithActiveChildren = getGroupsWithActiveChildren();
+            
+            // Combine stored IDs with groups that have active children (active groups take precedence)
+            const combinedIds = [...new Set([...storedExpandedIds, ...groupsWithActiveChildren])];
+            const validExpandedIds = sanitizeExpandedGroupIds(combinedIds, validMenuGroupIds);
+            
+            // Clean up localStorage if IDs were invalid
+            if (storedExpandedIds.length !== validExpandedIds.length) {
+                writeExpandedGroupIds(validExpandedIds);
+            }
+            
+            // Restore expanded state for each valid ID
+            validExpandedIds.forEach(function(menuId) {
+                const menuElement = document.getElementById(menuId);
+                if (menuElement) {
+                    // Use Bootstrap's Collapse API to show the menu
+                    const bsCollapse = new bootstrap.Collapse(menuElement, {
+                        toggle: false
+                    });
+                    bsCollapse.show();
+                }
+            });
+        }
+        
+        // Add event listeners to persist state on expand/collapse
         menuGroups.forEach(function(menuGroup) {
             if (!menuGroup.id) return;
+            
+            menuGroup.addEventListener('shown.bs.collapse', function() {
+                const currentExpanded = readExpandedGroupIds();
+                if (!currentExpanded.includes(menuGroup.id)) {
+                    currentExpanded.push(menuGroup.id);
+                    writeExpandedGroupIds(currentExpanded);
+                }
+            });
             
             menuGroup.addEventListener('hide.bs.collapse', function(e) {
                 // Don't allow closing if this group has an active child
                 if (hasActiveChild(menuGroup)) {
                     e.preventDefault();
+                    return;
                 }
+                
+                const currentExpanded = readExpandedGroupIds();
+                const filtered = currentExpanded.filter(id => id !== menuGroup.id);
+                writeExpandedGroupIds(filtered);
             });
         });
     });

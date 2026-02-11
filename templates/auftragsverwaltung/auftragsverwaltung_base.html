@@ -623,14 +623,10 @@
                 }
             });
             
-            menuGroup.addEventListener('hidden.bs.collapse', function() {
+            menuGroup.addEventListener('hide.bs.collapse', function(e) {
                 // Don't allow closing if this group has an active child
                 if (hasActiveChild(menuGroup)) {
-                    // Re-open the group
-                    const bsCollapse = new bootstrap.Collapse(menuGroup, {
-                        toggle: false
-                    });
-                    bsCollapse.show();
+                    e.preventDefault();
                     return;
                 }
                 
