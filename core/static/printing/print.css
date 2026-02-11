@@ -15,7 +15,7 @@
 /* Default page settings for all pages */
 @page {
     size: A4;
-    margin: 2.5cm 2cm 3cm 1.5cm; /* top, right, bottom, left */
+    margin: 2.5cm 2.5cm 3cm 1.5cm; /* top, right, bottom, left */
     
     /* Running footer on all pages */
     @bottom-center {
@@ -45,8 +45,8 @@
 
 /* Right pages (odd) - for double-sided printing */
 @page :right {
-    margin-left: 1.5cm;
-    margin-right: 2.5cm;
+    margin-left: 2.5cm;
+    margin-right: 1.5cm;
 }
 
 

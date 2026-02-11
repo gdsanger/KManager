@@ -72,10 +72,10 @@
 }
 
 .positions-table .col-pos { width: 30pt; text-align: center; }
-.positions-table .col-qty { width: 70pt; text-align: right; }
+.positions-table .col-qty { width: 45pt; text-align: right; }
 .positions-table .col-desc { width: auto; }
-.positions-table .col-price { width: 50pt; text-align: right; }
-.positions-table .col-net { width: 60pt; text-align: right; }
+.positions-table .col-price { width: 55pt; text-align: right; }
+.positions-table .col-net { width: 55pt; text-align: right; }
 
 .long-text {
     font-size: 8pt;
@@ -213,7 +213,7 @@
 {% block first_page_header %}
 <!-- Company Logo (top left, starting after margin) -->
 {% if company.logo_url %}
-<div style="text-align: left; margin-bottom: 12pt; margin-top: 0;">
+<div style="text-align: right; margin-bottom: 12pt; margin-top: 0;">
     <img src="{{ company.logo_url }}" alt="Logo" style="max-width: 150pt; max-height: 80pt;">
 </div>
 {% endif %}
@@ -240,11 +240,12 @@
             <!-- Document metadata -->
             <table class="doc-meta-table">
                 <tr>
-                    <td class="label">Rechnungsnummer:</td>
+                    <td class="label">Belegnummer:</td>
                     <td>{{ doc.number }}</td>
                 </tr>
+                <tr><td colspan="2" style="text-align: center;"><div style="color: darkred;">Bei Zahlung bitte Beleg-Nr. angeben</div></td></tr>
                 <tr>
-                    <td class="label">Rechnungsdatum:</td>
+                    <td class="label">Datum:</td>
                     <td>{{ doc.issue_date|date:"d.m.Y" }}</td>
                 </tr>
                 {% if doc.due_date %}
@@ -255,7 +256,7 @@
                 {% endif %}
                 {% if customer %}
                 <tr>
-                    <td class="label">Kunde:</td>
+                    <td class="label">Kunden-Nr.:</td>
                     <td>{{ customer.debitor_number }}</td>
                 </tr>
                 {% endif %}
@@ -304,7 +305,7 @@
     <thead style="border-bottom: solid 2px;">
         <tr>
             <th class="col-pos">Pos.</th>
-            <th class="col-qty">Menge</th>           
+            <th class="col-qty">Menge<br><span style="font-size: 7pt; font-weight: normal;">(Einheit)</span></th>           
             <th class="col-desc">Beschreibung</th>
             <th class="col-price">Einzelpreis<br><span style="font-size: 7pt; font-weight: normal;">(Rabatt)</span></th>
             <th class="col-net">Gesamt<br><span style="font-size: 7pt; font-weight: normal;">(Umsatzsteuer)</span></th>
@@ -314,7 +315,7 @@
         {% for line in lines %}
         <tr>
             <td class="col-pos">{{ line.pos }}</td>
-            <td class="col-qty">{{ line.qty|floatformat:2 }} {{ line.unit }}</td>            
+            <td class="col-qty">{{ line.qty|floatformat:2 }} <br>{{ line.unit }}</td>            
             <td class="col-desc">
                 {{ line.short_text }}
                 {% if line.long_text %}
@@ -376,7 +377,7 @@
             <td class="amount">{{ totals.tax_total|floatformat:2 }} €</td>
         </tr>
         <tr class="total-row">
-            <td class="label">Gesamtbruttobetrag:</td>
+            <td class="label">Endbetrag:</td>
             <td class="amount">{{ totals.gross_total|floatformat:2 }} €</td>
         </tr>
     </table>
