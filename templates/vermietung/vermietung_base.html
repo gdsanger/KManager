@@ -108,7 +108,7 @@
             <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
             
             <!-- Sidebar Navigation -->
-            <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar" id="sidebarMenu">
+            <nav class="col-md-3 col-lg-2 d-md-block bg-dark sidebar" id="sidebarMenu" aria-hidden="false">
                 <div class="position-sticky pt-3">
                     <!-- Hamburger Toggle Button -->
                     <div class="d-flex justify-content-between align-items-center px-3 mb-3">
@@ -339,12 +339,29 @@
             return window.innerWidth < 768;
         }
         
+        // Initialize aria-hidden based on viewport size
+        function initializeAriaHidden() {
+            if (sidebar) {
+                if (isMobile()) {
+                    // On mobile, sidebar starts hidden
+                    sidebar.setAttribute('aria-hidden', 'true');
+                } else {
+                    // On desktop, sidebar is always visible
+                    sidebar.setAttribute('aria-hidden', 'false');
+                }
+            }
+        }
+        
+        // Initialize on page load
+        initializeAriaHidden();
+        
         // Toggle sidebar for mobile
         function toggleMobileSidebar(show) {
             if (!sidebar || !sidebarBackdrop) return;
             
             if (show) {
                 sidebar.classList.add('show');
+                sidebar.setAttribute('aria-hidden', 'false');
                 sidebarBackdrop.classList.add('show');
                 document.body.style.overflow = 'hidden'; // Prevent scroll on body
                 
@@ -361,6 +378,7 @@
                 }
             } else {
                 sidebar.classList.remove('show');
+                sidebar.setAttribute('aria-hidden', 'true');
                 sidebarBackdrop.classList.remove('show');
                 document.body.style.overflow = '';
                 
@@ -419,6 +437,8 @@
                 if (!isMobile() && sidebar && sidebar.classList.contains('show')) {
                     toggleMobileSidebar(false);
                 }
+                // Always update aria-hidden based on current viewport
+                initializeAriaHidden();
             }, 250);
         });
         
@@ -503,10 +523,37 @@
         const menuGroups = document.querySelectorAll('.sidebar .collapse');
         const validMenuGroupIds = Array.from(menuGroups).map(group => group.id).filter(id => id);
         
-        // Restore expanded state from localStorage
+        /**
+         * Check if a menu group contains an active nav item
+         * @param {HTMLElement} menuGroup - The collapse menu element
+         * @returns {boolean} True if contains active item
+         */
+        function hasActiveChild(menuGroup) {
+            return menuGroup.querySelector('.nav-link.active') !== null;
+        }
+        
+        /**
+         * Get IDs of menu groups that should be expanded (have active children)
+         * @returns {Array} Array of menu group IDs with active children
+         */
+        function getGroupsWithActiveChildren() {
+            const groupsWithActive = [];
+            menuGroups.forEach(function(menuGroup) {
+                if (menuGroup.id && hasActiveChild(menuGroup)) {
+                    groupsWithActive.push(menuGroup.id);
+                }
+            });
+            return groupsWithActive;
+        }
+        
+        // Restore expanded state from localStorage and ensure active children groups are open
         if (validMenuGroupIds.length > 0) {
             const storedExpandedIds = readExpandedGroupIds();
-            const validExpandedIds = sanitizeExpandedGroupIds(storedExpandedIds, validMenuGroupIds);
+            const groupsWithActiveChildren = getGroupsWithActiveChildren();
+            
+            // Combine stored IDs with groups that have active children (active groups take precedence)
+            const combinedIds = [...new Set([...storedExpandedIds, ...groupsWithActiveChildren])];
+            const validExpandedIds = sanitizeExpandedGroupIds(combinedIds, validMenuGroupIds);
             
             // Clean up localStorage if IDs were invalid
             if (storedExpandedIds.length !== validExpandedIds.length) {
@@ -538,7 +585,16 @@
                 }
             });
             
+            menuGroup.addEventListener('hide.bs.collapse', function(e) {
+                // Don't allow closing if this group has an active child
+                if (hasActiveChild(menuGroup)) {
+                    e.preventDefault();
+                    return; // Early return - don't update localStorage
+                }
+            });
+            
             menuGroup.addEventListener('hidden.bs.collapse', function() {
+                // Update localStorage after collapse completes
                 const currentExpanded = readExpandedGroupIds();
                 const filtered = currentExpanded.filter(id => id !== menuGroup.id);
                 writeExpandedGroupIds(filtered);
