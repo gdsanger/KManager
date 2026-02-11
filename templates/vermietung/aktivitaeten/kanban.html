@@ -110,6 +110,12 @@
 {% endblock %}
 
 {% block content %}
+<!-- Hidden data attributes for JavaScript to safely access server-side values -->
+<div id="filter-state-data" 
+     data-filter-mode="{{ filter_mode }}" 
+     data-completed-filter="{% if completed_filter %}true{% else %}false{% endif %}" 
+     style="display: none;"></div>
+
 <div class="alert alert-info mb-3" role="alert">
     <i class="bi bi-info-circle" aria-hidden="true"></i>
     <strong>Tipp:</strong> Aufgaben können per Drag &amp; Drop in eine andere Spalte gezogen werden, um den Status zu ändern.
@@ -190,6 +196,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // localStorage key for persisting aktivitaeten filters
     const STORAGE_KEY = 'aktivitaeten_kanban_filters';
     
+    // Get server-side values safely from data attributes
+    const filterStateData = document.getElementById('filter-state-data');
+    const initialFilterMode = filterStateData.dataset.filterMode;
+    const initialCompletedFilter = filterStateData.dataset.completedFilter === 'true';
+    
     // Get filter elements
     const filterButtons = document.querySelectorAll('.filter-mode-btn');
     const completedCheckbox = document.getElementById('completedFilterCheckbox');
@@ -203,10 +214,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Only apply from localStorage if no URL params present
                 const urlParams = new URLSearchParams(window.location.search);
                 if (!urlParams.has('filter') && !urlParams.has('completed')) {
-                    const currentFilterMode = '{{ filter_mode }}';
-                    const currentCompleted = {% if completed_filter %}true{% else %}false{% endif %};
                     // Redirect if stored filters differ from current state
-                    if (filters.filter_mode !== currentFilterMode || filters.completed !== currentCompleted) {
+                    if (filters.filter_mode !== initialFilterMode || filters.completed !== initialCompletedFilter) {
                         window.location.href = buildFilterUrl(filters.filter_mode, filters.completed);
                         return true;
                     }
@@ -251,10 +260,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle completed checkbox changes
     completedCheckbox.addEventListener('change', function() {
-        const filterMode = '{{ filter_mode }}';
         const completed = this.checked;
-        saveFiltersToStorage(filterMode, completed);
-        window.location.href = buildFilterUrl(filterMode, completed);
+        saveFiltersToStorage(initialFilterMode, completed);
+        window.location.href = buildFilterUrl(initialFilterMode, completed);
     });
     
     // Try to load filters from localStorage
@@ -264,7 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Save current state to localStorage
-    saveFiltersToStorage('{{ filter_mode }}', {% if completed_filter %}true{% else %}false{% endif %});
+    saveFiltersToStorage(initialFilterMode, initialCompletedFilter);
     
     // Add drag and drop functionality
     const cards = document.querySelectorAll('.kanban-card');
