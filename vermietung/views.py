@@ -2449,7 +2449,8 @@ def aktivitaet_kanban(request):
     aktivitaeten_offen = aktivitaeten.filter(status='OFFEN').order_by('-prioritaet', 'faellig_am')
     aktivitaeten_in_bearbeitung = aktivitaeten.filter(status='IN_BEARBEITUNG').order_by('-prioritaet', 'faellig_am')
     
-    # Erledigt: Only show activities completed in last 7 days (based on updated_at)
+    # Erledigt: Only show activities updated in last 7 days (based on updated_at)
+    # Note: updated_at changes on any modification, so this shows recently touched completed activities
     seven_days_ago = timezone.now() - timedelta(days=7)
     aktivitaeten_erledigt = aktivitaeten.filter(
         status='ERLEDIGT',
