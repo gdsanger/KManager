@@ -2398,6 +2398,20 @@ def mietobjekt_bild_delete(request, bild_id):
 
 # Aktivitaet (Activity/Task) Views
 
+
+def _parse_completed_filter(request):
+    """
+    Helper function to parse the 'completed' parameter from request.
+    
+    Args:
+        request: Django request object
+        
+    Returns:
+        bool: True if completed='true', False otherwise (default)
+    """
+    return request.GET.get('completed', 'false').lower() == 'true'
+
+
 @vermietung_required
 def aktivitaet_kanban(request):
     """
@@ -2424,7 +2438,7 @@ def aktivitaet_kanban(request):
         filter_mode = 'responsible'
     
     # Get completed filter (default: 'false' - show non-completed)
-    completed_filter = request.GET.get('completed', 'false').lower() == 'true'
+    completed_filter = _parse_completed_filter(request)
     
     # Get base queryset with related data
     aktivitaeten = Aktivitaet.objects.select_related(
@@ -2492,7 +2506,7 @@ def aktivitaet_list(request):
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
-    completed_filter = request.GET.get('completed', 'false').lower() == 'true'
+    completed_filter = _parse_completed_filter(request)
     prioritaet_filter = request.GET.get('prioritaet', '')
     assigned_user_filter = request.GET.get('assigned_user', '')
     
@@ -2560,7 +2574,7 @@ def aktivitaet_assigned_list(request):
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
-    completed_filter = request.GET.get('completed', 'false').lower() == 'true'
+    completed_filter = _parse_completed_filter(request)
     prioritaet_filter = request.GET.get('prioritaet', '')
     
     # Base queryset: activities assigned to current user
@@ -2626,7 +2640,7 @@ def aktivitaet_created_list(request):
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
-    completed_filter = request.GET.get('completed', 'false').lower() == 'true'
+    completed_filter = _parse_completed_filter(request)
     prioritaet_filter = request.GET.get('prioritaet', '')
     assigned_user_filter = request.GET.get('assigned_user', '')
     

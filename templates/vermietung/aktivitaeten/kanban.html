@@ -201,6 +201,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialFilterMode = filterStateData.dataset.filterMode;
     const initialCompletedFilter = filterStateData.dataset.completedFilter === 'true';
     
+    // Track current filter mode (updated when buttons are clicked)
+    let currentFilterMode = initialFilterMode;
+    
     // Get filter elements
     const filterButtons = document.querySelectorAll('.filter-mode-btn');
     const completedCheckbox = document.getElementById('completedFilterCheckbox');
@@ -252,6 +255,7 @@ document.addEventListener('DOMContentLoaded', function() {
     filterButtons.forEach(button => {
         button.addEventListener('click', function() {
             const filterMode = this.dataset.filter;
+            currentFilterMode = filterMode; // Update tracked mode
             const completed = completedCheckbox.checked;
             saveFiltersToStorage(filterMode, completed);
             window.location.href = buildFilterUrl(filterMode, completed);
@@ -261,9 +265,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle completed checkbox changes
     completedCheckbox.addEventListener('change', function() {
         const completed = this.checked;
-        // Get current filter mode from active button
-        const activeButton = document.querySelector('.filter-mode-btn.btn-primary');
-        const currentFilterMode = activeButton ? activeButton.dataset.filter : initialFilterMode;
+        // Use tracked current filter mode
         saveFiltersToStorage(currentFilterMode, completed);
         window.location.href = buildFilterUrl(currentFilterMode, completed);
     });
