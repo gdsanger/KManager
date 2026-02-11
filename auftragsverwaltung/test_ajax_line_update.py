@@ -415,7 +415,7 @@ class AjaxLineUpdateTestCase(TestCase):
         
         # Update unit_id
         data = {
-            'unit_id': str(unit.pk)
+            'unit_id': unit.pk
         }
         
         response = self.client.post(

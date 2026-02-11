@@ -780,7 +780,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 
                                 // Update unit dropdown selection
                                 const unitSelect = lineItem.querySelector('.line-unit');
-                                if (unitSelect && response.line.hasOwnProperty('unit_id')) {
+                                if (unitSelect && 'unit_id' in response.line) {
                                     unitSelect.value = response.line.unit_id || '';
                                 }
                             }
