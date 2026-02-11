@@ -589,9 +589,12 @@
                 // Don't allow closing if this group has an active child
                 if (hasActiveChild(menuGroup)) {
                     e.preventDefault();
-                    return;
+                    return; // Early return - don't update localStorage
                 }
-                
+            });
+            
+            menuGroup.addEventListener('hidden.bs.collapse', function() {
+                // Update localStorage after collapse completes
                 const currentExpanded = readExpandedGroupIds();
                 const filtered = currentExpanded.filter(id => id !== menuGroup.id);
                 writeExpandedGroupIds(filtered);
