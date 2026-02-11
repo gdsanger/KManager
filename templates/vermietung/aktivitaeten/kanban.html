@@ -5,19 +5,25 @@
 {% block page_title %}Aktivitäten{% endblock %}
 
 {% block page_actions %}
-<div class="btn-group me-2" role="group" aria-label="Aktivitäten-Filter">
-    <a href="{% url 'vermietung:aktivitaet_kanban' %}?filter=responsible" 
-       class="btn btn-sm {% if filter_mode == 'responsible' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+<div class="btn-group me-2" role="group" aria-label="Aktivitäten-Filter" id="filter-mode-buttons">
+    <button type="button" data-filter="responsible" 
+       class="btn btn-sm filter-mode-btn {% if filter_mode == 'responsible' %}btn-primary{% else %}btn-outline-primary{% endif %}">
         <i class="bi bi-person-check"></i> Verantwortlich
-    </a>
-    <a href="{% url 'vermietung:aktivitaet_kanban' %}?filter=created" 
-       class="btn btn-sm {% if filter_mode == 'created' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+    </button>
+    <button type="button" data-filter="created" 
+       class="btn btn-sm filter-mode-btn {% if filter_mode == 'created' %}btn-primary{% else %}btn-outline-primary{% endif %}">
         <i class="bi bi-plus-circle"></i> Erstellt
-    </a>
-    <a href="{% url 'vermietung:aktivitaet_kanban' %}?filter=all" 
-       class="btn btn-sm {% if filter_mode == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+    </button>
+    <button type="button" data-filter="all" 
+       class="btn btn-sm filter-mode-btn {% if filter_mode == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}">
         <i class="bi bi-list-ul"></i> Alle
-    </a>
+    </button>
+</div>
+<div class="form-check form-switch me-2" style="display: inline-block; padding-left: 2.5em;">
+    <input class="form-check-input" type="checkbox" id="completedFilterCheckbox" {% if completed_filter %}checked{% endif %}>
+    <label class="form-check-label" for="completedFilterCheckbox">
+        Erledigt
+    </label>
 </div>
 <a href="{% url 'vermietung:aktivitaet_list' %}" class="btn btn-outline-secondary">
     <i class="bi bi-list-ul"></i> Listenansicht
@@ -181,6 +187,83 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // localStorage key for persisting aktivitaeten filters
+    const STORAGE_KEY = 'aktivitaeten_kanban_filters';
+    
+    // Get filter elements
+    const filterButtons = document.querySelectorAll('.filter-mode-btn');
+    const completedCheckbox = document.getElementById('completedFilterCheckbox');
+    
+    // Load filters from localStorage on page load
+    function loadFiltersFromStorage() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const filters = JSON.parse(stored);
+                // Only apply from localStorage if no URL params present
+                const urlParams = new URLSearchParams(window.location.search);
+                if (!urlParams.has('filter') && !urlParams.has('completed')) {
+                    if (filters.filter_mode && filters.filter_mode !== '{{ filter_mode }}') {
+                        // Redirect to apply stored filter
+                        window.location.href = buildFilterUrl(filters.filter_mode, filters.completed);
+                        return true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error loading filters from localStorage:', e);
+        }
+        return false;
+    }
+    
+    // Save filters to localStorage
+    function saveFiltersToStorage(filterMode, completed) {
+        try {
+            const filters = {
+                filter_mode: filterMode,
+                completed: completed
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
+        } catch (e) {
+            console.error('Error saving filters to localStorage:', e);
+        }
+    }
+    
+    // Build URL with current filters
+    function buildFilterUrl(filterMode, completed) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('filter', filterMode);
+        url.searchParams.set('completed', completed ? 'true' : 'false');
+        return url.toString();
+    }
+    
+    // Handle filter mode button clicks
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const filterMode = this.dataset.filter;
+            const completed = completedCheckbox.checked;
+            saveFiltersToStorage(filterMode, completed);
+            window.location.href = buildFilterUrl(filterMode, completed);
+        });
+    });
+    
+    // Handle completed checkbox changes
+    completedCheckbox.addEventListener('change', function() {
+        const filterMode = '{{ filter_mode }}';
+        const completed = this.checked;
+        saveFiltersToStorage(filterMode, completed);
+        window.location.href = buildFilterUrl(filterMode, completed);
+    });
+    
+    // Try to load filters from localStorage
+    const redirected = loadFiltersFromStorage();
+    if (redirected) {
+        return; // Don't initialize drag-drop if we're redirecting
+    }
+    
+    // Save current state to localStorage
+    saveFiltersToStorage('{{ filter_mode }}', {{ completed_filter|yesno:"true,false" }});
+    
     // Add drag and drop functionality
     const cards = document.querySelectorAll('.kanban-card');
     const columns = document.querySelectorAll('.kanban-cards');
