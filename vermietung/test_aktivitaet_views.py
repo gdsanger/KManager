@@ -335,6 +335,16 @@ class AktivitaetViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['aktivitaeten_offen'].count(), 1)
         self.assertEqual(response.context['aktivitaeten_in_bearbeitung'].count(), 1)
+        # Erledigt column is empty by default (completed=false)
+        self.assertEqual(response.context['aktivitaeten_erledigt'].count(), 0)
+        
+        # Test with completed=true to see the completed activity
+        response = self.client.get(reverse('vermietung:aktivitaet_kanban') + '?completed=true')
+        
+        self.assertEqual(response.status_code, 200)
+        # When completed=true, only completed activities are shown
+        self.assertEqual(response.context['aktivitaeten_offen'].count(), 0)
+        self.assertEqual(response.context['aktivitaeten_in_bearbeitung'].count(), 0)
         self.assertEqual(response.context['aktivitaeten_erledigt'].count(), 1)
     
     def test_assignment_to_user(self):

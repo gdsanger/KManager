@@ -103,6 +103,30 @@ class AktivitaetKanbanDragDropTest(TestCase):
         aktivitaet.refresh_from_db()
         self.assertEqual(aktivitaet.status, 'ERLEDIGT')
     
+    def test_status_update_by_cc_user(self):
+        """Test that cc_user can update activity status."""
+        # Create activity where testuser is a cc_user
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Test Aktivität',
+            status='OFFEN',
+            ersteller=self.other_user,
+            assigned_user=self.assigned_user
+        )
+        aktivitaet.cc_users.add(self.user)
+        
+        # Update status
+        url = reverse('vermietung:aktivitaet_update_status', kwargs={'pk': aktivitaet.pk})
+        response = self.client.post(url, {'status': 'IN_BEARBEITUNG'})
+        
+        # Check response
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Verify status was changed
+        aktivitaet.refresh_from_db()
+        self.assertEqual(aktivitaet.status, 'IN_BEARBEITUNG')
+    
     def test_status_update_permission_denied(self):
         """Test that user without permission cannot update activity status."""
         # Create activity where testuser is neither ersteller nor assigned_user
@@ -193,8 +217,9 @@ class AktivitaetKanbanDragDropTest(TestCase):
         )
         aktivitaet_old.refresh_from_db()
         
-        # Get Kanban view with filter=responsible (shows activities where user is assigned_user)
-        url = reverse('vermietung:aktivitaet_kanban') + '?filter=responsible'
+        # Get Kanban view with filter=responsible and completed=true
+        # (shows completed activities where user is assigned_user)
+        url = reverse('vermietung:aktivitaet_kanban') + '?filter=responsible&completed=true'
         response = self.client.get(url)
         
         # Check response
@@ -207,7 +232,7 @@ class AktivitaetKanbanDragDropTest(TestCase):
         self.assertNotIn(aktivitaet_old, aktivitaeten_erledigt)
     
     def test_kanban_erledigt_filter_excludes_other_statuses(self):
-        """Test that Erledigt column only shows ERLEDIGT status."""
+        """Test that Erledigt column only shows ERLEDIGT status when completed filter is enabled."""
         # Create activities with different statuses
         aktivitaet_offen = Aktivitaet.objects.create(
             titel='Open Activity',
@@ -230,26 +255,24 @@ class AktivitaetKanbanDragDropTest(TestCase):
             assigned_user=self.user
         )
         
-        # Get Kanban view
-        url = reverse('vermietung:aktivitaet_kanban') + '?filter=responsible'
+        # Get Kanban view with completed=true to see the Erledigt column
+        url = reverse('vermietung:aktivitaet_kanban') + '?filter=responsible&completed=true'
         response = self.client.get(url)
         
         # Check response
         self.assertEqual(response.status_code, 200)
         
-        # Verify each column contains only correct status
+        # When completed=true, only ERLEDIGT activities should be shown
         aktivitaeten_offen = response.context['aktivitaeten_offen']
         aktivitaeten_in_bearbeitung = response.context['aktivitaeten_in_bearbeitung']
         aktivitaeten_erledigt = response.context['aktivitaeten_erledigt']
         
-        self.assertIn(aktivitaet_offen, aktivitaeten_offen)
-        self.assertNotIn(aktivitaet_offen, aktivitaeten_erledigt)
+        # With completed=true filter, offen and in_bearbeitung columns should be empty
+        self.assertEqual(aktivitaeten_offen.count(), 0)
+        self.assertEqual(aktivitaeten_in_bearbeitung.count(), 0)
         
-        self.assertIn(aktivitaet_in_bearbeitung, aktivitaeten_in_bearbeitung)
-        self.assertNotIn(aktivitaet_in_bearbeitung, aktivitaeten_erledigt)
-        
+        # Only erledigt column should have the completed activity
         self.assertIn(aktivitaet_erledigt, aktivitaeten_erledigt)
-        self.assertNotIn(aktivitaet_erledigt, aktivitaeten_offen)
     
     def test_status_update_requires_post(self):
         """Test that status update requires POST method."""

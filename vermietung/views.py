@@ -2478,9 +2478,13 @@ def aktivitaet_kanban(request):
     aktivitaeten_offen = aktivitaeten.filter(status='OFFEN').order_by('-prioritaet', 'faellig_am')
     aktivitaeten_in_bearbeitung = aktivitaeten.filter(status='IN_BEARBEITUNG').order_by('-prioritaet', 'faellig_am')
     
-    # Erledigt: Only show if completed_filter is True
+    # Erledigt: Only show if completed_filter is True, and limit to last 7 days
     if completed_filter:
-        aktivitaeten_erledigt = aktivitaeten.filter(status='ERLEDIGT').order_by('-updated_at')
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        aktivitaeten_erledigt = aktivitaeten.filter(
+            status='ERLEDIGT',
+            updated_at__gte=seven_days_ago
+        ).order_by('-updated_at')
     else:
         aktivitaeten_erledigt = Aktivitaet.objects.none()
     
@@ -2973,12 +2977,16 @@ def aktivitaet_update_status(request, pk):
     Quick update of activity status (for Kanban drag & drop).
     Expects 'status' in POST data.
     
-    Permission: Only assigned_user or ersteller can change the status.
+    Permission: Only assigned_user, ersteller, or cc_users can change the status.
     """
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
     
-    # Check permissions: user must be assigned_user or ersteller
-    if aktivitaet.assigned_user != request.user and aktivitaet.ersteller != request.user:
+    # Check permissions: user must be assigned_user, ersteller, or in cc_users
+    is_assigned_user = aktivitaet.assigned_user == request.user
+    is_ersteller = aktivitaet.ersteller == request.user
+    is_cc_user = aktivitaet.cc_users.filter(id=request.user.id).exists()
+    
+    if not (is_assigned_user or is_ersteller or is_cc_user):
         return JsonResponse({
             'error': 'Sie haben keine Berechtigung, den Status dieser Aktivität zu ändern.'
         }, status=403)
