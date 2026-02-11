@@ -17,7 +17,7 @@ class KanbanEmptyColumnDropTest(TestCase):
     
     def setUp(self):
         """Set up test data."""
-        # Create a Mandant (required for ActivityStream)
+        # Create a Mandant (required by Activity model through ActivityStream)
         from core.models import Mandant
         self.mandant = Mandant.objects.create(
             name='Test Mandant',
@@ -47,9 +47,15 @@ class KanbanEmptyColumnDropTest(TestCase):
         
         self.assertEqual(response.status_code, 200)
         
-        # Check that the CSS includes min-height for .kanban-cards
-        self.assertContains(response, '.kanban-cards')
-        self.assertContains(response, 'min-height:')
+        # Extract the CSS and verify min-height is within .kanban-cards block
+        content = response.content.decode('utf-8')
+        kanban_cards_start = content.find('.kanban-cards {')
+        self.assertNotEqual(kanban_cards_start, -1, ".kanban-cards CSS block not found")
+        
+        kanban_cards_end = content.find('}', kanban_cards_start)
+        kanban_cards_css = content[kanban_cards_start:kanban_cards_end]
+        
+        self.assertIn('min-height:', kanban_cards_css)
         
     def test_kanban_cards_have_flex_grow_css(self):
         """Test that .kanban-cards elements have flex-grow CSS to fill columns."""
@@ -59,9 +65,15 @@ class KanbanEmptyColumnDropTest(TestCase):
         
         self.assertEqual(response.status_code, 200)
         
-        # Check that the CSS includes flex-grow for .kanban-cards
-        self.assertContains(response, '.kanban-cards')
-        self.assertContains(response, 'flex-grow:')
+        # Extract the CSS and verify flex-grow is within .kanban-cards block
+        content = response.content.decode('utf-8')
+        kanban_cards_start = content.find('.kanban-cards {')
+        self.assertNotEqual(kanban_cards_start, -1, ".kanban-cards CSS block not found")
+        
+        kanban_cards_end = content.find('}', kanban_cards_start)
+        kanban_cards_css = content[kanban_cards_start:kanban_cards_end]
+        
+        self.assertIn('flex-grow:', kanban_cards_css)
         
     def test_kanban_empty_state_has_pointer_events_none(self):
         """Test that empty state text has pointer-events: none to allow drops."""
@@ -71,9 +83,16 @@ class KanbanEmptyColumnDropTest(TestCase):
         
         self.assertEqual(response.status_code, 200)
         
-        # Check that the CSS includes pointer-events: none for empty state
-        self.assertContains(response, 'pointer-events:')
-        self.assertContains(response, '.kanban-cards .text-muted')
+        # Extract the CSS and verify pointer-events: none is within .kanban-cards .text-muted block
+        content = response.content.decode('utf-8')
+        empty_state_start = content.find('.kanban-cards .text-muted {')
+        self.assertNotEqual(empty_state_start, -1, ".kanban-cards .text-muted CSS block not found")
+        
+        empty_state_end = content.find('}', empty_state_start)
+        empty_state_css = content[empty_state_start:empty_state_end]
+        
+        self.assertIn('pointer-events:', empty_state_css)
+        self.assertIn('none', empty_state_css)
     
     def test_empty_columns_render_with_kanban_cards_class(self):
         """Test that empty columns still have .kanban-cards container."""
