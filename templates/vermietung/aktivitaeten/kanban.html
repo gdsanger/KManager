@@ -104,6 +104,11 @@
 {% endblock %}
 
 {% block content %}
+<div class="alert alert-info mb-3" role="alert">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    <strong>Tipp:</strong> Aufgaben können per Drag &amp; Drop in eine andere Spalte gezogen werden, um den Status zu ändern.
+</div>
+
 <div class="kanban-container">
     <!-- Offen Column -->
     <div class="kanban-column">
@@ -234,18 +239,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: `status=${newStatus}`
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    // Handle HTTP errors
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Status konnte nicht aktualisiert werden');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     // Reload page to show updated status
                     location.reload();
                 } else {
+                    // Show error and reload to restore UI state
                     alert('Fehler: ' + (data.error || 'Status konnte nicht aktualisiert werden'));
+                    location.reload();
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Fehler beim Aktualisieren des Status');
+                alert('Fehler beim Aktualisieren des Status: ' + error.message);
+                // Reload page to restore consistent state
+                location.reload();
             });
         });
     });

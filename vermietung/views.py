@@ -2448,7 +2448,15 @@ def aktivitaet_kanban(request):
     # Group by status
     aktivitaeten_offen = aktivitaeten.filter(status='OFFEN').order_by('-prioritaet', 'faellig_am')
     aktivitaeten_in_bearbeitung = aktivitaeten.filter(status='IN_BEARBEITUNG').order_by('-prioritaet', 'faellig_am')
-    aktivitaeten_erledigt = aktivitaeten.filter(status='ERLEDIGT').order_by('-updated_at')[:20]  # Limit completed
+    
+    # Erledigt: Only show activities updated in last 7 days (based on updated_at)
+    # Note: updated_at changes on any modification, so this shows recently touched completed activities
+    seven_days_ago = timezone.now() - timedelta(days=7)
+    aktivitaeten_erledigt = aktivitaeten.filter(
+        status='ERLEDIGT',
+        updated_at__gte=seven_days_ago
+    ).order_by('-updated_at')
+    
     aktivitaeten_abgebrochen = aktivitaeten.filter(status='ABGEBROCHEN').order_by('-updated_at')[:20]  # Limit cancelled
     
     context = {
@@ -2928,8 +2936,17 @@ def aktivitaet_update_status(request, pk):
     """
     Quick update of activity status (for Kanban drag & drop).
     Expects 'status' in POST data.
+    
+    Permission: Only assigned_user or ersteller can change the status.
     """
     aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    
+    # Check permissions: user must be assigned_user or ersteller
+    if aktivitaet.assigned_user != request.user and aktivitaet.ersteller != request.user:
+        return JsonResponse({
+            'error': 'Sie haben keine Berechtigung, den Status dieser Aktivität zu ändern.'
+        }, status=403)
+    
     old_status = aktivitaet.status
     new_status = request.POST.get('status')
     

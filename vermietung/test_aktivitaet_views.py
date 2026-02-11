@@ -18,6 +18,16 @@ class AktivitaetViewTest(TestCase):
     
     def setUp(self):
         """Set up test data for all tests."""
+        # Create a Mandant (required for ActivityStream)
+        from core.models import Mandant
+        self.mandant = Mandant.objects.create(
+            name='Test Mandant',
+            adresse='Test Str. 1',
+            plz='12345',
+            ort='Teststadt',
+            land='Deutschland'
+        )
+        
         # Create users
         self.user = User.objects.create_user(
             username='testuser',
