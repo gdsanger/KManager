@@ -16,413 +16,493 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-list-check"></i>
-                    {% if is_create %}Neue Aktivität{% else %}Aktivität bearbeiten{% endif %}
-                </h5>
+    <div class="col-12">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            
+            {% if context_obj %}
+            <div class="alert alert-info mb-4">
+                <i class="bi bi-info-circle"></i>
+                <strong>Kontext:</strong>
+                {% if context_type == 'vertrag' %}
+                    Vertrag: {{ context_obj }}
+                {% elif context_type == 'mietobjekt' %}
+                    Mietobjekt: {{ context_obj }}
+                {% elif context_type == 'kunde' %}
+                    Kunde: {{ context_obj }}
+                {% endif %}
             </div>
-            <div class="card-body">
-                <form method="post" novalidate>
-                    {% csrf_token %}
-                    
-                    {% if context_obj %}
-                    <div class="alert alert-info mb-4">
-                        <i class="bi bi-info-circle"></i>
-                        <strong>Kontext:</strong>
-                        {% if context_type == 'vertrag' %}
-                            Vertrag: {{ context_obj }}
-                        {% elif context_type == 'mietobjekt' %}
-                            Mietobjekt: {{ context_obj }}
-                        {% elif context_type == 'kunde' %}
-                            Kunde: {{ context_obj }}
-                        {% endif %}
-                    </div>
-                    {% endif %}
+            {% endif %}
 
-                    <!-- Section 1: Grunddaten (Basic Information) -->
-                    <h5 class="mb-3"><i class="bi bi-card-text"></i> Grunddaten</h5>
-                    <div class="mb-3">
-                        <label for="{{ form.titel.id_for_label }}" class="form-label">
-                            {{ form.titel.label }}
-                        </label>
-                        {{ form.titel }}
-                        {% if form.titel.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.titel.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.titel.help_text %}
-                        <div class="form-text">{{ form.titel.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ form.beschreibung.id_for_label }}" class="form-label">
-                            {{ form.beschreibung.label }}
-                        </label>
-                        {{ form.beschreibung }}
-                        {% if form.beschreibung.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.beschreibung.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.beschreibung.help_text %}
-                        <div class="form-text">{{ form.beschreibung.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    <hr class="my-4">
-
-                    <!-- Section 2: Status & Planung (Status & Planning) -->
-                    <h5 class="mb-3"><i class="bi bi-calendar-check"></i> Status & Planung</h5>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label for="{{ form.status.id_for_label }}" class="form-label">
-                                {{ form.status.label }}
-                            </label>
-                            {{ form.status }}
-                            {% if form.status.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.status.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="{{ form.prioritaet.id_for_label }}" class="form-label">
-                                {{ form.prioritaet.label }}
-                            </label>
-                            {{ form.prioritaet }}
-                            {% if form.prioritaet.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.prioritaet.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="{{ form.faellig_am.id_for_label }}" class="form-label">
-                                {{ form.faellig_am.label }}
-                            </label>
-                            {{ form.faellig_am }}
-                            {% if form.faellig_am.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.faellig_am.errors }}
-                            </div>
-                            {% endif %}
-                            {% if form.faellig_am.help_text %}
-                            <div class="form-text">{{ form.faellig_am.help_text }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <hr class="my-4">
-
-                    <!-- Section 2b: Kategorisierung -->
-                    <h5 class="mb-3"><i class="bi bi-tags"></i> Kategorisierung</h5>
-                    <div class="row">
-                        <div class="col-md-8 mb-3">
-                            <label for="{{ form.bereich.id_for_label }}" class="form-label">
-                                {{ form.bereich.label }}
-                            </label>
-                            <div class="input-group">
-                                {{ form.bereich }}
-                                <button type="button" 
-                                        class="btn btn-outline-primary" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#bereichCreateModal"
-                                        title="Neuen Bereich anlegen">
-                                    <i class="bi bi-plus-circle"></i>
-                                </button>
-                            </div>
-                            {% if form.bereich.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.bereich.errors }}
-                            </div>
-                            {% endif %}
-                            {% if form.bereich.help_text %}
-                            <div class="form-text">{{ form.bereich.help_text }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <hr class="my-4">
-
-                    <!-- Section 3: Zuständigkeit (Assignment) -->
-                    <h5 class="mb-3"><i class="bi bi-people"></i> Zuständigkeit</h5>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.ersteller.id_for_label }}" class="form-label">
-                                {{ form.ersteller.label }}
-                            </label>
-                            {{ form.ersteller }}
-                            {% if form.ersteller.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.ersteller.errors }}
-                            </div>
-                            {% endif %}
-                            {% if form.ersteller.help_text %}
-                            <div class="form-text">{{ form.ersteller.help_text }}</div>
-                            {% endif %}
-                        </div>
-
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.assigned_user.id_for_label }}" class="form-label">
-                                {{ form.assigned_user.label }}
-                            </label>
-                            {{ form.assigned_user }}
-                            {% if form.assigned_user.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.assigned_user.errors }}
-                            </div>
-                            {% endif %}
-                            {% if form.assigned_user.help_text %}
-                            <div class="form-text">{{ form.assigned_user.help_text }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ form.assigned_supplier.id_for_label }}" class="form-label">
-                            {{ form.assigned_supplier.label }}
-                        </label>
-                        {{ form.assigned_supplier }}
-                        {% if form.assigned_supplier.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.assigned_supplier.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.assigned_supplier.help_text %}
-                        <div class="form-text">{{ form.assigned_supplier.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ form.cc_users.id_for_label }}" class="form-label">
-                            {{ form.cc_users.label }}
-                        </label>
-                        {{ form.cc_users }}
-                        {% if form.cc_users.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.cc_users.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.cc_users.help_text %}
-                        <div class="form-text">{{ form.cc_users.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    <hr class="my-4">
-
-                    <!-- Section 4: Serien-Aktivität (Recurring Activity) -->
-                    <h5 class="mb-3"><i class="bi bi-arrow-repeat"></i> Serien-Aktivität</h5>
-                    <div class="mb-3 form-check">
-                        {{ form.ist_serie }}
-                        <label class="form-check-label" for="{{ form.ist_serie.id_for_label }}">
-                            {{ form.ist_serie.label }}
-                        </label>
-                        {% if form.ist_serie.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.ist_serie.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.ist_serie.help_text %}
-                        <div class="form-text">{{ form.ist_serie.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3" id="intervall_container">
-                        <label for="{{ form.intervall_monate.id_for_label }}" class="form-label">
-                            {{ form.intervall_monate.label }}
-                        </label>
-                        {{ form.intervall_monate }}
-                        {% if form.intervall_monate.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.intervall_monate.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.intervall_monate.help_text %}
-                        <div class="form-text">{{ form.intervall_monate.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    <hr class="my-4">
-
-                    <!-- Section 5: Sichtbarkeit (Privacy) -->
-                    <h5 class="mb-3"><i class="bi bi-eye-slash"></i> Sichtbarkeit</h5>
-                    <div class="mb-3 form-check">
-                        {{ form.privat }}
-                        <label class="form-check-label" for="{{ form.privat.id_for_label }}">
-                            {{ form.privat.label }}
-                        </label>
-                        {% if form.privat.errors %}
-                        <div class="invalid-feedback d-block">
-                            {{ form.privat.errors }}
-                        </div>
-                        {% endif %}
-                        {% if form.privat.help_text %}
-                        <div class="form-text">{{ form.privat.help_text }}</div>
-                        {% endif %}
-                    </div>
-
-                    {% if not context_obj %}
-                    <hr class="my-4">
-
-                    <!-- Section 6: Kontext/Zuordnung (Context/Reference) -->
-                    <h5 class="mb-3"><i class="bi bi-link-45deg"></i> Kontext/Zuordnung</h5>
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i>
-                        Wählen Sie genau einen Kontext: Mietobjekt, Vertrag oder Kunde.
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">
-                                {{ form.mietobjekt.label }}
-                            </label>
-                            {{ form.mietobjekt }}
-                            {% if form.mietobjekt.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.mietobjekt.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="{{ form.vertrag.id_for_label }}" class="form-label">
-                                {{ form.vertrag.label }}
-                            </label>
-                            {{ form.vertrag }}
-                            {% if form.vertrag.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.vertrag.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            <label for="{{ form.kunde.id_for_label }}" class="form-label">
-                                {{ form.kunde.label }}
-                            </label>
-                            {{ form.kunde }}
-                            {% if form.kunde.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.kunde.errors }}
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% else %}
-                    <!-- Hidden context fields (already set via form) -->
-                    {{ form.mietobjekt }}
-                    {{ form.vertrag }}
-                    {{ form.kunde }}
-                    {% endif %}
-
-                    <hr class="my-4">
-
-                    <!-- Action Buttons -->
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
-                            <i class="bi bi-x-circle"></i> Abbrechen
-                        </a>
-                        {% if not is_create %}
-                        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#assignModal">
-                            <i class="bi bi-person-plus"></i> Zuweisen
-                        </button>
-                        {% endif %}
-                        {% if not is_create and aktivitaet.status != 'ERLEDIGT' %}
-                        <button type="button" class="btn btn-success" onclick="markAsCompleted()">
-                            <i class="bi bi-check-circle-fill"></i> Als erledigt markieren
-                        </button>
-                        {% endif %}
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-circle"></i>
-                            {% if is_create %}Anlegen{% else %}Speichern{% endif %}
-                        </button>
-                    </div>
-                </form>
-
-                {% if not is_create %}
-                <hr class="my-4">
-                
-                <!-- Delete Section -->
-                <div class="d-grid">
-                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">
-                        <i class="bi bi-trash"></i> Aktivität löschen
+            <!-- Navigation Tabs -->
+            <ul class="nav nav-tabs mb-4" id="aktivitaetTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="basic-tab" data-bs-toggle="tab" data-bs-target="#basic" type="button" role="tab" aria-controls="basic" aria-selected="true">
+                        <i class="bi bi-card-text"></i> Grunddaten
                     </button>
-                </div>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="assignment-tab" data-bs-toggle="tab" data-bs-target="#assignment" type="button" role="tab" aria-controls="assignment" aria-selected="false">
+                        <i class="bi bi-people"></i> Zuständigkeit
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced" type="button" role="tab" aria-controls="advanced" aria-selected="false">
+                        <i class="bi bi-sliders"></i> Erweitert
+                    </button>
+                </li>
+            </ul>
 
-                <form id="deleteForm" method="post" action="{% url 'vermietung:aktivitaet_delete' aktivitaet.pk %}" style="display: none;">
-                    {% csrf_token %}
-                </form>
-
-                <form id="completedForm" method="post" action="{% url 'vermietung:aktivitaet_mark_completed' aktivitaet.pk %}" style="display: none;">
-                    {% csrf_token %}
-                </form>
-
-                <!-- Assignment Modal -->
-                <div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="assignModalLabel">
-                                    <i class="bi bi-person-plus"></i> Aktivität zuweisen
-                                </h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            
-                            <form id="assignForm" method="post" action="{% url 'vermietung:aktivitaet_assign' aktivitaet.pk %}">
-                                {% csrf_token %}
-                                <div class="modal-body">
-                                    <p class="mb-3">Wählen Sie einen neuen Verantwortlichen für diese Aktivität:</p>
-                                    
+            <!-- Tab Content -->
+            <div class="tab-content" id="aktivitaetTabContent">
+                <!-- TAB 1: BASIC INFORMATION -->
+                <div class="tab-pane fade show active" id="basic" role="tabpanel" aria-labelledby="basic-tab">
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <!-- Card: Grunddaten -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-card-text"></i> Grunddaten
+                                    </h5>
+                                </div>
+                                <div class="card-body">
                                     <div class="mb-3">
-                                        <label for="new_assigned_user" class="form-label">Verantwortlicher</label>
-                                        <select name="assigned_user" id="new_assigned_user" class="form-select" required>
-                                            <option value="">-- Bitte wählen --</option>
-                                            {% for user in available_users %}
-                                            <option value="{{ user.id }}" {% if aktivitaet.assigned_user_id == user.id %}selected{% endif %}>
-                                                {{ user.get_full_name|default:user.username }}{% if user.email %} ({{ user.email }}){% endif %}
-                                            </option>
-                                            {% endfor %}
-                                        </select>
-                                        <div class="form-text">
-                                            Der neue Verantwortliche wird per E-Mail benachrichtigt.
+                                        <label for="{{ form.titel.id_for_label }}" class="form-label">
+                                            {{ form.titel.label }}
+                                        </label>
+                                        {{ form.titel }}
+                                        {% if form.titel.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.titel.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.titel.help_text %}
+                                        <div class="form-text">{{ form.titel.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="mb-0">
+                                        <label for="{{ form.beschreibung.id_for_label }}" class="form-label">
+                                            {{ form.beschreibung.label }}
+                                        </label>
+                                        {{ form.beschreibung }}
+                                        {% if form.beschreibung.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.beschreibung.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.beschreibung.help_text %}
+                                        <div class="form-text">{{ form.beschreibung.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card: Status & Planung -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-calendar-check"></i> Status & Planung
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label for="{{ form.status.id_for_label }}" class="form-label">
+                                                {{ form.status.label }}
+                                            </label>
+                                            {{ form.status }}
+                                            {% if form.status.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.status.errors }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="col-md-4 mb-3">
+                                            <label for="{{ form.prioritaet.id_for_label }}" class="form-label">
+                                                {{ form.prioritaet.label }}
+                                            </label>
+                                            {{ form.prioritaet }}
+                                            {% if form.prioritaet.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.prioritaet.errors }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="col-md-4 mb-3">
+                                            <label for="{{ form.faellig_am.id_for_label }}" class="form-label">
+                                                {{ form.faellig_am.label }}
+                                            </label>
+                                            {{ form.faellig_am }}
+                                            {% if form.faellig_am.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.faellig_am.errors }}
+                                            </div>
+                                            {% endif %}
+                                            {% if form.faellig_am.help_text %}
+                                            <div class="form-text">{{ form.faellig_am.help_text }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-0">
+                                        <label for="{{ form.bereich.id_for_label }}" class="form-label">
+                                            {{ form.bereich.label }}
+                                        </label>
+                                        <div class="input-group">
+                                            {{ form.bereich }}
+                                            <button type="button" 
+                                                    class="btn btn-outline-primary" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#bereichCreateModal"
+                                                    title="Neuen Bereich anlegen">
+                                                <i class="bi bi-plus-circle"></i>
+                                            </button>
+                                        </div>
+                                        {% if form.bereich.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.bereich.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.bereich.help_text %}
+                                        <div class="form-text">{{ form.bereich.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {% if not context_obj %}
+                            <!-- Card: Kontext/Zuordnung -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-link-45deg"></i> Kontext/Zuordnung
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info mb-3">
+                                        <i class="bi bi-info-circle"></i>
+                                        Optional: Wählen Sie einen Kontext für diese Aktivität.
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3 mb-md-0">
+                                            <label for="{{ form.mietobjekt.id_for_label }}" class="form-label">
+                                                {{ form.mietobjekt.label }}
+                                            </label>
+                                            {{ form.mietobjekt }}
+                                            {% if form.mietobjekt.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.mietobjekt.errors }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="col-md-4 mb-3 mb-md-0">
+                                            <label for="{{ form.vertrag.id_for_label }}" class="form-label">
+                                                {{ form.vertrag.label }}
+                                            </label>
+                                            {{ form.vertrag }}
+                                            {% if form.vertrag.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.vertrag.errors }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="col-md-4 mb-0">
+                                            <label for="{{ form.kunde.id_for_label }}" class="form-label">
+                                                {{ form.kunde.label }}
+                                            </label>
+                                            {{ form.kunde }}
+                                            {% if form.kunde.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.kunde.errors }}
+                                            </div>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
-                                
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="bi bi-person-check"></i> Zuweisen
-                                    </button>
-                                </div>
-                            </form>
+                            </div>
+                            {% else %}
+                            <!-- Hidden context fields (already set via form) -->
+                            {{ form.mietobjekt }}
+                            {{ form.vertrag }}
+                            {{ form.kunde }}
+                            {% endif %}
                         </div>
                     </div>
                 </div>
 
-                <script>
-                function confirmDelete() {
-                    if (confirm('Möchten Sie diese Aktivität wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-                        document.getElementById('deleteForm').submit();
-                    }
-                }
-                
-                function markAsCompleted() {
-                    if (confirm('Möchten Sie diese Aktivität als erledigt markieren? Der Ersteller wird per E-Mail benachrichtigt.')) {
-                        document.getElementById('completedForm').submit();
-                    }
-                }
-                </script>
-                {% endif %}
+                <!-- TAB 2: ASSIGNMENT & NOTIFICATIONS -->
+                <div class="tab-pane fade" id="assignment" role="tabpanel" aria-labelledby="assignment-tab">
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <!-- Card: Team -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-people"></i> Team
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="{{ form.ersteller.id_for_label }}" class="form-label">
+                                                {{ form.ersteller.label }}
+                                            </label>
+                                            {{ form.ersteller }}
+                                            {% if form.ersteller.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.ersteller.errors }}
+                                            </div>
+                                            {% endif %}
+                                            {% if form.ersteller.help_text %}
+                                            <div class="form-text">{{ form.ersteller.help_text }}</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label for="{{ form.assigned_user.id_for_label }}" class="form-label">
+                                                {{ form.assigned_user.label }}
+                                            </label>
+                                            {{ form.assigned_user }}
+                                            {% if form.assigned_user.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.assigned_user.errors }}
+                                            </div>
+                                            {% endif %}
+                                            {% if form.assigned_user.help_text %}
+                                            <div class="form-text">{{ form.assigned_user.help_text }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-0">
+                                        <label for="{{ form.assigned_supplier.id_for_label }}" class="form-label">
+                                            {{ form.assigned_supplier.label }}
+                                        </label>
+                                        {{ form.assigned_supplier }}
+                                        {% if form.assigned_supplier.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.assigned_supplier.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.assigned_supplier.help_text %}
+                                        <div class="form-text">{{ form.assigned_supplier.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card: Benachrichtigungen -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-bell"></i> Benachrichtigungen
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-0">
+                                        <label for="{{ form.cc_users.id_for_label }}" class="form-label">
+                                            {{ form.cc_users.label }}
+                                        </label>
+                                        {{ form.cc_users }}
+                                        {% if form.cc_users.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.cc_users.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.cc_users.help_text %}
+                                        <div class="form-text">{{ form.cc_users.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: ADVANCED SETTINGS -->
+                <div class="tab-pane fade" id="advanced" role="tabpanel" aria-labelledby="advanced-tab">
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <!-- Card: Serien-Aktivität -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-arrow-repeat"></i> Serien-Aktivität
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3 form-check">
+                                        {{ form.ist_serie }}
+                                        <label class="form-check-label" for="{{ form.ist_serie.id_for_label }}">
+                                            {{ form.ist_serie.label }}
+                                        </label>
+                                        {% if form.ist_serie.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.ist_serie.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.ist_serie.help_text %}
+                                        <div class="form-text">{{ form.ist_serie.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="mb-0" id="intervall_container">
+                                        <label for="{{ form.intervall_monate.id_for_label }}" class="form-label">
+                                            {{ form.intervall_monate.label }}
+                                        </label>
+                                        {{ form.intervall_monate }}
+                                        {% if form.intervall_monate.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.intervall_monate.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.intervall_monate.help_text %}
+                                        <div class="form-text">{{ form.intervall_monate.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card: Sichtbarkeit -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-eye-slash"></i> Sichtbarkeit
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-0 form-check">
+                                        {{ form.privat }}
+                                        <label class="form-check-label" for="{{ form.privat.id_for_label }}">
+                                            {{ form.privat.label }}
+                                        </label>
+                                        {% if form.privat.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.privat.errors }}
+                                        </div>
+                                        {% endif %}
+                                        {% if form.privat.help_text %}
+                                        <div class="form-text">{{ form.privat.help_text }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+
+            <!-- Action Buttons -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                        <div>
+                            {% if not is_create %}
+                            <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                                <i class="bi bi-trash"></i> Löschen
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex">
+                            <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                            {% if not is_create %}
+                            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#assignModal">
+                                <i class="bi bi-person-plus"></i> Zuweisen
+                            </button>
+                            {% endif %}
+                            {% if not is_create and aktivitaet.status != 'ERLEDIGT' %}
+                            <button type="button" class="btn btn-success" onclick="markAsCompleted()">
+                                <i class="bi bi-check-circle-fill"></i> Als erledigt markieren
+                            </button>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i>
+                                {% if is_create %}Anlegen{% else %}Speichern{% endif %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        {% if not is_create %}
+        <!-- Hidden Forms for Delete and Complete Actions -->
+        <form id="deleteForm" method="post" action="{% url 'vermietung:aktivitaet_delete' aktivitaet.pk %}" style="display: none;">
+            {% csrf_token %}
+        </form>
+
+        <form id="completedForm" method="post" action="{% url 'vermietung:aktivitaet_mark_completed' aktivitaet.pk %}" style="display: none;">
+            {% csrf_token %}
+        </form>
+
+        <!-- Assignment Modal -->
+        <div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="assignModalLabel">
+                            <i class="bi bi-person-plus"></i> Aktivität zuweisen
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    
+                    <form id="assignForm" method="post" action="{% url 'vermietung:aktivitaet_assign' aktivitaet.pk %}">
+                        {% csrf_token %}
+                        <div class="modal-body">
+                            <p class="mb-3">Wählen Sie einen neuen Verantwortlichen für diese Aktivität:</p>
+                            
+                            <div class="mb-3">
+                                <label for="new_assigned_user" class="form-label">Verantwortlicher</label>
+                                <select name="assigned_user" id="new_assigned_user" class="form-select" required>
+                                    <option value="">-- Bitte wählen --</option>
+                                    {% for user in available_users %}
+                                    <option value="{{ user.id }}" {% if aktivitaet.assigned_user_id == user.id %}selected{% endif %}>
+                                        {{ user.get_full_name|default:user.username }}{% if user.email %} ({{ user.email }}){% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    Der neue Verantwortliche wird per E-Mail benachrichtigt.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-person-check"></i> Zuweisen
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
+
+        <script>
+        function confirmDelete() {
+            if (confirm('Möchten Sie diese Aktivität wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+                document.getElementById('deleteForm').submit();
+            }
+        }
+        
+        function markAsCompleted() {
+            if (confirm('Möchten Sie diese Aktivität als erledigt markieren? Der Ersteller wird per E-Mail benachrichtigt.')) {
+                document.getElementById('completedForm').submit();
+            }
+        }
+        </script>
+        {% endif %}
     </div>
 </div>
 
