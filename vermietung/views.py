@@ -2398,6 +2398,20 @@ def mietobjekt_bild_delete(request, bild_id):
 
 # Aktivitaet (Activity/Task) Views
 
+
+def _parse_completed_filter(request):
+    """
+    Helper function to parse the 'completed' parameter from request.
+    
+    Args:
+        request: Django request object
+        
+    Returns:
+        bool: True if completed='true', False otherwise (default)
+    """
+    return request.GET.get('completed', 'false').lower() == 'true'
+
+
 @vermietung_required
 def aktivitaet_kanban(request):
     """
@@ -2409,6 +2423,10 @@ def aktivitaet_kanban(request):
     - 'created': Activities where current user is ersteller
     - 'all': All activities (with standard visibility)
     
+    Supports 'completed' parameter:
+    - 'true': Show only completed (ERLEDIGT) activities
+    - 'false' or absent (default): Show only non-completed activities (status != ERLEDIGT)
+    
     Privacy enforcement: Activities with privat=True are only visible to
     assigned_user and ersteller, regardless of filter mode.
     """
@@ -2418,6 +2436,9 @@ def aktivitaet_kanban(request):
     # Validate filter mode - fallback to 'responsible' for invalid values
     if filter_mode not in ['responsible', 'created', 'all']:
         filter_mode = 'responsible'
+    
+    # Get completed filter (default: 'false' - show non-completed)
+    completed_filter = _parse_completed_filter(request)
     
     # Get base queryset with related data
     aktivitaeten = Aktivitaet.objects.select_related(
@@ -2445,19 +2466,25 @@ def aktivitaet_kanban(request):
         Q(privat=True, ersteller=request.user)
     )
     
+    # Apply completed filter
+    if completed_filter:
+        # Show only completed activities
+        aktivitaeten = aktivitaeten.filter(status='ERLEDIGT')
+    else:
+        # Show only non-completed activities (exclude ERLEDIGT)
+        aktivitaeten = aktivitaeten.exclude(status='ERLEDIGT')
+    
     # Group by status
     aktivitaeten_offen = aktivitaeten.filter(status='OFFEN').order_by('-prioritaet', 'faellig_am')
     aktivitaeten_in_bearbeitung = aktivitaeten.filter(status='IN_BEARBEITUNG').order_by('-prioritaet', 'faellig_am')
     
-    # Erledigt: Only show activities updated in last 7 days (based on updated_at)
-    # Note: updated_at changes on any modification, so this shows recently touched completed activities
-    seven_days_ago = timezone.now() - timedelta(days=7)
-    aktivitaeten_erledigt = aktivitaeten.filter(
-        status='ERLEDIGT',
-        updated_at__gte=seven_days_ago
-    ).order_by('-updated_at')
+    # Erledigt: Only show if completed_filter is True
+    if completed_filter:
+        aktivitaeten_erledigt = aktivitaeten.filter(status='ERLEDIGT').order_by('-updated_at')
+    else:
+        aktivitaeten_erledigt = Aktivitaet.objects.none()
     
-    aktivitaeten_abgebrochen = aktivitaeten.filter(status='ABGEBROCHEN').order_by('-updated_at')[:20]  # Limit cancelled
+    aktivitaeten_abgebrochen = aktivitaeten.filter(status='ABGEBROCHEN').order_by('-updated_at')
     
     context = {
         'aktivitaeten_offen': aktivitaeten_offen,
@@ -2465,6 +2492,7 @@ def aktivitaet_kanban(request):
         'aktivitaeten_erledigt': aktivitaeten_erledigt,
         'aktivitaeten_abgebrochen': aktivitaeten_abgebrochen,
         'filter_mode': filter_mode,  # Pass to template for UI state
+        'completed_filter': completed_filter,  # Pass to template for checkbox state
     }
     
     return render(request, 'vermietung/aktivitaeten/kanban.html', context)
@@ -2478,7 +2506,7 @@ def aktivitaet_list(request):
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
-    status_filter = request.GET.get('status', '')
+    completed_filter = _parse_completed_filter(request)
     prioritaet_filter = request.GET.get('prioritaet', '')
     assigned_user_filter = request.GET.get('assigned_user', '')
     
@@ -2502,9 +2530,13 @@ def aktivitaet_list(request):
             Q(beschreibung__icontains=search_query)
         )
     
-    # Apply status filter
-    if status_filter:
-        aktivitaeten = aktivitaeten.filter(status=status_filter)
+    # Apply completed filter
+    if completed_filter:
+        # Show only completed activities
+        aktivitaeten = aktivitaeten.filter(status='ERLEDIGT')
+    else:
+        # Show only non-completed activities (status != ERLEDIGT)
+        aktivitaeten = aktivitaeten.exclude(status='ERLEDIGT')
     
     # Apply priority filter
     if prioritaet_filter:
@@ -2525,7 +2557,7 @@ def aktivitaet_list(request):
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
-        'status_filter': status_filter,
+        'completed_filter': completed_filter,
         'prioritaet_filter': prioritaet_filter,
         'assigned_user_filter': assigned_user_filter,
     }
@@ -2537,12 +2569,12 @@ def aktivitaet_list(request):
 def aktivitaet_assigned_list(request):
     """
     List view for activities assigned to the current user.
-    Shows only non-completed and non-cancelled activities.
+    By default shows only non-completed activities.
     Enforces privacy: privat=True activities only visible to assigned_user and ersteller.
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
-    status_filter = request.GET.get('status', '')
+    completed_filter = _parse_completed_filter(request)
     prioritaet_filter = request.GET.get('prioritaet', '')
     
     # Base queryset: activities assigned to current user
@@ -2551,8 +2583,6 @@ def aktivitaet_assigned_list(request):
         'mietobjekt', 'vertrag', 'kunde'
     ).filter(
         assigned_user=request.user
-    ).exclude(
-        status__in=['ERLEDIGT', 'ABGEBROCHEN']
     )
     
     # Apply privacy filter: privat=True activities only visible to assigned_user and ersteller
@@ -2569,9 +2599,13 @@ def aktivitaet_assigned_list(request):
             Q(beschreibung__icontains=search_query)
         )
     
-    # Apply status filter
-    if status_filter:
-        aktivitaeten = aktivitaeten.filter(status=status_filter)
+    # Apply completed filter
+    if completed_filter:
+        # Show only completed activities
+        aktivitaeten = aktivitaeten.filter(status='ERLEDIGT')
+    else:
+        # Show only non-completed activities (exclude ERLEDIGT and ABGEBROCHEN)
+        aktivitaeten = aktivitaeten.exclude(status__in=['ERLEDIGT', 'ABGEBROCHEN'])
     
     # Apply priority filter
     if prioritaet_filter:
@@ -2588,7 +2622,7 @@ def aktivitaet_assigned_list(request):
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
-        'status_filter': status_filter,
+        'completed_filter': completed_filter,
         'prioritaet_filter': prioritaet_filter,
         'view_type': 'assigned',
         'page_title': 'Meine zugewiesenen Aktivitäten',
@@ -2601,12 +2635,12 @@ def aktivitaet_assigned_list(request):
 def aktivitaet_created_list(request):
     """
     List view for activities created by the current user.
-    Shows only non-completed and non-cancelled activities by default.
+    By default shows only non-completed activities.
     Enforces privacy: privat=True activities only visible to assigned_user and ersteller.
     """
     # Get filter parameters
     search_query = request.GET.get('q', '').strip()
-    status_filter = request.GET.get('status', '')
+    completed_filter = _parse_completed_filter(request)
     prioritaet_filter = request.GET.get('prioritaet', '')
     assigned_user_filter = request.GET.get('assigned_user', '')
     
@@ -2616,8 +2650,6 @@ def aktivitaet_created_list(request):
         'mietobjekt', 'vertrag', 'kunde'
     ).filter(
         ersteller=request.user
-    ).exclude(
-        status__in=['ERLEDIGT', 'ABGEBROCHEN']
     )
     
     # Apply privacy filter: privat=True activities only visible to assigned_user and ersteller
@@ -2634,9 +2666,13 @@ def aktivitaet_created_list(request):
             Q(beschreibung__icontains=search_query)
         )
     
-    # Apply status filter
-    if status_filter:
-        aktivitaeten = aktivitaeten.filter(status=status_filter)
+    # Apply completed filter
+    if completed_filter:
+        # Show only completed activities
+        aktivitaeten = aktivitaeten.filter(status='ERLEDIGT')
+    else:
+        # Show only non-completed activities (exclude ERLEDIGT and ABGEBROCHEN)
+        aktivitaeten = aktivitaeten.exclude(status__in=['ERLEDIGT', 'ABGEBROCHEN'])
     
     # Apply priority filter
     if prioritaet_filter:
@@ -2657,7 +2693,7 @@ def aktivitaet_created_list(request):
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
-        'status_filter': status_filter,
+        'completed_filter': completed_filter,
         'prioritaet_filter': prioritaet_filter,
         'assigned_user_filter': assigned_user_filter,
         'view_type': 'created',
