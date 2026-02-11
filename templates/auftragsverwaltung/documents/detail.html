@@ -777,6 +777,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 if (lineNetEl && response.line.line_net) {
                                     lineNetEl.value = parseFloat(response.line.line_net).toFixed(2) + ' €';
                                 }
+                                
+                                // Update unit dropdown selection
+                                const unitSelect = lineItem.querySelector('.line-unit');
+                                if (unitSelect && 'unit_id' in response.line) {
+                                    unitSelect.value = response.line.unit_id || '';
+                                }
                             }
                         }
                         
