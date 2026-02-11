@@ -261,8 +261,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle completed checkbox changes
     completedCheckbox.addEventListener('change', function() {
         const completed = this.checked;
-        saveFiltersToStorage(initialFilterMode, completed);
-        window.location.href = buildFilterUrl(initialFilterMode, completed);
+        // Get current filter mode from active button
+        const activeButton = document.querySelector('.filter-mode-btn.btn-primary');
+        const currentFilterMode = activeButton ? activeButton.dataset.filter : initialFilterMode;
+        saveFiltersToStorage(currentFilterMode, completed);
+        window.location.href = buildFilterUrl(currentFilterMode, completed);
     });
     
     // Try to load filters from localStorage
