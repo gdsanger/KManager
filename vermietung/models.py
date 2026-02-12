@@ -281,28 +281,14 @@ class MietObjekt(models.Model):
             return Vertrag.objects.filter(id__in=contract_ids)
         return Vertrag.objects.none()
     
-    def get_active_units_count(self):
+    def _calculate_own_active_units(self):
         """
-        Count the total number of units currently in active contracts.
-        
-        For objects with children: Returns sum of active units from all direct children.
-        For objects without children: Returns count from this object's contracts.
-        
-        A contract is currently active if:
-        - Status is 'active'
-        - start <= today
-        - ende is NULL or ende > today
-        
-        Works with both new VertragsObjekt relationship and legacy mietobjekt field.
+        Internal method to calculate active units from this object's contracts only.
+        Does not consider children. Used by aggregation logic.
         
         Returns:
-            int: Total number of units in active contracts
+            int: Number of active units from this object's contracts
         """
-        # If this object has children, aggregate from children
-        if self.has_children():
-            return self.get_aggregated_active_units_count()
-        
-        # Otherwise, calculate from this object's contracts
         today = timezone.now().date()
         
         # Count units via VertragsObjekt (new n:m relationship)
@@ -317,11 +303,6 @@ class MietObjekt(models.Model):
         )['total'] or 0
         
         # Also check legacy relationship during migration period
-        # Legacy contracts don't have anzahl, so we count them as 1 unit each
-        # IMPORTANT: Exclude vertraege that already have a VertragsObjekt entry
-        # to avoid double counting (since Vertrag.save() auto-creates VertragsObjekt
-        # when legacy mietobjekt field is set)
-        # Only consider VertragsObjekt entries for currently active contracts
         vertragsobjekt_vertrag_ids = VertragsObjekt.objects.filter(
             mietobjekt=self,
             vertrag__status='active',
@@ -341,6 +322,35 @@ class MietObjekt(models.Model):
         
         return units_count + legacy_count
     
+    def get_active_units_count(self):
+        """
+        Count the total number of units currently in active contracts.
+        
+        For objects with children: Returns sum of active units from all direct children.
+        For objects without children: Returns count from this object's contracts.
+        
+        A contract is currently active if:
+        - Status is 'active'
+        - start <= today
+        - ende is NULL or ende > today
+        
+        Works with both new VertragsObjekt relationship and legacy mietobjekt field.
+        
+        Returns:
+            int: Total number of units in active contracts
+        """
+        # If this object has children, aggregate from children
+        if self.has_children():
+            total = 0
+            for child in self.children.all():
+                # Recursively call get_active_units_count on each child
+                # (children will use _calculate_own_active_units if they have no children)
+                total += child.get_active_units_count()
+            return total
+        
+        # Otherwise, calculate from this object's contracts
+        return self._calculate_own_active_units()
+    
     def get_available_units_count(self):
         """
         Calculate the number of units still available for booking.
@@ -353,10 +363,14 @@ class MietObjekt(models.Model):
         """
         # If this object has children, aggregate from children
         if self.has_children():
-            return self.get_aggregated_available_units_count()
+            total = 0
+            for child in self.children.all():
+                # Recursively call get_available_units_count on each child
+                total += child.get_available_units_count()
+            return total
         
         # Otherwise, calculate from this object's values
-        active_units = self.get_active_units_count()
+        active_units = self._calculate_own_active_units()
         return max(0, self.verfuegbare_einheiten - active_units)
     
     def has_active_contracts(self):
@@ -438,39 +452,6 @@ class MietObjekt(models.Model):
             total=models.Sum('verfuegbare_einheiten')
         )['total'] or 0
         return total
-    
-    def get_aggregated_active_units_count(self):
-        """
-        Calculate the total number of active units from all direct children.
-        If this object has no children, returns its own active units count.
-        
-        Returns:
-            int: Sum of active units from all direct children, or own value if no children
-        """
-        if not self.has_children():
-            return self.get_active_units_count()
-        
-        # Sum active units from all direct children
-        total = 0
-        for child in self.children.all():
-            total += child.get_active_units_count()
-        return total
-    
-    def get_aggregated_available_units_count(self):
-        """
-        Calculate the total number of available units from all direct children.
-        If this object has no children, returns its own available units count.
-        
-        Returns:
-            int: Sum of available units from all direct children, or own value if no children
-        """
-        if not self.has_children():
-            return self.get_available_units_count()
-        
-        # Calculate from aggregated values
-        total_verfuegbare = self.get_aggregated_verfuegbare_einheiten()
-        total_active = self.get_aggregated_active_units_count()
-        return max(0, total_verfuegbare - total_active)
     
     def get_aggregated_verfuegbar_status(self):
         """

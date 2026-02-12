@@ -1333,10 +1333,10 @@ function loadAvailableObjects() {
                         <td>${escapeHtml(obj.type)}</td>
                         <td><small>${escapeHtml(obj.standort)}</small></td>
                         <td>
-                            <span class="badge bg-info">${obj.verfuegbare_einheiten} Einheiten</span>
+                            <span class="badge bg-info">${escapeHtml(String(obj.verfuegbare_einheiten))} Einheiten</span>
                         </td>
                         <td class="text-end">
-                            <button type="button" class="btn btn-sm btn-primary" data-child-id="${obj.id}" data-child-name="${escapeHtml(obj.name)}">
+                            <button type="button" class="btn btn-sm btn-primary" data-child-id="${escapeHtml(String(obj.id))}" data-child-name="${escapeHtml(obj.name)}">
                                 <i class="bi bi-check-circle"></i> Zuweisen
                             </button>
                         </td>

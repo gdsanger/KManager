@@ -1397,8 +1397,8 @@ def mietobjekt_detail(request, pk):
     # Calculate aggregated values for parents with children
     has_children = mietobjekt.has_children()
     aggregated_verfuegbare_einheiten = mietobjekt.get_aggregated_verfuegbare_einheiten()
-    aggregated_active_units = mietobjekt.get_aggregated_active_units_count()
-    aggregated_available_units = mietobjekt.get_aggregated_available_units_count()
+    aggregated_active_units = mietobjekt.get_active_units_count()
+    aggregated_available_units = mietobjekt.get_available_units_count()
     aggregated_verfuegbar = mietobjekt.get_aggregated_verfuegbar_status()
     
     context = {
