@@ -130,6 +130,20 @@ class MietObjekt(models.Model):
     def __str__(self):
         return self.name
     
+    def get_verfuegbare_einheiten_display(self):
+        """
+        Get the display value for verfuegbare_einheiten.
+        
+        For objects with children: Returns sum from all direct children.
+        For objects without children: Returns the field value.
+        
+        Returns:
+            int: Total available units (either from field or aggregated from children)
+        """
+        if self.has_children():
+            return self.get_aggregated_verfuegbare_einheiten()
+        return self.verfuegbare_einheiten
+    
     @property
     def qm_mietpreis(self):
         """
@@ -270,6 +284,10 @@ class MietObjekt(models.Model):
     def get_active_units_count(self):
         """
         Count the total number of units currently in active contracts.
+        
+        For objects with children: Returns sum of active units from all direct children.
+        For objects without children: Returns count from this object's contracts.
+        
         A contract is currently active if:
         - Status is 'active'
         - start <= today
@@ -280,6 +298,11 @@ class MietObjekt(models.Model):
         Returns:
             int: Total number of units in active contracts
         """
+        # If this object has children, aggregate from children
+        if self.has_children():
+            return self.get_aggregated_active_units_count()
+        
+        # Otherwise, calculate from this object's contracts
         today = timezone.now().date()
         
         # Count units via VertragsObjekt (new n:m relationship)
@@ -322,9 +345,17 @@ class MietObjekt(models.Model):
         """
         Calculate the number of units still available for booking.
         
+        For objects with children: Returns sum of available units from all direct children.
+        For objects without children: Returns verfuegbare_einheiten - active units.
+        
         Returns:
-            int: Number of units available (verfuegbare_einheiten - active units)
+            int: Number of units available
         """
+        # If this object has children, aggregate from children
+        if self.has_children():
+            return self.get_aggregated_available_units_count()
+        
+        # Otherwise, calculate from this object's values
         active_units = self.get_active_units_count()
         return max(0, self.verfuegbare_einheiten - active_units)
     

@@ -142,7 +142,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        <span class="badge bg-info">{{ objekt.verfuegbare_einheiten }} gesamt</span>
+                        <span class="badge bg-info">{{ objekt.get_verfuegbare_einheiten_display }} gesamt</span>
                         <br><small class="text-muted">{{ objekt.get_active_units_count }} gebucht</small>
                         <br><small class="{% if objekt.get_available_units_count > 0 %}text-success{% else %}text-danger{% endif %}">
                             {{ objekt.get_available_units_count }} verfügbar

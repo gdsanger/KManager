@@ -340,3 +340,252 @@ class MietObjektHierarchyTestCase(TestCase):
         self.apartment1.refresh_from_db()
         self.assertIsNone(self.apartment1.parent)
         self.assertNotIn(self.apartment1, self.building.children.all())
+
+
+class MietObjektAggregationTestCase(TestCase):
+    """Test case for MietObjekt aggregation of child values."""
+    
+    def setUp(self):
+        """Set up test data for aggregation tests."""
+        # Create a user with Vermietung access
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123',
+            is_staff=False
+        )
+        self.vermietung_group = Group.objects.create(name='Vermietung')
+        self.user.groups.add(self.vermietung_group)
+        
+        # Create test standort
+        self.standort = Adresse.objects.create(
+            adressen_type='STANDORT',
+            name='Standort Test',
+            strasse='Test Str. 1',
+            plz='12345',
+            ort='Teststadt',
+            land='Deutschland'
+        )
+        
+        # Create parent building
+        self.building = MietObjekt.objects.create(
+            name='Gebäude A',
+            type='GEBAEUDE',
+            beschreibung='Hauptgebäude',
+            standort=self.standort,
+            verfuegbare_einheiten=10,  # This should be ignored when children exist
+            verfuegbar=False
+        )
+        
+        # Create child apartments with different unit counts
+        self.apartment1 = MietObjekt.objects.create(
+            name='Wohnung 1',
+            type='RAUM',
+            beschreibung='Apartment 1',
+            standort=self.standort,
+            parent=self.building,
+            verfuegbare_einheiten=5,
+            verfuegbar=True
+        )
+        
+        self.apartment2 = MietObjekt.objects.create(
+            name='Wohnung 2',
+            type='RAUM',
+            beschreibung='Apartment 2',
+            standort=self.standort,
+            parent=self.building,
+            verfuegbare_einheiten=3,
+            verfuegbar=True
+        )
+        
+        self.apartment3 = MietObjekt.objects.create(
+            name='Wohnung 3',
+            type='RAUM',
+            beschreibung='Apartment 3',
+            standort=self.standort,
+            parent=self.building,
+            verfuegbare_einheiten=2,
+            verfuegbar=False  # This one is not available
+        )
+        
+        self.client = Client()
+    
+    def test_has_children(self):
+        """Test that has_children() correctly identifies parent objects."""
+        self.assertTrue(self.building.has_children())
+        self.assertFalse(self.apartment1.has_children())
+        self.assertFalse(self.apartment2.has_children())
+        self.assertFalse(self.apartment3.has_children())
+    
+    def test_aggregated_verfuegbare_einheiten(self):
+        """Test that parent aggregates verfuegbare_einheiten from children."""
+        # Building should sum from children: 5 + 3 + 2 = 10
+        self.assertEqual(self.building.get_aggregated_verfuegbare_einheiten(), 10)
+        
+        # Children should return their own values
+        self.assertEqual(self.apartment1.get_aggregated_verfuegbare_einheiten(), 5)
+        self.assertEqual(self.apartment2.get_aggregated_verfuegbare_einheiten(), 3)
+        self.assertEqual(self.apartment3.get_aggregated_verfuegbare_einheiten(), 2)
+    
+    def test_aggregated_verfuegbar_status(self):
+        """Test that parent derives verfuegbar status from children."""
+        # Building should be True because at least one child (apartment1, apartment2) is available
+        self.assertTrue(self.building.get_aggregated_verfuegbar_status())
+        
+        # Make all children unavailable
+        self.apartment1.verfuegbar = False
+        self.apartment1.save()
+        self.apartment2.verfuegbar = False
+        self.apartment2.save()
+        
+        # Now building should be False
+        self.assertFalse(self.building.get_aggregated_verfuegbar_status())
+    
+    def test_get_verfuegbare_einheiten_display(self):
+        """Test that display method returns correct values."""
+        # Parent with children should return aggregated value
+        self.assertEqual(self.building.get_verfuegbare_einheiten_display(), 10)
+        
+        # Child should return its own field value
+        self.assertEqual(self.apartment1.get_verfuegbare_einheiten_display(), 5)
+    
+    def test_get_active_units_count_with_children(self):
+        """Test that active units count aggregates from children when they exist."""
+        # Initially, no contracts, so all should be 0
+        self.assertEqual(self.building.get_active_units_count(), 0)
+        
+        # The method should aggregate from children (even though they also have 0 active)
+        self.assertEqual(self.apartment1.get_active_units_count(), 0)
+        self.assertEqual(self.apartment2.get_active_units_count(), 0)
+    
+    def test_get_available_units_count_with_children(self):
+        """Test that available units count aggregates from children when they exist."""
+        # Building should aggregate from children: (5-0) + (3-0) + (2-0) = 10
+        self.assertEqual(self.building.get_available_units_count(), 10)
+        
+        # Children should return their own calculations
+        self.assertEqual(self.apartment1.get_available_units_count(), 5)
+        self.assertEqual(self.apartment2.get_available_units_count(), 3)
+        self.assertEqual(self.apartment3.get_available_units_count(), 2)
+    
+    def test_edit_form_disables_verfuegbare_einheiten_with_children(self):
+        """Test that verfuegbare_einheiten field is disabled in edit form when object has children."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Get edit form for parent with children
+        response = self.client.get(
+            reverse('vermietung:mietobjekt_edit', args=[self.building.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that has_children flag is in context
+        self.assertTrue(response.context['has_children'])
+        
+        # Check that verfuegbare_einheiten field is disabled
+        form = response.context['form']
+        self.assertTrue(form.fields['verfuegbare_einheiten'].disabled)
+        
+        # Get edit form for child without children
+        response = self.client.get(
+            reverse('vermietung:mietobjekt_edit', args=[self.apartment1.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that has_children flag is False
+        self.assertFalse(response.context['has_children'])
+        
+        # Check that verfuegbare_einheiten field is NOT disabled
+        form = response.context['form']
+        self.assertFalse(form.fields['verfuegbare_einheiten'].disabled)
+    
+    def test_detail_view_shows_aggregated_values(self):
+        """Test that detail view shows aggregated values for parents with children."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Get detail view for parent with children
+        response = self.client.get(
+            reverse('vermietung:mietobjekt_detail', args=[self.building.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that aggregated values are in context
+        self.assertEqual(response.context['aggregated_verfuegbare_einheiten'], 10)
+        self.assertEqual(response.context['aggregated_active_units'], 0)
+        self.assertEqual(response.context['aggregated_available_units'], 10)
+        self.assertTrue(response.context['aggregated_verfuegbar'])
+        self.assertTrue(response.context['has_children'])
+    
+    def test_available_for_assignment_endpoint(self):
+        """Test the AJAX endpoint for getting available objects for assignment."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Create an object without parent
+        orphan = MietObjekt.objects.create(
+            name='Orphan',
+            type='RAUM',
+            beschreibung='No parent',
+            standort=self.standort,
+            verfuegbare_einheiten=1,
+            verfuegbar=True
+        )
+        
+        # Get available objects for assignment to building
+        response = self.client.get(
+            reverse('vermietung:mietobjekt_available_for_assignment', args=[self.building.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that orphan is in the list
+        data = response.json()
+        self.assertEqual(len(data['objects']), 1)
+        self.assertEqual(data['objects'][0]['id'], orphan.pk)
+        self.assertEqual(data['objects'][0]['name'], 'Orphan')
+        
+        # Children with parents should NOT be in the list
+        self.assertNotIn(self.apartment1.pk, [obj['id'] for obj in data['objects']])
+    
+    def test_assign_child_endpoint(self):
+        """Test the AJAX endpoint for assigning a child to a parent."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Create an object without parent
+        orphan = MietObjekt.objects.create(
+            name='Orphan',
+            type='RAUM',
+            beschreibung='No parent',
+            standort=self.standort,
+            verfuegbare_einheiten=1,
+            verfuegbar=True
+        )
+        
+        # Assign orphan to building
+        response = self.client.post(
+            reverse('vermietung:mietobjekt_assign_child', args=[self.building.pk]),
+            data='{"child_id": %d}' % orphan.pk,
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        
+        # Check response
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Check that orphan now has building as parent
+        orphan.refresh_from_db()
+        self.assertEqual(orphan.parent, self.building)
+        
+    def test_assign_child_validation(self):
+        """Test that assigning a child with a parent fails."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        # Try to assign apartment1 (which already has a parent) to building
+        response = self.client.post(
+            reverse('vermietung:mietobjekt_assign_child', args=[self.building.pk]),
+            data='{"child_id": %d}' % self.apartment1.pk,
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 400)
+        
+        # Check error message
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('bereits ein übergeordnetes Objekt', data['error'])
