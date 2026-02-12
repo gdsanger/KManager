@@ -382,6 +382,83 @@ class MietObjekt(models.Model):
                 # Move up the chain
                 current = current.parent
     
+    def has_children(self):
+        """
+        Check if this MietObjekt has any direct children.
+        
+        Returns:
+            bool: True if this object has at least one direct child, False otherwise
+        """
+        return self.children.exists()
+    
+    def get_aggregated_verfuegbare_einheiten(self):
+        """
+        Calculate the total available units from all direct children.
+        If this object has no children, returns its own verfuegbare_einheiten.
+        
+        Returns:
+            int: Sum of verfuegbare_einheiten from all direct children, or own value if no children
+        """
+        if not self.has_children():
+            return self.verfuegbare_einheiten
+        
+        # Sum verfuegbare_einheiten from all direct children
+        total = self.children.aggregate(
+            total=models.Sum('verfuegbare_einheiten')
+        )['total'] or 0
+        return total
+    
+    def get_aggregated_active_units_count(self):
+        """
+        Calculate the total number of active units from all direct children.
+        If this object has no children, returns its own active units count.
+        
+        Returns:
+            int: Sum of active units from all direct children, or own value if no children
+        """
+        if not self.has_children():
+            return self.get_active_units_count()
+        
+        # Sum active units from all direct children
+        total = 0
+        for child in self.children.all():
+            total += child.get_active_units_count()
+        return total
+    
+    def get_aggregated_available_units_count(self):
+        """
+        Calculate the total number of available units from all direct children.
+        If this object has no children, returns its own available units count.
+        
+        Returns:
+            int: Sum of available units from all direct children, or own value if no children
+        """
+        if not self.has_children():
+            return self.get_available_units_count()
+        
+        # Calculate from aggregated values
+        total_verfuegbare = self.get_aggregated_verfuegbare_einheiten()
+        total_active = self.get_aggregated_active_units_count()
+        return max(0, total_verfuegbare - total_active)
+    
+    def get_aggregated_verfuegbar_status(self):
+        """
+        Calculate the availability status from all direct children.
+        If this object has no children, returns its own verfuegbar status.
+        
+        For parents:
+        - Returns True if at least one direct child is available (verfuegbar=True)
+        - Returns False if no children are available
+        
+        Returns:
+            bool: Aggregated availability status
+        """
+        if not self.has_children():
+            return self.verfuegbar
+        
+        # Check if at least one child is available
+        return self.children.filter(verfuegbar=True).exists()
+    
     def save(self, *args, **kwargs):
         """
         Override save to set kaution default value for new objects.

@@ -45,20 +45,38 @@
                 <div class="row mb-2">
                     <div class="col-md-4 text-muted">Verfügbare Einheiten:</div>
                     <div class="col-md-8">
-                        <strong>{{ mietobjekt.verfuegbare_einheiten }} gesamt</strong>
-                        <br><small class="text-muted">{{ mietobjekt.get_active_units_count }} gebucht</small>
-                        <br><small class="{% if mietobjekt.get_available_units_count > 0 %}text-success{% else %}text-danger{% endif %}">
-                            <strong>{{ mietobjekt.get_available_units_count }} verfügbar</strong>
-                        </small>
+                        {% if has_children %}
+                            <small class="text-info"><i class="bi bi-info-circle"></i> Aus untergeordneten Objekten berechnet (readonly)</small>
+                            <br><strong>{{ aggregated_verfuegbare_einheiten }} gesamt</strong>
+                            <br><small class="text-muted">{{ aggregated_active_units }} gebucht</small>
+                            <br><small class="{% if aggregated_available_units > 0 %}text-success{% else %}text-danger{% endif %}">
+                                <strong>{{ aggregated_available_units }} verfügbar</strong>
+                            </small>
+                        {% else %}
+                            <strong>{{ mietobjekt.verfuegbare_einheiten }} gesamt</strong>
+                            <br><small class="text-muted">{{ mietobjekt.get_active_units_count }} gebucht</small>
+                            <br><small class="{% if mietobjekt.get_available_units_count > 0 %}text-success{% else %}text-danger{% endif %}">
+                                <strong>{{ mietobjekt.get_available_units_count }} verfügbar</strong>
+                            </small>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="row mb-2">
                     <div class="col-md-4 text-muted">Status:</div>
                     <div class="col-md-8">
-                        {% if mietobjekt.verfuegbar %}
-                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Verfügbar</span>
+                        {% if has_children %}
+                            <small class="text-info"><i class="bi bi-info-circle"></i> Aus untergeordneten Objekten berechnet (readonly)</small>
+                            <br>{% if aggregated_verfuegbar %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Verfügbar</span>
+                            {% else %}
+                                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Belegt</span>
+                            {% endif %}
                         {% else %}
-                            <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Belegt</span>
+                            {% if mietobjekt.verfuegbar %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Verfügbar</span>
+                            {% else %}
+                                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Belegt</span>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -96,11 +114,16 @@
 
         <!-- Hierarchy -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Hierarchie</h5>
+                {% if children %}
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#assignChildModal">
+                    <i class="bi bi-plus-circle"></i> Zuweisen
+                </button>
+                {% endif %}
             </div>
             <div class="card-body">
-                <div class="row mb-2">
+                <div class="row mb-3">
                     <div class="col-md-4 text-muted">Übergeordnetes Objekt:</div>
                     <div class="col-md-8">
                         {% if mietobjekt.parent %}
@@ -114,33 +137,85 @@
                         {% endif %}
                     </div>
                 </div>
-                <div class="row mb-2">
+                <div class="row mb-3">
                     <div class="col-md-4 text-muted">Hierarchie-Ebene:</div>
                     <div class="col-md-8">
                         Level {{ mietobjekt.get_hierarchy_level }}
                     </div>
                 </div>
-                <div class="row mb-2">
-                    <div class="col-md-4 text-muted">Untergeordnete Objekte:</div>
-                    <div class="col-md-8">
-                        {% with children=mietobjekt.children.all %}
-                            {% if children %}
-                                <ul class="list-unstyled mb-0">
+                
+                {% if children %}
+                <!-- Children Table -->
+                <div class="row">
+                    <div class="col-12">
+                        <h6 class="text-muted mb-2">Untergeordnete Objekte ({{ children.count }})</h6>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Fläche</th>
+                                        <th>Einheiten</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                                     {% for child in children %}
-                                        <li class="mb-1">
-                                            <a href="{% url 'vermietung:mietobjekt_detail' child.pk %}" class="text-decoration-none">
-                                                <i class="bi bi-building"></i> {{ child.name }}
-                                            </a>
-                                            <small class="text-muted">({{ child.get_type_display }})</small>
-                                        </li>
+                                    <tr>
+                                        <td>
+                                            <strong>{{ child.name }}</strong>
+                                            <br><small class="text-muted">{{ child.get_type_display }}</small>
+                                        </td>
+                                        <td>
+                                            {% if child.fläche %}
+                                                {{ child.fläche }} m²
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">{{ child.verfuegbare_einheiten }} gesamt</span>
+                                            <br><small class="text-muted">{{ child.get_active_units_count }} gebucht</small>
+                                            <br><small class="{% if child.get_available_units_count > 0 %}text-success{% else %}text-danger{% endif %}">
+                                                {{ child.get_available_units_count }} verfügbar
+                                            </small>
+                                        </td>
+                                        <td>
+                                            {% if child.verfuegbar %}
+                                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Verfügbar</span>
+                                            {% else %}
+                                                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Belegt</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="{% url 'vermietung:mietobjekt_detail' child.pk %}" class="btn btn-outline-info" title="Details anzeigen">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                                <a href="{% url 'vermietung:mietobjekt_edit' child.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
                                     {% endfor %}
-                                </ul>
-                            {% else %}
-                                <em class="text-muted">Keine untergeordneten Objekte</em>
-                            {% endif %}
-                        {% endwith %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
+                {% else %}
+                <div class="row">
+                    <div class="col-12">
+                        <h6 class="text-muted mb-2">Untergeordnete Objekte</h6>
+                        <p class="text-muted"><em>Keine untergeordneten Objekte</em></p>
+                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#assignChildModal">
+                            <i class="bi bi-plus-circle"></i> Objekt zuweisen
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -906,6 +981,57 @@
     {% csrf_token %}
 </form>
 
+<!-- Child Assignment Modal -->
+<div class="modal fade" id="assignChildModal" tabindex="-1" aria-labelledby="assignChildModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header">
+                <h5 class="modal-title" id="assignChildModalLabel">
+                    <i class="bi bi-diagram-3"></i> Objekt zuweisen
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">
+                    Wählen Sie ein bestehendes Mietobjekt ohne übergeordnetes Objekt aus, um es diesem Objekt zuzuweisen.
+                </p>
+                
+                <div id="assignChildError" class="alert alert-danger d-none"></div>
+                <div id="assignChildLoading" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Lädt...</span>
+                    </div>
+                </div>
+                
+                <div id="assignChildContent" class="d-none">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Typ</th>
+                                    <th>Standort</th>
+                                    <th>Einheiten</th>
+                                    <th class="text-end">Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="availableObjectsList">
+                                <!-- Will be populated via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="noObjectsMessage" class="alert alert-info d-none">
+                        <i class="bi bi-info-circle"></i> Keine verfügbaren Objekte ohne übergeordnetes Objekt gefunden.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Document Upload Modal -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -1159,5 +1285,127 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Child Assignment Modal Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    var assignChildModal = document.getElementById('assignChildModal');
+    if (assignChildModal) {
+        assignChildModal.addEventListener('show.bs.modal', function () {
+            loadAvailableObjects();
+        });
+    }
+});
+
+function loadAvailableObjects() {
+    const loading = document.getElementById('assignChildLoading');
+    const content = document.getElementById('assignChildContent');
+    const error = document.getElementById('assignChildError');
+    const noObjectsMsg = document.getElementById('noObjectsMessage');
+    const objectsList = document.getElementById('availableObjectsList');
+    
+    // Show loading, hide content and error
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+    error.classList.add('d-none');
+    
+    // Fetch available objects
+    fetch('{% url "vermietung:mietobjekt_available_for_assignment" mietobjekt.pk %}')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Netzwerk-Fehler beim Laden der verfügbaren Objekte');
+            }
+            return response.json();
+        })
+        .then(data => {
+            loading.classList.add('d-none');
+            content.classList.remove('d-none');
+            
+            if (data.objects && data.objects.length > 0) {
+                objectsList.innerHTML = '';
+                noObjectsMsg.classList.add('d-none');
+                
+                data.objects.forEach(obj => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>
+                            <strong>${escapeHtml(obj.name)}</strong>
+                        </td>
+                        <td>${escapeHtml(obj.type)}</td>
+                        <td><small>${escapeHtml(obj.standort)}</small></td>
+                        <td>
+                            <span class="badge bg-info">${obj.verfuegbare_einheiten} Einheiten</span>
+                        </td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="assignChild(${obj.id}, '${escapeHtml(obj.name)}')">
+                                <i class="bi bi-check-circle"></i> Zuweisen
+                            </button>
+                        </td>
+                    `;
+                    objectsList.appendChild(row);
+                });
+            } else {
+                objectsList.innerHTML = '';
+                noObjectsMsg.classList.remove('d-none');
+            }
+        })
+        .catch(err => {
+            loading.classList.add('d-none');
+            error.classList.remove('d-none');
+            error.textContent = err.message;
+        });
+}
+
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
+}
+
+function assignChild(childId, childName) {
+    if (!confirm(`Möchten Sie "${childName}" wirklich diesem Objekt zuweisen?`)) {
+        return;
+    }
+    
+    const error = document.getElementById('assignChildError');
+    error.classList.add('d-none');
+    
+    // Get CSRF token from the page
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch('{% url "vermietung:mietobjekt_assign_child" mietobjekt.pk %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ child_id: childId })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Fehler beim Zuweisen');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Success - reload page to show updated hierarchy
+            window.location.reload();
+        } else {
+            error.classList.remove('d-none');
+            error.textContent = data.error || 'Fehler beim Zuweisen';
+        }
+    })
+    .catch(err => {
+        error.classList.remove('d-none');
+        error.textContent = err.message;
+    });
+}
 </script>
 {% endblock %}

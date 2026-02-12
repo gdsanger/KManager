@@ -1390,6 +1390,16 @@ def mietobjekt_detail(request, pk):
     eingangsrechnungen_page = request.GET.get('eingangsrechnungen_page', 1)
     eingangsrechnungen_page_obj = eingangsrechnungen_paginator.get_page(eingangsrechnungen_page)
     
+    # Get direct children for hierarchy display
+    children = mietobjekt.children.select_related('standort').all()
+    
+    # Calculate aggregated values for parents with children
+    has_children = mietobjekt.has_children()
+    aggregated_verfuegbare_einheiten = mietobjekt.get_aggregated_verfuegbare_einheiten()
+    aggregated_active_units = mietobjekt.get_aggregated_active_units_count()
+    aggregated_available_units = mietobjekt.get_aggregated_available_units_count()
+    aggregated_verfuegbar = mietobjekt.get_aggregated_verfuegbar_status()
+    
     context = {
         'mietobjekt': mietobjekt,
         'vertraege_page_obj': vertraege_page_obj,
@@ -1399,6 +1409,13 @@ def mietobjekt_detail(request, pk):
         'aktivitaeten_page_obj': aktivitaeten_page_obj,
         'parent_zaehler': parent_zaehler,
         'eingangsrechnungen_page_obj': eingangsrechnungen_page_obj,
+        # Hierarchy data
+        'children': children,
+        'has_children': has_children,
+        'aggregated_verfuegbare_einheiten': aggregated_verfuegbare_einheiten,
+        'aggregated_active_units': aggregated_active_units,
+        'aggregated_available_units': aggregated_available_units,
+        'aggregated_verfuegbar': aggregated_verfuegbar,
     }
     
     return render(request, 'vermietung/mietobjekte/detail.html', context)
@@ -1432,6 +1449,7 @@ def mietobjekt_edit(request, pk):
     Edit an existing MietObjekt.
     """
     mietobjekt = get_object_or_404(MietObjekt, pk=pk)
+    has_children = mietobjekt.has_children()
     
     if request.method == 'POST':
         form = MietObjektForm(request.POST, instance=mietobjekt)
@@ -1442,10 +1460,16 @@ def mietobjekt_edit(request, pk):
     else:
         form = MietObjektForm(instance=mietobjekt)
     
+    # Make verfuegbare_einheiten readonly if has children
+    if has_children:
+        form.fields['verfuegbare_einheiten'].disabled = True
+        form.fields['verfuegbare_einheiten'].help_text = 'Dieses Feld wird aus den untergeordneten Objekten berechnet und kann nicht manuell bearbeitet werden.'
+    
     context = {
         'form': form,
         'mietobjekt': mietobjekt,
         'is_create': False,
+        'has_children': has_children,
     }
     
     return render(request, 'vermietung/mietobjekte/form.html', context)
@@ -2394,6 +2418,112 @@ def mietobjekt_bild_delete(request, bild_id):
         messages.error(request, f'Fehler beim Löschen des Bildes: {str(e)}')
     
     return redirect('vermietung:mietobjekt_detail', pk=mietobjekt_id)
+
+
+@vermietung_required
+def mietobjekt_available_for_assignment(request, parent_pk):
+    """
+    AJAX endpoint to get list of MietObjekte available for assignment to a parent.
+    Returns JSON list of objects that have no parent and are not the parent itself.
+    
+    Args:
+        request: HTTP request
+        parent_pk: ID of the parent MietObjekt
+    
+    Returns:
+        JSON response with list of available objects
+    """
+    from django.http import JsonResponse
+    
+    parent = get_object_or_404(MietObjekt, pk=parent_pk)
+    
+    # Get MietObjekte without a parent, excluding the current parent object
+    available_objects = MietObjekt.objects.filter(
+        parent__isnull=True
+    ).exclude(
+        pk=parent_pk
+    ).select_related('standort').order_by('name')
+    
+    # Build response data
+    data = []
+    for obj in available_objects:
+        data.append({
+            'id': obj.pk,
+            'name': obj.name,
+            'type': obj.get_type_display(),
+            'standort': f"{obj.standort.ort}, {obj.standort.strasse}",
+            'verfuegbare_einheiten': obj.verfuegbare_einheiten,
+        })
+    
+    return JsonResponse({'objects': data})
+
+
+@vermietung_required
+def mietobjekt_assign_child(request, parent_pk):
+    """
+    AJAX endpoint to assign an existing MietObjekt as a child to a parent.
+    
+    Args:
+        request: HTTP POST request with 'child_id' parameter
+        parent_pk: ID of the parent MietObjekt
+    
+    Returns:
+        JSON response with success/error status
+    """
+    from django.http import JsonResponse
+    from django.views.decorators.http import require_POST
+    import json
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    
+    try:
+        parent = get_object_or_404(MietObjekt, pk=parent_pk)
+        
+        # Get child_id from POST data
+        data = json.loads(request.body)
+        child_id = data.get('child_id')
+        
+        if not child_id:
+            return JsonResponse({'success': False, 'error': 'Keine Kind-ID angegeben'}, status=400)
+        
+        child = get_object_or_404(MietObjekt, pk=child_id)
+        
+        # Validate that child has no parent
+        if child.parent is not None:
+            return JsonResponse({
+                'success': False,
+                'error': 'Das gewählte Objekt hat bereits ein übergeordnetes Objekt'
+            }, status=400)
+        
+        # Validate that child is not the parent itself
+        if child.pk == parent.pk:
+            return JsonResponse({
+                'success': False,
+                'error': 'Ein Objekt kann nicht sein eigenes übergeordnetes Objekt sein'
+            }, status=400)
+        
+        # Assign parent
+        child.parent = parent
+        try:
+            child.full_clean()  # Validate (includes circular reference check)
+            child.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'"{child.name}" wurde erfolgreich zugewiesen'
+            })
+        except ValidationError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+            
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Unerwarteter Fehler: {str(e)}'
+        }, status=500)
 
 
 # Aktivitaet (Activity/Task) Views
