@@ -214,10 +214,10 @@
             <td class="value">{{ vertrag.ende|date:"d.m.Y" }}</td>
         </tr>
         {% endif %}
-        {% if vertrag.miete_kalt %}
+        {% if vertrag.miete %}
         <tr>
-            <td class="label">Kaltmiete:</td>
-            <td class="value">{{ vertrag.miete_kalt|floatformat:2 }} €</td>
+            <td class="label">Miete:</td>
+            <td class="value">{{ vertrag.miete|floatformat:2 }} €</td>
         </tr>
         {% endif %}
     </table>
@@ -239,16 +239,10 @@
             <td class="value">{{ mietobjekt.type_display }}</td>
         </tr>
         {% endif %}
-        {% if mietobjekt.qm %}
+        {% if mietobjekt.flaeche %}
         <tr>
             <td class="label">Wohnfläche:</td>
-            <td class="value">{{ mietobjekt.qm|floatformat:2 }} m²</td>
-        </tr>
-        {% endif %}
-        {% if mietobjekt.zimmer %}
-        <tr>
-            <td class="label">Anzahl Zimmer:</td>
-            <td class="value">{{ mietobjekt.zimmer }}</td>
+            <td class="value">{{ mietobjekt.flaeche|floatformat:2 }} m²</td>
         </tr>
         {% endif %}
         {% if mietobjekt.address_lines %}
