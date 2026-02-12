@@ -147,8 +147,8 @@ class UebergabeprotokollContextBuilder(IContextBuilder):
             'vertragsnummer': vertrag.vertragsnummer,
             'start': vertrag.start,
             'ende': vertrag.ende,
-            'miete_kalt': vertrag.miete_kalt if hasattr(vertrag, 'miete_kalt') else None,
-            'miete_warm': vertrag.miete_warm if hasattr(vertrag, 'miete_warm') else None,
+            'miete_kalt': vertrag.miete if hasattr(vertrag, 'miete') else None,
+            'miete_warm': None,  # Legacy field no longer exists
             'kaution': vertrag.kaution if hasattr(vertrag, 'kaution') else None,
         }
     
@@ -169,8 +169,8 @@ class UebergabeprotokollContextBuilder(IContextBuilder):
             'name': mietobjekt.name,
             'type': mietobjekt.type if hasattr(mietobjekt, 'type') else None,
             'type_display': mietobjekt.get_type_display() if hasattr(mietobjekt, 'get_type_display') else '',
-            'qm': mietobjekt.qm if hasattr(mietobjekt, 'qm') else None,
-            'zimmer': mietobjekt.zimmer if hasattr(mietobjekt, 'zimmer') else None,
+            'qm': mietobjekt.fläche if hasattr(mietobjekt, 'fläche') else None,
+            'zimmer': None,  # MietObjekt doesn't have a zimmer field
             'address_lines': address_lines,
         }
     
