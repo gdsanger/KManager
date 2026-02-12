@@ -81,6 +81,7 @@ urlpatterns = [
     # Aktivitaet (Activity/Task) URLs
     path('aktivitaeten/', views.aktivitaet_kanban, name='aktivitaet_kanban'),
     path('aktivitaeten/liste/', views.aktivitaet_list, name='aktivitaet_list'),
+    path('aktivitaeten/serien/', views.aktivitaet_serie_list, name='aktivitaet_serie_list'),
     path('aktivitaeten/meine-zugewiesenen/', views.aktivitaet_assigned_list, name='aktivitaet_assigned_list'),
     path('aktivitaeten/meine-erstellten/', views.aktivitaet_created_list, name='aktivitaet_created_list'),
     path('aktivitaeten/neu/', views.aktivitaet_create, name='aktivitaet_create'),

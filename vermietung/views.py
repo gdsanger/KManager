@@ -2756,6 +2756,75 @@ def aktivitaet_list(request):
 
 
 @vermietung_required
+def aktivitaet_serie_list(request):
+    """
+    List view for recurring/series activities (ist_serie=True).
+    Enforces privacy: privat=True activities only visible to assigned_user and ersteller.
+    """
+    # Get filter parameters
+    search_query = request.GET.get('q', '').strip()
+    completed_filter = _parse_completed_filter(request)
+    prioritaet_filter = request.GET.get('prioritaet', '')
+    assigned_user_filter = request.GET.get('assigned_user', '')
+    
+    # Base queryset with related data - filter for series activities only
+    aktivitaeten = Aktivitaet.objects.select_related(
+        'assigned_user', 'assigned_supplier', 'ersteller',
+        'mietobjekt', 'vertrag', 'kunde', 'bereich'
+    ).filter(ist_serie=True)
+    
+    # Apply privacy filter: privat=True activities only visible to assigned_user and ersteller
+    aktivitaeten = aktivitaeten.filter(
+        Q(privat=False) |
+        Q(privat=True, assigned_user=request.user) |
+        Q(privat=True, ersteller=request.user)
+    )
+    
+    # Apply search filter
+    if search_query:
+        aktivitaeten = aktivitaeten.filter(
+            Q(titel__icontains=search_query) |
+            Q(beschreibung__icontains=search_query)
+        )
+    
+    # Apply completed filter
+    if completed_filter:
+        # Show only completed activities
+        aktivitaeten = aktivitaeten.filter(status='ERLEDIGT')
+    else:
+        # Show only non-completed activities (status != ERLEDIGT)
+        aktivitaeten = aktivitaeten.exclude(status='ERLEDIGT')
+    
+    # Apply priority filter
+    if prioritaet_filter:
+        aktivitaeten = aktivitaeten.filter(prioritaet=prioritaet_filter)
+    
+    # Apply assigned user filter
+    if assigned_user_filter:
+        aktivitaeten = aktivitaeten.filter(assigned_user_id=assigned_user_filter)
+    
+    # Order by priority and due date
+    aktivitaeten = aktivitaeten.order_by('-prioritaet', 'faellig_am', '-created_at')
+    
+    # Pagination
+    paginator = Paginator(aktivitaeten, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'completed_filter': completed_filter,
+        'prioritaet_filter': prioritaet_filter,
+        'assigned_user_filter': assigned_user_filter,
+        'page_title': 'Serien-Aktivitäten',
+        'view_type': 'serie',
+    }
+    
+    return render(request, 'vermietung/aktivitaeten/serie_list.html', context)
+
+
+@vermietung_required
 def aktivitaet_assigned_list(request):
     """
     List view for activities assigned to the current user.
