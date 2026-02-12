@@ -803,6 +803,8 @@ def ajax_update_line(request, doc_key, pk, line_id):
         if 'short_text_2' in data:
             line.short_text_2 = data['short_text_2']
         if 'long_text' in data:
+            # Log the update for debugging Issue #377
+            logger.debug(f"Updating long_text for line {line_id}: old_value='{line.long_text}', new_value='{data['long_text']}'")
             line.long_text = data['long_text']
         if 'description' in data:
             line.description = data['description']

@@ -51,7 +51,9 @@ When HTMX triggers without `hx-vals`:
 
 ## The Fix
 
-Added the `hx-vals` attribute to explicitly send only the specific textarea's value:
+**Update (12.02.2026)**: Simplified the `hx-vals` expression by removing unnecessary fallback.
+
+### Template Change
 
 ```html
 <!-- AFTER FIX (CORRECT) -->
@@ -61,26 +63,56 @@ Added the `hx-vals` attribute to explicitly send only the specific textarea's va
           placeholder="Langtext"
           hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
           hx-trigger="change, keyup changed delay:500ms"
-          hx-vals='js:{"long_text": this.value || ""}'  <!-- ✓ Now sends only this textarea's value -->
+          hx-vals='js:{"long_text": this.value}'  <!-- ✓ Sends only this textarea's value -->
           hx-swap="none">{{ line.long_text }}</textarea>
+```
+
+### Backend Change
+
+Added logging to track long_text updates for debugging (views.py, line ~807):
+
+```python
+if 'long_text' in data:
+    # Log the update for debugging Issue #377
+    logger.debug(f"Updating long_text for line {line_id}: old_value='{line.long_text}', new_value='{data['long_text']}'")
+    line.long_text = data['long_text']
 ```
 
 ### Key Points of the Fix
 
-1. **`hx-vals='js:{"long_text": this.value || ""}'`**: Ensures only the triggered textarea's value is sent
-2. **`|| ""`**: Ensures empty textareas send an empty string instead of `undefined` (requirement from issue)
-3. **Minimal Change**: Only 1 line added to the template - no backend changes needed
+1. **`hx-vals='js:{"long_text": this.value}'`**: Ensures only the triggered textarea's value is sent
+2. **Removed `|| ""`**: Unnecessary since textarea.value is always a string (never undefined)
+3. **Added debug logging**: Helps track updates and diagnose issues
+4. **Minimal Change**: Template and minimal backend logging - no model changes needed
 
 ## Files Changed
 
-1. **templates/auftragsverwaltung/documents/detail.html** (line 465)
-   - Added `hx-vals='js:{"long_text": this.value || ""}'` attribute
+1. **templates/auftragsverwaltung/documents/detail.html** (line ~465)
+   - Updated `hx-vals` attribute: removed unnecessary `|| ""` fallback
+   - Changed from `hx-vals='js:{"long_text": this.value || ""}'`
+   - Changed to `hx-vals='js:{"long_text": this.value}'`
 
-2. **auftragsverwaltung/test_issue_377_langtext.py** (new file)
-   - Created comprehensive test suite with 5 tests
+2. **auftragsverwaltung/views.py** (line ~807)
+   - Added debug logging for long_text updates
+   - Logs old and new values to help diagnose future issues
+
+3. **auftragsverwaltung/test_issue_377_langtext.py** (existing, no changes)
+   - Existing comprehensive test suite with 5 tests
    - Tests cover first position, middle position, last position
    - Tests verify empty values save as `""` not `undefined`
    - Tests verify positions update independently
+
+## Reasoning for Changes (12.02.2026 Update)
+
+The `|| ""` fallback in the original fix was unnecessary and potentially problematic:
+
+1. **Textarea.value is always a string**: Unlike other input types, `textarea.value` is NEVER `undefined` or `null` - it's always a string (empty string at minimum)
+
+2. **Simplicity**: Removing unnecessary code reduces complexity and potential edge cases
+
+3. **Consistency**: Other fields like `short_text_1` don't use a fallback, so `long_text` shouldn't need one either
+
+4. **Debugging**: Added logging helps track what values are actually being sent and saved, making it easier to diagnose future issues
 
 ## Testing
 
