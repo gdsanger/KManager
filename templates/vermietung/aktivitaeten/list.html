@@ -255,13 +255,17 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Get the completed checkbox and form elements
     const completedCheckbox = document.getElementById('completed');
-    const searchForm = completedCheckbox.closest('form');
     
-    // Add change event listener to the "Erledigt" checkbox
-    completedCheckbox.addEventListener('change', function() {
-        // Automatically submit the form when checkbox changes
-        searchForm.submit();
-    });
+    // Only add event listener if checkbox exists
+    if (completedCheckbox) {
+        const searchForm = completedCheckbox.closest('form');
+        
+        // Add change event listener to the "Erledigt" checkbox
+        completedCheckbox.addEventListener('change', function() {
+            // Automatically submit the form when checkbox changes
+            searchForm.submit();
+        });
+    }
 });
 </script>
 {% endblock %}
