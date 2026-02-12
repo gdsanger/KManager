@@ -462,6 +462,7 @@ Neues {{ document_type.name }}
                                                           placeholder="Langtext"
                                                           hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                           hx-trigger="change, keyup changed delay:500ms"
+                                                          hx-vals='js:{"long_text": this.value || ""}'
                                                           hx-swap="none">{{ line.long_text }}</textarea>
                                             </div>
                                         </div>
