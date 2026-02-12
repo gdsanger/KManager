@@ -1,0 +1,422 @@
+{% extends "printing/base.html" %}
+
+{% block title %}Übergabeprotokoll - {{ protokoll.typ_display }} - {{ protokoll.uebergabetag|date:"d.m.Y" }}{% endblock %}
+
+{% block inline_styles %}
+/* Übergabeprotokoll-specific styles */
+.font {
+    font-family: Arial, sans-serif;
+}
+
+.header-section {
+    margin-bottom: 24pt;
+}
+
+.protocol-title {
+    font-size: 18pt;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 16pt;
+    padding-bottom: 8pt;
+    border-bottom: 2pt solid #333;
+}
+
+.section {
+    margin-bottom: 16pt;
+    page-break-inside: avoid;
+}
+
+.section-title {
+    font-size: 12pt;
+    font-weight: bold;
+    margin-bottom: 8pt;
+    padding-bottom: 4pt;
+    border-bottom: 1pt solid #666;
+    background-color: #f5f5f5;
+    padding: 6pt;
+}
+
+.info-table {
+    width: 100%;
+    margin-bottom: 12pt;
+    border-collapse: collapse;
+}
+
+.info-table td {
+    padding: 4pt 8pt;
+    font-size: 9pt;
+    border: 1pt solid #ddd;
+}
+
+.info-table .label {
+    font-weight: bold;
+    width: 40%;
+    background-color: #f9f9f9;
+}
+
+.info-table .value {
+    width: 60%;
+}
+
+.signature-section {
+    margin-top: 48pt;
+    page-break-inside: avoid;
+}
+
+.signature-box {
+    display: inline-block;
+    width: 45%;
+    vertical-align: top;
+    margin-right: 5%;
+}
+
+.signature-box:last-child {
+    margin-right: 0;
+}
+
+.signature-line {
+    border-top: 1pt solid #333;
+    margin-top: 48pt;
+    padding-top: 6pt;
+    font-size: 9pt;
+}
+
+.text-content {
+    font-size: 10pt;
+    white-space: pre-wrap;
+    line-height: 1.4;
+    padding: 8pt;
+    background-color: #fafafa;
+    border: 1pt solid #ddd;
+    min-height: 60pt;
+}
+
+.defects-content {
+    font-size: 10pt;
+    white-space: pre-wrap;
+    line-height: 1.4;
+    padding: 8pt;
+    background-color: #fff9e6;
+    border: 1pt solid #f0ad4e;
+    min-height: 80pt;
+}
+
+.meter-readings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8pt;
+}
+
+.meter-readings-table th,
+.meter-readings-table td {
+    border: 1pt solid #ddd;
+    padding: 6pt;
+    font-size: 9pt;
+    text-align: left;
+}
+
+.meter-readings-table th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+}
+
+/* Footer on every page */
+@page {
+    @bottom-center {
+        content: "Seite " counter(page) " von " counter(pages);
+        font-size: 6pt;
+        color: #666;
+    }
+}
+
+.company-footer {
+    margin-top: 24pt;
+    padding-top: 8pt;
+    border-top: 1pt solid #333;
+    page-break-inside: avoid;
+    font-size: 6pt;
+    line-height: 1.3;
+    color: #555;
+}
+
+/* First page specific header */
+@page :first {
+    margin-top: 1cm;
+}
+{% endblock %}
+
+{% block first_page_header %}
+<!-- Company Logo (top right) -->
+{% if company and company.logo_url %}
+<div style="text-align: right; margin-bottom: 12pt; margin-top: 0;">
+    <img src="{{ company.logo_url }}" alt="Logo" style="max-width: 150pt; max-height: 80pt;">
+</div>
+{% endif %}
+
+<!-- Company Header -->
+{% if company %}
+<div style="text-align: center; margin-bottom: 16pt; font-size: 10pt;">
+    <div style="font-weight: bold; font-size: 12pt;">{{ company.name }}</div>
+    {% for line in company.address_lines %}
+    <div>{{ line }}</div>
+    {% endfor %}
+    {% if company.phone %}
+    <div>Tel: {{ company.phone }}</div>
+    {% endif %}
+    {% if company.email %}
+    <div>E-Mail: {{ company.email }}</div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Protocol Title -->
+<div class="protocol-title">
+    ÜBERGABEPROTOKOLL - {{ protokoll.typ_display|upper }}
+</div>
+
+<!-- Basic Information -->
+<div class="section">
+    <div class="section-title">Allgemeine Informationen</div>
+    <table class="info-table">
+        <tr>
+            <td class="label">Typ der Übergabe:</td>
+            <td class="value">{{ protokoll.typ_display }}</td>
+        </tr>
+        <tr>
+            <td class="label">Datum der Übergabe:</td>
+            <td class="value">{{ protokoll.uebergabetag|date:"d.m.Y" }}</td>
+        </tr>
+        <tr>
+            <td class="label">Protokoll-ID:</td>
+            <td class="value">{{ protokoll.id }}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Contract Information -->
+{% if vertrag %}
+<div class="section">
+    <div class="section-title">Vertragsdaten</div>
+    <table class="info-table">
+        <tr>
+            <td class="label">Vertragsnummer:</td>
+            <td class="value">{{ vertrag.vertragsnummer }}</td>
+        </tr>
+        <tr>
+            <td class="label">Vertragsbeginn:</td>
+            <td class="value">{{ vertrag.start|date:"d.m.Y" }}</td>
+        </tr>
+        {% if vertrag.ende %}
+        <tr>
+            <td class="label">Vertragsende:</td>
+            <td class="value">{{ vertrag.ende|date:"d.m.Y" }}</td>
+        </tr>
+        {% endif %}
+        {% if vertrag.miete_kalt %}
+        <tr>
+            <td class="label">Kaltmiete:</td>
+            <td class="value">{{ vertrag.miete_kalt|floatformat:2 }} €</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Rental Object Information -->
+{% if mietobjekt %}
+<div class="section">
+    <div class="section-title">Mietobjekt</div>
+    <table class="info-table">
+        <tr>
+            <td class="label">Objektbezeichnung:</td>
+            <td class="value">{{ mietobjekt.name }}</td>
+        </tr>
+        {% if mietobjekt.type_display %}
+        <tr>
+            <td class="label">Objekttyp:</td>
+            <td class="value">{{ mietobjekt.type_display }}</td>
+        </tr>
+        {% endif %}
+        {% if mietobjekt.qm %}
+        <tr>
+            <td class="label">Wohnfläche:</td>
+            <td class="value">{{ mietobjekt.qm|floatformat:2 }} m²</td>
+        </tr>
+        {% endif %}
+        {% if mietobjekt.zimmer %}
+        <tr>
+            <td class="label">Anzahl Zimmer:</td>
+            <td class="value">{{ mietobjekt.zimmer }}</td>
+        </tr>
+        {% endif %}
+        {% if mietobjekt.address_lines %}
+        <tr>
+            <td class="label">Adresse:</td>
+            <td class="value">
+                {% for line in mietobjekt.address_lines %}
+                {{ line }}{% if not forloop.last %}<br>{% endif %}
+                {% endfor %}
+            </td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Tenant Information -->
+{% if mieter %}
+<div class="section">
+    <div class="section-title">Mieter</div>
+    <table class="info-table">
+        <tr>
+            <td class="label">Name:</td>
+            <td class="value">{{ mieter.name }}</td>
+        </tr>
+        {% if mieter.address_lines %}
+        <tr>
+            <td class="label">Adresse:</td>
+            <td class="value">
+                {% for line in mieter.address_lines %}
+                {{ line }}{% if not forloop.last %}<br>{% endif %}
+                {% endfor %}
+            </td>
+        </tr>
+        {% endif %}
+        {% if mieter.telefon %}
+        <tr>
+            <td class="label">Telefon:</td>
+            <td class="value">{{ mieter.telefon }}</td>
+        </tr>
+        {% endif %}
+        {% if mieter.email %}
+        <tr>
+            <td class="label">E-Mail:</td>
+            <td class="value">{{ mieter.email }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Meter Readings -->
+<div class="section">
+    <div class="section-title">Zählerstände</div>
+    <table class="meter-readings-table">
+        <thead>
+            <tr>
+                <th>Zählerart</th>
+                <th>Zählerstand</th>
+                <th>Einheit</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Strom</td>
+                <td>{{ protokoll.zaehlerstand_strom|default:"-" }}</td>
+                <td>kWh</td>
+            </tr>
+            <tr>
+                <td>Gas</td>
+                <td>{{ protokoll.zaehlerstand_gas|default:"-" }}</td>
+                <td>m³</td>
+            </tr>
+            <tr>
+                <td>Wasser</td>
+                <td>{{ protokoll.zaehlerstand_wasser|default:"-" }}</td>
+                <td>m³</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Keys -->
+<div class="section">
+    <div class="section-title">Schlüsselübergabe</div>
+    <table class="info-table">
+        <tr>
+            <td class="label">Anzahl übergebener Schlüssel:</td>
+            <td class="value">{{ protokoll.anzahl_schluessel }}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Remarks -->
+{% if protokoll.bemerkungen %}
+<div class="section">
+    <div class="section-title">Bemerkungen</div>
+    <div class="text-content">{{ protokoll.bemerkungen }}</div>
+</div>
+{% else %}
+<div class="section">
+    <div class="section-title">Bemerkungen</div>
+    <div class="text-content" style="min-height: 80pt;">
+        <!-- Leer zum Ausfüllen -->
+    </div>
+</div>
+{% endif %}
+
+<!-- Defects -->
+{% if protokoll.maengel %}
+<div class="section">
+    <div class="section-title">Festgestellte Mängel</div>
+    <div class="defects-content">{{ protokoll.maengel }}</div>
+</div>
+{% else %}
+<div class="section">
+    <div class="section-title">Festgestellte Mängel</div>
+    <div class="defects-content" style="min-height: 100pt;">
+        <!-- Leer zum Ausfüllen -->
+    </div>
+</div>
+{% endif %}
+
+<!-- Involved Persons -->
+<div class="section">
+    <div class="section-title">Beteiligte Personen</div>
+    <table class="info-table">
+        <tr>
+            <td class="label">Person Vermieter:</td>
+            <td class="value">{{ protokoll.person_vermieter|default:"-" }}</td>
+        </tr>
+        <tr>
+            <td class="label">Person Mieter:</td>
+            <td class="value">{{ protokoll.person_mieter|default:"-" }}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Signatures -->
+<div class="signature-section">
+    <div class="signature-box">
+        <div class="signature-line">
+            Unterschrift Vermieter
+        </div>
+        <div style="font-size: 8pt; margin-top: 4pt; color: #666;">
+            {{ protokoll.person_vermieter|default:"" }}
+        </div>
+    </div>
+    <div class="signature-box">
+        <div class="signature-line">
+            Unterschrift Mieter
+        </div>
+        <div style="font-size: 8pt; margin-top: 4pt; color: #666;">
+            {{ protokoll.person_mieter|default:"" }}
+        </div>
+    </div>
+</div>
+
+<!-- Company Footer -->
+{% if company %}
+<div class="company-footer">
+    <div style="text-align: center;">
+        {{ company.name }}
+        {% if company.address_lines.0 %} • {{ company.address_lines.0 }}{% endif %}
+        {% if company.address_lines.1 %} • {{ company.address_lines.1 }}{% endif %}
+        {% if company.phone %} • Tel: {{ company.phone }}{% endif %}
+        {% if company.email %} • E-Mail: {{ company.email }}{% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

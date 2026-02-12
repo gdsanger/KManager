@@ -75,6 +75,7 @@ urlpatterns = [
     path('uebergabeprotokolle/<int:pk>/', views.uebergabeprotokoll_detail, name='uebergabeprotokoll_detail'),
     path('uebergabeprotokolle/<int:pk>/bearbeiten/', views.uebergabeprotokoll_edit, name='uebergabeprotokoll_edit'),
     path('uebergabeprotokolle/<int:pk>/loeschen/', views.uebergabeprotokoll_delete, name='uebergabeprotokoll_delete'),
+    path('uebergabeprotokolle/<int:pk>/pdf/', views.uebergabeprotokoll_pdf, name='uebergabeprotokoll_pdf'),
     path('vertraege/<int:vertrag_pk>/uebergabeprotokoll/neu/', views.uebergabeprotokoll_create_from_vertrag, name='uebergabeprotokoll_create_from_vertrag'),
     
     # Aktivitaet (Activity/Task) URLs
