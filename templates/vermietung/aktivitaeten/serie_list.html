@@ -127,7 +127,7 @@
                         <td>
                             {% if aktivitaet.intervall_monate %}
                             <span class="badge bg-info">
-                                <i class="bi bi-calendar-week"></i> {{ aktivitaet.intervall_monate }} Monat{{ aktivitaet.intervall_monate|pluralize:"e" }}
+                                <i class="bi bi-calendar-week"></i> {{ aktivitaet.intervall_monate }} {% if aktivitaet.intervall_monate == 1 %}Monat{% else %}Monate{% endif %}
                             </span>
                             {% else %}
                             <span class="text-muted">-</span>
