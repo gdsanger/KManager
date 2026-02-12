@@ -57,6 +57,9 @@ urlpatterns = [
     path('mietobjekte/<int:pk>/', views.mietobjekt_detail, name='mietobjekt_detail'),
     path('mietobjekte/<int:pk>/bearbeiten/', views.mietobjekt_edit, name='mietobjekt_edit'),
     path('mietobjekte/<int:pk>/loeschen/', views.mietobjekt_delete, name='mietobjekt_delete'),
+    # Hierarchy management URLs
+    path('mietobjekte/<int:parent_pk>/verfuegbar-fuer-zuweisung/', views.mietobjekt_available_for_assignment, name='mietobjekt_available_for_assignment'),
+    path('mietobjekte/<int:parent_pk>/kind-zuweisen/', views.mietobjekt_assign_child, name='mietobjekt_assign_child'),
     
     # Vertrag (Contract) URLs
     path('vertraege/', views.vertrag_list, name='vertrag_list'),

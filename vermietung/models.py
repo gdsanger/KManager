@@ -130,6 +130,20 @@ class MietObjekt(models.Model):
     def __str__(self):
         return self.name
     
+    def get_verfuegbare_einheiten_display(self):
+        """
+        Get the display value for verfuegbare_einheiten.
+        
+        For objects with children: Returns sum from all direct children.
+        For objects without children: Returns the field value.
+        
+        Returns:
+            int: Total available units (either from field or aggregated from children)
+        """
+        if self.has_children():
+            return self.get_aggregated_verfuegbare_einheiten()
+        return self.verfuegbare_einheiten
+    
     @property
     def qm_mietpreis(self):
         """
@@ -267,18 +281,13 @@ class MietObjekt(models.Model):
             return Vertrag.objects.filter(id__in=contract_ids)
         return Vertrag.objects.none()
     
-    def get_active_units_count(self):
+    def _calculate_own_active_units(self):
         """
-        Count the total number of units currently in active contracts.
-        A contract is currently active if:
-        - Status is 'active'
-        - start <= today
-        - ende is NULL or ende > today
-        
-        Works with both new VertragsObjekt relationship and legacy mietobjekt field.
+        Internal method to calculate active units from this object's contracts only.
+        Does not consider children. Used by aggregation logic.
         
         Returns:
-            int: Total number of units in active contracts
+            int: Number of active units from this object's contracts
         """
         today = timezone.now().date()
         
@@ -294,11 +303,6 @@ class MietObjekt(models.Model):
         )['total'] or 0
         
         # Also check legacy relationship during migration period
-        # Legacy contracts don't have anzahl, so we count them as 1 unit each
-        # IMPORTANT: Exclude vertraege that already have a VertragsObjekt entry
-        # to avoid double counting (since Vertrag.save() auto-creates VertragsObjekt
-        # when legacy mietobjekt field is set)
-        # Only consider VertragsObjekt entries for currently active contracts
         vertragsobjekt_vertrag_ids = VertragsObjekt.objects.filter(
             mietobjekt=self,
             vertrag__status='active',
@@ -318,14 +322,55 @@ class MietObjekt(models.Model):
         
         return units_count + legacy_count
     
+    def get_active_units_count(self):
+        """
+        Count the total number of units currently in active contracts.
+        
+        For objects with children: Returns sum of active units from all direct children.
+        For objects without children: Returns count from this object's contracts.
+        
+        A contract is currently active if:
+        - Status is 'active'
+        - start <= today
+        - ende is NULL or ende > today
+        
+        Works with both new VertragsObjekt relationship and legacy mietobjekt field.
+        
+        Returns:
+            int: Total number of units in active contracts
+        """
+        # If this object has children, aggregate from children
+        if self.has_children():
+            total = 0
+            for child in self.children.all():
+                # Recursively call get_active_units_count on each child
+                # (children will use _calculate_own_active_units if they have no children)
+                total += child.get_active_units_count()
+            return total
+        
+        # Otherwise, calculate from this object's contracts
+        return self._calculate_own_active_units()
+    
     def get_available_units_count(self):
         """
         Calculate the number of units still available for booking.
         
+        For objects with children: Returns sum of available units from all direct children.
+        For objects without children: Returns verfuegbare_einheiten - active units.
+        
         Returns:
-            int: Number of units available (verfuegbare_einheiten - active units)
+            int: Number of units available
         """
-        active_units = self.get_active_units_count()
+        # If this object has children, aggregate from children
+        if self.has_children():
+            total = 0
+            for child in self.children.all():
+                # Recursively call get_available_units_count on each child
+                total += child.get_available_units_count()
+            return total
+        
+        # Otherwise, calculate from this object's values
+        active_units = self._calculate_own_active_units()
         return max(0, self.verfuegbare_einheiten - active_units)
     
     def has_active_contracts(self):
@@ -381,6 +426,50 @@ class MietObjekt(models.Model):
                 
                 # Move up the chain
                 current = current.parent
+    
+    def has_children(self):
+        """
+        Check if this MietObjekt has any direct children.
+        
+        Returns:
+            bool: True if this object has at least one direct child, False otherwise
+        """
+        return self.children.exists()
+    
+    def get_aggregated_verfuegbare_einheiten(self):
+        """
+        Calculate the total available units from all direct children.
+        If this object has no children, returns its own verfuegbare_einheiten.
+        
+        Returns:
+            int: Sum of verfuegbare_einheiten from all direct children, or own value if no children
+        """
+        if not self.has_children():
+            return self.verfuegbare_einheiten
+        
+        # Sum verfuegbare_einheiten from all direct children
+        total = self.children.aggregate(
+            total=models.Sum('verfuegbare_einheiten')
+        )['total'] or 0
+        return total
+    
+    def get_aggregated_verfuegbar_status(self):
+        """
+        Calculate the availability status from all direct children.
+        If this object has no children, returns its own verfuegbar status.
+        
+        For parents:
+        - Returns True if at least one direct child is available (verfuegbar=True)
+        - Returns False if no children are available
+        
+        Returns:
+            bool: Aggregated availability status
+        """
+        if not self.has_children():
+            return self.verfuegbar
+        
+        # Check if at least one child is available
+        return self.children.filter(verfuegbar=True).exists()
     
     def save(self, *args, **kwargs):
         """
