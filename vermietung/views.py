@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
-from django.http import JsonResponse, Http404, FileResponse
+from django.http import JsonResponse, Http404, FileResponse, HttpResponse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -34,6 +34,8 @@ from core.services.ai.supplier_matching import SupplierMatchingService
 from core.services.activity_stream import ActivityStreamService
 from .tables import EingangsrechnungTable
 from .filters import EingangsrechnungFilter
+from core.printing import PdfRenderService, get_static_base_url
+from .printing.context import UebergabeprotokollContextBuilder
 
 
 logger = logging.getLogger(__name__)
@@ -2159,6 +2161,67 @@ def uebergabeprotokoll_delete(request, pk):
         return redirect('vermietung:uebergabeprotokoll_detail', pk=pk)
     
     return redirect('vermietung:uebergabeprotokoll_list')
+
+
+@login_required
+@vermietung_required
+def uebergabeprotokoll_pdf(request, pk):
+    """
+    Generate and display PDF for an Übergabeprotokoll.
+    
+    Generates a PDF handover protocol using the Core Printing Framework and returns it
+    as an inline PDF (viewable in browser with download option).
+    
+    Args:
+        request: HTTP request
+        pk: Primary key of the Uebergabeprotokoll
+        
+    Returns:
+        HttpResponse with PDF content
+    """
+    # Get protokoll with related data
+    protokoll = get_object_or_404(
+        Uebergabeprotokoll.objects.select_related(
+            'vertrag',
+            'vertrag__mieter',
+            'vertrag__mandant',
+            'mietobjekt',
+            'mietobjekt__standort',
+            'mietobjekt__mandant'
+        ),
+        pk=pk
+    )
+    
+    # Build context using context builder
+    context_builder = UebergabeprotokollContextBuilder()
+    context = context_builder.build_context(protokoll)
+    template_name = context_builder.get_template_name(protokoll)
+    
+    # Get base URL for static assets
+    base_url = get_static_base_url()
+    
+    # Generate PDF
+    pdf_service = PdfRenderService()
+    
+    # Create filename
+    typ_short = 'Einzug' if protokoll.typ == 'EINZUG' else 'Auszug'
+    date_str = protokoll.uebergabetag.strftime('%Y-%m-%d')
+    safe_vertrag = ''.join(c if c.isalnum() or c in ('-', '_') else '_' for c in protokoll.vertrag.vertragsnummer) if protokoll.vertrag else 'unbekannt'
+    
+    result = pdf_service.render(
+        template_name=template_name,
+        context=context,
+        base_url=base_url,
+        filename=f'Uebergabeprotokoll_{typ_short}_{safe_vertrag}_{date_str}.pdf'
+    )
+    
+    # Return PDF as HTTP response (inline - opens in browser)
+    response = HttpResponse(result.pdf_bytes, content_type=result.content_type)
+    response['Content-Disposition'] = f'inline; filename="{result.filename}"'
+    
+    logger.info(f"Generated PDF for Uebergabeprotokoll {protokoll.pk} ({len(result.pdf_bytes)} bytes)")
+    
+    return response
 
 
 # Document Upload/Delete Views
