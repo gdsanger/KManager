@@ -1336,11 +1336,16 @@ function loadAvailableObjects() {
                             <span class="badge bg-info">${obj.verfuegbare_einheiten} Einheiten</span>
                         </td>
                         <td class="text-end">
-                            <button type="button" class="btn btn-sm btn-primary" onclick="assignChild(${obj.id}, '${escapeHtml(obj.name)}')">
+                            <button type="button" class="btn btn-sm btn-primary" data-child-id="${obj.id}" data-child-name="${escapeHtml(obj.name)}">
                                 <i class="bi bi-check-circle"></i> Zuweisen
                             </button>
                         </td>
                     `;
+                    // Add event listener to the button
+                    const btn = row.querySelector('button[data-child-id]');
+                    btn.addEventListener('click', function() {
+                        assignChild(this.dataset.childId, this.dataset.childName);
+                    });
                     objectsList.appendChild(row);
                 });
             } else {

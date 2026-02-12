@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.http import JsonResponse, Http404, FileResponse
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.paginator import Paginator
@@ -14,6 +14,7 @@ from decimal import Decimal
 import tempfile
 import os
 import logging
+import json
 from django_tables2 import RequestConfig
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, AktivitaetsBereich,
@@ -2433,8 +2434,6 @@ def mietobjekt_available_for_assignment(request, parent_pk):
     Returns:
         JSON response with list of available objects
     """
-    from django.http import JsonResponse
-    
     parent = get_object_or_404(MietObjekt, pk=parent_pk)
     
     # Get MietObjekte without a parent, excluding the current parent object
@@ -2459,6 +2458,7 @@ def mietobjekt_available_for_assignment(request, parent_pk):
 
 
 @vermietung_required
+@require_POST
 def mietobjekt_assign_child(request, parent_pk):
     """
     AJAX endpoint to assign an existing MietObjekt as a child to a parent.
@@ -2470,13 +2470,6 @@ def mietobjekt_assign_child(request, parent_pk):
     Returns:
         JSON response with success/error status
     """
-    from django.http import JsonResponse
-    from django.views.decorators.http import require_POST
-    import json
-    
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
-    
     try:
         parent = get_object_or_404(MietObjekt, pk=parent_pk)
         
