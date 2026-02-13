@@ -17,7 +17,7 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <form method="post" novalidate>
+        <form method="post" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
             
             {% if context_obj %}
@@ -187,10 +187,7 @@
                                 </div>
                             </div>
                              {% if not is_create %}
-        <!-- Attachments Section (outside main form to avoid nesting) -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <!-- Card: Upload Attachments -->
+      <!-- Card: Upload Attachments -->
                 <div class="card mb-4">
                     <div class="card-header">
                         <h5 class="mb-0">
@@ -198,8 +195,7 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <form method="post" enctype="multipart/form-data" action="{% url 'vermietung:aktivitaet_attachment_upload' aktivitaet.pk %}" id="uploadForm">
-                            {% csrf_token %}
+                        <div id="uploadForm">
                             <div class="mb-3">
                                 <label for="attachmentFiles" class="form-label">Dateien auswählen</label>
                                 <div class="file-drop-area" id="fileDropArea">
@@ -215,10 +211,15 @@
                                 </div>
                             </div>
                             <div id="fileList" class="mb-3"></div>
-                            <button type="submit" class="btn btn-primary" id="uploadButton">
+                            <button type="submit"
+                                    class="btn btn-primary"
+                                    id="uploadButton"
+                                    formaction="{% url 'vermietung:aktivitaet_attachment_upload' aktivitaet.pk %}"
+                                    formmethod="post"
+                                    formenctype="multipart/form-data">
                                 <i class="bi bi-upload"></i> Hochladen
                             </button>
-                        </form>
+                        </div>
                     </div>
                 </div>
 
@@ -293,10 +294,65 @@
                         {% endif %}
                     </div>
                 </div>
-            </div>
-        </div>
+      
         {% endif %}
-
+{% if is_create %}
+        <!-- Info about attachments for create mode -->
+       
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-info-circle"></i> Hinweis zu Anhängen
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-0">
+                            <i class="bi bi-lightbulb"></i>
+                            Anhänge können nach dem Anlegen der Aktivität hochgeladen werden. 
+                            Klicken Sie auf <strong>"Anlegen"</strong>, um die Aktivität zu speichern. 
+                            Sie werden dann automatisch zur Bearbeitungsseite weitergeleitet, wo Sie Dateien hochladen können.
+                        </p>
+                    </div>
+                </div>
+        {% endif %}
+        <!-- Action Buttons -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                        <div>
+                            {% if not is_create %}
+                            <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                                <i class="bi bi-trash"></i> Löschen
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex">
+                            <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                            {% if not is_create %}
+                            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#assignModal">
+                                <i class="bi bi-person-plus"></i> Zuweisen
+                            </button>
+                            {% endif %}
+                            {% if not is_create and aktivitaet.status != 'ERLEDIGT' %}
+                            <button type="button" class="btn btn-success" onclick="markAsCompleted()">
+                                <i class="bi bi-check-circle-fill"></i> Als erledigt markieren
+                            </button>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary" name="action" value="save">
+                                <i class="bi bi-check-circle"></i>
+                                {% if is_create %}Anlegen{% else %}Speichern{% endif %}
+                            </button>
+                            {% if not is_create %}
+                            <button type="submit" class="btn btn-outline-primary" name="action" value="save_and_close">
+                                <i class="bi bi-check-circle"></i> Speichern & Schließen
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
      <!-- Navigation Tabs -->
             
 
@@ -470,44 +526,7 @@
 
            
 
-            <!-- Action Buttons -->
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-between">
-                        <div>
-                            {% if not is_create %}
-                            <button type="button" class="btn btn-danger" onclick="confirmDelete()">
-                                <i class="bi bi-trash"></i> Löschen
-                            </button>
-                            {% endif %}
-                        </div>
-                        <div class="d-grid gap-2 d-md-flex">
-                            <a href="{% url 'vermietung:aktivitaet_kanban' %}" class="btn btn-secondary">
-                                <i class="bi bi-x-circle"></i> Abbrechen
-                            </a>
-                            {% if not is_create %}
-                            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#assignModal">
-                                <i class="bi bi-person-plus"></i> Zuweisen
-                            </button>
-                            {% endif %}
-                            {% if not is_create and aktivitaet.status != 'ERLEDIGT' %}
-                            <button type="button" class="btn btn-success" onclick="markAsCompleted()">
-                                <i class="bi bi-check-circle-fill"></i> Als erledigt markieren
-                            </button>
-                            {% endif %}
-                            <button type="submit" class="btn btn-primary" name="action" value="save">
-                                <i class="bi bi-check-circle"></i>
-                                {% if is_create %}Anlegen{% else %}Speichern{% endif %}
-                            </button>
-                            {% if not is_create %}
-                            <button type="submit" class="btn btn-outline-primary" name="action" value="save_and_close">
-                                <i class="bi bi-check-circle"></i> Speichern & Schließen
-                            </button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
+            
         </form>
 
         {% if not is_create %}
@@ -594,28 +613,7 @@
         </script>
         {% endif %}
         
-        {% if is_create %}
-        <!-- Info about attachments for create mode -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card border-info">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">
-                            <i class="bi bi-info-circle"></i> Hinweis zu Anhängen
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-0">
-                            <i class="bi bi-lightbulb"></i>
-                            Anhänge können nach dem Anlegen der Aktivität hochgeladen werden. 
-                            Klicken Sie auf <strong>"Anlegen"</strong>, um die Aktivität zu speichern. 
-                            Sie werden dann automatisch zur Bearbeitungsseite weitergeleitet, wo Sie Dateien hochladen können.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
+        
     </div>
 </div>
 
