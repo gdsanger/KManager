@@ -1,5 +1,4 @@
 {% extends "vermietung/vermietung_base.html" %}
-{% load humanize %}
 
 {% block title %}
 {% if is_create %}Neue Aktivität{% else %}Aktivität bearbeiten{% endif %} - K-Manager v1.0
@@ -423,15 +422,7 @@
                                                         <i class="bi bi-file-earmark"></i>
                                                         {{ attachment.original_filename }}
                                                     </td>
-                                                    <td>
-                                                        {% if attachment.file_size < 1024 %}
-                                                        {{ attachment.file_size }} B
-                                                        {% elif attachment.file_size < 1048576 %}
-                                                        {{ attachment.file_size|filesizeformat }}
-                                                        {% else %}
-                                                        {{ attachment.file_size|filesizeformat }}
-                                                        {% endif %}
-                                                    </td>
+                                                    <td>{{ attachment.file_size|filesizeformat }}</td>
                                                     <td>
                                                         <small class="text-muted">{{ attachment.mime_type }}</small>
                                                     </td>

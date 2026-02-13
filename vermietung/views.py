@@ -2564,6 +2564,8 @@ def serve_aktivitaet_attachment(request, attachment_id):
     Raises:
         Http404: If attachment not found or file doesn't exist
     """
+    from django.utils.http import quote
+    
     # Get attachment from database
     attachment = get_object_or_404(AktivitaetAttachment, pk=attachment_id)
     
@@ -2582,8 +2584,10 @@ def serve_aktivitaet_attachment(request, attachment_id):
         as_attachment=False
     )
     
-    # Set filename for download (in case user saves)
-    response['Content-Disposition'] = f'inline; filename="{attachment.original_filename}"'
+    # Set filename for download (in case user saves) - properly escaped
+    # quote() escapes special characters to prevent header injection
+    safe_filename = quote(attachment.original_filename)
+    response['Content-Disposition'] = f'inline; filename="{safe_filename}"'
     
     return response
 
