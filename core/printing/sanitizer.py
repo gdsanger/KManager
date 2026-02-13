@@ -14,8 +14,8 @@ def sanitize_html(html_content: str) -> str:
     
     Reuses the same allowlist as the Quill editor fields for consistency.
     
-    Allowed tags: p, br, strong, em, u, ul, ol, li, a
-    Allowed attributes: a[href, target, rel]
+    Allowed tags: p, br, strong, em, u, ul, ol, li, a, img, h1-h3, table elements, div, span
+    Allowed attributes: a[href, target, rel], img[src, alt, width, height], table attributes
     
     Args:
         html_content: Raw HTML content to sanitize
@@ -28,7 +28,7 @@ def sanitize_html(html_content: str) -> str:
         'p', 'br', 'strong', 'em', 'u',
         'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 
         'table', 'thead', 'tbody', 'tr', 'th', 'td',
-        'div', 'span'
+        'div', 'span', 'img'
     ]
     
     # Define allowed attributes for specific tags
@@ -39,6 +39,7 @@ def sanitize_html(html_content: str) -> str:
         'table': ['class'],
         'td': ['colspan', 'rowspan'],
         'th': ['colspan', 'rowspan'],
+        'img': ['src', 'alt', 'width', 'height'],
     }
     
     # Sanitize the HTML content

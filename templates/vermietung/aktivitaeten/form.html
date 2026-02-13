@@ -1,4 +1,5 @@
 {% extends "vermietung/vermietung_base.html" %}
+{% load static %}
 
 {% block title %}
 {% if is_create %}Neue Aktivität{% else %}Aktivität bearbeiten{% endif %} - K-Manager v1.0
@@ -6,6 +7,24 @@
 
 {% block page_title %}
 {% if is_create %}Neue Aktivität anlegen{% else %}Aktivität bearbeiten{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<!-- Quill CSS -->
+<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
+<style>
+    #beschreibungEditor {
+        height: 300px;
+        background-color: var(--bs-body-bg);
+    }
+    .ql-toolbar {
+        background-color: var(--bs-secondary-bg);
+        border-color: var(--bs-border-color);
+    }
+    .ql-container {
+        border-color: var(--bs-border-color);
+    }
+</style>
 {% endblock %}
 
 {% block page_actions %}
@@ -67,6 +86,9 @@
                                         <label for="{{ form.beschreibung.id_for_label }}" class="form-label">
                                             {{ form.beschreibung.label }}
                                         </label>
+                                        <!-- Quill Editor Container -->
+                                        <div id="beschreibungEditor"></div>
+                                        <!-- Hidden textarea for form submission -->
                                         {{ form.beschreibung }}
                                         {% if form.beschreibung.errors %}
                                         <div class="invalid-feedback d-block">
@@ -907,6 +929,159 @@ document.addEventListener('DOMContentLoaded', function() {
             const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
+    }
+});
+</script>
+
+<!-- Quill JS -->
+<script src="{% static 'quill/quill.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Quill editor with toolbar configuration
+    const quill = new Quill('#beschreibungEditor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                ['bold', 'italic', 'underline'],        // toggled buttons
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],  // lists
+                ['link'],                                // link
+                ['clean']                                // remove formatting
+            ]
+        },
+        placeholder: 'Beschreibung eingeben...'
+    });
+    
+    // Load initial content from textarea if exists
+    const hiddenTextarea = document.getElementById('{{ form.beschreibung.id_for_label }}');
+    const initialContent = hiddenTextarea.value || '';
+    if (initialContent) {
+        // Set HTML content in Quill
+        quill.root.innerHTML = initialContent;
+    }
+    
+    // Update hidden field on text change
+    quill.on('text-change', function() {
+        hiddenTextarea.value = quill.root.innerHTML;
+    });
+    
+    // Set initial value in hidden field
+    hiddenTextarea.value = quill.root.innerHTML;
+    
+    // Handle clipboard image paste
+    quill.root.addEventListener('paste', function(e) {
+        const clipboardData = e.clipboardData || window.clipboardData;
+        const items = clipboardData.items;
+        
+        if (!items) return;
+        
+        // Check for image in clipboard
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                e.preventDefault();
+                
+                const blob = items[i].getAsFile();
+                const reader = new FileReader();
+                
+                reader.onload = function(event) {
+                    const base64Data = event.target.result;
+                    
+                    // Insert image temporarily with data URI
+                    const range = quill.getSelection(true);
+                    quill.insertEmbed(range.index, 'image', base64Data);
+                    quill.setSelection(range.index + 1);
+                    
+                    // Upload image to server
+                    uploadClipboardImage(blob, range.index);
+                };
+                
+                reader.readAsDataURL(blob);
+                break;
+            }
+        }
+    });
+    
+    // Function to upload clipboard image to server
+    function uploadClipboardImage(blob, editorIndex) {
+        {% if not is_create %}
+        // Get aktivitaet ID from URL
+        const aktivitaetId = {{ form.instance.pk|default:"null" }};
+        
+        if (!aktivitaetId) {
+            console.error('Cannot upload image: Aktivität must be saved first');
+            alert('Bitte speichern Sie die Aktivität zuerst, bevor Sie Bilder einfügen.');
+            return;
+        }
+        
+        // Create form data
+        const formData = new FormData();
+        
+        // Generate filename with timestamp
+        const timestamp = new Date().getTime();
+        const filename = `clipboard-image-${timestamp}.png`;
+        formData.append('file', blob, filename);
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Upload to server via API endpoint
+        fetch(`{% url 'vermietung:aktivitaet_attachment_upload_api' pk=form.instance.pk %}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Replace the data URI with the server URL
+                const delta = quill.getContents();
+                const imageIndex = findImageIndex(delta, editorIndex);
+                
+                if (imageIndex !== -1) {
+                    // Delete the temporary data URI image
+                    quill.deleteText(imageIndex, 1);
+                    // Insert the permanent server-hosted image
+                    quill.insertEmbed(imageIndex, 'image', data.url);
+                }
+                
+                console.log('Image uploaded successfully:', data.filename);
+            } else {
+                console.error('Error uploading image:', data.error);
+                alert('Fehler beim Hochladen des Bildes: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error uploading image:', error);
+            alert('Fehler beim Hochladen des Bildes. Bitte versuchen Sie es erneut.');
+        });
+        {% else %}
+        // For new activities, show a message that the activity must be saved first
+        alert('Bitte speichern Sie die Aktivität zuerst, bevor Sie Bilder einfügen.');
+        // Remove the temporary image
+        setTimeout(function() {
+            quill.deleteText(editorIndex, 1);
+        }, 100);
+        {% endif %}
+    }
+    
+    // Helper function to find image index in delta
+    function findImageIndex(delta, nearIndex) {
+        let index = 0;
+        for (let i = 0; i < delta.ops.length; i++) {
+            const op = delta.ops[i];
+            if (op.insert && op.insert.image) {
+                if (index >= nearIndex - 5 && index <= nearIndex + 5) {
+                    return index;
+                }
+            }
+            if (typeof op.insert === 'string') {
+                index += op.insert.length;
+            } else {
+                index += 1;
+            }
+        }
+        return -1;
     }
 });
 </script>
