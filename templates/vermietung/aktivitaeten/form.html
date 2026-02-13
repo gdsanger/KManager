@@ -593,6 +593,29 @@
             }
         </script>
         {% endif %}
+        
+        {% if is_create %}
+        <!-- Info about attachments for create mode -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-info-circle"></i> Hinweis zu Anhängen
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-0">
+                            <i class="bi bi-lightbulb"></i>
+                            Anhänge können nach dem Anlegen der Aktivität hochgeladen werden. 
+                            Klicken Sie auf <strong>"Anlegen"</strong>, um die Aktivität zu speichern. 
+                            Sie werden dann automatisch zur Bearbeitungsseite weitergeleitet, wo Sie Dateien hochladen können.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
