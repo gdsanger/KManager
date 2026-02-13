@@ -2326,6 +2326,280 @@ class Aktivitaet(models.Model):
         return "Kein Kontext"
 
 
+# Dangerous/executable file extensions to block for attachments
+BLOCKED_ATTACHMENT_EXTENSIONS = [
+    '.exe', '.js', '.bat', '.cmd', '.com', '.msi', '.jar', '.ps1', 
+    '.sh', '.vbs', '.php', '.py', '.rb', '.pl', '.apk', '.scr', '.vbe',
+    '.jse', '.wsf', '.wsh', '.cpl', '.dll', '.pif', '.application',
+]
+
+# Max file size for attachments (5 MB as per requirements)
+MAX_ATTACHMENT_FILE_SIZE = 5 * 1024 * 1024
+
+
+def validate_attachment_file_size(file):
+    """Validate that attachment file size does not exceed maximum allowed size."""
+    if file.size > MAX_ATTACHMENT_FILE_SIZE:
+        raise ValidationError(
+            f'Die Dateigröße ({file.size / (1024*1024):.2f} MB) überschreitet '
+            f'das Maximum von {MAX_ATTACHMENT_FILE_SIZE / (1024*1024):.0f} MB.'
+        )
+
+
+def validate_attachment_file_type(file):
+    """
+    Validate that file type is not in the blocked dangerous/executable files list.
+    
+    Returns:
+        str: The detected MIME type
+    
+    Raises:
+        ValidationError: If file type is blocked
+    """
+    # Check file extension against blocklist
+    filename = file.name.lower()
+    for blocked_ext in BLOCKED_ATTACHMENT_EXTENSIONS:
+        if filename.endswith(blocked_ext):
+            raise ValidationError(
+                f'Dateityp "{blocked_ext}" ist nicht erlaubt. '
+                f'Ausführbare und potenziell gefährliche Dateien sind blockiert.'
+            )
+    
+    # Read file content to detect MIME type
+    file.seek(0)
+    mime = magic.from_buffer(file.read(2048), mime=True)
+    file.seek(0)
+    
+    # Additional MIME type blocklist (executable types)
+    blocked_mime_types = [
+        'application/x-msdownload',  # .exe
+        'application/x-executable',
+        'application/x-dosexec',
+        'application/x-msdos-program',
+        'application/x-sh',  # shell scripts
+        'application/x-bat',
+        'application/x-java-archive',  # .jar
+        'text/x-python',  # .py
+        'text/x-php',  # .php
+        'application/x-httpd-php',
+    ]
+    
+    if mime in blocked_mime_types:
+        raise ValidationError(
+            f'Dateityp "{mime}" ist nicht erlaubt. '
+            f'Ausführbare und potenziell gefährliche Dateien sind blockiert.'
+        )
+    
+    return mime
+
+
+class AktivitaetAttachment(models.Model):
+    """
+    Attachment model for Aktivitaet (Activity).
+    
+    Attachments are stored in the filesystem under /data/vermietung/aktivitaet/<id>/attachments/
+    Metadata is stored in the database.
+    
+    Unlike MietObjektBild, this model handles general files (not just images),
+    so no thumbnail generation is performed.
+    """
+    # Foreign key to Aktivitaet
+    aktivitaet = models.ForeignKey(
+        Aktivitaet,
+        on_delete=models.CASCADE,
+        related_name='attachments',
+        verbose_name="Aktivität"
+    )
+    
+    # Original filename
+    original_filename = models.CharField(
+        max_length=255,
+        verbose_name="Originaler Dateiname",
+        help_text="Der ursprüngliche Dateiname beim Upload"
+    )
+    
+    # Storage path (relative to VERMIETUNG_DOCUMENTS_ROOT)
+    storage_path = models.CharField(
+        max_length=500,
+        verbose_name="Speicherpfad",
+        help_text="Relativer Pfad zur Datei"
+    )
+    
+    # File metadata
+    file_size = models.IntegerField(
+        verbose_name="Dateigröße",
+        help_text="Dateigröße in Bytes"
+    )
+    
+    mime_type = models.CharField(
+        max_length=100,
+        verbose_name="MIME-Type",
+        help_text="MIME-Type der Datei"
+    )
+    
+    # Upload metadata
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Hochgeladen am",
+        help_text="Zeitpunkt des Uploads"
+    )
+    
+    uploaded_by = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Hochgeladen von",
+        help_text="Benutzer, der die Datei hochgeladen hat"
+    )
+    
+    class Meta:
+        verbose_name = "Aktivitäts-Anhang"
+        verbose_name_plural = "Aktivitäts-Anhänge"
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        """String representation of the attachment."""
+        return f"{self.original_filename} ({self.aktivitaet.titel})"
+    
+    def get_absolute_path(self):
+        """Get the absolute filesystem path to the attachment."""
+        return Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / self.storage_path
+    
+    def delete(self, *args, **kwargs):
+        """Override delete to also remove the file from filesystem."""
+        # Delete file
+        file_path = self.get_absolute_path()
+        if file_path.exists():
+            file_path.unlink()
+        
+        # Try to remove empty parent directories
+        try:
+            parent = file_path.parent
+            doc_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
+            # Only clean up directories within document root
+            while parent != doc_root and parent.is_relative_to(doc_root):
+                if not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
+                else:
+                    break
+        except (OSError, RuntimeError, ValueError):
+            pass  # Ignore errors when cleaning up directories
+        
+        super().delete(*args, **kwargs)
+    
+    @staticmethod
+    def generate_storage_path(aktivitaet_id, filename):
+        """
+        Generate storage path for attachment.
+        
+        Path format: aktivitaet/<id>/attachments/<uuid>_<filename>
+        
+        Args:
+            aktivitaet_id: ID of the Aktivitaet
+            filename: Name of the file
+        
+        Returns:
+            str: The storage path
+        """
+        # Generate unique filename to prevent collisions
+        unique_id = uuid.uuid4().hex[:8]
+        safe_filename = f"{unique_id}_{filename}"
+        
+        storage_path = f"aktivitaet/{aktivitaet_id}/attachments/{safe_filename}"
+        
+        return storage_path
+    
+    @staticmethod
+    def save_uploaded_file(uploaded_file, aktivitaet_id, user=None):
+        """
+        Save an uploaded file as attachment.
+        
+        Args:
+            uploaded_file: Django UploadedFile object
+            aktivitaet_id: ID of the Aktivitaet
+            user: User who uploaded the file (optional)
+        
+        Returns:
+            AktivitaetAttachment instance
+        
+        Raises:
+            ValidationError: If file validation fails
+        """
+        # Validate file size
+        validate_attachment_file_size(uploaded_file)
+        
+        # Validate file type and get MIME type
+        mime_type = validate_attachment_file_type(uploaded_file)
+        
+        # Generate storage path
+        storage_path = AktivitaetAttachment.generate_storage_path(
+            aktivitaet_id,
+            uploaded_file.name
+        )
+        
+        # Create absolute path
+        absolute_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / storage_path
+        
+        # Create directory if it doesn't exist
+        try:
+            absolute_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Created directory: {absolute_path.parent}")
+        except Exception as e:
+            logger.error(
+                f"Failed to create directory {absolute_path.parent}: {e}",
+                exc_info=True
+            )
+            raise ValidationError(
+                f'Fehler beim Erstellen des Verzeichnisses: {e}'
+            )
+        
+        # Save file
+        try:
+            with open(absolute_path, 'wb') as destination:
+                for chunk in uploaded_file.chunks():
+                    destination.write(chunk)
+            logger.debug(f"Saved attachment to: {absolute_path}")
+        except Exception as e:
+            logger.error(
+                f"Failed to save file {absolute_path}: {e}",
+                exc_info=True
+            )
+            raise ValidationError(
+                f'Fehler beim Speichern der Datei: {e}'
+            )
+        
+        # Create database entry
+        try:
+            attachment = AktivitaetAttachment(
+                aktivitaet_id=aktivitaet_id,
+                original_filename=uploaded_file.name,
+                storage_path=storage_path,
+                file_size=uploaded_file.size,
+                mime_type=mime_type,
+                uploaded_by=user
+            )
+            attachment.save()
+            logger.info(
+                f"Successfully uploaded attachment '{uploaded_file.name}' "
+                f"for Aktivitaet {aktivitaet_id}"
+            )
+        except Exception as e:
+            # Clean up file if database save fails
+            logger.error(
+                f"Failed to save database record for {uploaded_file.name}: {e}",
+                exc_info=True
+            )
+            if absolute_path.exists():
+                absolute_path.unlink()
+            raise ValidationError(
+                f'Fehler beim Speichern der Datenbank-Einträge: {e}'
+            )
+        
+        return attachment
+
+
 # Meter type choices
 ZAEHLER_TYPEN = [
     ('STROM', 'Strom'),

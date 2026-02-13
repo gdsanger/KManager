@@ -924,6 +924,77 @@ class MietObjektBildUploadForm(forms.Form):
         return bilder
 
 
+class AktivitaetAttachmentUploadForm(forms.Form):
+    """
+    Form for uploading attachments to Aktivitaet.
+    Supports multiple file upload.
+    """
+    
+    attachments = forms.FileField(
+        label='Anhänge',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+        }),
+        help_text='Maximale Größe: 5 MB pro Datei. Ausführbare Dateien sind nicht erlaubt. Sie können mehrere Dateien gleichzeitig hochladen.',
+        required=True
+    )
+    
+    def __init__(self, *args, aktivitaet=None, user=None, **kwargs):
+        """
+        Initialize form with aktivitaet and user.
+        
+        Args:
+            aktivitaet: Aktivitaet instance to upload attachments for
+            user: User who is uploading the attachments
+        """
+        super().__init__(*args, **kwargs)
+        self.aktivitaet = aktivitaet
+        self.user = user
+        # Set multiple attribute on the widget after initialization
+        self.fields['attachments'].widget.attrs['multiple'] = True
+    
+    def clean_attachments(self):
+        """Validate that files are uploaded."""
+        # Note: Multiple files are handled in the view
+        return self.cleaned_data.get('attachments')
+    
+    def save(self, files):
+        """
+        Save uploaded attachments.
+        
+        Args:
+            files: List of uploaded files
+        
+        Returns:
+            List of created AktivitaetAttachment instances
+        """
+        from .models import AktivitaetAttachment
+        
+        attachments = []
+        errors = []
+        
+        for uploaded_file in files:
+            try:
+                attachment = AktivitaetAttachment.save_uploaded_file(
+                    uploaded_file,
+                    self.aktivitaet.pk,
+                    self.user
+                )
+                attachments.append(attachment)
+            except ValidationError as e:
+                # Collect errors but continue with other files
+                error_message = str(e)
+                if hasattr(e, 'messages') and e.messages:
+                    error_message = '; '.join(e.messages) if isinstance(e.messages, list) else str(e.messages)
+                errors.append(f'{uploaded_file.name}: {error_message}')
+        
+        # If there were errors, raise them
+        if errors:
+            raise ValidationError(errors)
+        
+        return attachments
+
+
 class AktivitaetForm(forms.ModelForm):
     """
     Form for creating/editing Aktivitaet (activities/tasks).
