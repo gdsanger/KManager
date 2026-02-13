@@ -823,8 +823,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const dt = e.dataTransfer;
             const files = dt.files;
             
-            // Set the files to the input element
-            fileInput.files = files;
+            // Set the files to the input element using DataTransfer for cross-browser compatibility
+            try {
+                const dataTransfer = new DataTransfer();
+                Array.from(files).forEach(file => dataTransfer.items.add(file));
+                fileInput.files = dataTransfer.files;
+            } catch (error) {
+                // Fallback for browsers that don't support DataTransfer
+                // In this case, we'll just display the files but they won't be in the input
+                console.warn('DataTransfer not supported, files may not upload correctly');
+            }
             
             // Trigger the change event to display file names
             const event = new Event('change', { bubbles: true });
@@ -866,9 +874,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function formatFileSize(bytes) {
             if (bytes === 0) return '0 Bytes';
+            if (bytes < 1) return '< 1 Byte';
+            
             const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
     }
