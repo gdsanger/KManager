@@ -295,6 +295,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
      <!-- Navigation Tabs -->
             
@@ -509,8 +510,7 @@
             </div>
         </form>
 
-       
-
+        {% if not is_create %}
         <!-- Hidden Forms for Delete and Complete Actions -->
         <form id="deleteForm" method="post" action="{% url 'vermietung:aktivitaet_delete' aktivitaet.pk %}" style="display: none;">
             {% csrf_token %}
