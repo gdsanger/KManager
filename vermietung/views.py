@@ -2593,6 +2593,64 @@ def serve_aktivitaet_attachment(request, attachment_id):
 
 
 @vermietung_required
+@require_POST
+def aktivitaet_attachment_upload_api(request, pk):
+    """
+    API endpoint for uploading attachments via AJAX (e.g., from clipboard paste).
+    Returns JSON response with attachment details.
+    
+    Args:
+        request: HTTP request
+        pk: ID of the Aktivitaet
+    
+    Returns:
+        JsonResponse with attachment ID and URL, or error message
+    """
+    aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    
+    # Get file from request
+    if 'file' not in request.FILES:
+        return JsonResponse({
+            'success': False,
+            'error': 'Keine Datei gefunden'
+        }, status=400)
+    
+    uploaded_file = request.FILES['file']
+    
+    try:
+        # Use the existing save method from AktivitaetAttachment
+        attachment = AktivitaetAttachment.save_uploaded_file(
+            uploaded_file,
+            aktivitaet.pk,
+            request.user
+        )
+        
+        # Return success with attachment details
+        return JsonResponse({
+            'success': True,
+            'attachment_id': attachment.pk,
+            'url': reverse('vermietung:aktivitaet_attachment_serve', kwargs={'attachment_id': attachment.pk}),
+            'filename': attachment.original_filename
+        })
+    except ValidationError as e:
+        # Extract error message from ValidationError
+        if hasattr(e, 'messages') and e.messages:
+            error_message = '; '.join(e.messages) if isinstance(e.messages, list) else str(e.messages)
+        else:
+            error_message = str(e)
+        return JsonResponse({
+            'success': False,
+            'error': error_message
+        }, status=400)
+    except Exception as e:
+        logger.error(f'Error uploading attachment via API: {str(e)}')
+        return JsonResponse({
+            'success': False,
+            'error': f'Fehler beim Hochladen: {str(e)}'
+        }, status=500)
+
+
+@vermietung_required
 @require_http_methods(["POST"])
 def aktivitaet_attachment_delete(request, attachment_id):
     """

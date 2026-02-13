@@ -1023,7 +1023,7 @@ class AktivitaetForm(forms.ModelForm):
         ]
         widgets = {
             'titel': forms.TextInput(attrs={'class': 'form-control'}),
-            'beschreibung': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'beschreibung': forms.Textarea(attrs={'style': 'display: none;', 'aria-hidden': 'true'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
             'prioritaet': forms.Select(attrs={'class': 'form-select'}),
             'faellig_am': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
@@ -1152,8 +1152,15 @@ class AktivitaetForm(forms.ModelForm):
         """
         Validate the activity data.
         Context fields are now all optional - no validation needed.
+        Sanitizes HTML content in beschreibung field.
         """
         cleaned_data = super().clean()
+        
+        # Sanitize beschreibung HTML content if present
+        beschreibung = cleaned_data.get('beschreibung')
+        if beschreibung:
+            from core.printing.sanitizer import sanitize_html
+            cleaned_data['beschreibung'] = sanitize_html(beschreibung)
         
         # If context was provided in __init__, ensure it's set
         if self.context_type and self.context_id:

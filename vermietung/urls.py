@@ -17,6 +17,7 @@ urlpatterns = [
     
     # Aktivitaet Attachment URLs
     path('aktivitaeten/<int:pk>/anhaenge/hochladen/', views.aktivitaet_attachment_upload, name='aktivitaet_attachment_upload'),
+    path('aktivitaeten/<int:pk>/anhaenge/upload-api/', views.aktivitaet_attachment_upload_api, name='aktivitaet_attachment_upload_api'),
     path('aktivitaeten/anhaenge/<int:attachment_id>/', views.serve_aktivitaet_attachment, name='aktivitaet_attachment_serve'),
     path('aktivitaeten/anhaenge/<int:attachment_id>/loeschen/', views.aktivitaet_attachment_delete, name='aktivitaet_attachment_delete'),
     
