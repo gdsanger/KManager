@@ -3144,16 +3144,19 @@ def aktivitaet_create(request, context_type=None, context_id=None):
                     description=f'Status: {aktivitaet.get_status_display()}'
                 )
                 
-                messages.success(
-                    request,
-                    f'Aktivität "{aktivitaet.titel}" wurde erfolgreich angelegt.'
-                )
-                
                 # If redirecting to context detail, pass the context_id
                 if context_id:
+                    messages.success(
+                        request,
+                        f'Aktivität "{aktivitaet.titel}" wurde erfolgreich angelegt.'
+                    )
                     return redirect(redirect_url, pk=context_id)
                 else:
                     # Redirect to edit page to allow adding attachments
+                    messages.success(
+                        request,
+                        f'Aktivität "{aktivitaet.titel}" wurde erfolgreich angelegt. Sie können jetzt Anhänge hochladen.'
+                    )
                     return redirect('vermietung:aktivitaet_edit', pk=aktivitaet.pk)
             except ValidationError as e:
                 for field, errors in e.message_dict.items():
@@ -3233,7 +3236,13 @@ def aktivitaet_edit(request, pk):
                     request,
                     f'Aktivität "{aktivitaet.titel}" wurde erfolgreich aktualisiert.'
                 )
-                return redirect('vermietung:aktivitaet_kanban')
+                
+                # Check if user clicked "Save and Close" button
+                if request.POST.get('action') == 'save_and_close':
+                    return redirect('vermietung:aktivitaet_kanban')
+                else:
+                    # Stay on edit page to allow further edits or file uploads
+                    return redirect('vermietung:aktivitaet_edit', pk=aktivitaet.pk)
             except ValidationError as e:
                 for field, errors in e.message_dict.items():
                     for error in errors:
