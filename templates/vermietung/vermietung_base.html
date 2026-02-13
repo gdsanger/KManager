@@ -195,6 +195,11 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_serie_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_serie_list' %}">
+                                        <i class="bi bi-arrow-repeat"></i> <span class="sidebar-text">Serien-Aktivitäten</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if request.resolver_match.url_name == 'aktivitaet_assigned_list' %}active{% endif %}" href="{% url 'vermietung:aktivitaet_assigned_list' %}">
                                         <i class="bi bi-person-check"></i> <span class="sidebar-text">Meine zugewiesenen</span>
                                     </a>
