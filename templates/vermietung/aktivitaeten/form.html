@@ -11,19 +11,11 @@
 
 {% block extra_css %}
 <!-- Quill CSS -->
-<link href="{% static 'quill/quill.snow.css' %}" rel="stylesheet">
 <style>
     #beschreibungEditor {
         height: 300px;
-        background-color: var(--bs-body-bg);
-    }
-    .ql-toolbar {
-        background-color: var(--bs-secondary-bg);
-        border-color: var(--bs-border-color);
-    }
-    .ql-container {
-        border-color: var(--bs-border-color);
-    }
+       
+    }    
 </style>
 {% endblock %}
 
@@ -934,7 +926,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- Quill JS -->
-<script src="{% static 'quill/quill.js' %}"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize Quill editor with toolbar configuration
