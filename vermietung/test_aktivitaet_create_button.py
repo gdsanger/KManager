@@ -91,3 +91,36 @@ class AktivitaetCreateButtonTest(TestCase):
         # Check that the info about attachments appears
         self.assertIn('Hinweis zu Anhängen', content,
                      "Attachment info should appear in create mode")
+    
+    def test_delete_button_appears_in_edit_mode(self):
+        """Test that the delete button appears in edit mode but not in create mode"""
+        # First create an activity
+        from vermietung.models import Aktivitaet
+        from datetime import date, timedelta
+        
+        aktivitaet = Aktivitaet.objects.create(
+            titel='Test Activity',
+            beschreibung='Test description',
+            status='OFFEN',
+            prioritaet='NORMAL',
+            faellig_am=date.today() + timedelta(days=7),
+            ersteller=self.user
+        )
+        
+        # Test edit page - delete button should appear
+        edit_url = reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+        edit_response = self.client.get(edit_url)
+        edit_content = edit_response.content.decode('utf-8')
+        
+        self.assertIn('Löschen', edit_content,
+                     "Delete button should appear in edit mode")
+        self.assertIn('deleteForm', edit_content,
+                     "Delete form should be present in edit mode")
+        
+        # Test create page - delete button should NOT appear (this is the primary test for this)
+        create_url = reverse('vermietung:aktivitaet_create')
+        create_response = self.client.get(create_url)
+        create_content = create_response.content.decode('utf-8')
+        
+        self.assertNotIn('deleteForm', create_content,
+                        "Delete form should not be present in create mode")
