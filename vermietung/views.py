@@ -3153,7 +3153,8 @@ def aktivitaet_create(request, context_type=None, context_id=None):
                 if context_id:
                     return redirect(redirect_url, pk=context_id)
                 else:
-                    return redirect('vermietung:aktivitaet_kanban')
+                    # Redirect to edit page to allow adding attachments
+                    return redirect('vermietung:aktivitaet_edit', pk=aktivitaet.pk)
             except ValidationError as e:
                 for field, errors in e.message_dict.items():
                     for error in errors:
