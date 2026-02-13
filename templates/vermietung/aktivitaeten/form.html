@@ -1,4 +1,5 @@
 {% extends "vermietung/vermietung_base.html" %}
+{% load humanize %}
 
 {% block title %}
 {% if is_create %}Neue Aktivität{% else %}Aktivität bearbeiten{% endif %} - K-Manager v1.0
@@ -41,7 +42,16 @@
                         <i class="bi bi-card-text"></i> Grunddaten
                     </button>
                 </li>
-              
+                {% if not is_create %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="attachments-tab" data-bs-toggle="tab" data-bs-target="#attachments" type="button" role="tab" aria-controls="attachments" aria-selected="false">
+                        <i class="bi bi-paperclip"></i> Anhänge
+                        {% if aktivitaet.attachments.count > 0 %}
+                        <span class="badge bg-primary">{{ aktivitaet.attachments.count }}</span>
+                        {% endif %}
+                    </button>
+                </li>
+                {% endif %}
               
             </ul>
 
@@ -354,6 +364,119 @@
                     </div>
                 </div>
 
+                <!-- TAB 2: ATTACHMENTS (only in edit mode) -->
+                {% if not is_create %}
+                <div class="tab-pane fade" id="attachments" role="tabpanel" aria-labelledby="attachments-tab">
+                    <div class="row">
+                        <div class="col-12">
+                            <!-- Card: Upload Attachments -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-upload"></i> Anhänge hochladen
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <form method="post" enctype="multipart/form-data" action="{% url 'vermietung:aktivitaet_attachment_upload' aktivitaet.pk %}">
+                                        {% csrf_token %}
+                                        <div class="mb-3">
+                                            <label for="attachmentFiles" class="form-label">Dateien auswählen</label>
+                                            <input type="file" class="form-control" id="attachmentFiles" name="attachments" multiple>
+                                            <div class="form-text">
+                                                Maximale Größe: 5 MB pro Datei. Ausführbare Dateien sind nicht erlaubt. 
+                                                Sie können mehrere Dateien gleichzeitig hochladen.
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="bi bi-upload"></i> Hochladen
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Card: Existing Attachments -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-paperclip"></i> Vorhandene Anhänge
+                                        <span class="badge bg-secondary">{{ aktivitaet.attachments.count }}</span>
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if aktivitaet.attachments.exists %}
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Dateiname</th>
+                                                    <th>Größe</th>
+                                                    <th>Typ</th>
+                                                    <th>Hochgeladen</th>
+                                                    <th>Von</th>
+                                                    <th>Aktionen</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for attachment in aktivitaet.attachments.all %}
+                                                <tr>
+                                                    <td>
+                                                        <i class="bi bi-file-earmark"></i>
+                                                        {{ attachment.original_filename }}
+                                                    </td>
+                                                    <td>
+                                                        {% if attachment.file_size < 1024 %}
+                                                        {{ attachment.file_size }} B
+                                                        {% elif attachment.file_size < 1048576 %}
+                                                        {{ attachment.file_size|filesizeformat }}
+                                                        {% else %}
+                                                        {{ attachment.file_size|filesizeformat }}
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>
+                                                        <small class="text-muted">{{ attachment.mime_type }}</small>
+                                                    </td>
+                                                    <td>
+                                                        {{ attachment.uploaded_at|date:"d.m.Y H:i" }}
+                                                    </td>
+                                                    <td>
+                                                        {% if attachment.uploaded_by %}
+                                                        {{ attachment.uploaded_by.get_full_name|default:attachment.uploaded_by.username }}
+                                                        {% else %}
+                                                        <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <a href="{% url 'vermietung:aktivitaet_attachment_serve' attachment.pk %}" 
+                                                               class="btn btn-outline-primary" 
+                                                               title="Öffnen/Herunterladen">
+                                                                <i class="bi bi-download"></i>
+                                                            </a>
+                                                            <button type="button" 
+                                                                    class="btn btn-outline-danger" 
+                                                                    onclick="confirmAttachmentDelete({{ attachment.pk }}, '{{ attachment.original_filename|escapejs }}')"
+                                                                    title="Löschen">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-info mb-0">
+                                        <i class="bi bi-info-circle"></i>
+                                        Es sind noch keine Anhänge vorhanden. Nutzen Sie das Formular oben, um Dateien hochzuladen.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
                       
             </div>
 
@@ -402,6 +525,11 @@
             {% csrf_token %}
         </form>
 
+        <!-- Hidden form for attachment deletion -->
+        <form id="attachmentDeleteForm" method="post" style="display: none;">
+            {% csrf_token %}
+        </form>
+
         <!-- Assignment Modal -->
         <div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
@@ -446,17 +574,28 @@
         </div>
 
         <script>
-        function confirmDelete() {
-            if (confirm('Möchten Sie diese Aktivität wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-                document.getElementById('deleteForm').submit();
+            // Confirm and delete activity
+            function confirmDelete() {
+                if (confirm('Möchten Sie diese Aktivität wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+                    document.getElementById('deleteForm').submit();
+                }
             }
-        }
-        
-        function markAsCompleted() {
-            if (confirm('Möchten Sie diese Aktivität als erledigt markieren? Der Ersteller wird per E-Mail benachrichtigt.')) {
-                document.getElementById('completedForm').submit();
+            
+            // Mark activity as completed
+            function markAsCompleted() {
+                if (confirm('Möchten Sie diese Aktivität als erledigt markieren? Der Ersteller wird per E-Mail benachrichtigt.')) {
+                    document.getElementById('completedForm').submit();
+                }
             }
-        }
+            
+            // Confirm and delete attachment
+            function confirmAttachmentDelete(attachmentId, filename) {
+                if (confirm('Möchten Sie den Anhang "' + filename + '" wirklich löschen?')) {
+                    const form = document.getElementById('attachmentDeleteForm');
+                    form.action = "{% url 'vermietung:aktivitaet_attachment_delete' 0 %}".replace('0', attachmentId);
+                    form.submit();
+                }
+            }
         </script>
         {% endif %}
     </div>
