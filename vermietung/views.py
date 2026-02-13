@@ -2633,9 +2633,11 @@ def aktivitaet_attachment_upload_api(request, pk):
             'filename': attachment.original_filename
         })
     except ValidationError as e:
-        error_message = str(e)
+        # Extract error message from ValidationError
         if hasattr(e, 'messages') and e.messages:
             error_message = '; '.join(e.messages) if isinstance(e.messages, list) else str(e.messages)
+        else:
+            error_message = str(e)
         return JsonResponse({
             'success': False,
             'error': error_message

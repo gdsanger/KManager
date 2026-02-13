@@ -1058,20 +1058,23 @@ document.addEventListener('DOMContentLoaded', function() {
         {% else %}
         // For new activities, show a message that the activity must be saved first
         alert('Bitte speichern Sie die Aktivität zuerst, bevor Sie Bilder einfügen.');
-        // Remove the temporary image
+        // Remove the temporary image after a short delay to allow Quill to complete the paste operation
+        const PASTE_CLEANUP_DELAY_MS = 100;
         setTimeout(function() {
             quill.deleteText(editorIndex, 1);
-        }, 100);
+        }, PASTE_CLEANUP_DELAY_MS);
         {% endif %}
     }
     
     // Helper function to find image index in delta
     function findImageIndex(delta, nearIndex) {
+        // Tolerance range for finding the recently inserted image around the expected position
+        const INDEX_TOLERANCE = 5;
         let index = 0;
         for (let i = 0; i < delta.ops.length; i++) {
             const op = delta.ops[i];
             if (op.insert && op.insert.image) {
-                if (index >= nearIndex - 5 && index <= nearIndex + 5) {
+                if (index >= nearIndex - INDEX_TOLERANCE && index <= nearIndex + INDEX_TOLERANCE) {
                     return index;
                 }
             }
