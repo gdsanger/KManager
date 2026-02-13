@@ -15,6 +15,11 @@ urlpatterns = [
     path('mietobjekte/bilder/<int:bild_id>/original/', views.serve_mietobjekt_bild, {'mode': 'original'}, name='mietobjekt_bild_original'),
     path('mietobjekte/bilder/<int:bild_id>/loeschen/', views.mietobjekt_bild_delete, name='mietobjekt_bild_delete'),
     
+    # Aktivitaet Attachment URLs
+    path('aktivitaeten/<int:pk>/anhaenge/hochladen/', views.aktivitaet_attachment_upload, name='aktivitaet_attachment_upload'),
+    path('aktivitaeten/anhaenge/<int:attachment_id>/', views.serve_aktivitaet_attachment, name='aktivitaet_attachment_serve'),
+    path('aktivitaeten/anhaenge/<int:attachment_id>/loeschen/', views.aktivitaet_attachment_delete, name='aktivitaet_attachment_delete'),
+    
     path('', views.vermietung_home, name='home'),
     path('components/', views.vermietung_components, name='components'),
     

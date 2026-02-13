@@ -18,13 +18,13 @@ import json
 from django_tables2 import RequestConfig
 from .models import (
     Dokument, MietObjekt, Vertrag, Uebergabeprotokoll, MietObjektBild, Aktivitaet, AktivitaetsBereich,
-    Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
+    AktivitaetAttachment, Zaehler, Zaehlerstand, OBJEKT_TYPE, Eingangsrechnung, EingangsrechnungAufteilung, 
     EINGANGSRECHNUNG_STATUS, AKTIVITAET_STATUS
 )
 from core.models import Adresse, AdresseKontakt, Mandant, Kostenart
 from .forms import (
     AdresseKundeForm, AdresseStandortForm, AdresseLieferantForm, AdresseForm, AdresseKontaktForm, MietObjektForm, VertragForm, VertragEndForm, 
-    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetForm, AktivitaetsBereichForm,
+    UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetAttachmentUploadForm, AktivitaetForm, AktivitaetsBereichForm,
     VertragsObjektFormSet, ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet, KostenartForm
 )
 from core.mailing.service import send_mail, MailServiceError
@@ -2482,6 +2482,137 @@ def mietobjekt_bild_delete(request, bild_id):
         messages.error(request, f'Fehler beim Löschen des Bildes: {str(e)}')
     
     return redirect('vermietung:mietobjekt_detail', pk=mietobjekt_id)
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def aktivitaet_attachment_upload(request, pk):
+    """
+    Upload attachments for a specific Aktivitaet.
+    Supports multiple file upload.
+    
+    Args:
+        request: HTTP request
+        pk: ID of the Aktivitaet
+    
+    Returns:
+        Redirects back to aktivitaet edit page with success/error message
+    """
+    aktivitaet = get_object_or_404(Aktivitaet, pk=pk)
+    
+    if request.method == 'POST':
+        form = AktivitaetAttachmentUploadForm(
+            request.POST,
+            request.FILES,
+            aktivitaet=aktivitaet,
+            user=request.user
+        )
+        
+        # Get multiple files from request
+        files = request.FILES.getlist('attachments')
+        
+        if not files:
+            messages.error(request, 'Bitte wählen Sie mindestens eine Datei aus.')
+            return redirect('vermietung:aktivitaet_edit', pk=pk)
+        
+        if form.is_valid():
+            try:
+                attachments = form.save(files)
+                
+                if len(attachments) == 1:
+                    messages.success(
+                        request,
+                        f'Anhang "{attachments[0].original_filename}" wurde erfolgreich hochgeladen.'
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f'{len(attachments)} Anhänge wurden erfolgreich hochgeladen.'
+                    )
+                return redirect('vermietung:aktivitaet_edit', pk=pk)
+            except ValidationError as e:
+                # Handle validation errors from file validators
+                if isinstance(e.messages, list):
+                    for error in e.messages:
+                        messages.error(request, error)
+                else:
+                    messages.error(request, str(e))
+            except Exception as e:
+                messages.error(request, f'Fehler beim Hochladen: {str(e)}')
+        else:
+            # Display form errors
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'{error}')
+    
+    # Redirect back to edit page (GET or failed POST)
+    return redirect('vermietung:aktivitaet_edit', pk=pk)
+
+
+@vermietung_required
+def serve_aktivitaet_attachment(request, attachment_id):
+    """
+    Auth-protected view to serve Aktivitaet attachments.
+    
+    Args:
+        request: HTTP request
+        attachment_id: ID of the AktivitaetAttachment
+    
+    Returns:
+        FileResponse with the attachment file
+    
+    Raises:
+        Http404: If attachment not found or file doesn't exist
+    """
+    # Get attachment from database
+    attachment = get_object_or_404(AktivitaetAttachment, pk=attachment_id)
+    
+    # Get file path
+    file_path = attachment.get_absolute_path()
+    
+    # Check if file exists
+    if not file_path.exists():
+        raise Http404("Datei wurde nicht gefunden im Filesystem.")
+    
+    # Create response - FileResponse handles file opening/closing automatically
+    # For attachments, we want to allow inline viewing for PDFs/images
+    response = FileResponse(
+        file_path.open('rb'),
+        content_type=attachment.mime_type,
+        as_attachment=False
+    )
+    
+    # Set filename for download (in case user saves)
+    response['Content-Disposition'] = f'inline; filename="{attachment.original_filename}"'
+    
+    return response
+
+
+@vermietung_required
+@require_http_methods(["POST"])
+def aktivitaet_attachment_delete(request, attachment_id):
+    """
+    Delete an Aktivitaet attachment.
+    Available to all authenticated users in vermietung area with access to the activity.
+    
+    Args:
+        request: HTTP request
+        attachment_id: ID of the AktivitaetAttachment to delete
+    
+    Returns:
+        Redirects back to aktivitaet edit page with success/error message
+    """
+    attachment = get_object_or_404(AktivitaetAttachment, pk=attachment_id)
+    aktivitaet_id = attachment.aktivitaet_id
+    attachment_name = attachment.original_filename
+    
+    try:
+        attachment.delete()
+        messages.success(request, f'Anhang "{attachment_name}" wurde erfolgreich gelöscht.')
+    except Exception as e:
+        messages.error(request, f'Fehler beim Löschen des Anhangs: {str(e)}')
+    
+    return redirect('vermietung:aktivitaet_edit', pk=aktivitaet_id)
 
 
 @vermietung_required
