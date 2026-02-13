@@ -1059,16 +1059,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // For new activities, show a message that the activity must be saved first
         alert('Bitte speichern Sie die Aktivität zuerst, bevor Sie Bilder einfügen.');
         // Remove the temporary image after a short delay to allow Quill to complete the paste operation
-        const PASTE_CLEANUP_DELAY_MS = 100;
+        const IMAGE_REMOVAL_DELAY_MS = 100;
         setTimeout(function() {
             quill.deleteText(editorIndex, 1);
-        }, PASTE_CLEANUP_DELAY_MS);
+        }, IMAGE_REMOVAL_DELAY_MS);
         {% endif %}
     }
     
     // Helper function to find image index in delta
     function findImageIndex(delta, nearIndex) {
         // Tolerance range for finding the recently inserted image around the expected position
+        // The value 5 accounts for potential insertion of newlines or formatting during paste
         const INDEX_TOLERANCE = 5;
         let index = 0;
         for (let i = 0; i < delta.ops.length; i++) {
