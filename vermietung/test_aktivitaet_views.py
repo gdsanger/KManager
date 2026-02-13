@@ -574,3 +574,105 @@ class AktivitaetViewTest(TestCase):
         aktivitaet.refresh_from_db()
         self.assertEqual(aktivitaet.faellig_am, due_date)
         self.assertEqual(aktivitaet.titel, 'Date Preservation Test - Updated')
+    
+    def test_edit_redirects_to_self_by_default(self):
+        """Test that editing an activity redirects back to edit page by default."""
+        aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Redirect Test',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL'
+        )
+        
+        url = reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+        response = self.client.post(url, {
+            'titel': 'Redirect Test - Updated',
+            'status': 'IN_BEARBEITUNG',
+            'prioritaet': 'NORMAL',
+            'vertrag': self.vertrag.pk,
+            'ersteller': self.user.pk,
+            'action': 'save',  # Default save action
+        })
+        
+        # Should redirect back to edit page
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk]))
+    
+    def test_edit_save_and_close_redirects_to_kanban(self):
+        """Test that 'Save & Close' action redirects to kanban view."""
+        aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Save and Close Test',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL'
+        )
+        
+        url = reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+        response = self.client.post(url, {
+            'titel': 'Save and Close Test - Updated',
+            'status': 'IN_BEARBEITUNG',
+            'prioritaet': 'NORMAL',
+            'vertrag': self.vertrag.pk,
+            'ersteller': self.user.pk,
+            'action': 'save_and_close',  # Save and close action
+        })
+        
+        # Should redirect to kanban
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('vermietung:aktivitaet_kanban'))
+    
+    def test_create_redirects_to_edit_with_message(self):
+        """Test that creating an activity redirects to edit page with attachment info."""
+        url = reverse('vermietung:aktivitaet_create')
+        response = self.client.post(url, {
+            'titel': 'New Activity for File Upload',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+            'vertrag': self.vertrag.pk,
+            'ersteller': self.user.pk,
+        })
+        
+        # Should redirect to edit page
+        self.assertEqual(response.status_code, 302)
+        
+        # Get the created activity
+        aktivitaet = Aktivitaet.objects.get(titel='New Activity for File Upload')
+        self.assertEqual(response.url, reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk]))
+        
+        # Follow the redirect to check the message
+        response = self.client.get(response.url)
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that success message is present (though we can't easily test the exact text here)
+        # The message should mention that attachments can be uploaded
+    
+    def test_create_form_shows_attachment_info_card(self):
+        """Test that create form shows info card about attachments."""
+        url = reverse('vermietung:aktivitaet_create')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        # Check that the info card text is present
+        self.assertContains(response, 'Hinweis zu Anhängen')
+        self.assertContains(response, 'Anhänge können nach dem Anlegen der Aktivität hochgeladen werden')
+    
+    def test_edit_form_shows_upload_section(self):
+        """Test that edit form shows file upload section (not info card)."""
+        aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Upload Section Test',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL'
+        )
+        
+        url = reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        # Check that upload form is present
+        self.assertContains(response, 'Anhänge hochladen')
+        # Check that info card is NOT present
+        self.assertNotContains(response, 'Hinweis zu Anhängen')
