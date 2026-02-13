@@ -186,7 +186,115 @@
                                     </div>
                                 </div>
                             </div>
-                            
+                             {% if not is_create %}
+        <!-- Attachments Section (outside main form to avoid nesting) -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <!-- Card: Upload Attachments -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-upload"></i> Anhänge hochladen
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" enctype="multipart/form-data" action="{% url 'vermietung:aktivitaet_attachment_upload' aktivitaet.pk %}" id="uploadForm">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="attachmentFiles" class="form-label">Dateien auswählen</label>
+                                <div class="file-drop-area" id="fileDropArea">
+                                    <input type="file" class="form-control" id="attachmentFiles" name="attachments" multiple>
+                                    <div class="file-drop-message mt-2">
+                                        <i class="bi bi-cloud-upload fs-1 text-muted"></i>
+                                        <p class="text-muted mb-0">Dateien hier ablegen oder klicken zum Auswählen</p>
+                                    </div>
+                                </div>
+                                <div class="form-text">
+                                    Maximale Größe: 5 MB pro Datei. Ausführbare Dateien sind nicht erlaubt. 
+                                    Sie können mehrere Dateien gleichzeitig hochladen.
+                                </div>
+                            </div>
+                            <div id="fileList" class="mb-3"></div>
+                            <button type="submit" class="btn btn-primary" id="uploadButton">
+                                <i class="bi bi-upload"></i> Hochladen
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Card: Existing Attachments -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-paperclip"></i> Vorhandene Anhänge
+                            <span class="badge bg-secondary">{{ aktivitaet.attachments.count }}</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if aktivitaet.attachments.exists %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Dateiname</th>
+                                        <th>Größe</th>
+                                        <th>Typ</th>
+                                        <th>Hochgeladen</th>
+                                        <th>Von</th>
+                                        <th>Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for attachment in aktivitaet.attachments.all %}
+                                    <tr>
+                                        <td>
+                                            <i class="bi bi-file-earmark"></i>
+                                            {{ attachment.original_filename }}
+                                        </td>
+                                        <td>{{ attachment.file_size|filesizeformat }}</td>
+                                        <td>
+                                            <small class="text-muted">{{ attachment.mime_type }}</small>
+                                        </td>
+                                        <td>
+                                            {{ attachment.uploaded_at|date:"d.m.Y H:i" }}
+                                        </td>
+                                        <td>
+                                            {% if attachment.uploaded_by %}
+                                            {{ attachment.uploaded_by.get_full_name|default:attachment.uploaded_by.username }}
+                                            {% else %}
+                                            <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="{% url 'vermietung:aktivitaet_attachment_serve' attachment.pk %}" 
+                                                   class="btn btn-outline-primary" 
+                                                   title="Öffnen/Herunterladen">
+                                                    <i class="bi bi-download"></i>
+                                                </a>
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger" 
+                                                        onclick="confirmAttachmentDelete({{ attachment.pk }}, '{{ attachment.original_filename|escapejs }}')"
+                                                        title="Löschen">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            Es sind noch keine Anhänge vorhanden. Nutzen Sie das Formular oben, um Dateien hochzuladen.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
 
      <!-- Navigation Tabs -->
             
@@ -396,115 +504,7 @@
             </div>
         </form>
 
-        {% if not is_create %}
-        <!-- Attachments Section (outside main form to avoid nesting) -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <!-- Card: Upload Attachments -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="bi bi-upload"></i> Anhänge hochladen
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <form method="post" enctype="multipart/form-data" action="{% url 'vermietung:aktivitaet_attachment_upload' aktivitaet.pk %}" id="uploadForm">
-                            {% csrf_token %}
-                            <div class="mb-3">
-                                <label for="attachmentFiles" class="form-label">Dateien auswählen</label>
-                                <div class="file-drop-area" id="fileDropArea">
-                                    <input type="file" class="form-control" id="attachmentFiles" name="attachments" multiple>
-                                    <div class="file-drop-message mt-2">
-                                        <i class="bi bi-cloud-upload fs-1 text-muted"></i>
-                                        <p class="text-muted mb-0">Dateien hier ablegen oder klicken zum Auswählen</p>
-                                    </div>
-                                </div>
-                                <div class="form-text">
-                                    Maximale Größe: 5 MB pro Datei. Ausführbare Dateien sind nicht erlaubt. 
-                                    Sie können mehrere Dateien gleichzeitig hochladen.
-                                </div>
-                            </div>
-                            <div id="fileList" class="mb-3"></div>
-                            <button type="submit" class="btn btn-primary" id="uploadButton">
-                                <i class="bi bi-upload"></i> Hochladen
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Card: Existing Attachments -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="bi bi-paperclip"></i> Vorhandene Anhänge
-                            <span class="badge bg-secondary">{{ aktivitaet.attachments.count }}</span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        {% if aktivitaet.attachments.exists %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Dateiname</th>
-                                        <th>Größe</th>
-                                        <th>Typ</th>
-                                        <th>Hochgeladen</th>
-                                        <th>Von</th>
-                                        <th>Aktionen</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for attachment in aktivitaet.attachments.all %}
-                                    <tr>
-                                        <td>
-                                            <i class="bi bi-file-earmark"></i>
-                                            {{ attachment.original_filename }}
-                                        </td>
-                                        <td>{{ attachment.file_size|filesizeformat }}</td>
-                                        <td>
-                                            <small class="text-muted">{{ attachment.mime_type }}</small>
-                                        </td>
-                                        <td>
-                                            {{ attachment.uploaded_at|date:"d.m.Y H:i" }}
-                                        </td>
-                                        <td>
-                                            {% if attachment.uploaded_by %}
-                                            {{ attachment.uploaded_by.get_full_name|default:attachment.uploaded_by.username }}
-                                            {% else %}
-                                            <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm" role="group">
-                                                <a href="{% url 'vermietung:aktivitaet_attachment_serve' attachment.pk %}" 
-                                                   class="btn btn-outline-primary" 
-                                                   title="Öffnen/Herunterladen">
-                                                    <i class="bi bi-download"></i>
-                                                </a>
-                                                <button type="button" 
-                                                        class="btn btn-outline-danger" 
-                                                        onclick="confirmAttachmentDelete({{ attachment.pk }}, '{{ attachment.original_filename|escapejs }}')"
-                                                        title="Löschen">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <div class="alert alert-info mb-0">
-                            <i class="bi bi-info-circle"></i>
-                            Es sind noch keine Anhänge vorhanden. Nutzen Sie das Formular oben, um Dateien hochzuladen.
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
+       
 
         <!-- Hidden Forms for Delete and Complete Actions -->
         <form id="deleteForm" method="post" action="{% url 'vermietung:aktivitaet_delete' aktivitaet.pk %}" style="display: none;">
