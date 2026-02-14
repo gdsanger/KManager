@@ -1563,7 +1563,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const lineDataStore = new Map();
     {% for line in lines %}
     lineDataStore.set({{ line.pk }}, {
-        long_text: {{ line.long_text|escapejs|safe|default:"''"|safe }}
+        long_text: '{{ line.long_text|escapejs }}'
     });
     {% endfor %}
     
