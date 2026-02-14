@@ -705,7 +705,7 @@ def ajax_add_line(request, doc_key, pk):
             is_selected=True if line_type == 'NORMAL' else data.get('is_selected', False),
             short_text_1=short_text_1,
             short_text_2=short_text_2,
-            long_text=long_text,
+            long_text=sanitize_html(long_text) if long_text else '',
             description=description,
             quantity=quantity,
             unit_id=normalize_foreign_key_id(unit_id),
@@ -805,7 +805,8 @@ def ajax_update_line(request, doc_key, pk, line_id):
         if 'long_text' in data:
             # Log the update for debugging Issue #377
             logger.debug(f"Updating long_text for line {line_id}: old_value='{line.long_text}', new_value='{data['long_text']}'")
-            line.long_text = data['long_text']
+            # Sanitize HTML content before saving
+            line.long_text = sanitize_html(data['long_text'])
         if 'description' in data:
             line.description = data['description']
         if 'tax_rate_id' in data:
