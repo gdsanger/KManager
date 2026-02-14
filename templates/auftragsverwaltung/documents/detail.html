@@ -1563,7 +1563,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const lineDataStore = new Map();
     {% for line in lines %}
     lineDataStore.set({{ line.pk }}, {
-        long_text: '{{ line.long_text|escapejs }}'
+        long_text: decodeURIComponent('{{ line.long_text|urlencode }}')
     });
     {% endfor %}
     
@@ -1616,8 +1616,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get HTML content from Quill editor
             const longtextHTML = quillEditor.root.innerHTML.trim();
-            // Clean up empty paragraphs
-            const cleanedHTML = longtextHTML === '<p><br></p>' ? '' : longtextHTML;
+            // Check if content is truly empty (Quill can produce various empty states)
+            const plainText = quillEditor.getText().trim();
+            const cleanedHTML = plainText ? longtextHTML : '';
             
             // Update the line via AJAX
             fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${currentEditingLineId}/update/`, {
@@ -1668,6 +1669,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const SEARCH_DEBOUNCE_MS = 300; // Delay before triggering search after typing stops
     const SUGGESTIONS_HIDE_DELAY_MS = 200; // Delay to allow click events to register on suggestion items
     const KOSTENART2_LOAD_TIMEOUT_MS = 500; // Timeout to wait for kostenart2 options to load after article selection
+    
+    // Utility function to strip HTML tags
+    function stripHtmlTags(html) {
+        if (!html) return '';
+        return html.replace(/<[^>]*>/g, '');
+    }
     
     // Article search on Kurztext 1 input
     let searchTimeouts = {};
@@ -1779,7 +1786,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (shortText1Input) shortText1Input.value = article.short_text_1 || '';
         if (shortText2Input) shortText2Input.value = article.short_text_2 || '';
         if (longTextPreview) {
-            const plainText = article.long_text ? article.long_text.replace(/<[^>]*>/g, '') : '';
+            const plainText = stripHtmlTags(article.long_text || '');
             longTextPreview.textContent = plainText;
         }
         if (unitPriceInput) unitPriceInput.value = article.net_price || 0;
