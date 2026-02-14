@@ -374,4 +374,6 @@ class Issue377LangtextTestCase(TestCase):
         self.assertIn('<p>Normal text</p>', self.line1.long_text)
         self.assertIn('<p>More text</p>', self.line1.long_text)
         # Note: bleach with strip=True removes tags but keeps content
-        # This is acceptable as the script won't execute without the tag
+        # The content itself (e.g., 'alert("XSS")') remains, but without
+        # script tags it cannot execute. This is acceptable for our use case
+        # as the content is always rendered as text or within safe HTML context.

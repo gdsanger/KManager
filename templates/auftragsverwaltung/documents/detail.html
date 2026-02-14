@@ -1563,7 +1563,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const lineDataStore = new Map();
     {% for line in lines %}
     lineDataStore.set({{ line.pk }}, {
-        long_text: decodeURIComponent('{{ line.long_text|urlencode }}')
+        long_text: '{{ line.long_text|escapejs }}'
     });
     {% endfor %}
     
@@ -1640,10 +1640,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         lineData.long_text = cleanedHTML;
                     }
                     
-                    // Update preview with plain text version (strip HTML tags)
+                    // Update preview with plain text version (reuse plainText from above)
                     const lineItem = document.querySelector(`.line-item[data-line-id="${currentEditingLineId}"]`);
                     const preview = lineItem.querySelector('.long-text-preview');
-                    const plainText = quillEditor.getText().trim();
                     preview.textContent = plainText || '';
                     
                     // Close modal
