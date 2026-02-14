@@ -324,3 +324,54 @@ class Issue377LangtextTestCase(TestCase):
                           "Positions 2 and 3 should have different long_text")
         self.assertNotEqual(self.line1.long_text, self.line3.long_text,
                           "Positions 1 and 3 should have different long_text")
+    
+    def test_html_content_is_sanitized(self):
+        """Test that HTML content from Quill editor is sanitized before saving."""
+        url = reverse('auftragsverwaltung:ajax_update_line',
+                     kwargs={'doc_key': 'quote', 'pk': self.document.pk, 'line_id': self.line1.pk})
+        
+        # Send HTML content with allowed and disallowed tags (simulates Quill editor output)
+        html_content = '<p>This is <strong>bold</strong> and <em>italic</em> text.</p><ul><li>List item 1</li><li>List item 2</li></ul>'
+        
+        data = {
+            'long_text': html_content
+        }
+        
+        response = self.client.post(url, data=data)
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data.get('success'))
+        
+        # Check that HTML was saved (sanitized but preserved)
+        self.line1.refresh_from_db()
+        self.assertIn('<strong>bold</strong>', self.line1.long_text)
+        self.assertIn('<em>italic</em>', self.line1.long_text)
+        self.assertIn('<ul>', self.line1.long_text)
+        self.assertIn('<li>List item 1</li>', self.line1.long_text)
+    
+    def test_dangerous_html_is_stripped(self):
+        """Test that dangerous HTML tags (like script) are stripped during sanitization."""
+        url = reverse('auftragsverwaltung:ajax_update_line',
+                     kwargs={'doc_key': 'quote', 'pk': self.document.pk, 'line_id': self.line1.pk})
+        
+        # Send HTML content with script tag (should be stripped)
+        html_content = '<p>Normal text</p><script>alert("XSS")</script><p>More text</p>'
+        
+        data = {
+            'long_text': html_content
+        }
+        
+        response = self.client.post(url, data=data)
+        
+        self.assertEqual(response.status_code, 200)
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data.get('success'))
+        
+        # Check that script tag was stripped but normal paragraphs remain
+        self.line1.refresh_from_db()
+        self.assertNotIn('<script>', self.line1.long_text)
+        self.assertIn('<p>Normal text</p>', self.line1.long_text)
+        self.assertIn('<p>More text</p>', self.line1.long_text)
+        # Note: bleach with strip=True removes tags but keeps content
+        # This is acceptable as the script won't execute without the tag
