@@ -90,7 +90,7 @@
                                 <i class="bi bi-arrow-repeat"></i> Serie
                             </span>
                             {% if aktivitaet.beschreibung %}
-                            <br><small class="text-muted">{{ aktivitaet.beschreibung|truncatewords:10 }}</small>
+                            <br><small class="text-muted">{{ aktivitaet.beschreibung|striptags|truncatewords:10 }}</small>
                             {% endif %}
                         </td>
                         <td>
