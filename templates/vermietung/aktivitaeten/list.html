@@ -95,7 +95,7 @@
                             </span>
                             {% endif %}
                             {% if aktivitaet.beschreibung %}
-                            <br><small class="text-muted">{{ aktivitaet.beschreibung|truncatewords:10 }}</small>
+                            <br><small class="text-muted">{{ aktivitaet.beschreibung|striptags|truncatewords:10 }}</small>
                             {% endif %}
                         </td>
                         <td>
