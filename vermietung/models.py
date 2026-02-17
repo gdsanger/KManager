@@ -580,6 +580,12 @@ class Vertrag(models.Model):
         verbose_name="Mandant",
         help_text="Zugeordneter Mandant für diesen Vertrag"
     )
+    bemerkung = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Bemerkung",
+        help_text="Freitextfeld für Hinweise und Bemerkungen zum Mietvertrag"
+    )
     
     # Custom manager
     objects = VertragQuerySet.as_manager()

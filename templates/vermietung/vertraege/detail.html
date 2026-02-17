@@ -570,6 +570,19 @@
     <div class="col-lg-4">
         <div class="card mb-3">
             <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-chat-left-text"></i> Bemerkung</h5>
+            </div>
+            <div class="card-body">
+                {% if vertrag.bemerkung %}
+                    <p class="mb-0" style="white-space: pre-wrap;">{{ vertrag.bemerkung }}</p>
+                {% else %}
+                    <p class="text-muted small mb-0"><em>Keine Bemerkung vorhanden</em></p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mb-3">
+            <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-info-circle"></i> Information</h5>
             </div>
             <div class="card-body">

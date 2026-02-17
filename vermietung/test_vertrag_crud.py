@@ -497,3 +497,100 @@ class VertragCRUDTestCase(TestCase):
         
         self.assertFalse(form.is_valid())
         self.assertIn('ende', form.errors)
+    
+    def test_vertrag_bemerkung_field_save_and_reload(self):
+        """Test that bemerkung field can be saved and reloaded correctly."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        test_bemerkung = "Dies ist ein Test für das Bemerkungsfeld.\nMit mehreren Zeilen."
+        
+        # Update existing contract with bemerkung
+        self.vertrag1.bemerkung = test_bemerkung
+        self.vertrag1.save()
+        
+        # Reload from database
+        reloaded_vertrag = Vertrag.objects.get(pk=self.vertrag1.pk)
+        
+        # Verify bemerkung was saved correctly
+        self.assertEqual(reloaded_vertrag.bemerkung, test_bemerkung)
+    
+    def test_vertrag_create_with_bemerkung(self):
+        """Test creating a contract with bemerkung field."""
+        test_bemerkung = "Bemerkung bei Vertragserstellung"
+        
+        # Create contract directly with bemerkung
+        new_vertrag = Vertrag.objects.create(
+            mietobjekt=self.mietobjekt2,
+            mieter=self.kunde2,
+            start=date(2024, 6, 1),
+            miete=Decimal('800.00'),
+            kaution=Decimal('2400.00'),
+            status='active',
+            bemerkung=test_bemerkung
+        )
+        
+        # Reload from database
+        new_vertrag.refresh_from_db()
+        
+        # Check that bemerkung was saved correctly
+        self.assertEqual(new_vertrag.bemerkung, test_bemerkung)
+    
+    def test_vertrag_edit_with_bemerkung(self):
+        """Test editing a contract to add/modify bemerkung field."""
+        # Initially no bemerkung
+        self.assertIsNone(self.vertrag1.bemerkung)
+        
+        test_bemerkung = "Bemerkung nach Bearbeitung"
+        
+        # Update bemerkung
+        self.vertrag1.bemerkung = test_bemerkung
+        self.vertrag1.save()
+        
+        # Reload and check bemerkung was updated
+        self.vertrag1.refresh_from_db()
+        self.assertEqual(self.vertrag1.bemerkung, test_bemerkung)
+    
+    def test_vertrag_bemerkung_field_is_optional(self):
+        """Test that bemerkung field is optional (nullable/blank)."""
+        # Create contract without bemerkung
+        new_vertrag = Vertrag.objects.create(
+            mietobjekt=self.mietobjekt2,
+            mieter=self.kunde2,
+            start=date(2024, 6, 1),
+            miete=Decimal('800.00'),
+            kaution=Decimal('2400.00'),
+            status='active'
+            # No bemerkung field
+        )
+        
+        # Should succeed
+        self.assertIsNotNone(new_vertrag.pk)
+        
+        # Check that contract was created without bemerkung
+        new_vertrag.refresh_from_db()
+        self.assertIsNone(new_vertrag.bemerkung)
+    
+    def test_vertrag_detail_displays_bemerkung(self):
+        """Test that detail view displays bemerkung when present."""
+        self.client.login(username='testuser', password='testpass123')
+        
+        test_bemerkung = "Test Bemerkung für Detailansicht"
+        self.vertrag1.bemerkung = test_bemerkung
+        self.vertrag1.save()
+        
+        response = self.client.get(
+            reverse('vermietung:vertrag_detail', kwargs={'pk': self.vertrag1.pk})
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, test_bemerkung)
+        self.assertContains(response, 'Bemerkung')
+    
+    def test_vertrag_form_includes_bemerkung_field(self):
+        """Test that VertragForm includes bemerkung field."""
+        form = VertragForm()
+        self.assertIn('bemerkung', form.fields)
+        
+        # Check that it's a Textarea widget
+        self.assertEqual(form.fields['bemerkung'].__class__.__name__, 'CharField')
+        self.assertTrue(form.fields['bemerkung'].required is False)
