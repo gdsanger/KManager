@@ -238,6 +238,12 @@
                     <div class="col-md-8 text-muted">{{ vertrag.berechne_gesamtmiete|floatformat:2 }} €</div>
                 </div>
                 {% endif %}
+                {% if vertrag.stellplatzbetrag %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Stellplatzbetrag:</div>
+                    <div class="col-md-8">{{ vertrag.stellplatzbetrag|floatformat:2 }} €</div>
+                </div>
+                {% endif %}
                 <div class="row mb-2">
                     <div class="col-md-4 text-muted">Monatliche Miete (Netto):</div>
                     <div class="col-md-8"><strong>{{ vertrag.effective_net_total|floatformat:2 }} €</strong></div>

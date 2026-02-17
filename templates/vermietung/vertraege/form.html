@@ -239,6 +239,25 @@
                             {% endif %}
                         </div>
                     </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.stellplatzbetrag.id_for_label }}" class="form-label">{{ form.stellplatzbetrag.label }}</label>
+                            <div class="input-group">
+                                {{ form.stellplatzbetrag }}
+                                <span class="input-group-text">€</span>
+                            </div>
+                            {% if form.stellplatzbetrag.errors %}
+                            <div class="text-danger small">{{ form.stellplatzbetrag.errors }}</div>
+                            {% endif %}
+                            {% if form.stellplatzbetrag.help_text %}
+                            <div class="form-text">{{ form.stellplatzbetrag.help_text }}</div>
+                            {% endif %}
+                            <small class="text-muted d-block mt-1">
+                                <i class="bi bi-info-circle"></i> Wird zur Gesamtsumme addiert
+                            </small>
+                        </div>
+                    </div>
 
                     <div class="row">
                         <div class="col-md-12 mb-3">
@@ -400,6 +419,7 @@ const nettoSourceHint = document.getElementById('netto-source-hint');
 // Flat rate fields
 const autoTotalCheckbox = document.getElementById('id_auto_total');
 const manualNetTotalField = document.getElementById('id_manual_net_total');
+const stellplatzbetragField = document.getElementById('id_stellplatzbetrag');
 const autoTotalSection = document.getElementById('auto-total-section');
 const manualTotalSection = document.getElementById('manual-total-section');
 
@@ -461,13 +481,18 @@ function updateGesamtmiete() {
     
     // Only update VAT if in auto mode
     if (autoTotalCheckbox.checked) {
-        updateVATCalculations(total, 'Auto');
+        // Add stellplatzbetrag to total
+        const stellplatzbetrag = parseFloat(stellplatzbetragField.value) || 0;
+        const effectiveTotal = total + stellplatzbetrag;
+        updateVATCalculations(effectiveTotal, 'Auto');
     }
 }
 
 function updateManualTotalCalculations() {
     const manualTotal = parseFloat(manualNetTotalField.value) || 0;
-    updateVATCalculations(manualTotal, 'Manuell');
+    const stellplatzbetrag = parseFloat(stellplatzbetragField.value) || 0;
+    const effectiveTotal = manualTotal + stellplatzbetrag;
+    updateVATCalculations(effectiveTotal, 'Manuell');
 }
 
 function updateVATCalculations(nettobetrag, source) {
@@ -598,6 +623,17 @@ if (manualNetTotalField) {
     });
 }
 
+// Setup stellplatzbetrag input event listener
+if (stellplatzbetragField) {
+    stellplatzbetragField.addEventListener('input', function() {
+        if (autoTotalCheckbox.checked) {
+            updateGesamtmiete();
+        } else {
+            updateManualTotalCalculations();
+        }
+    });
+}
+
 // Calculate initial total
 updateGesamtmiete();
 
@@ -606,8 +642,7 @@ if (umsatzsteuerSatzSelect) {
     umsatzsteuerSatzSelect.addEventListener('change', function() {
         if (autoTotalCheckbox.checked) {
             // Recalculate with current auto total
-            const nettobetrag = parseFloat(mieteField.value) || 0;
-            updateVATCalculations(nettobetrag, 'Auto');
+            updateGesamtmiete();
         } else {
             // Recalculate with current manual total
             updateManualTotalCalculations();
