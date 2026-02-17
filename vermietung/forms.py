@@ -495,6 +495,7 @@ class VertragForm(forms.ModelForm):
             'miete',
             'auto_total',
             'manual_net_total',
+            'stellplatzbetrag',
             'kaution',
             'umsatzsteuer_satz',
             'status',
@@ -530,6 +531,12 @@ class VertragForm(forms.ModelForm):
                 'step': '0.01',
                 'id': 'id_manual_net_total',
             }),
+            'stellplatzbetrag': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'id': 'id_stellplatzbetrag',
+            }),
             'kaution': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'step': '0.01',
@@ -552,6 +559,7 @@ class VertragForm(forms.ModelForm):
             'miete': 'Gesamtmiete (€) (Netto)',
             'auto_total': 'Automatisch aus Positionen berechnen',
             'manual_net_total': 'Manueller Netto-Gesamtpreis (€)',
+            'stellplatzbetrag': 'Stellplatzbetrag (€)',
             'kaution': 'Kaution (€) *',
             'umsatzsteuer_satz': 'Umsatzsteuer *',
             'status': 'Status *',
@@ -566,6 +574,7 @@ class VertragForm(forms.ModelForm):
             'miete': 'Wird automatisch aus den Mietobjekten berechnet (Summe aus Anzahl × Preis) im Auto-Modus',
             'auto_total': 'Aktiviert: Gesamtpreis wird aus Positionen berechnet. Deaktiviert: Manueller Pauschalpreis wird verwendet.',
             'manual_net_total': 'Pauschaler Netto-Gesamtpreis. Nur aktiv wenn "Automatisch berechnen" deaktiviert ist.',
+            'stellplatzbetrag': 'Optional: Zusätzlicher Betrag für Stellplätze (wird zur Gesamtsumme addiert)',
             'kaution': 'Kaution in EUR',
             'umsatzsteuer_satz': 'Umsatzsteuersatz für die Berechnung des Bruttobetrags',
             'status': 'Status des Vertrags',
@@ -585,6 +594,7 @@ class VertragForm(forms.ModelForm):
         self.fields['vertragsnummer'].required = False
         self.fields['miete'].required = False
         self.fields['manual_net_total'].required = False
+        self.fields['stellplatzbetrag'].required = False
         
         # Order mandanten by name
         self.fields['mandant'].queryset = Mandant.objects.all().order_by('name')
@@ -594,6 +604,13 @@ class VertragForm(forms.ModelForm):
             first_mandant = Mandant.objects.first()
             if first_mandant:
                 self.initial['mandant'] = first_mandant.pk
+    
+    def clean_stellplatzbetrag(self):
+        """Validate that stellplatzbetrag is non-negative."""
+        stellplatzbetrag = self.cleaned_data.get('stellplatzbetrag')
+        if stellplatzbetrag is not None and stellplatzbetrag < 0:
+            raise forms.ValidationError('Stellplatzbetrag darf nicht negativ sein.')
+        return stellplatzbetrag
 
 
 class VertragEndForm(forms.Form):

@@ -586,6 +586,14 @@ class Vertrag(models.Model):
         verbose_name="Bemerkung",
         help_text="Freitextfeld für Hinweise und Bemerkungen zum Mietvertrag"
     )
+    stellplatzbetrag = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Stellplatzbetrag",
+        help_text="Zusätzlicher Betrag für Stellplätze in EUR (optional)"
+    )
     
     # Custom manager
     objects = VertragQuerySet.as_manager()
@@ -682,11 +690,20 @@ class Vertrag(models.Model):
         Get the effective net total for this contract.
         Returns the manual_net_total if auto_total is False and manual_net_total is set,
         otherwise returns the calculated total from VertragsObjekt items.
+        Includes stellplatzbetrag in both cases.
         Returns Decimal with 2 decimal places.
         """
+        # Get base total (manual or calculated)
         if not self.auto_total and self.manual_net_total is not None:
-            return self.manual_net_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        return self.berechne_gesamtmiete()
+            base_total = self.manual_net_total
+        else:
+            base_total = self.berechne_gesamtmiete()
+        
+        # Add stellplatzbetrag (treat None/NULL as 0)
+        stellplatz = self.stellplatzbetrag if self.stellplatzbetrag is not None else Decimal('0.00')
+        total = base_total + stellplatz
+        
+        return total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     def berechne_umsatzsteuer(self):
         """
