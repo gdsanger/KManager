@@ -323,6 +323,22 @@
     <div class="col-lg-4">
         <div class="card mb-3">
             <div class="card-header">
+                <i class="bi bi-chat-left-text"></i> Bemerkung
+            </div>
+            <div class="card-body">
+                <label for="{{ form.bemerkung.id_for_label }}" class="form-label">{{ form.bemerkung.label }}</label>
+                {{ form.bemerkung }}
+                {% if form.bemerkung.errors %}
+                <div class="text-danger small">{{ form.bemerkung.errors }}</div>
+                {% endif %}
+                {% if form.bemerkung.help_text %}
+                <div class="form-text">{{ form.bemerkung.help_text }}</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mb-3">
+            <div class="card-header">
                 <i class="bi bi-info-circle"></i> Hinweise
             </div>
             <div class="card-body">

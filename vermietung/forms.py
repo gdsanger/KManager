@@ -499,6 +499,7 @@ class VertragForm(forms.ModelForm):
             'umsatzsteuer_satz',
             'status',
             'mandant',
+            'bemerkung',
         ]
         widgets = {
             'vertragsnummer': forms.TextInput(attrs={
@@ -537,6 +538,11 @@ class VertragForm(forms.ModelForm):
             'umsatzsteuer_satz': forms.Select(attrs={'class': 'form-select'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
             'mandant': forms.Select(attrs={'class': 'form-select'}),
+            'bemerkung': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Hinweise oder Bemerkungen zum Mietvertrag...',
+            }),
         }
         labels = {
             'vertragsnummer': 'Vertragsnummer',
@@ -550,6 +556,7 @@ class VertragForm(forms.ModelForm):
             'umsatzsteuer_satz': 'Umsatzsteuer *',
             'status': 'Status *',
             'mandant': 'Mandant',
+            'bemerkung': 'Bemerkung',
         }
         help_texts = {
             'vertragsnummer': 'Optional: Vertragsnummer manuell eingeben, oder leer lassen für automatische Generierung',
@@ -563,6 +570,7 @@ class VertragForm(forms.ModelForm):
             'umsatzsteuer_satz': 'Umsatzsteuersatz für die Berechnung des Bruttobetrags',
             'status': 'Status des Vertrags',
             'mandant': 'Optional: Zugeordneter Mandant (wird vom Mietobjekt übernommen wenn leer)',
+            'bemerkung': 'Freitextfeld für Hinweise und Bemerkungen zum Mietvertrag',
         }
     
     def __init__(self, *args, **kwargs):
