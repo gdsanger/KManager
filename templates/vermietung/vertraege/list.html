@@ -74,14 +74,22 @@
                         </a>
                     </td>
                     <td>
+                        {% if vertrag.mietobjekt and vertrag.mietobjekt.pk %}
                         <a href="{% url 'vermietung:mietobjekt_detail' vertrag.mietobjekt.pk %}" class="text-decoration-none">
                             {{ vertrag.mietobjekt.name }}
                         </a>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
                     </td>
                     <td>
+                        {% if vertrag.mieter and vertrag.mieter.pk %}
                         <a href="{% url 'vermietung:kunde_detail' vertrag.mieter.pk %}" class="text-decoration-none">
                             {{ vertrag.mieter.full_name }}
                         </a>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
                     </td>
                     <td>
                         <small>
