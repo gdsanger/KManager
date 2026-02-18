@@ -95,9 +95,9 @@ class VertragListViewTestCase(TestCase):
     
     def test_vertrag_list_without_mietobjekt(self):
         """Test that contract list displays correctly without mietobjekt (null/None)."""
-        # Create contract WITHOUT mietobjekt (mietobjekt=None)
+        # Create contract WITHOUT mietobjekt
         vertrag = Vertrag.objects.create(
-            mietobjekt=None,  # Explicitly set to None
+            mietobjekt=None,
             mieter=self.kunde,
             start=date(2024, 1, 1),
             ende=date(2024, 12, 31),
