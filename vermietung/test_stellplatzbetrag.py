@@ -262,3 +262,27 @@ class VertragStellplatzbetragTestCase(TestCase):
         
         # Check that stellplatzbetrag was saved correctly
         self.assertEqual(vertrag_from_db.stellplatzbetrag, Decimal('125.75'))
+    
+    def test_stellplatzbetrag_negative_validation(self):
+        """Test that negative stellplatzbetrag is rejected by validation."""
+        # Create contract with negative stellplatzbetrag
+        vertrag = Vertrag(
+            mieter=self.kunde,
+            start=date(2024, 1, 1),
+            ende=date(2024, 12, 31),
+            miete=Decimal('1000.00'),
+            kaution=Decimal('3000.00'),
+            status='active',
+            stellplatzbetrag=Decimal('-50.00')
+        )
+        
+        # Validation should raise error
+        with self.assertRaises(ValidationError) as context:
+            vertrag.clean()
+        
+        # Check that the error is for stellplatzbetrag field
+        self.assertIn('stellplatzbetrag', context.exception.message_dict)
+        self.assertEqual(
+            context.exception.message_dict['stellplatzbetrag'][0],
+            'Der Stellplatzbetrag darf nicht negativ sein.'
+        )

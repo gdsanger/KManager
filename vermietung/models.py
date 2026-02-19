@@ -730,7 +730,8 @@ class Vertrag(models.Model):
         Validate the contract data:
         1. If ende is set, it must be greater than start
         2. If manual_net_total is set, it must be non-negative
-        3. For backwards compatibility, check overlaps on legacy mietobjekt field
+        3. If stellplatzbetrag is set, it must be non-negative
+        4. For backwards compatibility, check overlaps on legacy mietobjekt field
         
         Note: Overlap checking for new n:m relationship is handled in VertragsObjekt.clean()
         """
@@ -746,6 +747,12 @@ class Vertrag(models.Model):
         if self.manual_net_total is not None and self.manual_net_total < 0:
             raise ValidationError({
                 'manual_net_total': 'Der manuelle Netto-Gesamtpreis darf nicht negativ sein.'
+            })
+        
+        # Validate stellplatzbetrag
+        if self.stellplatzbetrag is not None and self.stellplatzbetrag < 0:
+            raise ValidationError({
+                'stellplatzbetrag': 'Der Stellplatzbetrag darf nicht negativ sein.'
             })
         
         # Backwards compatibility: Check for overlaps on legacy mietobjekt field
