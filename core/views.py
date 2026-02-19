@@ -15,7 +15,7 @@ from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, Cust
 from core.tables import ItemTable
 from core.filters import ItemFilter
 from core.services.activity_stream import ActivityStreamService
-
+from werkzeug.utils import secure_filename
 
 def home(request):
     """Home page view"""
@@ -305,10 +305,15 @@ def mandant_detail(request, pk):
         mandants_dir = os.path.join(settings.MEDIA_ROOT, 'mandants')
         os.makedirs(mandants_dir, exist_ok=True)
         
-        # Generate unique filename
-        filename = f"mandant_{mandant.pk}_{logo_file.name}"
+        # Generate unique, safe filename
+        safe_logo_name = secure_filename(logo_file.name)
+        filename = f"mandant_{mandant.pk}_{safe_logo_name}"
         relative_path = os.path.join('mandants', filename)
-        full_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+        full_path = os.path.normpath(os.path.join(settings.MEDIA_ROOT, relative_path))
+        safe_base_dir = os.path.normpath(mandants_dir)
+        if os.path.commonpath([safe_base_dir, full_path]) != safe_base_dir:
+            messages.error(request, 'Ungültiger Dateipfad.')
+            return redirect('mandant_detail', pk=pk)
         
         # Save file
         with open(full_path, 'wb+') as destination:
