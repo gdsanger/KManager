@@ -2528,11 +2528,14 @@ class AktivitaetAttachment(models.Model):
         """
         # Generate unique filename to prevent collisions
         unique_id = uuid.uuid4().hex[:8]
-        safe_filename = f"{unique_id}_{filename}"
+        # Use only the base name of the uploaded file to avoid injected paths
+        base_name = Path(filename).name
+        safe_filename = f"{unique_id}_{base_name}"
         
-        storage_path = f"aktivitaet/{aktivitaet_id}/attachments/{safe_filename}"
+        # Build the storage path using pathlib to avoid accidental traversal
+        storage_path = Path("aktivitaet") / str(aktivitaet_id) / "attachments" / safe_filename
         
-        return storage_path
+        return str(storage_path)
     
     @staticmethod
     def save_uploaded_file(uploaded_file, aktivitaet_id, user=None):
@@ -2562,8 +2565,18 @@ class AktivitaetAttachment(models.Model):
             uploaded_file.name
         )
         
-        # Create absolute path
-        absolute_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / storage_path
+        # Create absolute path under the configured documents root
+        root_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT).resolve()
+        absolute_path = (root_path / storage_path).resolve()
+        # Ensure the resolved path is within the documents root to prevent traversal
+        if absolute_path != root_path and root_path not in absolute_path.parents:
+            logger.error(
+                f"Attempted to save attachment outside of documents root: {absolute_path}"
+            )
+            raise ValidationError(
+                'Ungültiger Dateipfad.'
+            )
+        
         
         # Create directory if it doesn't exist
         try:
