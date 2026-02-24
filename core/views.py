@@ -1141,9 +1141,6 @@ def projekt_file_download(request, pk, file_pk):
     if not file_path.exists():
         raise Http404('Datei nicht gefunden.')
 
-    response = FileResponse(
-        open(file_path, 'rb'),
-        as_attachment=True,
-        filename=pfile.filename,
-    )
-    return response
+    # FileResponse takes ownership of the file handle and closes it after streaming.
+    fh = open(file_path, 'rb')  # noqa: WPS515
+    return FileResponse(fh, as_attachment=True, filename=pfile.filename)
