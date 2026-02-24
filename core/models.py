@@ -1423,13 +1423,30 @@ class ProjektFile(models.Model):
         safe_name = secure_filename(uploaded_file.name) or 'file'
         unique_name = f"{uuid.uuid4().hex[:8]}_{safe_name}"
 
-        if ordner:
-            rel_path = f"{projekt.pk}/{ordner}/{unique_name}"
-        else:
-            rel_path = f"{projekt.pk}/{unique_name}"
+        # Base directory for this project's files
+        base_dir = Path(settings.PROJECT_DOCUMENTS_ROOT) / str(projekt.pk)
 
-        abs_path = Path(settings.PROJECT_DOCUMENTS_ROOT) / rel_path
-        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        # Validate and normalize the optional subfolder ("ordner")
+        if ordner:
+            # Construct the candidate folder path and resolve it
+            folder_path = (base_dir / ordner).resolve()
+            try:
+                # Ensure the resolved folder is still within the project base directory
+                folder_path.relative_to(base_dir)
+            except ValueError:
+                raise ValidationError("Ungültiger Ordnerpfad.")
+            target_dir = folder_path
+        else:
+            target_dir = base_dir
+
+        # Ensure the target directory exists
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        # Final absolute path for the file
+        abs_path = target_dir / unique_name
+
+        # Compute storage path relative to PROJECT_DOCUMENTS_ROOT
+        rel_path = str(abs_path.relative_to(Path(settings.PROJECT_DOCUMENTS_ROOT)))
 
         try:
             with open(abs_path, 'wb') as dst:
