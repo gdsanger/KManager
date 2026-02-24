@@ -991,7 +991,38 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    
+
+    // Handle drag-and-drop of images into the Quill editor
+    quill.root.addEventListener('drop', function(e) {
+        const dataTransfer = e.dataTransfer;
+        if (!dataTransfer || !dataTransfer.files || dataTransfer.files.length === 0) return;
+
+        // Check if any dropped files are images
+        for (let i = 0; i < dataTransfer.files.length; i++) {
+            const file = dataTransfer.files[i];
+            if (file.type.includes('image')) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const base64Data = event.target.result;
+
+                    // Insert image temporarily with data URI at drop position
+                    const range = quill.getSelection(true);
+                    const insertIndex = range ? range.index : quill.getLength();
+                    quill.insertEmbed(insertIndex, 'image', base64Data);
+                    quill.setSelection(insertIndex + 1);
+
+                    // Upload image to server and replace data URI
+                    uploadClipboardImage(file, insertIndex);
+                };
+                reader.readAsDataURL(file);
+                break; // Process only the first dropped image (consistent with paste handler)
+            }
+        }
+    }, true);
+
     // Function to upload clipboard image to server
     function uploadClipboardImage(blob, editorIndex) {
         {% if not is_create %}
