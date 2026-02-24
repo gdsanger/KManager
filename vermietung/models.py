@@ -2567,9 +2567,21 @@ class AktivitaetAttachment(models.Model):
         
         # Create absolute path under the configured documents root
         root_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT).resolve()
-        absolute_path = (root_path / storage_path).resolve()
+        # Ensure storage_path is treated as a relative Path
+        absolute_path = (root_path / Path(storage_path)).resolve()
         # Ensure the resolved path is within the documents root to prevent traversal
-        if absolute_path != root_path and root_path not in absolute_path.parents:
+        try:
+            # Python 3.9+: reliable containment check
+            is_within_root = absolute_path.is_relative_to(root_path)
+        except AttributeError:
+            # Fallback for older Python versions
+            try:
+                absolute_path.relative_to(root_path)
+                is_within_root = True
+            except ValueError:
+                is_within_root = False
+
+        if not is_within_root:
             logger.error(
                 f"Attempted to save attachment outside of documents root: {absolute_path}"
             )
