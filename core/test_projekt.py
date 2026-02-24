@@ -356,3 +356,40 @@ class ProjektFileDownloadViewTestCase(TestCase):
                 )
                 self.assertEqual(response.status_code, 302)
                 self.assertIn('/login/', response['Location'])
+class ProjektFileUploadTestCase(TestCase):
+    """Tests for the projekt_file_upload view (no-duplicate guarantee)."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='uploaduser', password='password')
+        self.client.login(username='uploaduser', password='password')
+        self.projekt = Projekt.objects.create(titel='Upload Test', erstellt_von=self.user)
+
+    def _upload(self, filename='test.txt', content=b'hello', ordner=''):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile(filename, content, content_type='text/plain')
+        return self.client.post(
+            reverse('projekt_file_upload', args=[self.projekt.pk]),
+            {'ordner': ordner, 'files': f},
+            format='multipart',
+        )
+
+    def test_upload_creates_exactly_one_entry(self):
+        """Uploading a single file must create exactly one ProjektFile record."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                before = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                self._upload()
+                after = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                self.assertEqual(after - before, 1)
+
+    def test_upload_in_root_folder_creates_exactly_one_entry(self):
+        """Upload with empty ordner parameter (root) must create exactly one record."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                before = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                self._upload(ordner='')
+                after = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                self.assertEqual(after - before, 1)
