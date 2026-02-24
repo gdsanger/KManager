@@ -17,6 +17,7 @@ from core.tables import ItemTable
 from core.filters import ItemFilter
 from core.services.activity_stream import ActivityStreamService
 from werkzeug.utils import secure_filename
+from django.utils.http import urlquote
 
 def home(request):
     """Home page view"""
@@ -1033,11 +1034,12 @@ def projekt_file_upload(request, pk):
 
     if request.method == 'POST':
         ordner = request.POST.get('ordner', '').strip()
+        safe_ordner = urlquote(ordner, safe='')
         uploaded_files = request.FILES.getlist('files')
 
         if not uploaded_files:
             messages.error(request, 'Bitte wählen Sie mindestens eine Datei aus.')
-            return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={ordner}")
+            return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={safe_ordner}")
 
         errors = []
         success_count = 0
@@ -1065,7 +1067,7 @@ def projekt_file_upload(request, pk):
         for err in errors:
             messages.error(request, err)
 
-        return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={ordner}")
+        return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={safe_ordner}")
 
     return redirect('projekt_detail', pk=pk)
 
