@@ -337,8 +337,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const aktivitaetId = e.dataTransfer.getData('aktivitaet-id');
             const newStatus = this.dataset.status;
+
+            // Validate that the activity ID is a non-empty, purely numeric identifier
+            if (!/^\d+$/.test(aktivitaetId)) {
+                console.error('Ungültige Aktivität-ID in Drag-and-Drop-Ereignis:', aktivitaetId);
+                alert('Die ausgewählte Aktivität konnte nicht verarbeitet werden.');
+                return;
+            }
             
-            // Build URL using aktivitaet ID
+            // Build URL using validated aktivitaet ID
             const updateUrl = '{% url "vermietung:aktivitaet_update_status" 0 %}'.replace('/0/', '/' + aktivitaetId + '/');
             
             // Update status via AJAX
