@@ -1,0 +1,121 @@
+{% extends "core/core_base.html" %}
+
+{% block title %}Projekte - Domus{% endblock %}
+
+{% block page_title %}Projekte{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'projekt_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Neues Projekt
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- Search and Filter -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-5">
+                    <label for="search" class="form-label">Suche</label>
+                    <input type="text" class="form-control" id="search" name="search"
+                           value="{{ request.GET.search }}" placeholder="Projekttitel suchen…">
+                </div>
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">Alle Status</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-search"></i> Suchen
+                    </button>
+                    <a href="{% url 'projekt_list' %}" class="btn btn-secondary">
+                        <i class="bi bi-x"></i> Zurücksetzen
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>Titel</th>
+                            <th>Status</th>
+                            <th>Erstellt am</th>
+                            <th>Erstellt von</th>
+                            <th class="text-end">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for projekt in projekte %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'projekt_detail' projekt.pk %}">{{ projekt.titel }}</a>
+                                {% if projekt.beschreibung %}
+                                <br><small class="text-muted">{{ projekt.beschreibung|truncatewords:12 }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if projekt.status == 'NEU' %}
+                                    <span class="badge bg-primary">{{ projekt.get_status_display }}</span>
+                                {% elif projekt.status == 'IN_BEARBEITUNG' %}
+                                    <span class="badge bg-warning text-dark">{{ projekt.get_status_display }}</span>
+                                {% elif projekt.status == 'WARTET' %}
+                                    <span class="badge bg-info text-dark">{{ projekt.get_status_display }}</span>
+                                {% elif projekt.status == 'ZURUECKGESTELLT' %}
+                                    <span class="badge bg-secondary">{{ projekt.get_status_display }}</span>
+                                {% elif projekt.status == 'ABGESCHLOSSEN' %}
+                                    <span class="badge bg-success">{{ projekt.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ projekt.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ projekt.erstellt_am|date:"d.m.Y H:i" }}</td>
+                            <td>
+                                {% if projekt.erstellt_von %}
+                                    {{ projekt.erstellt_von.get_full_name|default:projekt.erstellt_von.username }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'projekt_detail' projekt.pk %}" class="btn btn-outline-info" title="Details">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'projekt_edit' projekt.pk %}" class="btn btn-outline-warning" title="Bearbeiten">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'projekt_delete' projekt.pk %}" class="btn btn-outline-danger" title="Löschen">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">
+                                <i class="bi bi-inbox"></i> Keine Projekte vorhanden
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

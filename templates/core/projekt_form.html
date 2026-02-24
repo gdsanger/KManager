@@ -1,0 +1,62 @@
+{% extends "core/core_base.html" %}
+
+{% block title %}{{ title }} - Domus{% endblock %}
+
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'projekt_list' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück zur Liste
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="{{ form.titel.id_for_label }}" class="form-label">{{ form.titel.label }}</label>
+                            {{ form.titel }}
+                            {% if form.titel.errors %}
+                                <div class="text-danger small mt-1">{{ form.titel.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.beschreibung.id_for_label }}" class="form-label">{{ form.beschreibung.label }}</label>
+                            {{ form.beschreibung }}
+                            {% if form.beschreibung.errors %}
+                                <div class="text-danger small mt-1">{{ form.beschreibung.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.status.id_for_label }}" class="form-label">{{ form.status.label }}</label>
+                            {{ form.status }}
+                            {% if form.status.errors %}
+                                <div class="text-danger small mt-1">{{ form.status.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Speichern
+                            </button>
+                            {% if projekt %}
+                            <a href="{% url 'projekt_detail' projekt.pk %}" class="btn btn-secondary">Abbrechen</a>
+                            {% else %}
+                            <a href="{% url 'projekt_list' %}" class="btn btn-secondary">Abbrechen</a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

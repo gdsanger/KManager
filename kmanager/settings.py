@@ -165,6 +165,7 @@ STATICFILES_DIRS = [
 MEDIA_ROOT = BASE_DIR / 'data'
 MEDIA_URL = '/data/'
 VERMIETUNG_DOCUMENTS_ROOT = MEDIA_ROOT / 'vermietung'
+PROJECT_DOCUMENTS_ROOT = MEDIA_ROOT / 'project'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

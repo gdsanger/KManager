@@ -6,7 +6,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
-from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart, Unit
+from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart, Unit, Projekt
 
 
 class SmtpSettingsForm(forms.ModelForm):
@@ -351,3 +351,72 @@ class UnitForm(forms.ModelForm):
             'symbol': 'Optionales Symbol für die Einheit (z.B. Stk, lfm)',
             'description': 'Optionale Beschreibung der Einheit',
         }
+
+
+class ProjektForm(forms.ModelForm):
+    """Form for creating and editing projects."""
+
+    class Meta:
+        model = Projekt
+        fields = ['titel', 'beschreibung', 'status']
+        widgets = {
+            'titel': forms.TextInput(attrs={'class': 'form-control'}),
+            'beschreibung': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {
+            'titel': 'Titel *',
+            'beschreibung': 'Beschreibung',
+            'status': 'Status *',
+        }
+
+
+class ProjektOrdnerForm(forms.Form):
+    """Form for creating a new folder inside a project."""
+
+    ordner_name = forms.CharField(
+        max_length=200,
+        label='Ordnername *',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. Dokumente'}),
+    )
+    parent_ordner = forms.CharField(
+        max_length=500,
+        required=False,
+        label='Übergeordneter Ordner',
+        widget=forms.HiddenInput(),
+    )
+
+    def clean_ordner_name(self):
+        name = self.cleaned_data['ordner_name'].strip()
+        # Disallow path separators to prevent directory traversal
+        if '/' in name or '\\' in name or '..' in name:
+            raise forms.ValidationError('Der Ordnername darf keine Pfadzeichen enthalten.')
+        return name
+
+
+class _MultipleFileInput(forms.FileInput):
+    allow_multiple_selected = True
+
+
+class _MultipleFileField(forms.FileField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('widget', _MultipleFileInput(attrs={'class': 'form-control'}))
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_file_clean(d, initial) for d in data]
+        return single_file_clean(data, initial)
+
+
+class ProjektFileUploadForm(forms.Form):
+    """Form for uploading one or more files into a project."""
+
+    files = _MultipleFileField(label='Datei(en)')
+    ordner = forms.CharField(
+        max_length=500,
+        required=False,
+        label='Zielordner',
+        widget=forms.HiddenInput(),
+    )

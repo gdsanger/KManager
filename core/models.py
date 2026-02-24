@@ -1,8 +1,17 @@
+import logging
+import os
+import uuid
+from pathlib import Path
+
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
+from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 ANREDEN = [
     ('HERR', 'Herr'),
@@ -1204,3 +1213,229 @@ class Unit(models.Model):
             self.code = self.code.strip().upper()
         
         super().save(*args, **kwargs)
+
+# ---------------------------------------------------------------------------
+# Projektverwaltung
+# ---------------------------------------------------------------------------
+
+PROJEKT_STATUS_CHOICES = [
+    ('NEU', 'Neu'),
+    ('IN_BEARBEITUNG', 'In Bearbeitung'),
+    ('WARTET', 'Wartet'),
+    ('ZURUECKGESTELLT', 'Zurückgestellt'),
+    ('ABGESCHLOSSEN', 'Abgeschlossen'),
+]
+
+# Max file size for project files: 25 MB
+PROJEKT_MAX_FILE_SIZE = 25 * 1024 * 1024
+
+
+def validate_projekt_file_size(file):
+    """Validate that file size does not exceed 25 MB."""
+    if file.size > PROJEKT_MAX_FILE_SIZE:
+        raise ValidationError(
+            f'Die Dateigröße ({file.size / (1024 * 1024):.2f} MB) überschreitet '
+            f'das Maximum von {PROJEKT_MAX_FILE_SIZE / (1024 * 1024):.0f} MB.'
+        )
+
+
+class Projekt(models.Model):
+    """
+    Projekt model for project management.
+    Projects can have files and folders attached to them.
+    """
+    titel = models.CharField(
+        max_length=255,
+        verbose_name="Titel",
+        help_text="Projektbezeichnung"
+    )
+    beschreibung = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Beschreibung",
+        help_text="Beschreibung des Projekts"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=PROJEKT_STATUS_CHOICES,
+        default='NEU',
+        verbose_name="Status",
+        help_text="Aktueller Projektstatus"
+    )
+    erstellt_am = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Erstellt am"
+    )
+    erstellt_von = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='projekte',
+        verbose_name="Erstellt von"
+    )
+    aktualisiert_am = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Aktualisiert am"
+    )
+
+    class Meta:
+        verbose_name = "Projekt"
+        verbose_name_plural = "Projekte"
+        ordering = ['-erstellt_am']
+
+    def __str__(self):
+        return self.titel
+
+    def get_storage_root(self):
+        """Return the absolute filesystem path for this project's files."""
+        return Path(settings.PROJECT_DOCUMENTS_ROOT) / str(self.pk)
+
+
+class ProjektFile(models.Model):
+    """
+    Represents either a folder or a file within a project.
+
+    Folders have ``is_folder=True`` and no physical file stored.
+    Files are stored in the filesystem under
+    ``PROJECT_DOCUMENTS_ROOT / <projekt_id> / <ordner> / <filename>``.
+    """
+    projekt = models.ForeignKey(
+        Projekt,
+        on_delete=models.CASCADE,
+        related_name='files',
+        verbose_name="Projekt"
+    )
+    filename = models.CharField(
+        max_length=255,
+        verbose_name="Dateiname / Ordnername"
+    )
+    ordner = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name="Ordner",
+        help_text="Pfad des übergeordneten Ordners (leer = Projektwurzel)"
+    )
+    is_folder = models.BooleanField(
+        default=False,
+        verbose_name="Ist Ordner"
+    )
+    # Storage path relative to PROJECT_DOCUMENTS_ROOT (empty for folders)
+    storage_path = models.CharField(
+        max_length=1000,
+        blank=True,
+        default="",
+        verbose_name="Speicherpfad"
+    )
+    file_size = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Dateigröße",
+        help_text="Dateigröße in Bytes"
+    )
+    mime_type = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="MIME-Type"
+    )
+    datum = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Datum"
+    )
+    benutzer = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='projekt_files',
+        verbose_name="Benutzer"
+    )
+
+    class Meta:
+        verbose_name = "Projektdatei"
+        verbose_name_plural = "Projektdateien"
+        ordering = ['-is_folder', 'ordner', 'filename']
+
+    def __str__(self):
+        if self.ordner:
+            return f"{self.ordner}/{self.filename}"
+        return self.filename
+
+    def get_absolute_path(self):
+        """Return the absolute filesystem path for this file."""
+        if self.is_folder:
+            folder_path = self.ordner + '/' + self.filename if self.ordner else self.filename
+            return Path(settings.PROJECT_DOCUMENTS_ROOT) / str(self.projekt_id) / folder_path
+        return Path(settings.PROJECT_DOCUMENTS_ROOT) / self.storage_path
+
+    def delete(self, *args, **kwargs):
+        """Override delete to remove physical file/folder from filesystem."""
+        if self.is_folder:
+            folder_abs = self.get_absolute_path()
+            if folder_abs.exists() and folder_abs.is_dir():
+                import shutil
+                try:
+                    shutil.rmtree(folder_abs)
+                except OSError:
+                    pass
+        else:
+            file_abs = self.get_absolute_path()
+            if file_abs.exists():
+                try:
+                    file_abs.unlink()
+                    # Clean up empty parent dirs (within project root only)
+                    project_root = Path(settings.PROJECT_DOCUMENTS_ROOT) / str(self.projekt_id)
+                    parent = file_abs.parent
+                    while parent != project_root and parent.is_relative_to(project_root):
+                        if not any(parent.iterdir()):
+                            parent.rmdir()
+                            parent = parent.parent
+                        else:
+                            break
+                except OSError:
+                    pass
+        super().delete(*args, **kwargs)
+
+    @staticmethod
+    def save_uploaded_file(uploaded_file, projekt, ordner=""):
+        """
+        Save an uploaded file to the filesystem and return
+        (storage_path, mime_type).
+
+        The file is stored at:
+            PROJECT_DOCUMENTS_ROOT / <projekt_id> / <ordner> / <uuid>_<filename>
+        """
+        validate_projekt_file_size(uploaded_file)
+
+        # Detect MIME type (best-effort, no strict whitelist for projects)
+        try:
+            import magic as libmagic
+            uploaded_file.seek(0)
+            mime_type = libmagic.from_buffer(uploaded_file.read(2048), mime=True)
+            uploaded_file.seek(0)
+        except Exception:
+            mime_type = "application/octet-stream"
+
+        # Build a safe filename with UUID prefix to avoid collisions
+        from werkzeug.utils import secure_filename
+        safe_name = secure_filename(uploaded_file.name) or 'file'
+        unique_name = f"{uuid.uuid4().hex[:8]}_{safe_name}"
+
+        if ordner:
+            rel_path = f"{projekt.pk}/{ordner}/{unique_name}"
+        else:
+            rel_path = f"{projekt.pk}/{unique_name}"
+
+        abs_path = Path(settings.PROJECT_DOCUMENTS_ROOT) / rel_path
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with open(abs_path, 'wb') as dst:
+                for chunk in uploaded_file.chunks():
+                    dst.write(chunk)
+        except OSError as exc:
+            raise ValidationError(f'Fehler beim Speichern der Datei: {exc}')
+
+        return rel_path, mime_type, unique_name

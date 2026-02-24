@@ -594,3 +594,43 @@ class UnitAdmin(admin.ModelAdmin):
         # For now, allow deletion. Later when Unit is referenced by Item or SalesDocumentLine,
         # this should check for references and return False if any exist.
         return True
+
+# ---------------------------------------------------------------------------
+# Projektverwaltung
+# ---------------------------------------------------------------------------
+from core.models import Projekt, ProjektFile
+
+
+class ProjektFileInline(admin.TabularInline):
+    model = ProjektFile
+    extra = 0
+    readonly_fields = ('filename', 'ordner', 'is_folder', 'file_size', 'mime_type', 'datum', 'benutzer', 'storage_path')
+    can_delete = True
+    show_change_link = False
+
+
+@admin.register(Projekt)
+class ProjektAdmin(admin.ModelAdmin):
+    list_display = ('titel', 'status', 'erstellt_am', 'erstellt_von')
+    list_filter = ('status',)
+    search_fields = ('titel', 'beschreibung')
+    readonly_fields = ('erstellt_am', 'aktualisiert_am')
+    inlines = [ProjektFileInline]
+
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('titel', 'beschreibung', 'status', 'erstellt_von')
+        }),
+        ('Zeitstempel', {
+            'fields': ('erstellt_am', 'aktualisiert_am'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(ProjektFile)
+class ProjektFileAdmin(admin.ModelAdmin):
+    list_display = ('filename', 'projekt', 'ordner', 'is_folder', 'file_size', 'datum', 'benutzer')
+    list_filter = ('is_folder', 'projekt')
+    search_fields = ('filename', 'ordner', 'projekt__titel')
+    readonly_fields = ('datum', 'storage_path', 'file_size', 'mime_type')
