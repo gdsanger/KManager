@@ -44,4 +44,15 @@ urlpatterns = [
     path('units/<int:pk>/', views.unit_detail, name='unit_detail'),
     path('units/<int:pk>/edit/', views.unit_edit, name='unit_edit'),
     path('units/<int:pk>/delete/', views.unit_delete, name='unit_delete'),
+
+    # Projektverwaltung
+    path('projekte/', views.projekt_list, name='projekt_list'),
+    path('projekte/create/', views.projekt_create, name='projekt_create'),
+    path('projekte/<int:pk>/', views.projekt_detail, name='projekt_detail'),
+    path('projekte/<int:pk>/edit/', views.projekt_edit, name='projekt_edit'),
+    path('projekte/<int:pk>/delete/', views.projekt_delete, name='projekt_delete'),
+    path('projekte/<int:pk>/upload/', views.projekt_file_upload, name='projekt_file_upload'),
+    path('projekte/<int:pk>/ordner/create/', views.projekt_ordner_create, name='projekt_ordner_create'),
+    path('projekte/<int:pk>/files/<int:file_pk>/delete/', views.projekt_file_delete, name='projekt_file_delete'),
+    path('projekte/<int:pk>/files/<int:file_pk>/download/', views.projekt_file_download, name='projekt_file_download'),
 ]

@@ -8,14 +8,16 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404
+from django.urls import reverse
 from django_tables2 import RequestConfig
-from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, Unit
-from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm, ItemGroupForm, UnitForm
+from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, Unit, Projekt, ProjektFile
+from core.forms import SmtpSettingsForm, MailTemplateForm, UserProfileForm, CustomPasswordChangeForm, MandantForm, ItemForm, ItemGroupForm, UnitForm, ProjektForm, ProjektOrdnerForm, ProjektFileUploadForm
 from core.tables import ItemTable
 from core.filters import ItemFilter
 from core.services.activity_stream import ActivityStreamService
 from werkzeug.utils import secure_filename
+from django.utils.http import urlquote
 
 def home(request):
     """Home page view"""
@@ -909,3 +911,238 @@ def unit_delete(request, pk):
     return render(request, 'core/unit_confirm_delete.html', {'unit': unit})
 
 
+
+
+# ---------------------------------------------------------------------------
+# Projektverwaltung
+# ---------------------------------------------------------------------------
+
+@login_required
+def projekt_list(request):
+    """List all projects with optional search/filter."""
+    projekte = Projekt.objects.all()
+
+    search = request.GET.get('search', '').strip()
+    if search:
+        projekte = projekte.filter(titel__icontains=search)
+
+    status_filter = request.GET.get('status', '').strip()
+    if status_filter:
+        projekte = projekte.filter(status=status_filter)
+
+    from core.models import PROJEKT_STATUS_CHOICES
+    return render(request, 'core/projekt_list.html', {
+        'projekte': projekte,
+        'status_choices': PROJEKT_STATUS_CHOICES,
+    })
+
+
+@login_required
+def projekt_detail(request, pk):
+    """Detail view for a project including its files and folders."""
+    projekt = get_object_or_404(Projekt, pk=pk)
+
+    # Current folder from query string
+    current_ordner = request.GET.get('ordner', '').strip()
+
+    # Files and folders at the current level
+    files_qs = projekt.files.filter(ordner=current_ordner)
+
+    upload_form = ProjektFileUploadForm(initial={'ordner': current_ordner})
+    ordner_form = ProjektOrdnerForm(initial={'parent_ordner': current_ordner})
+
+    # Breadcrumb path for folder navigation
+    breadcrumb = []
+    if current_ordner:
+        parts = current_ordner.split('/')
+        accumulated = ''
+        for part in parts:
+            accumulated = f"{accumulated}/{part}" if accumulated else part
+            breadcrumb.append({'name': part, 'path': accumulated})
+
+    return render(request, 'core/projekt_detail.html', {
+        'projekt': projekt,
+        'files': files_qs,
+        'current_ordner': current_ordner,
+        'breadcrumb': breadcrumb,
+        'upload_form': upload_form,
+        'ordner_form': ordner_form,
+    })
+
+
+@login_required
+def projekt_create(request):
+    """Create a new project."""
+    if request.method == 'POST':
+        form = ProjektForm(request.POST)
+        if form.is_valid():
+            projekt = form.save(commit=False)
+            projekt.erstellt_von = request.user
+            projekt.save()
+            messages.success(request, f'Projekt „{projekt.titel}" wurde erfolgreich erstellt.')
+            return redirect('projekt_detail', pk=projekt.pk)
+    else:
+        form = ProjektForm()
+    return render(request, 'core/projekt_form.html', {'form': form, 'title': 'Neues Projekt'})
+
+
+@login_required
+def projekt_edit(request, pk):
+    """Edit an existing project."""
+    projekt = get_object_or_404(Projekt, pk=pk)
+    if request.method == 'POST':
+        form = ProjektForm(request.POST, instance=projekt)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Projekt „{projekt.titel}" wurde gespeichert.')
+            return redirect('projekt_detail', pk=projekt.pk)
+    else:
+        form = ProjektForm(instance=projekt)
+    return render(request, 'core/projekt_form.html', {
+        'form': form,
+        'projekt': projekt,
+        'title': f'Projekt bearbeiten: {projekt.titel}',
+    })
+
+
+@login_required
+def projekt_delete(request, pk):
+    """Delete a project and all associated files."""
+    import shutil
+    from pathlib import Path
+
+    projekt = get_object_or_404(Projekt, pk=pk)
+    if request.method == 'POST':
+        titel = projekt.titel
+        # Remove all physical files (cascade delete handles DB records)
+        project_dir = Path(settings.PROJECT_DOCUMENTS_ROOT) / str(projekt.pk)
+        if project_dir.exists():
+            try:
+                shutil.rmtree(project_dir)
+            except OSError:
+                pass
+        projekt.delete()
+        messages.success(request, f'Projekt „{titel}" wurde gelöscht.')
+        return redirect('projekt_list')
+    return render(request, 'core/projekt_confirm_delete.html', {'projekt': projekt})
+
+
+@login_required
+def projekt_file_upload(request, pk):
+    """Upload one or more files to a project folder."""
+    projekt = get_object_or_404(Projekt, pk=pk)
+
+    if request.method == 'POST':
+        ordner = request.POST.get('ordner', '').strip()
+        safe_ordner = urlquote(ordner, safe='')
+        uploaded_files = request.FILES.getlist('files')
+
+        if not uploaded_files:
+            messages.error(request, 'Bitte wählen Sie mindestens eine Datei aus.')
+            return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={safe_ordner}")
+
+        errors = []
+        success_count = 0
+        for uploaded_file in uploaded_files:
+            try:
+                storage_path, mime_type, unique_name = ProjektFile.save_uploaded_file(
+                    uploaded_file, projekt, ordner
+                )
+                ProjektFile.objects.create(
+                    projekt=projekt,
+                    filename=uploaded_file.name,
+                    ordner=ordner,
+                    is_folder=False,
+                    storage_path=storage_path,
+                    file_size=uploaded_file.size,
+                    mime_type=mime_type,
+                    benutzer=request.user,
+                )
+                success_count += 1
+            except Exception as exc:
+                errors.append(f'{uploaded_file.name}: {exc}')
+
+        if success_count:
+            messages.success(request, f'{success_count} Datei(en) erfolgreich hochgeladen.')
+        for err in errors:
+            messages.error(request, err)
+
+        return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={safe_ordner}")
+
+    return redirect('projekt_detail', pk=pk)
+
+
+@login_required
+def projekt_ordner_create(request, pk):
+    """Create a new folder inside a project."""
+    from pathlib import Path
+
+    projekt = get_object_or_404(Projekt, pk=pk)
+
+    if request.method == 'POST':
+        form = ProjektOrdnerForm(request.POST)
+        if form.is_valid():
+            ordner_name = form.cleaned_data['ordner_name']
+            parent_ordner = form.cleaned_data.get('parent_ordner', '').strip()
+
+            full_path = f"{parent_ordner}/{ordner_name}" if parent_ordner else ordner_name
+
+            # Create physical directory
+            abs_dir = Path(settings.PROJECT_DOCUMENTS_ROOT) / str(projekt.pk) / full_path
+            try:
+                abs_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                messages.error(request, f'Ordner konnte nicht erstellt werden: {exc}')
+                return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={parent_ordner}")
+
+            # Create DB record
+            ProjektFile.objects.get_or_create(
+                projekt=projekt,
+                filename=ordner_name,
+                ordner=parent_ordner,
+                is_folder=True,
+                defaults={'benutzer': request.user},
+            )
+            messages.success(request, f'Ordner „{ordner_name}" wurde erstellt.')
+            return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={parent_ordner}")
+        else:
+            for error in form.errors.values():
+                messages.error(request, error)
+
+    return redirect('projekt_detail', pk=pk)
+
+
+@login_required
+def projekt_file_delete(request, pk, file_pk):
+    """Delete a single project file or folder."""
+    projekt = get_object_or_404(Projekt, pk=pk)
+    pfile = get_object_or_404(ProjektFile, pk=file_pk, projekt=projekt)
+
+    if request.method == 'POST':
+        parent_ordner = pfile.ordner
+        name = pfile.filename
+        pfile.delete()
+        messages.success(request, f'„{name}" wurde gelöscht.')
+        return redirect(f"{reverse('projekt_detail', args=[pk])}?ordner={parent_ordner}")
+
+    return render(request, 'core/projektfile_confirm_delete.html', {
+        'projekt': projekt,
+        'pfile': pfile,
+    })
+
+
+@login_required
+def projekt_file_download(request, pk, file_pk):
+    """Serve a project file for download."""
+    from pathlib import Path
+
+    projekt = get_object_or_404(Projekt, pk=pk)
+    pfile = get_object_or_404(ProjektFile, pk=file_pk, projekt=projekt, is_folder=False)
+
+    file_path = Path(settings.PROJECT_DOCUMENTS_ROOT) / pfile.storage_path
+    if not file_path.exists():
+        raise Http404('Datei nicht gefunden.')
+
+    # FileResponse takes ownership of the file handle and closes it after streaming.
+    fh = open(file_path, 'rb')  # noqa: WPS515
+    return FileResponse(fh, as_attachment=True, filename=pfile.filename)

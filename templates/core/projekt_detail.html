@@ -1,0 +1,331 @@
+{% extends "core/core_base.html" %}
+
+{% block title %}{{ projekt.titel }} - Domus{% endblock %}
+
+{% block page_title %}{{ projekt.titel }}{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar gap-2">
+    <a href="{% url 'projekt_edit' projekt.pk %}" class="btn btn-outline-warning btn-sm">
+        <i class="bi bi-pencil"></i> Bearbeiten
+    </a>
+    <a href="{% url 'projekt_delete' projekt.pk %}" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-trash"></i> Löschen
+    </a>
+    <a href="{% url 'projekt_list' %}" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Zurück
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+#drop-zone {
+    border: 2px dashed #6c757d;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+#drop-zone.dragover {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.08);
+}
+#drop-zone .drop-icon {
+    font-size: 2.5rem;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Left Column: Project Info + Files -->
+        <div class="col-lg-8">
+
+            <!-- Project Info Card -->
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-info-circle"></i> Projektinformationen</span>
+                    {% if projekt.status == 'NEU' %}
+                        <span class="badge bg-primary">{{ projekt.get_status_display }}</span>
+                    {% elif projekt.status == 'IN_BEARBEITUNG' %}
+                        <span class="badge bg-warning text-dark">{{ projekt.get_status_display }}</span>
+                    {% elif projekt.status == 'WARTET' %}
+                        <span class="badge bg-info text-dark">{{ projekt.get_status_display }}</span>
+                    {% elif projekt.status == 'ZURUECKGESTELLT' %}
+                        <span class="badge bg-secondary">{{ projekt.get_status_display }}</span>
+                    {% elif projekt.status == 'ABGESCHLOSSEN' %}
+                        <span class="badge bg-success">{{ projekt.get_status_display }}</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if projekt.beschreibung %}
+                    <p class="mb-2">{{ projekt.beschreibung|linebreaksbr }}</p>
+                    {% else %}
+                    <p class="text-muted mb-0"><em>Keine Beschreibung vorhanden.</em></p>
+                    {% endif %}
+                    <hr class="my-2">
+                    <small class="text-muted">
+                        Erstellt: {{ projekt.erstellt_am|date:"d.m.Y H:i" }}
+                        {% if projekt.erstellt_von %}
+                        von {{ projekt.erstellt_von.get_full_name|default:projekt.erstellt_von.username }}
+                        {% endif %}
+                        &nbsp;|&nbsp;
+                        Zuletzt aktualisiert: {{ projekt.aktualisiert_am|date:"d.m.Y H:i" }}
+                    </small>
+                </div>
+            </div>
+
+            <!-- File Browser Card -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-folder2-open"></i> Dateien &amp; Ordner</span>
+                    <!-- New folder button triggers modal -->
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newFolderModal">
+                        <i class="bi bi-folder-plus"></i> Neuer Ordner
+                    </button>
+                </div>
+                <div class="card-body">
+
+                    <!-- Breadcrumb -->
+                    <nav aria-label="breadcrumb" class="mb-3">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item">
+                                <a href="{% url 'projekt_detail' projekt.pk %}">
+                                    <i class="bi bi-house-door"></i> Projekt
+                                </a>
+                            </li>
+                            {% for crumb in breadcrumb %}
+                            <li class="breadcrumb-item {% if forloop.last %}active{% endif %}">
+                                {% if not forloop.last %}
+                                <a href="{% url 'projekt_detail' projekt.pk %}?ordner={{ crumb.path }}">{{ crumb.name }}</a>
+                                {% else %}
+                                {{ crumb.name }}
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ol>
+                    </nav>
+
+                    <!-- File/Folder Table -->
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Typ</th>
+                                    <th>Größe</th>
+                                    <th>Datum</th>
+                                    <th>Benutzer</th>
+                                    <th class="text-end">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for f in files %}
+                                <tr>
+                                    <td>
+                                        {% if f.is_folder %}
+                                        <i class="bi bi-folder-fill text-warning"></i>
+                                        <a href="{% url 'projekt_detail' projekt.pk %}?ordner={% if current_ordner %}{{ current_ordner }}/{% endif %}{{ f.filename }}">
+                                            {{ f.filename }}
+                                        </a>
+                                        {% else %}
+                                        <i class="bi bi-file-earmark"></i>
+                                        <a href="{% url 'projekt_file_download' projekt.pk f.pk %}">{{ f.filename }}</a>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if f.is_folder %}
+                                        <span class="badge bg-secondary">Ordner</span>
+                                        {% else %}
+                                        <span class="text-muted small">{{ f.mime_type|default:"–" }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if f.file_size is not None %}{{ f.file_size|filesizeformat }}{% else %}–{% endif %}
+                                    </td>
+                                    <td>{{ f.datum|date:"d.m.Y H:i" }}</td>
+                                    <td>
+                                        {% if f.benutzer %}
+                                            {{ f.benutzer.get_full_name|default:f.benutzer.username }}
+                                        {% else %}
+                                            <span class="text-muted">–</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if not f.is_folder %}
+                                        <a href="{% url 'projekt_file_download' projekt.pk f.pk %}"
+                                           class="btn btn-sm btn-outline-info" title="Herunterladen">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                        {% endif %}
+                                        <a href="{% url 'projekt_file_delete' projekt.pk f.pk %}"
+                                           class="btn btn-sm btn-outline-danger" title="Löschen">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> Keine Dateien vorhanden
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /col-lg-8 -->
+
+        <!-- Right Column: Upload -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-cloud-upload"></i> Datei-Upload
+                    {% if current_ordner %}
+                    <br><small class="text-muted">in Ordner: {{ current_ordner }}</small>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'projekt_file_upload' projekt.pk %}?ordner={{ current_ordner }}"
+                          enctype="multipart/form-data" id="upload-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="ordner" value="{{ current_ordner }}">
+
+                        <!-- Drag & Drop Zone -->
+                        <div id="drop-zone" class="mb-3" role="button" tabindex="0"
+                             aria-label="Dateien hier ablegen oder klicken um auszuwählen">
+                            <div class="drop-icon mb-2"><i class="bi bi-cloud-arrow-up"></i></div>
+                            <p class="mb-1 fw-semibold">Dateien hier ablegen</p>
+                            <p class="text-muted small mb-2">oder klicken um Dateien auszuwählen</p>
+                            <p class="text-muted small">Max. 25 MB pro Datei</p>
+                        </div>
+
+                        <input type="file" id="file-input" name="files" multiple
+                               class="d-none" aria-label="Dateien auswählen">
+
+                        <!-- File list preview -->
+                        <ul id="file-list" class="list-group list-group-flush mb-3 d-none"></ul>
+
+                        <button type="submit" class="btn btn-primary w-100" id="upload-btn" disabled>
+                            <i class="bi bi-upload"></i> Hochladen
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div><!-- /col-lg-4 -->
+
+    </div><!-- /row -->
+</div>
+
+<!-- New Folder Modal -->
+<div class="modal fade" id="newFolderModal" tabindex="-1" aria-labelledby="newFolderModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newFolderModalLabel">
+                    <i class="bi bi-folder-plus"></i> Neuer Ordner
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Schließen"></button>
+            </div>
+            <form method="post" action="{% url 'projekt_ordner_create' projekt.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="parent_ordner" value="{{ current_ordner }}">
+                <div class="modal-body">
+                    <label for="ordner_name" class="form-label">Ordnername *</label>
+                    <input type="text" class="form-control" id="ordner_name" name="ordner_name"
+                           placeholder="z.B. Dokumente" required maxlength="200" autofocus>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-folder-check"></i> Erstellen
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileList = document.getElementById('file-list');
+    const uploadBtn = document.getElementById('upload-btn');
+
+    // Click on drop zone opens file picker
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInput.click();
+        }
+    });
+
+    // Drag & Drop events
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    // File input change
+    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+    function handleFiles(files) {
+        if (!files || files.length === 0) return;
+
+        // Merge with existing files via DataTransfer
+        const dt = new DataTransfer();
+        // Keep previously selected files
+        if (fileInput.files) {
+            for (const f of fileInput.files) dt.items.add(f);
+        }
+        for (const f of files) dt.items.add(f);
+        fileInput.files = dt.files;
+
+        renderFileList(fileInput.files);
+    }
+
+    function renderFileList(files) {
+        fileList.innerHTML = '';
+        if (files.length === 0) {
+            fileList.classList.add('d-none');
+            uploadBtn.disabled = true;
+            return;
+        }
+
+        fileList.classList.remove('d-none');
+        for (const file of files) {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-dark d-flex justify-content-between align-items-center py-1 px-2';
+            const sizeKB = (file.size / 1024).toFixed(1);
+            li.innerHTML = `<span class="text-truncate me-2" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                            <small class="text-muted text-nowrap">${sizeKB} KB</small>`;
+            fileList.appendChild(li);
+        }
+        uploadBtn.disabled = false;
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+})();
+</script>
+{% endblock %}
