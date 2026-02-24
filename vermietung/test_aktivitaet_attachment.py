@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.conf import settings
 from django.urls import reverse
 from pathlib import Path
+import json
 import tempfile
 import shutil
 import io
@@ -382,3 +383,56 @@ class AktivitaetAttachmentViewTest(TestCase):
         
         # No attachment should be created
         self.assertEqual(self.aktivitaet.attachments.count(), 0)
+
+    def test_upload_api_inline_image(self):
+        """Test uploading an inline image via the API endpoint (e.g. from drag-and-drop)."""
+        # Minimal 1x1 PNG image bytes
+        png_bytes = (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00'
+            b'\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18'
+            b'\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+        )
+        image_file = SimpleUploadedFile('inline-image.png', png_bytes, content_type='image/png')
+
+        response = self.client.post(
+            reverse('vermietung:aktivitaet_attachment_upload_api', args=[self.aktivitaet.pk]),
+            {'file': image_file},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertTrue(data['success'])
+        self.assertIn('url', data)
+        self.assertIn('attachment_id', data)
+        self.assertEqual(self.aktivitaet.attachments.count(), 1)
+
+    def test_upload_api_requires_file(self):
+        """Test that the API endpoint returns error when no file is provided."""
+        response = self.client.post(
+            reverse('vermietung:aktivitaet_attachment_upload_api', args=[self.aktivitaet.pk]),
+            {},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertFalse(data['success'])
+
+    def test_upload_api_requires_authentication(self):
+        """Test that the API endpoint requires authentication."""
+        # Log out the user
+        self.client.logout()
+
+        png_bytes = b'\x89PNG\r\n\x1a\n'
+        image_file = SimpleUploadedFile('test.png', png_bytes, content_type='image/png')
+
+        response = self.client.post(
+            reverse('vermietung:aktivitaet_attachment_upload_api', args=[self.aktivitaet.pk]),
+            {'file': image_file},
+        )
+
+        # Should redirect to login
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login', response.url)
