@@ -2559,17 +2559,25 @@ class AktivitaetAttachment(models.Model):
         # Validate file type and get MIME type
         mime_type = validate_attachment_file_type(uploaded_file)
         
-        # Generate storage path
+        # Generate storage path (relative path under the documents root)
         storage_path = AktivitaetAttachment.generate_storage_path(
             aktivitaet_id,
             uploaded_file.name
         )
-        
-        # Create absolute path under the configured documents root
+
+        # Normalize and validate the documents root
         root_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT).resolve()
-        # Ensure storage_path is treated as a relative Path
-        absolute_path = (root_path / Path(storage_path)).resolve()
-        # Ensure the resolved path is within the documents root to prevent traversal
+
+        # Convert storage_path to a pure relative path to avoid accidental traversal
+        relative_storage_path = Path(storage_path)
+        if relative_storage_path.is_absolute():
+            logger.error(
+                f"Refusing absolute storage path for attachment: {relative_storage_path}"
+            )
+            raise ValidationError('Ungültiger Dateipfad.')
+
+        # Build the absolute path and ensure it stays within documents root
+        absolute_path = (root_path / relative_storage_path).resolve()
         try:
             # Python 3.9+: reliable containment check
             is_within_root = absolute_path.is_relative_to(root_path)
@@ -2585,11 +2593,8 @@ class AktivitaetAttachment(models.Model):
             logger.error(
                 f"Attempted to save attachment outside of documents root: {absolute_path}"
             )
-            raise ValidationError(
-                'Ungültiger Dateipfad.'
-            )
-        
-        
+            raise ValidationError('Ungültiger Dateipfad.')
+
         # Create directory if it doesn't exist
         try:
             absolute_path.parent.mkdir(parents=True, exist_ok=True)
