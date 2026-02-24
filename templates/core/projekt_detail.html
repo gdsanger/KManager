@@ -285,8 +285,8 @@
         handleFiles(e.dataTransfer.files);
     });
 
-    // File input change
-    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+    // File input change – do not merge; the input already holds the new selection
+    fileInput.addEventListener('change', () => renderFileList(fileInput.files));
 
     function handleFiles(files) {
         if (!files || files.length === 0) return;
