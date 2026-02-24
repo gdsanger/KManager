@@ -273,6 +273,89 @@ class ProjektFileFileSizeTestCase(TestCase):
         self.assertEqual(PROJEKT_MAX_FILE_SIZE, 25 * 1024 * 1024)
 
 
+class ProjektFileDownloadViewTestCase(TestCase):
+    """Tests for the projekt_file_download view."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username='dluser', password='password')
+        self.client.login(username='dluser', password='password')
+        self.projekt = Projekt.objects.create(titel='Download Test Projekt', erstellt_von=self.user)
+
+    def _make_real_file(self, tmpdir, projekt, filename='test.txt', content=b'hello'):
+        """Create a real file on disk and a ProjektFile DB entry with correct storage_path."""
+        proj_dir = Path(tmpdir) / str(projekt.pk)
+        proj_dir.mkdir(parents=True, exist_ok=True)
+        abs_path = proj_dir / filename
+        abs_path.write_bytes(content)
+        # storage_path is relative to PROJECT_DOCUMENTS_ROOT (includes project id)
+        storage_path = str(abs_path.relative_to(Path(tmpdir)))
+        pfile = ProjektFile.objects.create(
+            projekt=projekt,
+            filename=filename,
+            ordner='',
+            is_folder=False,
+            storage_path=storage_path,
+            file_size=len(content),
+            mime_type='text/plain',
+            benutzer=self.user,
+        )
+        return pfile
+
+    def test_download_success(self):
+        """Authenticated user can download an existing file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                pfile = self._make_real_file(tmpdir, self.projekt, content=b'file content')
+                response = self.client.get(
+                    reverse('projekt_file_download', args=[self.projekt.pk, pfile.pk])
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('attachment', response.get('Content-Disposition', ''))
+
+    def test_download_wrong_project_returns_404(self):
+        """File belonging to a different project returns 404."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                other_projekt = Projekt.objects.create(
+                    titel='Other Projekt', erstellt_von=self.user
+                )
+                pfile = self._make_real_file(tmpdir, other_projekt)
+                # Request with self.projekt's pk but pfile belongs to other_projekt
+                response = self.client.get(
+                    reverse('projekt_file_download', args=[self.projekt.pk, pfile.pk])
+                )
+                self.assertEqual(response.status_code, 404)
+
+    def test_download_missing_storage_returns_404(self):
+        """File entry exists in DB but physical file is absent returns 404."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                pfile = ProjektFile.objects.create(
+                    projekt=self.projekt,
+                    filename='ghost.txt',
+                    ordner='',
+                    is_folder=False,
+                    storage_path=f'{self.projekt.pk}/ghost.txt',
+                    file_size=0,
+                    benutzer=self.user,
+                )
+                response = self.client.get(
+                    reverse('projekt_file_download', args=[self.projekt.pk, pfile.pk])
+                )
+                self.assertEqual(response.status_code, 404)
+
+    def test_download_unauthenticated_redirects(self):
+        """Unauthenticated request is redirected to login."""
+        self.client.logout()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                pfile = self._make_real_file(tmpdir, self.projekt)
+                response = self.client.get(
+                    reverse('projekt_file_download', args=[self.projekt.pk, pfile.pk])
+                )
+                self.assertEqual(response.status_code, 302)
+                self.assertIn('/login/', response['Location'])
 class ProjektFileUploadTestCase(TestCase):
     """Tests for the projekt_file_upload view (no-duplicate guarantee)."""
 
