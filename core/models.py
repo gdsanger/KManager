@@ -1451,8 +1451,8 @@ class ProjektFile(models.Model):
         # Final absolute path for the file
         abs_path = target_dir / unique_name
 
-        # Compute storage path relative to the project base directory
-        rel_path = str(abs_path.relative_to(base_dir))
+        # Compute storage path relative to PROJECT_DOCUMENTS_ROOT (includes projekt_id prefix)
+        rel_path = str(abs_path.relative_to(Path(settings.PROJECT_DOCUMENTS_ROOT)))
 
         try:
             with open(abs_path, 'wb') as dst:

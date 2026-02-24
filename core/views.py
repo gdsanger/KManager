@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 
@@ -18,6 +19,8 @@ from core.filters import ItemFilter
 from core.services.activity_stream import ActivityStreamService
 from werkzeug.utils import secure_filename
 from urllib.parse import quote
+
+logger = logging.getLogger(__name__)
 
 def home(request):
     """Home page view"""
@@ -1141,6 +1144,11 @@ def projekt_file_download(request, pk, file_pk):
 
     file_path = Path(settings.PROJECT_DOCUMENTS_ROOT) / pfile.storage_path
     if not file_path.exists():
+        logger.warning(
+            "projekt_file_download: storage missing for ProjektFile pk=%s (projekt=%s)",
+            pfile.pk,
+            pk,
+        )
         raise Http404('Datei nicht gefunden.')
 
     # FileResponse takes ownership of the file handle and closes it after streaming.
