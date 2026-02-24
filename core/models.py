@@ -1428,8 +1428,14 @@ class ProjektFile(models.Model):
 
         # Validate and normalize the optional subfolder ("ordner")
         if ordner:
+            # Normalize the user-supplied folder path and ensure it is relative
+            ordner_path = Path(ordner)
+            if ordner_path.is_absolute() or ordner_path.drive:
+                raise ValidationError("Ungültiger Ordnerpfad.")
+            # Remove any leading separators to avoid empty/absolute segments
+            cleaned_ordner = str(ordner_path).lstrip("/\\")
             # Construct the candidate folder path and resolve it
-            folder_path = (base_dir / ordner).resolve()
+            folder_path = (base_dir / cleaned_ordner).resolve()
             try:
                 # Ensure the resolved folder is still within the project base directory
                 folder_path.relative_to(base_dir)
@@ -1445,8 +1451,8 @@ class ProjektFile(models.Model):
         # Final absolute path for the file
         abs_path = target_dir / unique_name
 
-        # Compute storage path relative to PROJECT_DOCUMENTS_ROOT
-        rel_path = str(abs_path.relative_to(Path(settings.PROJECT_DOCUMENTS_ROOT)))
+        # Compute storage path relative to the project base directory
+        rel_path = str(abs_path.relative_to(base_dir))
 
         try:
             with open(abs_path, 'wb') as dst:
