@@ -17,7 +17,7 @@ from core.tables import ItemTable
 from core.filters import ItemFilter
 from core.services.activity_stream import ActivityStreamService
 from werkzeug.utils import secure_filename
-from django.utils.http import urlquote
+from urllib.parse import quote
 
 def home(request):
     """Home page view"""
@@ -1034,7 +1034,7 @@ def projekt_file_upload(request, pk):
 
     if request.method == 'POST':
         ordner = request.POST.get('ordner', '').strip()
-        safe_ordner = urlquote(ordner, safe='')
+        safe_ordner = quote(ordner, safe='')
         uploaded_files = request.FILES.getlist('files')
 
         if not uploaded_files:
