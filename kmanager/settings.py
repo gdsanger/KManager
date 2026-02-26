@@ -167,6 +167,11 @@ MEDIA_URL = '/data/'
 VERMIETUNG_DOCUMENTS_ROOT = MEDIA_ROOT / 'vermietung'
 PROJECT_DOCUMENTS_ROOT = MEDIA_ROOT / 'project'
 
+# File upload limits
+# Allow up to 50 MB per file; spill to disk above 5 MB to reduce memory pressure.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024   # 50 MB (non-file form fields)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024    # 5 MB  (switch to temp-file above this)
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 

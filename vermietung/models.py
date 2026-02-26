@@ -2528,11 +2528,16 @@ class AktivitaetAttachment(models.Model):
         """
         # Generate unique filename to prevent collisions
         unique_id = uuid.uuid4().hex[:8]
-        safe_filename = f"{unique_id}_{filename}"
+        # Use only the base name of the uploaded file to avoid injected paths
+        base_name = Path(filename).name
+        safe_filename = f"{unique_id}_{base_name}"
         
-        storage_path = f"aktivitaet/{aktivitaet_id}/attachments/{safe_filename}"
+        # Build the storage path using pathlib to avoid accidental traversal.
+        # This path is intended to be *relative* to the documents root.
+        storage_path = Path("aktivitaet") / str(aktivitaet_id) / "attachments" / safe_filename
         
-        return storage_path
+        # Always return a normalized, relative POSIX-style path string
+        return storage_path.as_posix()
     
     @staticmethod
     def save_uploaded_file(uploaded_file, aktivitaet_id, user=None):
@@ -2556,15 +2561,47 @@ class AktivitaetAttachment(models.Model):
         # Validate file type and get MIME type
         mime_type = validate_attachment_file_type(uploaded_file)
         
-        # Generate storage path
+        # Generate storage path (relative path under the documents root)
         storage_path = AktivitaetAttachment.generate_storage_path(
             aktivitaet_id,
             uploaded_file.name
         )
-        
-        # Create absolute path
-        absolute_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / storage_path
-        
+
+        # Normalize and validate the documents root
+        root_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT).resolve()
+
+        # Reject absolute paths outright
+        # Convert storage_path to a pure relative path to avoid accidental traversal
+        relative_storage_path = Path(storage_path)
+        if relative_storage_path.is_absolute():
+            logger.error(
+                f"Refusing absolute storage path for attachment: {relative_storage_path}"
+        # Ensure we only ever use a strictly relative path segment when joining
+        if relative_storage_path.anchor or relative_storage_path.drive:
+            # Strip any root/drive information that might have slipped in
+            relative_storage_path = Path(relative_storage_path.name)
+            )
+            raise ValidationError('Ungültiger Dateipfad.')
+
+        # Build the absolute path and ensure it stays within documents root
+        absolute_path = (root_path / relative_storage_path).resolve()
+        try:
+            # Python 3.9+: reliable containment check
+            is_within_root = absolute_path.is_relative_to(root_path)
+        except AttributeError:
+            # Fallback for older Python versions
+            try:
+                absolute_path.relative_to(root_path)
+                is_within_root = True
+            except ValueError:
+                is_within_root = False
+
+        if not is_within_root:
+            logger.error(
+                f"Attempted to save attachment outside of documents root: {absolute_path}"
+            )
+            raise ValidationError('Ungültiger Dateipfad.')
+
         # Create directory if it doesn't exist
         try:
             absolute_path.parent.mkdir(parents=True, exist_ok=True)
