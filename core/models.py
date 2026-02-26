@@ -1232,6 +1232,8 @@ PROJEKT_MAX_FILE_SIZE = 25 * 1024 * 1024
 
 def validate_projekt_file_size(file):
     """Validate that file size does not exceed 25 MB."""
+    if file.size is None:
+        return
     if file.size > PROJEKT_MAX_FILE_SIZE:
         raise ValidationError(
             f'Die Dateigröße ({file.size / (1024 * 1024):.2f} MB) überschreitet '
@@ -1410,21 +1412,27 @@ class ProjektFile(models.Model):
         validate_projekt_file_size(uploaded_file)
 
         # Detect MIME type (best-effort, no strict whitelist for projects)
+        mime_type = "application/octet-stream"
         try:
             import magic as libmagic
             uploaded_file.seek(0)
             mime_type = libmagic.from_buffer(uploaded_file.read(2048), mime=True)
-            uploaded_file.seek(0)
         except Exception:
-            mime_type = "application/octet-stream"
+            pass
+        finally:
+            try:
+                uploaded_file.seek(0)
+            except Exception:
+                pass
 
         # Build a safe filename with UUID prefix to avoid collisions
         from werkzeug.utils import secure_filename
         safe_name = secure_filename(uploaded_file.name) or 'file'
         unique_name = f"{uuid.uuid4().hex[:8]}_{safe_name}"
 
-        # Base directory for this project's files
-        base_dir = Path(settings.PROJECT_DOCUMENTS_ROOT) / str(projekt.pk)
+        # Base directory for this project's files (keep unresolved – preserve symlinks)
+        project_root = Path(settings.PROJECT_DOCUMENTS_ROOT)
+        base_dir = project_root / str(projekt.pk)
 
         # Validate and normalize the optional subfolder ("ordner")
         if ordner:
@@ -1434,25 +1442,31 @@ class ProjektFile(models.Model):
                 raise ValidationError("Ungültiger Ordnerpfad.")
             # Remove any leading separators to avoid empty/absolute segments
             cleaned_ordner = str(ordner_path).lstrip("/\\")
-            # Construct the candidate folder path and resolve it
-            folder_path = (base_dir / cleaned_ordner).resolve()
+            # Security check via resolve(): ensure the candidate stays inside the project
+            # directory even when path components contain ".." or symlinks.
+            candidate_resolved = (base_dir / cleaned_ordner).resolve()
+            base_dir_resolved = base_dir.resolve()
             try:
-                # Ensure the resolved folder is still within the project base directory
-                folder_path.relative_to(base_dir)
+                candidate_resolved.relative_to(base_dir_resolved)
             except ValueError:
                 raise ValidationError("Ungültiger Ordnerpfad.")
-            target_dir = folder_path
+            # Use the *unresolved* path for the actual directory so that writes land
+            # inside the configured (possibly symlinked) root, not the real target.
+            target_dir = base_dir / cleaned_ordner
         else:
             target_dir = base_dir
 
         # Ensure the target directory exists
-        target_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise ValidationError(f'Fehler beim Erstellen des Verzeichnisses: {exc}')
 
         # Final absolute path for the file
         abs_path = target_dir / unique_name
 
         # Compute storage path relative to PROJECT_DOCUMENTS_ROOT (includes projekt_id prefix)
-        rel_path = str(abs_path.relative_to(Path(settings.PROJECT_DOCUMENTS_ROOT)))
+        rel_path = str(abs_path.relative_to(project_root))
 
         try:
             with open(abs_path, 'wb') as dst:

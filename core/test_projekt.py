@@ -393,3 +393,108 @@ class ProjektFileUploadTestCase(TestCase):
                 self._upload(ordner='')
                 after = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
                 self.assertEqual(after - before, 1)
+
+    def test_upload_2mb_file_succeeds(self):
+        """Uploading a ~2 MB file must succeed without any crash and save full content."""
+        import tempfile
+        content = b'X' * 2 * 1024 * 1024  # 2 MB
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                response = self._upload(filename='bigfile.bin', content=content)
+                self.assertEqual(response.status_code, 302)
+                pfile = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).last()
+                self.assertIsNotNone(pfile)
+                self.assertEqual(pfile.file_size, len(content))
+                abs_path = Path(tmpdir) / pfile.storage_path
+                self.assertTrue(abs_path.exists(), 'Saved file must exist on disk')
+                self.assertEqual(abs_path.stat().st_size, len(content), 'Saved file size must match upload size')
+
+    def test_upload_2mb_file_to_subfolder_succeeds(self):
+        """Uploading a ~2 MB file to a subfolder must succeed."""
+        import tempfile
+        content = b'Y' * 2 * 1024 * 1024  # 2 MB
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                # Pre-create the subfolder record
+                ProjektFile.objects.create(
+                    projekt=self.projekt, filename='docs', ordner='', is_folder=True, benutzer=self.user
+                )
+                before = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                response = self._upload(filename='big2.bin', content=content, ordner='docs')
+                self.assertEqual(response.status_code, 302)
+                after = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                self.assertEqual(after - before, 1)
+                pfile = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).last()
+                self.assertEqual(pfile.file_size, len(content))
+
+    def test_upload_over_limit_rejected(self):
+        """Uploading a file that exceeds PROJEKT_MAX_FILE_SIZE must not create a DB entry."""
+        import tempfile
+        oversized = b'Z' * (PROJEKT_MAX_FILE_SIZE + 1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                before = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                self._upload(filename='toolarge.bin', content=oversized)
+                after = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).count()
+                self.assertEqual(after - before, 0, 'Over-limit file must not be stored')
+
+
+class ProjektFileSizeValidationTestCase(TestCase):
+    """Unit tests for validate_projekt_file_size."""
+
+    def _make_mock_file(self, size):
+        """Return a minimal mock with a .size attribute."""
+        class _MockFile:
+            pass
+        f = _MockFile()
+        f.size = size
+        return f
+
+    def test_valid_size_passes(self):
+        """File under the limit must not raise."""
+        from core.models import validate_projekt_file_size
+        f = self._make_mock_file(2 * 1024 * 1024)  # 2 MB
+        validate_projekt_file_size(f)  # must not raise
+
+    def test_size_at_limit_passes(self):
+        """File exactly at the limit must not raise."""
+        from core.models import validate_projekt_file_size
+        f = self._make_mock_file(PROJEKT_MAX_FILE_SIZE)
+        validate_projekt_file_size(f)  # must not raise
+
+    def test_size_over_limit_raises(self):
+        """File over the limit must raise ValidationError."""
+        from core.models import validate_projekt_file_size
+        f = self._make_mock_file(PROJEKT_MAX_FILE_SIZE + 1)
+        with self.assertRaises(ValidationError):
+            validate_projekt_file_size(f)
+
+    def test_none_size_does_not_crash(self):
+        """File with size=None must not raise (unknown size is allowed through)."""
+        from core.models import validate_projekt_file_size
+        f = self._make_mock_file(None)
+        validate_projekt_file_size(f)  # must not raise
+
+
+class ProjektFileSymlinkSafetyTestCase(TestCase):
+    """Tests that path traversal via symlinks is prevented in save_uploaded_file."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='symlinkuser', password='password')
+        self.projekt = Projekt.objects.create(titel='Symlink Test', erstellt_von=self.user)
+
+    def test_subfolder_upload_with_symlinked_root(self):
+        """Subfolder uploads must work when PROJECT_DOCUMENTS_ROOT is a symlink."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        content = b'symlink test content'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            real_dir = Path(tmpdir) / 'real_project'
+            real_dir.mkdir()
+            link_dir = Path(tmpdir) / 'project_link'
+            link_dir.symlink_to(real_dir)
+            with self.settings(PROJECT_DOCUMENTS_ROOT=str(link_dir)):
+                f = SimpleUploadedFile('sym.txt', content, content_type='text/plain')
+                rel_path, mime, uname = ProjektFile.save_uploaded_file(f, self.projekt, 'subdir')
+                saved = Path(str(link_dir)) / rel_path
+                self.assertTrue(saved.exists(), 'File must exist under the symlinked root')
+                self.assertEqual(saved.read_bytes(), content)

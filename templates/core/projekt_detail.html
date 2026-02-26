@@ -303,6 +303,8 @@
         renderFileList(fileInput.files);
     }
 
+    const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB – must match PROJEKT_MAX_FILE_SIZE
+
     function renderFileList(files) {
         fileList.innerHTML = '';
         if (files.length === 0) {
@@ -311,16 +313,24 @@
             return;
         }
 
+        let hasOversized = false;
         fileList.classList.remove('d-none');
         for (const file of files) {
             const li = document.createElement('li');
-            li.className = 'list-group-item list-group-item-dark d-flex justify-content-between align-items-center py-1 px-2';
-            const sizeKB = (file.size / 1024).toFixed(1);
+            const oversized = file.size > MAX_FILE_SIZE;
+            if (oversized) hasOversized = true;
+            li.className = 'list-group-item list-group-item-dark d-flex justify-content-between align-items-center py-1 px-2' + (oversized ? ' list-group-item-danger' : '');
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
             li.innerHTML = `<span class="text-truncate me-2" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
-                            <small class="text-muted text-nowrap">${sizeKB} KB</small>`;
+                            <small class="${oversized ? 'text-danger fw-bold' : 'text-muted'} text-nowrap">${sizeMB} MB${oversized ? ' ❌ zu groß' : ''}</small>`;
             fileList.appendChild(li);
         }
-        uploadBtn.disabled = false;
+        uploadBtn.disabled = hasOversized;
+        if (hasOversized) {
+            uploadBtn.title = 'Eine oder mehrere Dateien überschreiten die maximale Größe von 25 MB.';
+        } else {
+            uploadBtn.title = '';
+        }
     }
 
     function escapeHtml(str) {
