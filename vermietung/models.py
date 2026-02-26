@@ -2532,10 +2532,12 @@ class AktivitaetAttachment(models.Model):
         base_name = Path(filename).name
         safe_filename = f"{unique_id}_{base_name}"
         
-        # Build the storage path using pathlib to avoid accidental traversal
+        # Build the storage path using pathlib to avoid accidental traversal.
+        # This path is intended to be *relative* to the documents root.
         storage_path = Path("aktivitaet") / str(aktivitaet_id) / "attachments" / safe_filename
         
-        return str(storage_path)
+        # Always return a normalized, relative POSIX-style path string
+        return storage_path.as_posix()
     
     @staticmethod
     def save_uploaded_file(uploaded_file, aktivitaet_id, user=None):
@@ -2568,11 +2570,16 @@ class AktivitaetAttachment(models.Model):
         # Normalize and validate the documents root
         root_path = Path(settings.VERMIETUNG_DOCUMENTS_ROOT).resolve()
 
+        # Reject absolute paths outright
         # Convert storage_path to a pure relative path to avoid accidental traversal
         relative_storage_path = Path(storage_path)
         if relative_storage_path.is_absolute():
             logger.error(
                 f"Refusing absolute storage path for attachment: {relative_storage_path}"
+        # Ensure we only ever use a strictly relative path segment when joining
+        if relative_storage_path.anchor or relative_storage_path.drive:
+            # Strip any root/drive information that might have slipped in
+            relative_storage_path = Path(relative_storage_path.name)
             )
             raise ValidationError('Ungültiger Dateipfad.')
 
