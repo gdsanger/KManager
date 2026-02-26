@@ -221,7 +221,12 @@
                                 </li>
                             </ul>
                         </li>
-                     
+                        <!-- Projekte -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'projekte' in request.path %}active{% endif %}" href="{% url 'projekt_list' %}">
+                                <i class="bi bi-kanban"></i> <span class="sidebar-text">Projekte</span>
+                            </a>
+                        </li>
 
                         <!-- Buchhaltung Section (NEW - after Aktivitäten) -->
                         <li class="nav-item nav-section">
