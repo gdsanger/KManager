@@ -168,9 +168,14 @@ VERMIETUNG_DOCUMENTS_ROOT = MEDIA_ROOT / 'vermietung'
 PROJECT_DOCUMENTS_ROOT = MEDIA_ROOT / 'project'
 
 # File upload limits
-# Allow up to 50 MB per file; spill to disk above 5 MB to reduce memory pressure.
-DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024   # 50 MB (non-file form fields)
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024    # 5 MB  (switch to temp-file above this)
+# DATA_UPLOAD_MAX_MEMORY_SIZE limits non-file POST fields only (not file data).
+# File size is enforced at the application level via validate_projekt_file_size (25 MB).
+# FILE_UPLOAD_MAX_MEMORY_SIZE controls when uploaded files are spooled to a temp file
+# instead of being held entirely in memory; it does not reject uploads above this value.
+# NOTE: A reverse proxy (e.g. nginx) must also allow bodies up to the application limit.
+#       Set client_max_body_size to at least 25m in nginx.conf.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 26 * 1024 * 1024   # 26 MB – generous headroom above project 25 MB limit
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024    # 5 MB  – spill to temp file above this size
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

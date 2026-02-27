@@ -427,6 +427,34 @@ class ProjektFileUploadTestCase(TestCase):
                 pfile = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).last()
                 self.assertEqual(pfile.file_size, len(content))
 
+    def test_upload_5mb_file_succeeds(self):
+        """Uploading a ~5 MB file must succeed without any crash and save full content."""
+        content = b'A' * 5 * 1024 * 1024  # 5 MB
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                response = self._upload(filename='5mb.bin', content=content)
+                self.assertEqual(response.status_code, 302)
+                pfile = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).last()
+                self.assertIsNotNone(pfile)
+                self.assertEqual(pfile.file_size, len(content))
+                abs_path = Path(tmpdir) / pfile.storage_path
+                self.assertTrue(abs_path.exists(), 'Saved file must exist on disk')
+                self.assertEqual(abs_path.stat().st_size, len(content), 'Saved file size must match upload size')
+
+    def test_upload_15mb_file_succeeds(self):
+        """Uploading a ~15 MB file must succeed without any crash and save full content."""
+        content = b'B' * 15 * 1024 * 1024  # 15 MB
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.settings(PROJECT_DOCUMENTS_ROOT=tmpdir):
+                response = self._upload(filename='15mb.bin', content=content)
+                self.assertEqual(response.status_code, 302)
+                pfile = ProjektFile.objects.filter(projekt=self.projekt, is_folder=False).last()
+                self.assertIsNotNone(pfile)
+                self.assertEqual(pfile.file_size, len(content))
+                abs_path = Path(tmpdir) / pfile.storage_path
+                self.assertTrue(abs_path.exists(), 'Saved file must exist on disk')
+                self.assertEqual(abs_path.stat().st_size, len(content), 'Saved file size must match upload size')
+
     def test_upload_over_limit_rejected(self):
         """Uploading a file that exceeds PROJEKT_MAX_FILE_SIZE must not create a DB entry."""
         import tempfile
