@@ -1,0 +1,243 @@
+{% extends "lieferantenwesen/base.html" %}
+
+{% block title %}{{ invoice.invoice_no }} – Eingangsrechnung{% endblock %}
+{% block page_title %}Eingangsrechnung: {{ invoice.invoice_no }}{% endblock %}
+
+{% block page_actions %}
+{% if invoice.status not in "APPROVED REJECTED" %}
+<a href="{% url 'lieferantenwesen:invoice_edit' invoice.pk %}" class="btn btn-warning">
+    <i class="bi bi-pencil"></i> Bearbeiten
+</a>
+{% endif %}
+{% if invoice.pdf_file %}
+<a href="{{ invoice.pdf_file.url }}" class="btn btn-outline-light" target="_blank">
+    <i class="bi bi-file-earmark-pdf"></i> PDF
+</a>
+{% endif %}
+<a href="{% url 'lieferantenwesen:invoice_list' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück
+</a>
+{% endblock %}
+
+{% block main_content %}
+<div class="row">
+    <!-- Left column: invoice data -->
+    <div class="col-lg-8">
+
+        <!-- Header data -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-receipt"></i> Kopfdaten</h5>
+                <span class="badge bg-{{ invoice.get_status_display_class }} fs-6">
+                    {{ invoice.get_status_display }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Rechnungsnummer</div>
+                    <div class="col-md-8"><strong>{{ invoice.invoice_no }}</strong></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Rechnungsdatum</div>
+                    <div class="col-md-8">{{ invoice.invoice_date|date:"d.m.Y" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Lieferant</div>
+                    <div class="col-md-8">
+                        <a href="{% url 'lieferantenwesen:supplier_detail' invoice.supplier.pk %}">
+                            {{ invoice.supplier.name }}
+                        </a>
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Währung</div>
+                    <div class="col-md-8">{{ invoice.currency }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Amounts -->
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-currency-euro"></i> Beträge</h5></div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Nettobetrag</div>
+                    <div class="col-md-8">{{ invoice.net_amount|default:"–" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Umsatzsteuer</div>
+                    <div class="col-md-8">{{ invoice.tax_amount|default:"–" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Bruttobetrag</div>
+                    <div class="col-md-8"><strong>{{ invoice.gross_amount|default:"–" }}</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment data -->
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-bank"></i> Zahlungsdaten</h5></div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Fälligkeit</div>
+                    <div class="col-md-8">{{ invoice.due_date|date:"d.m.Y"|default:"–" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Zahlungsbedingungen</div>
+                    <div class="col-md-8">{{ invoice.payment_terms_text|default:"–" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Verwendungszweck</div>
+                    <div class="col-md-8">{{ invoice.payment_reference|default:"–" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">IBAN (aus Rechnung)</div>
+                    <div class="col-md-8">
+                        {% if invoice.iban_from_invoice %}
+                            <code>{{ invoice.iban_from_invoice }}</code>
+                        {% else %}–{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cost assignment -->
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-tag"></i> Kostenart & Auftrag</h5></div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Hauptkostenart</div>
+                    <div class="col-md-8">{{ invoice.cost_type_main|default:"–" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Unterkostenart</div>
+                    <div class="col-md-8">{{ invoice.cost_type_sub|default:"–" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Auftrag</div>
+                    <div class="col-md-8">{{ invoice.order|default:"–" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lines / Positions -->
+        {% if lines %}
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-list-ol"></i> Positionen</h5></div>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Pos.</th>
+                            <th>Beschreibung</th>
+                            <th>Menge</th>
+                            <th>Einheit</th>
+                            <th>EP</th>
+                            <th>Netto</th>
+                            <th>MwSt %</th>
+                            <th>Brutto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in lines %}
+                        <tr>
+                            <td>{{ line.position_no }}</td>
+                            <td>{{ line.description }}</td>
+                            <td>{{ line.quantity|default:"" }}</td>
+                            <td>{{ line.unit }}</td>
+                            <td>{{ line.unit_price|default:"" }}</td>
+                            <td>{{ line.net_amount }}</td>
+                            <td>{{ line.tax_rate }} %</td>
+                            <td>{{ line.gross_amount|default:"" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Freigabe-Bereich -->
+        {% if approval_form %}
+        <div class="card mb-3 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-shield-check"></i> Freigabe-Entscheidung</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{% url 'lieferantenwesen:invoice_approve' invoice.pk %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ approval_form.action.label }}</label>
+                        {% for choice in approval_form.action %}
+                        <div class="form-check">
+                            {{ choice.tag }}
+                            <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                {{ choice.choice_label }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ approval_form.approval_comment.label }}</label>
+                        {{ approval_form.approval_comment }}
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Entscheidung speichern
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Existing approval/rejection info -->
+        {% if invoice.approval_comment and invoice.status in "APPROVED REJECTED" %}
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-chat-text"></i> Freigabe-Kommentar</h5></div>
+            <div class="card-body">
+                <p>{{ invoice.approval_comment }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right column: metadata -->
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-info-circle"></i> Informationen</h5></div>
+            <div class="card-body small">
+                <div class="row mb-2">
+                    <div class="col-6 text-muted">Erstellt am</div>
+                    <div class="col-6">{{ invoice.created_at|date:"d.m.Y H:i" }}</div>
+                </div>
+                {% if invoice.created_by %}
+                <div class="row mb-2">
+                    <div class="col-6 text-muted">Erstellt von</div>
+                    <div class="col-6">{{ invoice.created_by.get_full_name|default:invoice.created_by.username }}</div>
+                </div>
+                {% endif %}
+                {% if invoice.approved_at %}
+                <div class="row mb-2">
+                    <div class="col-6 text-muted">Freigegeben am</div>
+                    <div class="col-6">{{ invoice.approved_at|date:"d.m.Y H:i" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-6 text-muted">Freigegeben von</div>
+                    <div class="col-6">{{ invoice.approved_by.get_full_name|default:invoice.approved_by.username }}</div>
+                </div>
+                {% endif %}
+                {% if invoice.rejected_at %}
+                <div class="row mb-2">
+                    <div class="col-6 text-muted">Abgelehnt am</div>
+                    <div class="col-6">{{ invoice.rejected_at|date:"d.m.Y H:i" }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-6 text-muted">Abgelehnt von</div>
+                    <div class="col-6">{{ invoice.rejected_by.get_full_name|default:invoice.rejected_by.username }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

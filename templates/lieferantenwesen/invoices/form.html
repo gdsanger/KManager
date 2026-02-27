@@ -1,0 +1,194 @@
+{% extends "lieferantenwesen/base.html" %}
+
+{% block title %}{{ title }} – Lieferantenwesen{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block page_actions %}
+{% if invoice %}
+<a href="{% url 'lieferantenwesen:invoice_detail' invoice.pk %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% else %}
+<a href="{% url 'lieferantenwesen:invoice_list' %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endif %}
+{% endblock %}
+
+{% block main_content %}
+<form method="post" novalidate>
+    {% csrf_token %}
+    <div class="row">
+        <div class="col-lg-9">
+
+            <!-- Header -->
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="mb-0">Kopfdaten</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.invoice_no.label }} <span class="text-danger">*</span></label>
+                            {{ form.invoice_no }}
+                            {% if form.invoice_no.errors %}<div class="text-danger small">{{ form.invoice_no.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.invoice_date.label }} <span class="text-danger">*</span></label>
+                            {{ form.invoice_date }}
+                            {% if form.invoice_date.errors %}<div class="text-danger small">{{ form.invoice_date.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.currency.label }}</label>
+                            {{ form.currency }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.supplier.label }} <span class="text-danger">*</span></label>
+                            {{ form.supplier }}
+                            {% if form.supplier.errors %}<div class="text-danger small">{{ form.supplier.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">{{ form.status.label }}</label>
+                            {{ form.status }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Amounts -->
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="mb-0">Beträge</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.net_amount.label }}</label>
+                            {{ form.net_amount }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.tax_amount.label }}</label>
+                            {{ form.tax_amount }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.gross_amount.label }}</label>
+                            {{ form.gross_amount }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment -->
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="mb-0">Zahlungsdaten</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.due_date.label }}</label>
+                            {{ form.due_date }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.payment_terms_text.label }}</label>
+                            {{ form.payment_terms_text }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.payment_reference.label }}</label>
+                            {{ form.payment_reference }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.iban_from_invoice.label }}</label>
+                            {{ form.iban_from_invoice }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cost types & order -->
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="mb-0">Kostenart & Auftrag</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.cost_type_main.label }}</label>
+                            {{ form.cost_type_main }}
+                            {% if form.cost_type_main.errors %}<div class="text-danger small">{{ form.cost_type_main.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.cost_type_sub.label }}</label>
+                            {{ form.cost_type_sub }}
+                            {% if form.cost_type_sub.errors %}<div class="text-danger small">{{ form.cost_type_sub.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.order.label }}</label>
+                            {{ form.order }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Approval comment -->
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="mb-0">Freigabe-Kommentar</h5></div>
+                <div class="card-body">
+                    {{ form.approval_comment }}
+                </div>
+            </div>
+
+            <!-- Line items (positions) -->
+            {{ formset.management_form }}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Positionen</h5>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="add-line">
+                        <i class="bi bi-plus"></i> Position hinzufügen
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm mb-0" id="lines-table">
+                            <thead>
+                                <tr>
+                                    <th>Pos.</th>
+                                    <th>Beschreibung</th>
+                                    <th>Menge</th>
+                                    <th>Einheit</th>
+                                    <th>EP</th>
+                                    <th>Netto</th>
+                                    <th>MwSt%</th>
+                                    <th>Entf.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lines-body">
+                                {% for line_form in formset %}
+                                <tr class="line-form">
+                                    <td>{{ line_form.id }}{{ line_form.position_no }}</td>
+                                    <td>{{ line_form.description }}</td>
+                                    <td>{{ line_form.quantity }}</td>
+                                    <td>{{ line_form.unit }}</td>
+                                    <td>{{ line_form.unit_price }}</td>
+                                    <td>{{ line_form.net_amount }}</td>
+                                    <td>{{ line_form.tax_rate }}</td>
+                                    <td>
+                                        {% if line_form.DELETE %}
+                                        <div class="form-check">
+                                            {{ line_form.DELETE }}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Speichern
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

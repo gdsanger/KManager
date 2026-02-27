@@ -1,0 +1,138 @@
+{% extends "lieferantenwesen/base.html" %}
+
+{% block title %}{{ supplier.name }} – Lieferant{% endblock %}
+{% block page_title %}{{ supplier.name }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'lieferantenwesen:supplier_edit' supplier.pk %}" class="btn btn-warning">
+    <i class="bi bi-pencil"></i> Bearbeiten
+</a>
+<a href="{% url 'lieferantenwesen:supplier_list' %}" class="btn btn-secondary">
+    <i class="bi bi-arrow-left"></i> Zurück
+</a>
+{% endblock %}
+
+{% block main_content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Stammdaten -->
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-building"></i> Stammdaten</h5></div>
+            <div class="card-body">
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Name</div>
+                    <div class="col-md-8"><strong>{{ supplier.name }}</strong></div>
+                </div>
+                {% if supplier.ust_id %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">USt-IdNr.</div>
+                    <div class="col-md-8">{{ supplier.ust_id }}</div>
+                </div>
+                {% endif %}
+                {% if supplier.steuer_nr %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Steuernummer</div>
+                    <div class="col-md-8">{{ supplier.steuer_nr }}</div>
+                </div>
+                {% endif %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Status</div>
+                    <div class="col-md-8">
+                        {% if supplier.is_active %}
+                            <span class="badge bg-success">Aktiv</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inaktiv</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Adresse -->
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-geo-alt"></i> Adresse</h5></div>
+            <div class="card-body">
+                {% if supplier.adresse_street %}
+                <div>{{ supplier.adresse_street }}</div>
+                {% endif %}
+                {% if supplier.adresse_zip or supplier.adresse_city %}
+                <div>{{ supplier.adresse_zip }} {{ supplier.adresse_city }}</div>
+                {% endif %}
+                {% if supplier.adresse_country %}
+                <div>{{ supplier.adresse_country }}</div>
+                {% endif %}
+                {% if not supplier.adresse_street and not supplier.adresse_city %}
+                <span class="text-muted">Keine Adresse hinterlegt</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Kontakt -->
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-telephone"></i> Kontakt</h5></div>
+            <div class="card-body">
+                {% if supplier.email %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">E-Mail</div>
+                    <div class="col-md-8"><a href="mailto:{{ supplier.email }}">{{ supplier.email }}</a></div>
+                </div>
+                {% endif %}
+                {% if supplier.telefon %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Telefon</div>
+                    <div class="col-md-8">{{ supplier.telefon }}</div>
+                </div>
+                {% endif %}
+                {% if not supplier.email and not supplier.telefon %}
+                <span class="text-muted">Keine Kontaktdaten hinterlegt</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Bankdaten -->
+        {% if supplier.bank_iban or supplier.bank_bic %}
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-bank"></i> Bankdaten</h5></div>
+            <div class="card-body">
+                {% if supplier.bank_iban %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">IBAN</div>
+                    <div class="col-md-8"><code>{{ supplier.bank_iban }}</code></div>
+                </div>
+                {% endif %}
+                {% if supplier.bank_bic %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">BIC</div>
+                    <div class="col-md-8"><code>{{ supplier.bank_bic }}</code></div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="bi bi-receipt"></i> Letzte Rechnungen</h5></div>
+            <div class="list-group list-group-flush">
+                {% for inv in invoices %}
+                <a href="{% url 'lieferantenwesen:invoice_detail' inv.pk %}" class="list-group-item list-group-item-action list-group-item-dark">
+                    <div class="d-flex justify-content-between">
+                        <span>{{ inv.invoice_no }}</span>
+                        <span class="badge bg-{{ inv.get_status_display_class }}">{{ inv.get_status_display }}</span>
+                    </div>
+                    <small class="text-muted">{{ inv.invoice_date|date:"d.m.Y" }}</small>
+                </a>
+                {% empty %}
+                <div class="list-group-item list-group-item-dark text-muted">Keine Rechnungen</div>
+                {% endfor %}
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'lieferantenwesen:invoice_create' %}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-plus"></i> Rechnung anlegen
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

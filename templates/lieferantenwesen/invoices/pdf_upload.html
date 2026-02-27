@@ -1,0 +1,88 @@
+{% extends "lieferantenwesen/base.html" %}
+
+{% block title %}PDF hochladen – Eingangsrechnung{% endblock %}
+{% block page_title %}Eingangsrechnung aus PDF erstellen{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'lieferantenwesen:invoice_list' %}" class="btn btn-secondary">
+    <i class="bi bi-x-circle"></i> Abbrechen
+</a>
+{% endblock %}
+
+{% block main_content %}
+<div class="row">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>KI-gestützte PDF-Auswertung</strong><br>
+                    Die hochgeladene PDF-Rechnung wird automatisch durch künstliche Intelligenz analysiert.
+                    Erkannte Felder werden vorbefüllt. Nicht erkannte Felder können Sie anschließend manuell ergänzen.
+                </div>
+
+                <form method="post" enctype="multipart/form-data" id="pdf-upload-form">
+                    {% csrf_token %}
+
+                    <div class="mb-4">
+                        <label for="pdf_file" class="form-label">
+                            PDF-Datei <span class="text-danger">*</span>
+                        </label>
+                        <input class="form-control" type="file" id="pdf_file" name="pdf_file"
+                               accept=".pdf" required>
+                        <div class="form-text">Laden Sie die Eingangsrechnung als PDF-Datei hoch (max. 50 MB).</div>
+                    </div>
+
+                    <!-- Upload status (hidden until form is submitted) -->
+                    <div id="upload-status" class="mb-3" style="display: none;">
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                <div>
+                                    <strong id="status-title">PDF wird hochgeladen …</strong>
+                                    <div id="status-message" class="small">Bitte warten.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'lieferantenwesen:invoice_list' %}" class="btn btn-secondary">Abbrechen</a>
+                        <button type="submit" class="btn btn-primary" id="submit-btn">
+                            <i class="bi bi-upload"></i> Hochladen &amp; analysieren
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-lightbulb"></i> Hinweise</h6>
+                <ul class="small mb-0">
+                    <li>Unterstütztes Format: PDF</li>
+                    <li>Die KI extrahiert automatisch: Lieferant, Rechnungsdatum, Fälligkeit, Beträge und weitere Felder.</li>
+                    <li>Der Lieferant wird automatisch gesucht und ggf. neu angelegt.</li>
+                    <li>Alle Felder können nach der Extraktion manuell korrigiert werden.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('pdf-upload-form').addEventListener('submit', function () {
+    document.getElementById('upload-status').style.display = 'block';
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('submit-btn').innerHTML =
+        '<span class="spinner-border spinner-border-sm me-2"></span>Wird verarbeitet …';
+    setTimeout(function () {
+        document.getElementById('status-title').textContent = 'KI-Extraktion läuft …';
+        document.getElementById('status-message').textContent =
+            'Rechnungsdaten werden analysiert.';
+    }, 2000);
+});
+</script>
+{% endblock %}
