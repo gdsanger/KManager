@@ -2576,12 +2576,15 @@ class AktivitaetAttachment(models.Model):
         if relative_storage_path.is_absolute():
             logger.error(
                 f"Refusing absolute storage path for attachment: {relative_storage_path}"
+            )
+            raise ValidationError('Ungültiger Dateipfad.')
         # Ensure we only ever use a strictly relative path segment when joining
         if relative_storage_path.anchor or relative_storage_path.drive:
             # Strip any root/drive information that might have slipped in
             relative_storage_path = Path(relative_storage_path.name)
-            )
-            raise ValidationError('Ungültiger Dateipfad.')
+            if not relative_storage_path.name:
+                logger.error("Refusing empty storage path after stripping root/drive.")
+                raise ValidationError('Ungültiger Dateipfad.')
 
         # Build the absolute path and ensure it stays within documents root
         absolute_path = (root_path / relative_storage_path).resolve()
