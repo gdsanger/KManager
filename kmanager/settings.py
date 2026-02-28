@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'vermietung.apps.VermietungConfig',
     'auftragsverwaltung.apps.AuftragsverwaltungConfig',
     'finanzen.apps.FinanzenConfig',
+    'lieferantenwesen.apps.LieferantenwesenConfig',
 ]
 
 MIDDLEWARE = [
