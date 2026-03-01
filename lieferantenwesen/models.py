@@ -24,7 +24,17 @@ INVOICE_IN_STATUS = [
     ('IN_REVIEW', 'In Prüfung'),
     ('APPROVED', 'Freigegeben'),
     ('REJECTED', 'Abgelehnt'),
+    ('PAID', 'Bezahlt'),
 ]
+
+# Status mapping for migration from vermietung.Eingangsrechnung
+VERMIETUNG_STATUS_MAPPING = {
+    'NEU': 'DRAFT',
+    'PRUEFUNG': 'IN_REVIEW',
+    'OFFEN': 'APPROVED',
+    'KLAERUNG': 'IN_REVIEW',
+    'BEZAHLT': 'PAID',
+}
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +129,54 @@ class InvoiceIn(models.Model):
         help_text="Optionale Zuordnung zu einem Auftrag (Controlling / Rentabilität)",
     )
 
+    # --- Rental-specific fields (from vermietung.Eingangsrechnung) ---
+    rental_object = models.ForeignKey(
+        "vermietung.MietObjekt",
+        on_delete=models.PROTECT,
+        related_name="invoices_in",
+        null=True,
+        blank=True,
+        verbose_name="Mietobjekt",
+        help_text="Zuordnung zu einem Mietobjekt (für Vermietungs-Kontext)",
+    )
+    service_period_from = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Leistungszeitraum von",
+    )
+    service_period_to = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Leistungszeitraum bis",
+    )
+    subject = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Betreff",
+    )
+    reference_number = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Referenznummer",
+    )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Notizen",
+    )
+    payment_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Zahlungsdatum",
+    )
+    allocable_to_tenants = models.BooleanField(
+        default=True,
+        verbose_name="Umlagefähig",
+        help_text="Kann auf Mieter umgelegt werden",
+    )
+
     # --- PDF file ---
     pdf_file = models.FileField(
         upload_to="lieferantenwesen/invoices/",
@@ -202,6 +260,17 @@ class InvoiceIn(models.Model):
                 errors["cost_type_sub"] = (
                     "Die Unterkostenart muss zur gewählten Hauptkostenart gehören."
                 )
+        # Service period validation
+        if self.service_period_from and self.service_period_to:
+            if self.service_period_from > self.service_period_to:
+                errors["service_period_to"] = (
+                    "Leistungszeitraum bis muss nach dem Von-Datum liegen."
+                )
+        # Payment date validation
+        if self.status == "PAID" and not self.payment_date:
+            errors["payment_date"] = (
+                'Bei Status "Bezahlt" muss ein Zahlungsdatum angegeben werden.'
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -213,8 +282,16 @@ class InvoiceIn(models.Model):
             "IN_REVIEW": "warning",
             "APPROVED": "success",
             "REJECTED": "danger",
+            "PAID": "success",
         }
         return mapping.get(self.status, "secondary")
+
+    def mark_as_paid(self, payment_date=None):
+        """Mark invoice as paid with the given payment date."""
+        from django.utils import timezone
+        self.status = "PAID"
+        self.payment_date = payment_date or timezone.now().date()
+        self.save()
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +354,26 @@ class InvoiceInLine(models.Model):
         verbose_name="Bruttobetrag",
     )
 
+    # --- Cost type allocation (from vermietung.EingangsrechnungAufteilung) ---
+    cost_type_main_line = models.ForeignKey(
+        "core.Kostenart",
+        on_delete=models.PROTECT,
+        related_name="invoiceinline_main",
+        null=True,
+        blank=True,
+        limit_choices_to={"parent__isnull": True},
+        verbose_name="Kostenart 1 (Hauptkostenart)",
+    )
+    cost_type_sub_line = models.ForeignKey(
+        "core.Kostenart",
+        on_delete=models.PROTECT,
+        related_name="invoiceinline_sub",
+        null=True,
+        blank=True,
+        limit_choices_to={"parent__isnull": False},
+        verbose_name="Kostenart 2 (Unterkostenart)",
+    )
+
     class Meta:
         verbose_name = "Rechnungsposition"
         verbose_name_plural = "Rechnungspositionen"
@@ -284,6 +381,20 @@ class InvoiceInLine(models.Model):
 
     def __str__(self):
         return f"Pos. {self.position_no}: {self.description}"
+
+    def clean(self):
+        """Validate line item fields."""
+        super().clean()
+        errors = {}
+        # Validate cost_type_sub_line belongs to cost_type_main_line
+        if self.cost_type_sub_line and self.cost_type_main_line:
+            if self.cost_type_sub_line.parent_id != self.cost_type_main_line.pk:
+                errors["cost_type_sub_line"] = (
+                    f'Kostenart 2 "{self.cost_type_sub_line.name}" muss zur '
+                    f'Hauptkostenart "{self.cost_type_main_line.name}" gehören.'
+                )
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         """Auto-calculate tax_amount and gross_amount if not set."""
