@@ -1475,6 +1475,16 @@ class Dokument(models.Model):
         related_name='dokumente',
         verbose_name="Eingangsrechnung"
     )
+
+    # New FK to global InvoiceIn model (for migrated invoices)
+    invoice_in = models.ForeignKey(
+        'lieferantenwesen.InvoiceIn',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='dokumente_vermietung',
+        verbose_name="Eingangsrechnung (global)"
+    )
     
     class Meta:
         verbose_name = "Dokument"
@@ -1491,23 +1501,24 @@ class Dokument(models.Model):
         Validate that exactly one target entity is set.
         """
         super().clean()
-        
+
         # Count how many foreign keys are set
         target_entities = [
             self.vertrag_id,
             self.mietobjekt_id,
             self.adresse_id,
             self.uebergabeprotokoll_id,
-            self.eingangsrechnung_id
+            self.eingangsrechnung_id,
+            self.invoice_in_id,
         ]
         set_entities = [e for e in target_entities if e is not None]
-        
+
         if len(set_entities) == 0:
             raise ValidationError(
                 'Das Dokument muss genau einem Zielobjekt zugeordnet werden '
                 '(Vertrag, Mietobjekt, Adresse, Übergabeprotokoll oder Eingangsrechnung).'
             )
-        
+
         if len(set_entities) > 1:
             raise ValidationError(
                 'Das Dokument kann nur einem einzigen Zielobjekt zugeordnet werden.'
@@ -1530,8 +1541,10 @@ class Dokument(models.Model):
             return 'uebergabeprotokoll'
         elif self.eingangsrechnung_id:
             return 'eingangsrechnung'
+        elif self.invoice_in_id:
+            return 'invoice_in'
         return None
-    
+
     def get_entity_id(self):
         """Get the entity ID for storage path."""
         if self.vertrag_id:
@@ -1544,8 +1557,10 @@ class Dokument(models.Model):
             return self.uebergabeprotokoll_id
         elif self.eingangsrechnung_id:
             return self.eingangsrechnung_id
+        elif self.invoice_in_id:
+            return self.invoice_in_id
         return None
-    
+
     def get_entity_display(self):
         """Get a display string for the linked entity."""
         if self.vertrag:
@@ -1558,6 +1573,8 @@ class Dokument(models.Model):
             return f"Übergabeprotokoll: {self.uebergabeprotokoll}"
         elif self.eingangsrechnung:
             return f"Eingangsrechnung: {self.eingangsrechnung}"
+        elif self.invoice_in:
+            return f"Eingangsrechnung: {self.invoice_in}"
         return "Unbekannt"
     
     def get_absolute_path(self):
