@@ -88,7 +88,7 @@ class InvoiceExtractionService:
 
         try:
             extractor = CoreExtractor()
-            dto = extractor.extract_from_pdf(pdf_path, user=user)
+            dto = extractor.extract_invoice_data(pdf_path, user=user)
         except (ServiceNotConfigured, Exception) as exc:
             logger.warning("AI extraction unavailable or failed: %s", exc)
             invoice_in.status = "DRAFT"

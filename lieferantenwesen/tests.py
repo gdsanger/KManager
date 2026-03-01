@@ -274,3 +274,87 @@ class SupplierMatchServiceTest(TestCase):
         self.assertEqual(adresse.name, "Völlig Unbekannte AG")
         self.assertEqual(adresse.ort, "Berlin")
         self.assertEqual(adresse.adressen_type, "LIEFERANT")
+
+
+class InvoiceExtractionServiceTest(TestCase):
+    """Test the InvoiceExtractionService wrapper in lieferantenwesen."""
+
+    def setUp(self):
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Test Extract Lieferant",
+            strasse="Extractstr. 1",
+            plz="44444",
+            ort="Extractstadt",
+            land="DE",
+        )
+        self.invoice = InvoiceIn.objects.create(
+            invoice_no="TBD",
+            invoice_date=date(2026, 3, 1),
+            supplier=self.supplier,
+            status="DRAFT",
+        )
+
+    def test_extraction_service_calls_correct_method(self):
+        """Test that InvoiceExtractionService calls extract_invoice_data (not extract_from_pdf)."""
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceExtractionService
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        # Mock the core extraction service
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+
+            # Mock successful extraction
+            mock_dto = InvoiceDataDTO(
+                belegnummer="RE-2026-001",
+                belegdatum="2026-03-01",
+                lieferant_name="Test Extract Lieferant",
+                nettobetrag="100.00",
+            )
+            mock_instance.extract_invoice_data.return_value = mock_dto
+
+            # Run extraction
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            # Verify extract_invoice_data was called (not extract_from_pdf)
+            mock_instance.extract_invoice_data.assert_called_once_with("/tmp/test.pdf", user=None)
+
+            # Verify invoice was updated
+            self.assertEqual(result.status, "IN_REVIEW")
+            self.assertEqual(result.invoice_no, "RE-2026-001")
+
+    def test_extraction_service_handles_unavailable_service(self):
+        """Test graceful fallback when AI service is not configured."""
+        from unittest.mock import patch
+        from lieferantenwesen.services import InvoiceExtractionService
+        from core.services.base import ServiceNotConfigured
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            MockExtractor.return_value.extract_invoice_data.side_effect = ServiceNotConfigured(
+                "AI provider not configured"
+            )
+
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            # Should stay in DRAFT status
+            self.assertEqual(result.status, "DRAFT")
+
+    def test_extraction_service_handles_general_exception(self):
+        """Test graceful handling of unexpected exceptions."""
+        from unittest.mock import patch
+        from lieferantenwesen.services import InvoiceExtractionService
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            MockExtractor.return_value.extract_invoice_data.side_effect = Exception(
+                "Unexpected error"
+            )
+
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            # Should stay in DRAFT status
+            self.assertEqual(result.status, "DRAFT")
