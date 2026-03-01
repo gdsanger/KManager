@@ -162,3 +162,148 @@ class AktivitaetFormSanitizationTest(TestCase):
         self.assertIn('<img', beschreibung)
         self.assertIn('src="/media/screenshot.png"', beschreibung)
         self.assertIn('<u>underline</u>', beschreibung)
+
+    def test_sanitize_preserves_simple_table(self):
+        """Test that simple HTML table structure is preserved"""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': '<table><tbody><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></tbody></table>',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+        }
+        form = AktivitaetForm(data=form_data, current_user=self.user)
+        self.assertTrue(form.is_valid())
+        beschreibung = form.cleaned_data['beschreibung']
+
+        # Check that table structure is preserved
+        self.assertIn('<table>', beschreibung)
+        self.assertIn('<tbody>', beschreibung)
+        self.assertIn('<tr>', beschreibung)
+        self.assertIn('<th>A</th>', beschreibung)
+        self.assertIn('<th>B</th>', beschreibung)
+        self.assertIn('<td>1</td>', beschreibung)
+        self.assertIn('<td>2</td>', beschreibung)
+
+    def test_sanitize_preserves_table_with_thead_tfoot(self):
+        """Test that table with thead and tfoot is preserved"""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': '''
+            <table>
+                <thead>
+                    <tr><th>Header 1</th><th>Header 2</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Data 1</td><td>Data 2</td></tr>
+                </tbody>
+                <tfoot>
+                    <tr><td>Footer 1</td><td>Footer 2</td></tr>
+                </tfoot>
+            </table>
+            ''',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+        }
+        form = AktivitaetForm(data=form_data, current_user=self.user)
+        self.assertTrue(form.is_valid())
+        beschreibung = form.cleaned_data['beschreibung']
+
+        # Check that all table sections are preserved
+        self.assertIn('<table>', beschreibung)
+        self.assertIn('<thead>', beschreibung)
+        self.assertIn('<tbody>', beschreibung)
+        self.assertIn('<tfoot>', beschreibung)
+
+    def test_sanitize_preserves_table_colspan_rowspan(self):
+        """Test that colspan and rowspan attributes are preserved in tables"""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': '<table><tr><th colspan="2">Merged Header</th></tr><tr><td rowspan="2">Tall Cell</td><td>Normal</td></tr><tr><td>Normal</td></tr></table>',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+        }
+        form = AktivitaetForm(data=form_data, current_user=self.user)
+        self.assertTrue(form.is_valid())
+        beschreibung = form.cleaned_data['beschreibung']
+
+        # Check that colspan and rowspan are preserved
+        self.assertIn('colspan="2"', beschreibung)
+        self.assertIn('rowspan="2"', beschreibung)
+
+    def test_sanitize_preserves_table_caption(self):
+        """Test that table caption is preserved"""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': '<table><caption>Table Caption</caption><tr><td>Data</td></tr></table>',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+        }
+        form = AktivitaetForm(data=form_data, current_user=self.user)
+        self.assertTrue(form.is_valid())
+        beschreibung = form.cleaned_data['beschreibung']
+
+        # Check that caption is preserved
+        self.assertIn('<caption>Table Caption</caption>', beschreibung)
+
+    def test_sanitize_preserves_table_colgroup(self):
+        """Test that colgroup and col elements are preserved"""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': '<table><colgroup><col><col></colgroup><tr><td>A</td><td>B</td></tr></table>',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+        }
+        form = AktivitaetForm(data=form_data, current_user=self.user)
+        self.assertTrue(form.is_valid())
+        beschreibung = form.cleaned_data['beschreibung']
+
+        # Check that colgroup and col are preserved
+        self.assertIn('<colgroup>', beschreibung)
+        self.assertIn('<col', beschreibung)
+
+    def test_sanitize_table_with_mixed_content(self):
+        """Test table with surrounding text and formatting"""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': '''
+            <p>Here is a table from an email:</p>
+            <table>
+                <tbody>
+                    <tr><th>Name</th><th>Value</th></tr>
+                    <tr><td>Item 1</td><td>100</td></tr>
+                    <tr><td>Item 2</td><td>200</td></tr>
+                </tbody>
+            </table>
+            <p>Additional notes below the table.</p>
+            ''',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+        }
+        form = AktivitaetForm(data=form_data, current_user=self.user)
+        self.assertTrue(form.is_valid())
+        beschreibung = form.cleaned_data['beschreibung']
+
+        # Check that table and surrounding content are preserved
+        self.assertIn('<p>Here is a table from an email:</p>', beschreibung)
+        self.assertIn('<table>', beschreibung)
+        self.assertIn('<th>Name</th>', beschreibung)
+        self.assertIn('<td>100</td>', beschreibung)
+        self.assertIn('<p>Additional notes below the table.</p>', beschreibung)
+
+    def test_sanitize_removes_dangerous_table_attributes(self):
+        """Test that dangerous attributes in table elements are removed"""
+        form_data = {
+            'titel': 'Test Activity',
+            'beschreibung': '<table onclick="alert(1)"><tr><td onmouseover="alert(2)">Cell</td></tr></table>',
+            'status': 'OFFEN',
+            'prioritaet': 'NORMAL',
+        }
+        form = AktivitaetForm(data=form_data, current_user=self.user)
+        self.assertTrue(form.is_valid())
+        beschreibung = form.cleaned_data['beschreibung']
+
+        # Check that table structure is preserved but dangerous attributes are removed
+        self.assertIn('<table>', beschreibung)
+        self.assertIn('<td>Cell</td>', beschreibung)
+        self.assertNotIn('onclick', beschreibung)
+        self.assertNotIn('onmouseover', beschreibung)
