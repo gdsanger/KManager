@@ -95,20 +95,31 @@ class InvoiceExtractionService:
             return invoice_in
 
         # Apply extracted fields
-        if dto.belegnummer and not invoice_in.invoice_no:
-            invoice_in.invoice_no = dto.belegnummer
+        if dto.belegnummer:
+            # Map invoice number to invoice_no field (primary)
+            if not invoice_in.invoice_no or invoice_in.invoice_no == "TBD":
+                invoice_in.invoice_no = dto.belegnummer
+            # Also keep in payment_reference for compatibility
+            if not invoice_in.payment_reference:
+                invoice_in.payment_reference = dto.belegnummer
+
         if dto.belegdatum and not invoice_in.invoice_date:
             try:
                 from datetime import date
                 invoice_in.invoice_date = date.fromisoformat(dto.belegdatum)
             except (ValueError, TypeError):
                 pass
+
         if dto.faelligkeit and not invoice_in.due_date:
             try:
                 from datetime import date
                 invoice_in.due_date = date.fromisoformat(dto.faelligkeit)
             except (ValueError, TypeError):
                 pass
+
+        # Payment terms
+        if dto.zahlungsbedingungen and not invoice_in.payment_terms_text:
+            invoice_in.payment_terms_text = dto.zahlungsbedingungen
 
         # Amounts
         for src_field, dest_field in [
@@ -123,8 +134,8 @@ class InvoiceExtractionService:
                 except (InvalidOperation, TypeError):
                     pass
 
-        # Payment reference / IBAN
-        if dto.referenznummer:
+        # Payment reference / IBAN (keep existing behavior for referenznummer)
+        if dto.referenznummer and not invoice_in.payment_reference:
             invoice_in.payment_reference = dto.referenznummer
 
         invoice_in.status = "EXTRACTED"
@@ -152,6 +163,53 @@ class InvoiceExtractionService:
 
 class InvoiceInService:
     """High-level service for creating and managing InvoiceIn records."""
+
+    def _create_lines_from_dto(self, invoice, dto):
+        """
+        Create InvoiceInLine records from extracted line items.
+
+        Args:
+            invoice: The InvoiceIn instance
+            dto: InvoiceDataDTO with potential positionen field
+        """
+        from lieferantenwesen.models import InvoiceInLine
+
+        positionen = getattr(dto, "positionen", None)
+        if not positionen or not isinstance(positionen, list):
+            return
+
+        for item in positionen:
+            if not isinstance(item, dict):
+                continue
+
+            try:
+                line = InvoiceInLine(
+                    invoice=invoice,
+                    position_no=item.get("position_no", 1),
+                    description=item.get("description", ""),
+                )
+
+                # Optional numeric fields
+                if item.get("quantity"):
+                    line.quantity = Decimal(str(item["quantity"]))
+                if item.get("unit"):
+                    line.unit = item["unit"]
+                if item.get("unit_price"):
+                    line.unit_price = Decimal(str(item["unit_price"]))
+                if item.get("net_amount"):
+                    line.net_amount = Decimal(str(item["net_amount"]))
+                if item.get("tax_rate"):
+                    line.tax_rate = Decimal(str(item["tax_rate"]))
+                if item.get("tax_amount"):
+                    line.tax_amount = Decimal(str(item["tax_amount"]))
+                if item.get("gross_amount"):
+                    line.gross_amount = Decimal(str(item["gross_amount"]))
+
+                line.save()
+                logger.info(f"Created line item {line.position_no} for invoice {invoice.pk}")
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                logger.warning(f"Failed to create line item from {item}: {exc}")
+                continue
 
     def create_from_pdf(self, pdf_file, user: Optional[User] = None):
         """
@@ -188,6 +246,7 @@ class InvoiceInService:
         invoice.save()
 
         # Run AI extraction on a temp copy of the file
+        dto = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                 for chunk in pdf_file.chunks() if hasattr(pdf_file, "chunks") else [pdf_file.read()]:
@@ -195,9 +254,20 @@ class InvoiceInService:
                 tmp_path = tmp.name
 
             extractor = InvoiceExtractionService()
+
+            # Get the DTO before populating to access line items
+            from core.services.ai.invoice_extraction import InvoiceExtractionService as CoreExtractor
+            core_extractor = CoreExtractor()
+            dto = core_extractor.extract_invoice_data(tmp_path, user=user)
+
+            # Now populate the invoice fields
             invoice = extractor.extract_and_populate(invoice, tmp_path, user=user)
             invoice.updated_by = user
             invoice.save()
+
+            # Create line items if present in DTO
+            if dto:
+                self._create_lines_from_dto(invoice, dto)
         except Exception as exc:
             logger.warning("PDF extraction failed for invoice %s: %s", invoice.pk, exc)
         finally:

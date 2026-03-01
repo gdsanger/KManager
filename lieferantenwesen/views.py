@@ -262,3 +262,37 @@ def invoice_approve(request, pk):
 
     invoice.save()
     return redirect("lieferantenwesen:invoice_detail", pk=pk)
+
+
+@login_required
+@lieferantenwesen_required
+@require_POST
+def invoice_delete(request, pk):
+    """Hard-delete an invoice including its PDF file and line items."""
+    invoice = get_object_or_404(InvoiceIn, pk=pk)
+    invoice_no = invoice.invoice_no
+
+    # Delete PDF file if it exists
+    if invoice.pdf_file:
+        try:
+            invoice.pdf_file.delete(save=False)
+            logger.info(f"Deleted PDF file for invoice {invoice_no} (pk={pk})")
+        except Exception as exc:
+            logger.exception(f"Failed to delete PDF file for invoice {invoice_no} (pk={pk}): {exc}")
+            messages.error(
+                request,
+                "Fehler beim Löschen der PDF-Datei. Die Rechnung wurde nicht gelöscht.",
+            )
+            return redirect("lieferantenwesen:invoice_detail", pk=pk)
+
+    # Delete invoice (will cascade to lines)
+    try:
+        invoice.delete()
+        logger.info(f"Deleted invoice {invoice_no} (pk={pk})")
+        messages.success(request, f'Eingangsrechnung "{invoice_no}" wurde gelöscht.')
+    except Exception as exc:
+        logger.exception(f"Failed to delete invoice {invoice_no} (pk={pk}): {exc}")
+        messages.error(request, "Fehler beim Löschen der Rechnung.")
+        return redirect("lieferantenwesen:invoice_detail", pk=pk)
+
+    return redirect("lieferantenwesen:invoice_list")
