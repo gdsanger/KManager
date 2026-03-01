@@ -17,6 +17,12 @@
 <a href="{% url 'lieferantenwesen:invoice_list' %}" class="btn btn-secondary">
     <i class="bi bi-arrow-left"></i> Zurück
 </a>
+<form method="post" action="{% url 'lieferantenwesen:invoice_delete' invoice.pk %}" style="display: inline;" onsubmit="return confirm('Möchten Sie diese Eingangsrechnung wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">
+        <i class="bi bi-trash"></i> Löschen
+    </button>
+</form>
 {% endblock %}
 
 {% block main_content %}

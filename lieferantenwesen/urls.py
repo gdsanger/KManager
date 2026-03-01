@@ -16,4 +16,5 @@ urlpatterns = [
     path("eingangsrechnungen/<int:pk>/", views.invoice_detail, name="invoice_detail"),
     path("eingangsrechnungen/<int:pk>/bearbeiten/", views.invoice_edit, name="invoice_edit"),
     path("eingangsrechnungen/<int:pk>/freigabe/", views.invoice_approve, name="invoice_approve"),
+    path("eingangsrechnungen/<int:pk>/loeschen/", views.invoice_delete, name="invoice_delete"),
 ]

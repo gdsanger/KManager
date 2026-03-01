@@ -36,39 +36,43 @@ class InvoiceDataDTO:
     lieferant_plz: Optional[str] = None
     lieferant_ort: Optional[str] = None
     lieferant_land: Optional[str] = None
-    
+
     # Invoice details
     belegnummer: Optional[str] = None
     belegdatum: Optional[str] = None  # ISO format: YYYY-MM-DD
     faelligkeit: Optional[str] = None  # ISO format: YYYY-MM-DD
+    zahlungsbedingungen: Optional[str] = None  # Payment terms text
     betreff: Optional[str] = None
     referenznummer: Optional[str] = None
-    
+
     # Service period
     leistungszeitraum_von: Optional[str] = None  # ISO format: YYYY-MM-DD
     leistungszeitraum_bis: Optional[str] = None  # ISO format: YYYY-MM-DD
-    
+
     # Amounts (as strings to avoid precision issues in JSON)
     nettobetrag: Optional[str] = None
     umsatzsteuer: Optional[str] = None
     bruttobetrag: Optional[str] = None
-    
+
+    # Line items
+    positionen: Optional[list] = None
+
     # Notes
     notizen: Optional[str] = None
     
     def validate(self) -> Dict[str, Any]:
         """
         Validate extracted data and convert to proper types.
-        
+
         Returns:
             Dict with validated data (None values are removed)
-            
+
         Raises:
             ValidationError: If data contains invalid values
         """
         errors = {}
         validated = {}
-        
+
         # Validate dates
         date_fields = ['belegdatum', 'faelligkeit', 'leistungszeitraum_von', 'leistungszeitraum_bis']
         for field in date_fields:
@@ -80,7 +84,7 @@ class InvoiceDataDTO:
                     validated[field] = value
                 except (ValueError, TypeError):
                     errors[field] = f'Invalid date format: {value}. Expected YYYY-MM-DD.'
-        
+
         # Validate amounts (decimals)
         amount_fields = ['nettobetrag', 'umsatzsteuer', 'bruttobetrag']
         for field in amount_fields:
@@ -91,21 +95,26 @@ class InvoiceDataDTO:
                     validated[field] = decimal_value
                 except (InvalidOperation, ValueError, TypeError):
                     errors[field] = f'Invalid decimal value: {value}'
-        
+
         # String fields - just copy if not None
         string_fields = [
-            'lieferant_name', 'lieferant_strasse', 'lieferant_plz', 
+            'lieferant_name', 'lieferant_strasse', 'lieferant_plz',
             'lieferant_ort', 'lieferant_land',
-            'belegnummer', 'betreff', 'referenznummer', 'notizen'
+            'belegnummer', 'betreff', 'referenznummer', 'notizen',
+            'zahlungsbedingungen'
         ]
         for field in string_fields:
             value = getattr(self, field)
             if value is not None:
                 validated[field] = str(value).strip()
-        
+
+        # Line items (positionen) - just copy if present
+        if self.positionen is not None:
+            validated['positionen'] = self.positionen
+
         if errors:
             raise ValidationError(errors)
-        
+
         return validated
 
 
@@ -116,7 +125,7 @@ class InvoiceExtractionService:
 Extract the following information from the invoice. Return ONLY a JSON object with these exact field names.
 If a value is not found or unclear, use null (not "unknown", "N/A", or any other placeholder).
 
-IMPORTANT: 
+IMPORTANT:
 - Return ONLY the JSON object, no markdown formatting, no explanations
 - Use ISO date format (YYYY-MM-DD) for all dates
 - Use numeric strings for amounts (e.g., "123.45")
@@ -132,6 +141,7 @@ Expected JSON structure:
     "belegnummer": "Invoice number",
     "belegdatum": "Invoice date (YYYY-MM-DD)",
     "faelligkeit": "Due date (YYYY-MM-DD)",
+    "zahlungsbedingungen": "Payment terms as text (e.g., '30 Tage netto', 'sofort', etc.)",
     "betreff": "Subject/description",
     "referenznummer": "Reference number",
     "leistungszeitraum_von": "Service period start (YYYY-MM-DD)",
@@ -139,6 +149,19 @@ Expected JSON structure:
     "nettobetrag": "Net amount (as string)",
     "umsatzsteuer": "VAT amount (as string)",
     "bruttobetrag": "Gross amount (as string)",
+    "positionen": [
+        {
+            "position_no": 1,
+            "description": "Item description",
+            "quantity": "1.0",
+            "unit": "Stk",
+            "unit_price": "100.00",
+            "net_amount": "100.00",
+            "tax_rate": "19.00",
+            "tax_amount": "19.00",
+            "gross_amount": "119.00"
+        }
+    ],
     "notizen": "Any additional notes"
 }
 
