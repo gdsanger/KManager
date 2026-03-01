@@ -1,7 +1,7 @@
 """Django admin for the Lieferantenwesen module."""
 from django.contrib import admin
 
-from .models import InvoiceIn, InvoiceInLine, Supplier
+from .models import InvoiceIn, InvoiceInLine
 
 
 class InvoiceInLineInline(admin.TabularInline):
@@ -18,14 +18,6 @@ class InvoiceInLineInline(admin.TabularInline):
         "tax_amount",
         "gross_amount",
     ]
-
-
-@admin.register(Supplier)
-class SupplierAdmin(admin.ModelAdmin):
-    list_display = ["name", "adresse_city", "email", "telefon", "is_active"]
-    list_filter = ["is_active"]
-    search_fields = ["name", "email", "adresse_city", "ust_id"]
-    ordering = ["name"]
 
 
 @admin.register(InvoiceIn)

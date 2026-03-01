@@ -2,7 +2,7 @@
 Services for the Lieferantenwesen module.
 
 - InvoiceInService: Creates/updates InvoiceIn records.
-- SupplierMatchService: Matches extracted supplier data to existing Supplier records.
+- SupplierMatchService: Matches extracted supplier data to existing Adresse (LIEFERANT) records.
 - InvoiceExtractionService: Thin wrapper around core AI extraction service.
 """
 import logging
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class SupplierMatchService:
-    """Match extracted supplier name/address data to existing Supplier records."""
+    """Match extracted supplier name/address data to existing Adresse (LIEFERANT) records."""
 
     SIMILARITY_THRESHOLD = 0.80
 
@@ -32,32 +32,33 @@ class SupplierMatchService:
 
     def find_or_create(self, name: str, street: str = "", city: str = "", **kwargs):
         """
-        Try to find an existing Supplier matching the given data.
+        Try to find an existing Adresse (LIEFERANT) matching the given data.
         If none is found, create a new one.
 
-        Returns (supplier, created) tuple.
+        Returns (adresse, created) tuple.
         """
-        from lieferantenwesen.models import Supplier
+        from core.models import Adresse
 
         # Exact name match first
-        qs = Supplier.objects.filter(is_active=True)
-        for supplier in qs:
-            if self._similarity(name, supplier.name) >= self.SIMILARITY_THRESHOLD:
-                logger.debug("Supplier matched by name similarity: %s", supplier)
-                return supplier, False
+        qs = Adresse.objects.filter(adressen_type="LIEFERANT")
+        for adresse in qs:
+            if self._similarity(name, adresse.name) >= self.SIMILARITY_THRESHOLD:
+                logger.debug("Supplier matched by name similarity: %s", adresse)
+                return adresse, False
 
         # No match → create
-        supplier = Supplier.objects.create(
+        adresse = Adresse.objects.create(
+            adressen_type="LIEFERANT",
             name=name,
-            adresse_street=street or kwargs.get("adresse_street", ""),
-            adresse_city=city or kwargs.get("adresse_city", ""),
-            adresse_zip=kwargs.get("adresse_zip", ""),
-            adresse_country=kwargs.get("adresse_country", "DE"),
+            strasse=street or kwargs.get("strasse", ""),
+            ort=city or kwargs.get("ort", ""),
+            plz=kwargs.get("plz", ""),
+            land=kwargs.get("land", "DE"),
             email=kwargs.get("email", ""),
             telefon=kwargs.get("telefon", ""),
         )
-        logger.info("New supplier created: %s (pk=%s)", supplier.name, supplier.pk)
-        return supplier, True
+        logger.info("New supplier created: %s (pk=%s)", adresse.name, adresse.pk)
+        return adresse, True
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +137,8 @@ class InvoiceExtractionService:
                 name=supplier_name,
                 street=getattr(dto, "lieferant_strasse", "") or "",
                 city=getattr(dto, "lieferant_ort", "") or "",
-                adresse_zip=getattr(dto, "lieferant_plz", "") or "",
-                adresse_country=getattr(dto, "lieferant_land", "") or "DE",
+                plz=getattr(dto, "lieferant_plz", "") or "",
+                land=getattr(dto, "lieferant_land", "") or "DE",
             )
             invoice_in.supplier = supplier
 
@@ -160,13 +161,21 @@ class InvoiceInService:
         import os
         import tempfile
 
-        from lieferantenwesen.models import InvoiceIn, Supplier
+        from core.models import Adresse
+        from lieferantenwesen.models import InvoiceIn
 
         # We need a placeholder supplier for the initial save – the extraction
         # service will replace it if AI succeeds.
-        default_supplier = Supplier.objects.filter(is_active=True).first()
+        default_supplier = Adresse.objects.filter(adressen_type="LIEFERANT").first()
         if default_supplier is None:
-            default_supplier = Supplier.objects.create(name="Unbekannt (KI-Import)")
+            default_supplier = Adresse.objects.create(
+                adressen_type="LIEFERANT",
+                name="Unbekannt (KI-Import)",
+                strasse="",
+                plz="",
+                ort="",
+                land="DE",
+            )
 
         invoice = InvoiceIn(
             invoice_no="TBD",

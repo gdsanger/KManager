@@ -1,40 +1,8 @@
 """Forms for the Lieferantenwesen module."""
 from django import forms
 
-from .models import InvoiceIn, InvoiceInLine, Supplier
-
-
-class SupplierForm(forms.ModelForm):
-    class Meta:
-        model = Supplier
-        fields = [
-            "name",
-            "ust_id",
-            "steuer_nr",
-            "adresse_street",
-            "adresse_zip",
-            "adresse_city",
-            "adresse_country",
-            "email",
-            "telefon",
-            "bank_iban",
-            "bank_bic",
-            "is_active",
-        ]
-        widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control"}),
-            "ust_id": forms.TextInput(attrs={"class": "form-control"}),
-            "steuer_nr": forms.TextInput(attrs={"class": "form-control"}),
-            "adresse_street": forms.TextInput(attrs={"class": "form-control"}),
-            "adresse_zip": forms.TextInput(attrs={"class": "form-control"}),
-            "adresse_city": forms.TextInput(attrs={"class": "form-control"}),
-            "adresse_country": forms.TextInput(attrs={"class": "form-control"}),
-            "email": forms.EmailInput(attrs={"class": "form-control"}),
-            "telefon": forms.TextInput(attrs={"class": "form-control"}),
-            "bank_iban": forms.TextInput(attrs={"class": "form-control"}),
-            "bank_bic": forms.TextInput(attrs={"class": "form-control"}),
-            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
-        }
+from core.models import Adresse
+from .models import InvoiceIn, InvoiceInLine
 
 
 class InvoiceInForm(forms.ModelForm):
@@ -94,6 +62,8 @@ class InvoiceInForm(forms.ModelForm):
         # date fields need format set for initial rendering
         self.fields["invoice_date"].input_formats = ["%Y-%m-%d"]
         self.fields["due_date"].input_formats = ["%Y-%m-%d"]
+        # Limit supplier choices to LIEFERANT type
+        self.fields["supplier"].queryset = Adresse.objects.filter(adressen_type="LIEFERANT")
 
 
 class InvoiceInLineForm(forms.ModelForm):

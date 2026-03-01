@@ -1,10 +1,11 @@
 """
-Lieferantenwesen – Supplier management and incoming invoice models.
+Lieferantenwesen – Incoming invoice management.
 
 This module provides:
-- Supplier: standalone supplier master data (no Vermietung coupling)
 - InvoiceIn: incoming invoice with approval workflow
 - InvoiceInLine: line items for incoming invoices
+
+Note: Suppliers are managed via core.Adresse with adressen_type='LIEFERANT'
 """
 from decimal import Decimal
 
@@ -27,57 +28,6 @@ INVOICE_IN_STATUS = [
 
 
 # ---------------------------------------------------------------------------
-# Supplier model
-# ---------------------------------------------------------------------------
-
-class Supplier(models.Model):
-    """Standalone supplier (Lieferant) master data."""
-
-    name = models.CharField(max_length=200, verbose_name="Name")
-    ust_id = models.CharField(
-        max_length=50, blank=True, default="", verbose_name="USt-IdNr."
-    )
-    steuer_nr = models.CharField(
-        max_length=50, blank=True, default="", verbose_name="Steuernummer"
-    )
-    adresse_street = models.CharField(
-        max_length=200, blank=True, default="", verbose_name="Straße"
-    )
-    adresse_zip = models.CharField(
-        max_length=20, blank=True, default="", verbose_name="PLZ"
-    )
-    adresse_city = models.CharField(
-        max_length=100, blank=True, default="", verbose_name="Ort"
-    )
-    adresse_country = models.CharField(
-        max_length=100, blank=True, default="DE", verbose_name="Land"
-    )
-    email = models.EmailField(blank=True, default="", verbose_name="E-Mail")
-    telefon = models.CharField(
-        max_length=50, blank=True, default="", verbose_name="Telefon"
-    )
-    bank_iban = models.CharField(
-        max_length=34, blank=True, default="", verbose_name="IBAN"
-    )
-    bank_bic = models.CharField(
-        max_length=11, blank=True, default="", verbose_name="BIC"
-    )
-    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
-
-    # Audit
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Geändert am")
-
-    class Meta:
-        verbose_name = "Lieferant"
-        verbose_name_plural = "Lieferanten"
-        ordering = ["name"]
-
-    def __str__(self):
-        return self.name
-
-
-# ---------------------------------------------------------------------------
 # InvoiceIn model
 # ---------------------------------------------------------------------------
 
@@ -90,9 +40,10 @@ class InvoiceIn(models.Model):
     )
     invoice_date = models.DateField(verbose_name="Rechnungsdatum")
     supplier = models.ForeignKey(
-        Supplier,
+        "core.Adresse",
         on_delete=models.PROTECT,
-        related_name="invoices",
+        related_name="invoices_lieferantenwesen",
+        limit_choices_to={"adressen_type": "LIEFERANT"},
         verbose_name="Lieferant",
     )
     currency = models.CharField(
@@ -240,6 +191,11 @@ class InvoiceIn(models.Model):
     def clean(self):
         super().clean()
         errors = {}
+        # Validate supplier is a LIEFERANT
+        if self.supplier and self.supplier.adressen_type != "LIEFERANT":
+            errors["supplier"] = (
+                "Die gewählte Adresse muss vom Typ 'LIEFERANT' sein."
+            )
         # Sub cost type must belong to the selected main cost type
         if self.cost_type_sub and self.cost_type_main:
             if self.cost_type_sub.parent_id != self.cost_type_main_id:
