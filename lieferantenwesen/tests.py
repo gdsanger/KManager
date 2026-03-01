@@ -2,36 +2,34 @@
 Tests for the Lieferantenwesen module.
 
 Tests cover:
-- Supplier model CRUD
 - InvoiceIn model and workflow
 - InvoiceInLine auto-calculation
 - View access control
 - Approval workflow
+- Supplier (Adresse with LIEFERANT type) matching
 """
 from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth.models import Group, User
+from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from lieferantenwesen.models import INVOICE_IN_STATUS, InvoiceIn, InvoiceInLine, Supplier
-
-
-class SupplierModelTest(TestCase):
-    def test_create_supplier(self):
-        s = Supplier.objects.create(name="Test GmbH")
-        self.assertEqual(str(s), "Test GmbH")
-        self.assertTrue(s.is_active)
-
-    def test_supplier_default_country(self):
-        s = Supplier.objects.create(name="Muster AG")
-        self.assertEqual(s.adresse_country, "DE")
+from core.models import Adresse
+from lieferantenwesen.models import INVOICE_IN_STATUS, InvoiceIn, InvoiceInLine
 
 
 class InvoiceInModelTest(TestCase):
     def setUp(self):
-        self.supplier = Supplier.objects.create(name="Test Lieferant GmbH")
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Test Lieferant GmbH",
+            strasse="Teststr. 1",
+            plz="12345",
+            ort="Teststadt",
+            land="DE",
+        )
 
     def _make_invoice(self, **kwargs):
         defaults = dict(
@@ -67,10 +65,39 @@ class InvoiceInModelTest(TestCase):
         self.assertIn("APPROVED", status_values)
         self.assertIn("REJECTED", status_values)
 
+    def test_supplier_must_be_lieferant_type(self):
+        """Test that only Adresse with LIEFERANT type can be assigned as supplier."""
+        # Create a non-LIEFERANT Adresse
+        kunde = Adresse.objects.create(
+            adressen_type="KUNDE",
+            name="Test Kunde GmbH",
+            strasse="Kundenstr. 1",
+            plz="54321",
+            ort="Kundenstadt",
+            land="DE",
+        )
+        # Try to create invoice with KUNDE type
+        inv = InvoiceIn(
+            invoice_no="RE-002",
+            invoice_date=date(2026, 1, 20),
+            supplier=kunde,
+        )
+        # Should raise ValidationError when clean() is called
+        with self.assertRaises(ValidationError) as ctx:
+            inv.clean()
+        self.assertIn("supplier", ctx.exception.message_dict)
+
 
 class InvoiceInLineTest(TestCase):
     def setUp(self):
-        supplier = Supplier.objects.create(name="Auto Calc Lieferant")
+        supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Auto Calc Lieferant",
+            strasse="Str. 1",
+            plz="11111",
+            ort="Stadt",
+            land="DE",
+        )
         self.invoice = InvoiceIn.objects.create(
             invoice_no="RE-AUTO",
             invoice_date=date(2026, 2, 1),
@@ -109,7 +136,14 @@ class InvoiceViewAccessTest(TestCase):
         self.user = User.objects.create_user(
             username="testuser", password="testpass", is_staff=True
         )
-        self.supplier = Supplier.objects.create(name="View Test Lieferant")
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="View Test Lieferant",
+            strasse="Viewstr. 1",
+            plz="22222",
+            ort="Viewstadt",
+            land="DE",
+        )
 
     def test_invoice_list_requires_login(self):
         url = reverse("lieferantenwesen:invoice_list")
@@ -119,12 +153,6 @@ class InvoiceViewAccessTest(TestCase):
     def test_invoice_list_accessible_for_staff(self):
         self.client.login(username="testuser", password="testpass")
         url = reverse("lieferantenwesen:invoice_list")
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-
-    def test_supplier_list_accessible_for_staff(self):
-        self.client.login(username="testuser", password="testpass")
-        url = reverse("lieferantenwesen:supplier_list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
@@ -144,7 +172,14 @@ class InvoiceViewAccessTest(TestCase):
 class ApprovalWorkflowTest(TestCase):
     def setUp(self):
         self.client = Client()
-        self.supplier = Supplier.objects.create(name="Approval Lieferant")
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Approval Lieferant",
+            strasse="Approvalstr. 1",
+            plz="33333",
+            ort="Approvalstadt",
+            land="DE",
+        )
         self.invoice = InvoiceIn.objects.create(
             invoice_no="RE-WF-001",
             invoice_date=date(2026, 2, 15),
@@ -210,23 +245,32 @@ class ApprovalWorkflowTest(TestCase):
 
 class SupplierMatchServiceTest(TestCase):
     def setUp(self):
-        Supplier.objects.create(name="Mustermann GmbH", adresse_city="München")
+        Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Mustermann GmbH",
+            strasse="Musterstr. 1",
+            plz="80000",
+            ort="München",
+            land="DE",
+        )
 
     def test_find_existing_supplier_by_name(self):
         from lieferantenwesen.services import SupplierMatchService
 
         service = SupplierMatchService()
-        supplier, created = service.find_or_create("Mustermann GmbH")
+        adresse, created = service.find_or_create("Mustermann GmbH")
         self.assertFalse(created)
-        self.assertEqual(supplier.name, "Mustermann GmbH")
+        self.assertEqual(adresse.name, "Mustermann GmbH")
+        self.assertEqual(adresse.adressen_type, "LIEFERANT")
 
     def test_create_new_supplier_when_no_match(self):
         from lieferantenwesen.services import SupplierMatchService
 
         service = SupplierMatchService()
-        supplier, created = service.find_or_create(
+        adresse, created = service.find_or_create(
             "Völlig Unbekannte AG", city="Berlin"
         )
         self.assertTrue(created)
-        self.assertEqual(supplier.name, "Völlig Unbekannte AG")
-        self.assertEqual(supplier.adresse_city, "Berlin")
+        self.assertEqual(adresse.name, "Völlig Unbekannte AG")
+        self.assertEqual(adresse.ort, "Berlin")
+        self.assertEqual(adresse.adressen_type, "LIEFERANT")

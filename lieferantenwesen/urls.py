@@ -9,12 +9,6 @@ urlpatterns = [
     # Home / dashboard
     path("", views.home, name="home"),
 
-    # Supplier (Lieferant) CRUD
-    path("lieferanten/", views.supplier_list, name="supplier_list"),
-    path("lieferanten/neu/", views.supplier_create, name="supplier_create"),
-    path("lieferanten/<int:pk>/", views.supplier_detail, name="supplier_detail"),
-    path("lieferanten/<int:pk>/bearbeiten/", views.supplier_edit, name="supplier_edit"),
-
     # InvoiceIn (Eingangsrechnung)
     path("eingangsrechnungen/", views.invoice_list, name="invoice_list"),
     path("eingangsrechnungen/neu/", views.invoice_create, name="invoice_create"),

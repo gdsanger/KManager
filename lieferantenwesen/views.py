@@ -10,8 +10,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import ApprovalForm, InvoiceInForm, InvoiceInLineFormSet, SupplierForm
-from .models import InvoiceIn, Supplier
+from .forms import ApprovalForm, InvoiceInForm, InvoiceInLineFormSet
+from .models import InvoiceIn
 from .permissions import geschaeftsleitung_required, lieferantenwesen_required
 
 logger = logging.getLogger(__name__)
@@ -40,86 +40,6 @@ def home(request):
             "in_review_count": in_review_count,
             "overdue_count": overdue_count,
         },
-    )
-
-
-# ---------------------------------------------------------------------------
-# Supplier (Lieferant) CRUD
-# ---------------------------------------------------------------------------
-
-@login_required
-@lieferantenwesen_required
-def supplier_list(request):
-    q = request.GET.get("q", "").strip()
-    qs = Supplier.objects.all()
-    if q:
-        qs = qs.filter(
-            Q(name__icontains=q)
-            | Q(email__icontains=q)
-            | Q(adresse_city__icontains=q)
-            | Q(adresse_zip__icontains=q)
-        )
-    paginator = Paginator(qs, 20)
-    page_obj = paginator.get_page(request.GET.get("page"))
-    return render(
-        request,
-        "lieferantenwesen/suppliers/list.html",
-        {"page_obj": page_obj, "q": q},
-    )
-
-
-@login_required
-@lieferantenwesen_required
-def supplier_detail(request, pk):
-    supplier = get_object_or_404(Supplier, pk=pk)
-    invoices = supplier.invoices.order_by("-invoice_date")[:20]
-    return render(
-        request,
-        "lieferantenwesen/suppliers/detail.html",
-        {"supplier": supplier, "invoices": invoices},
-    )
-
-
-@login_required
-@lieferantenwesen_required
-def supplier_create(request):
-    if request.method == "POST":
-        form = SupplierForm(request.POST)
-        if form.is_valid():
-            supplier = form.save()
-            messages.success(
-                request,
-                f'Lieferant "{supplier.name}" wurde erfolgreich angelegt.',
-            )
-            return redirect("lieferantenwesen:supplier_detail", pk=supplier.pk)
-    else:
-        form = SupplierForm()
-    return render(
-        request,
-        "lieferantenwesen/suppliers/form.html",
-        {"form": form, "title": "Lieferant anlegen"},
-    )
-
-
-@login_required
-@lieferantenwesen_required
-def supplier_edit(request, pk):
-    supplier = get_object_or_404(Supplier, pk=pk)
-    if request.method == "POST":
-        form = SupplierForm(request.POST, instance=supplier)
-        if form.is_valid():
-            form.save()
-            messages.success(
-                request,
-                f'Lieferant "{supplier.name}" wurde erfolgreich aktualisiert.',
-            )
-            return redirect("lieferantenwesen:supplier_detail", pk=supplier.pk)
-    else:
-        form = SupplierForm(instance=supplier)
-    return render(
-        request,
-        "lieferantenwesen/suppliers/form.html",
-        {"form": form, "supplier": supplier, "title": "Lieferant bearbeiten"},
     )
 
 
