@@ -167,6 +167,11 @@
                                         <i class="bi bi-box-seam"></i> <span class="sidebar-text">Artikelverwaltung</span>
                                     </a>
                                 </li>
+                                 <li class="nav-item">
+                        <a class="nav-link {% if 'lieferantenwesen' in request.path %}active{% endif %}" href="{% url 'lieferantenwesen:home' %}">
+                            <i class="bi bi-truck"></i> Lieferantenwesen
+                        </a>
+                    </li>
                         <!-- Adressen Section -->
                         <li class="nav-item nav-section">
                             <a class="nav-link nav-category" href="#adressenMenu" data-bs-toggle="collapse" aria-expanded="{% if 'adressen' in request.path or 'kunde' in request.path or 'lieferant' in request.path %}true{% else %}false{% endif %}">
