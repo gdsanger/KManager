@@ -11,23 +11,27 @@ import bleach
 def sanitize_html(html_content: str) -> str:
     """
     Sanitize HTML content using allowlist approach.
-    
+
     Reuses the same allowlist as the Quill editor fields for consistency.
-    
-    Allowed tags: p, br, strong, em, u, ul, ol, li, a, img, h1-h3, table elements, div, span
-    Allowed attributes: a[href, target, rel], img[src, alt, width, height], table attributes
-    
+
+    Allowed tags: p, br, strong, em, u, ul, ol, li, a, img, h1-h3,
+                  table, thead, tbody, tfoot, tr, th, td, caption, colgroup, col,
+                  div, span
+    Allowed attributes: a[href, target, rel], img[src, alt, width, height],
+                       table cells[colspan, rowspan]
+
     Args:
         html_content: Raw HTML content to sanitize
-        
+
     Returns:
         Sanitized HTML content
     """
     # Define allowed HTML tags (consistent with Quill editor)
     allowed_tags = [
         'p', 'br', 'strong', 'em', 'u',
-        'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 
-        'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3',
+        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+        'caption', 'colgroup', 'col',
         'div', 'span', 'img'
     ]
     

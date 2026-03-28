@@ -938,10 +938,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 [{ 'list': 'ordered'}, { 'list': 'bullet' }],  // lists
                 ['link'],                                // link
                 ['clean']                                // remove formatting
-            ]
+            ],
+            clipboard: {
+                // Preserve more HTML structure during paste
+                matchVisual: false
+            }
         },
         placeholder: 'Beschreibung eingeben...'
     });
+
+    // Custom paste handler to preserve table HTML
+    // This handler runs before Quill's default paste processing
+    quill.root.addEventListener('paste', function(e) {
+        // Check if clipboard contains HTML with tables
+        const clipboardData = e.clipboardData || window.clipboardData;
+        const htmlData = clipboardData.getData('text/html');
+
+        if (htmlData && htmlData.includes('<table')) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Get current selection
+            const selection = quill.getSelection();
+            if (!selection) return;
+
+            // Insert the HTML directly into the editor
+            // This bypasses Quill's Delta conversion which strips table tags
+            const range = quill.getSelection(true);
+
+            // Insert HTML by directly manipulating the DOM
+            quill.focus();
+            document.execCommand('insertHTML', false, htmlData);
+
+            // Update the hidden textarea
+            const hiddenTextarea = document.getElementById('{{ form.beschreibung.id_for_label }}');
+            hiddenTextarea.value = quill.root.innerHTML;
+
+            return false;
+        }
+    }, true); // Use capture phase to intercept before Quill
     
     // Load initial content from textarea if exists
     const hiddenTextarea = document.getElementById('{{ form.beschreibung.id_for_label }}');
