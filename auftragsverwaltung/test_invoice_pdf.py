@@ -989,3 +989,210 @@ class GenericTemplateDocumentTypeTest(TestCase):
         
         # PDFs should be different (different content)
         self.assertNotEqual(result_invoice.pdf_bytes, result_quote.pdf_bytes)
+
+
+class PositionLongTextHtmlRenderingTest(TestCase):
+    """Tests for HTML rendering in position long_text field (Issue #561)"""
+
+    def setUp(self):
+        """Set up test data"""
+        # Create company
+        self.company = Mandant.objects.create(
+            name='Test GmbH',
+            adresse='Teststraße 1',
+            plz='12345',
+            ort='Berlin'
+        )
+
+        # Create customer
+        self.customer = Adresse.objects.create(
+            firma='Kunde GmbH',
+            name='Max Mustermann',
+            strasse='Kundenstraße 10',
+            plz='54321',
+            ort='Hamburg',
+            land='Deutschland'
+        )
+
+        # Create document type
+        self.doc_type = DocumentType.objects.create(
+            key='rechnung',
+            name='Rechnung',
+            prefix='R',
+            is_invoice=True
+        )
+
+        # Create tax rate
+        self.tax_19 = TaxRate.objects.create(code='normal', name='Normal 19%', rate=Decimal('0.19'))
+
+        # Create unit
+        self.unit = Unit.objects.create(code='STK', name='Stück', symbol='Stk')
+
+        # Create document
+        self.document = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.doc_type,
+            customer=self.customer,
+            number='R26-00999',
+            status='OPEN',
+            issue_date=date.today(),
+            subject='Test Rechnung mit HTML Langtext',
+            total_net=Decimal('200.00'),
+            total_tax=Decimal('38.00'),
+            total_gross=Decimal('238.00')
+        )
+
+    def test_long_text_with_html_renders_as_html_not_escaped(self):
+        """Test that HTML in long_text is rendered as HTML, not as escaped text"""
+        # Create a line with HTML content in long_text
+        html_content = '<p>Dies ist ein <strong>wichtiger</strong> Text.</p><ul><li>Punkt 1</li><li>Punkt 2</li></ul>'
+
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            short_text_1='Artikel mit HTML',
+            long_text=html_content,
+            description='Artikel mit HTML',
+            unit=self.unit,
+            quantity=Decimal('1.00'),
+            unit_price_net=Decimal('100.00'),
+            discount=Decimal('0.00'),
+            line_net=Decimal('100.00'),
+            line_tax=Decimal('19.00'),
+            line_gross=Decimal('119.00'),
+            tax_rate=self.tax_19
+        )
+
+        # Build context
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+
+        # Verify HTML is NOT escaped in the rendered output
+        # The HTML tags should be present as-is, not as &lt;p&gt; etc.
+        self.assertIn('<p>Dies ist ein <strong>wichtiger</strong> Text.</p>', html)
+        self.assertIn('<ul><li>Punkt 1</li><li>Punkt 2</li></ul>', html)
+
+        # Ensure escaped HTML is NOT present
+        self.assertNotIn('&lt;p&gt;', html)
+        self.assertNotIn('&lt;strong&gt;', html)
+        self.assertNotIn('&lt;ul&gt;', html)
+
+    def test_long_text_without_html_still_renders_correctly(self):
+        """Test that plain text in long_text still renders correctly (regression test)"""
+        plain_text = 'Dies ist ein einfacher Text ohne HTML.'
+
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            short_text_1='Artikel ohne HTML',
+            long_text=plain_text,
+            description='Artikel ohne HTML',
+            unit=self.unit,
+            quantity=Decimal('1.00'),
+            unit_price_net=Decimal('100.00'),
+            discount=Decimal('0.00'),
+            line_net=Decimal('100.00'),
+            line_tax=Decimal('19.00'),
+            line_gross=Decimal('119.00'),
+            tax_rate=self.tax_19
+        )
+
+        # Build context
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+
+        # Verify plain text is rendered correctly
+        self.assertIn(plain_text, html)
+
+    def test_long_text_with_html_in_pdf_generation(self):
+        """Test that HTML in long_text renders correctly in actual PDF generation"""
+        html_content = '<p>Test <strong>bold</strong> und <em>italic</em> Text.</p>'
+
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            short_text_1='PDF Test Artikel',
+            long_text=html_content,
+            description='PDF Test Artikel',
+            unit=self.unit,
+            quantity=Decimal('1.00'),
+            unit_price_net=Decimal('100.00'),
+            discount=Decimal('0.00'),
+            line_net=Decimal('100.00'),
+            line_tax=Decimal('19.00'),
+            line_gross=Decimal('119.00'),
+            tax_rate=self.tax_19
+        )
+
+        # Build context and generate PDF
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        pdf_service = PdfRenderService()
+        static_root = settings.BASE_DIR / 'static'
+        base_url = f'file://{static_root}/'
+
+        result = pdf_service.render(
+            template_name='printing/orders/invoice.html',
+            context=context,
+            base_url=base_url,
+            filename='test-html-longtext.pdf'
+        )
+
+        # Should generate valid PDF
+        self.assertIsNotNone(result.pdf_bytes)
+        self.assertGreater(len(result.pdf_bytes), 1000)
+        self.assertTrue(result.pdf_bytes.startswith(b'%PDF'))
+
+        # Convert PDF bytes to string to check content
+        # Note: Direct text extraction from PDF is complex, so we verify:
+        # 1. PDF was generated successfully (no errors)
+        # 2. PDF has substantial content (size check)
+        # The actual visual verification would be done manually
+
+    def test_empty_long_text_renders_correctly(self):
+        """Test that empty long_text does not cause issues (regression test)"""
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            position_no=1,
+            line_type='NORMAL',
+            is_selected=True,
+            short_text_1='Artikel ohne Langtext',
+            long_text='',  # Empty long_text
+            description='Artikel ohne Langtext',
+            unit=self.unit,
+            quantity=Decimal('1.00'),
+            unit_price_net=Decimal('100.00'),
+            discount=Decimal('0.00'),
+            line_net=Decimal('100.00'),
+            line_tax=Decimal('19.00'),
+            line_gross=Decimal('119.00'),
+            tax_rate=self.tax_19
+        )
+
+        # Build context
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+
+        # Should not have the long-text div at all (it's wrapped in {% if %})
+        # Just verify the template renders without errors
+        self.assertIsNotNone(html)
+        self.assertGreater(len(html), 100)
