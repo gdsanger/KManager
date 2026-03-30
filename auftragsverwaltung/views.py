@@ -538,19 +538,25 @@ def ajax_search_articles(request):
     """
     try:
         query = request.GET.get('q', '').strip()
-        
+
         if not query or len(query) < 2:
             return JsonResponse({'articles': []})
-        
-        # Full-text search across article fields
-        articles = Item.objects.filter(
-            Q(article_no__icontains=query) |
-            Q(short_text_1__icontains=query) |
-            Q(short_text_2__icontains=query) |
-            Q(long_text__icontains=query),
-            is_active=True
-        ).select_related('tax_rate', 'cost_type_1', 'cost_type_2', 'item_group')[:20]
-        
+
+        # Search across required fields:
+        # - article_no: exact (case-insensitive)
+        # - short_text_1/short_text_2/long_text: partial (case-insensitive)
+        articles = (
+            Item.objects.filter(
+                Q(article_no__iexact=query) |
+                Q(short_text_1__icontains=query) |
+                Q(short_text_2__icontains=query) |
+                Q(long_text__icontains=query),
+                is_active=True
+            )
+            .select_related('tax_rate', 'cost_type_1', 'cost_type_2', 'item_group')
+            .order_by('article_no')[:20]
+        )
+
         # Format results
         results = []
         for article in articles:
@@ -2211,4 +2217,3 @@ def timeentry_update(request, pk):
     }
     
     return render(request, 'auftragsverwaltung/timeentries/form.html', context)
-
