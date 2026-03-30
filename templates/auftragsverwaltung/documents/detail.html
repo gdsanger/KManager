@@ -739,17 +739,26 @@ Neues {{ document_type.name }}
                         <textarea class="form-control" id="manualLineLongText" rows="3" 
                                   placeholder="Detaillierter Langtext"></textarea>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Menge <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" id="manualLineQuantity" 
                                value="1.0" step="0.01" min="0" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <label class="form-label">Einheit</label>
+                        <select class="form-select" id="manualLineUnit">
+                            <option value="">--</option>
+                            {% for unit in units %}
+                            <option value="{{ unit.pk }}">{{ unit.code }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">Einzelpreis (Netto) <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" id="manualLineUnitPrice" 
                                value="0.00" step="0.01" min="0" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Steuersatz <span class="text-danger">*</span></label>
                         <select class="form-select" id="manualLineTaxRate" required>
                             {% for tax_rate in tax_rates %}
@@ -1163,6 +1172,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const quantity = document.getElementById('manualLineQuantity').value;
             const unitPrice = document.getElementById('manualLineUnitPrice').value;
             const taxRateId = document.getElementById('manualLineTaxRate').value;
+            const unitId = document.getElementById('manualLineUnit').value;
             const kostenart1Id = document.getElementById('manualLineKostenart1').value;
             const kostenart2Id = document.getElementById('manualLineKostenart2').value;
             
@@ -1189,6 +1199,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     long_text: longText,
                     quantity: parseFloat(quantity),
                     unit_price_net: parseFloat(unitPrice),
+                    unit_id: unitId ? parseInt(unitId) : null,
                     tax_rate_id: parseInt(taxRateId),
                     kostenart1_id: kostenart1Id ? parseInt(kostenart1Id) : null,
                     kostenart2_id: kostenart2Id ? parseInt(kostenart2Id) : null,

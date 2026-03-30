@@ -258,3 +258,50 @@ class UnitPersistenceTestCase(TestCase):
         self.assertIsNone(self.line.unit)
         self.assertIsNone(response_data['line']['unit_id'])
         self.assertEqual(response_data['line']['unit_symbol'], '')
+
+    def test_unit_persisted_when_creating_line(self):
+        """Test that unit provided during line creation is saved and rendered"""
+        url = reverse(
+            'auftragsverwaltung:ajax_add_line',
+            kwargs={'doc_key': 'quote', 'pk': self.document.pk}
+        )
+
+        payload = {
+            'short_text_1': 'Neue Position',
+            'short_text_2': '',
+            'long_text': '',
+            'quantity': 2.5,
+            'unit_price_net': 10.00,
+            'unit_id': self.unit_lfm.pk,
+            'tax_rate_id': self.tax_rate.pk,
+            'line_type': 'NORMAL'
+        }
+
+        response = self.client.post(
+            url,
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertTrue(data.get('success'))
+
+        line_id = data['line_id']
+        created_line = SalesDocumentLine.objects.get(pk=line_id)
+        self.assertEqual(created_line.unit, self.unit_lfm)
+
+        detail_url = reverse(
+            'auftragsverwaltung:document_detail',
+            kwargs={'doc_key': 'quote', 'pk': self.document.pk}
+        )
+        detail_response = self.client.get(detail_url)
+        self.assertEqual(detail_response.status_code, 200)
+        content = detail_response.content.decode('utf-8')
+        self.assertIn(f'data-line-id=\"{line_id}\"', content)
+        self.assertIn(f'<option value=\"{self.unit_lfm.pk}\" selected>', content)
+
+        context_builder = SalesDocumentInvoiceContextBuilder()
+        context = context_builder.build_context(self.document)
+        units = [line['unit'] for line in context.get('lines', [])]
+        self.assertIn(self.unit_lfm.symbol, units)
