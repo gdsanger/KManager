@@ -319,7 +319,7 @@
             <td class="col-desc">
                 {{ line.short_text }}
                 {% if line.long_text %}
-                <div class="long-text">{{ line.long_text }}</div>
+                <div class="long-text">{{ line.long_text|safe }}</div>
                 {% endif %}
             </td>
             <td class="col-price">
