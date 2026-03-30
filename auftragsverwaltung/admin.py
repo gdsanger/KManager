@@ -205,7 +205,8 @@ class SalesDocumentLineAdmin(admin.ModelAdmin):
         'unit_price_net',
         'line_net',
         'line_tax',
-        'line_gross'
+        'line_gross',
+        'unit'
     )
     list_filter = (
         'document__company',
@@ -228,7 +229,7 @@ class SalesDocumentLineAdmin(admin.ModelAdmin):
             'fields': ('line_type', 'is_selected')
         }),
         ('Inhalt', {
-            'fields': ('item', 'description', 'quantity', 'unit_price_net', 'tax_rate', 'is_discountable')
+            'fields': ('item', 'description', 'quantity', 'unit', 'unit_price_net', 'tax_rate', 'is_discountable')
         }),
         ('Beträge (berechnet)', {
             'fields': ('line_net', 'line_tax', 'line_gross'),
