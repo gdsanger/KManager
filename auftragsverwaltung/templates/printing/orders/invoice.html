@@ -339,7 +339,7 @@
             <td class="col-net">
                 {{ line.net|floatformat:2 }} €
                 {% if line.tax_rate %}
-                <div class="tax-rate-text">{{ line.tax_rate|floatformat:0 }}% MwSt.</div>
+                <div class="tax-rate-text">{{ line.tax_rate.name }}</div>
                 {% endif %}
             </td>
         </tr>
