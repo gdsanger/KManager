@@ -122,6 +122,9 @@
 
 /* Footer on every page */
 @page {
+    @bottom-left {
+        content: flow(footer-content);
+    }
     @bottom-center {
         content: "Seite " counter(page) " von " counter(pages);
         font-size: 6pt;
@@ -130,6 +133,7 @@
 }
 
 .company-footer {
+    flow: static(footer-content);
     margin-top: 24pt;
     padding-top: 8pt;
     border-top: 1pt solid #333;
