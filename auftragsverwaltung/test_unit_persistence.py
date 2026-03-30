@@ -234,6 +234,25 @@ class UnitPersistenceTestCase(TestCase):
         self.assertEqual(response_data['line']['unit_id'], self.unit_lfm.pk)
         self.assertEqual(response_data['line']['unit_symbol'], 'lfm')
 
+    def test_unit_change_accepts_unit_key(self):
+        """Ensure backend accepts both unit_id and unit keys from requests"""
+        url = reverse('auftragsverwaltung:ajax_update_line',
+                     kwargs={'doc_key': 'quote', 'pk': self.document.pk, 'line_id': self.line.pk})
+
+        response = self.client.post(
+            url,
+            data={'unit': self.unit_lfm.pk}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertTrue(data.get('success'))
+
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.unit, self.unit_lfm)
+        self.assertEqual(data['line']['unit_id'], self.unit_lfm.pk)
+        self.assertEqual(data['line']['unit_symbol'], self.unit_lfm.symbol)
+
     def test_unit_cleared_via_ajax(self):
         """Test clearing unit (setting to None) via AJAX"""
         # Start with a unit
@@ -305,3 +324,19 @@ class UnitPersistenceTestCase(TestCase):
         context = context_builder.build_context(self.document)
         units = [line['unit'] for line in context.get('lines', [])]
         self.assertIn(self.unit_lfm.symbol, units)
+
+    def test_unit_select_has_name_attribute(self):
+        """Detail view should render unit select with name for HTMX payloads"""
+        self.line.unit = self.unit_stk
+        self.line.save()
+
+        detail_url = reverse(
+            'auftragsverwaltung:document_detail',
+            kwargs={'doc_key': 'quote', 'pk': self.document.pk}
+        )
+        response = self.client.get(detail_url)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertIn('class="form-select form-select-sm line-unit"', content)
+        self.assertIn('name="unit_id"', content)
