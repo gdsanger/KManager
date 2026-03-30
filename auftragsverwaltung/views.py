@@ -248,7 +248,7 @@ def document_detail(request, doc_key, pk):
     units = Unit.objects.all().order_by('name')  # All available units
     
     # Get document lines (ordered by position_no)
-    lines = document.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2').order_by('position_no')
+    lines = document.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2', 'unit').order_by('position_no')
     
     # Get available text templates for this company
     header_templates = TextTemplate.objects.filter(
