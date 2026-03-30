@@ -472,9 +472,9 @@ Neues {{ document_type.name }}
                                             </div>
                                             <div class="col-md-2">
                                                 <select class="form-select form-select-sm line-unit"
+                                                        name="unit_id"
                                                         hx-post="{% url 'auftragsverwaltung:ajax_update_line' doc_key document.pk line.pk %}"
                                                         hx-trigger="change"
-                                                        hx-vals='js:{"unit_id": parseInt(this.value) || null}'
                                                         hx-swap="none">
                                                     <option value="">--</option>
                                                     {% for unit in units %}

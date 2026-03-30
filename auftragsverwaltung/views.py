@@ -815,8 +815,9 @@ def ajax_update_line(request, doc_key, pk, line_id):
                 line.tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
         if 'is_selected' in data:
             line.is_selected = data['is_selected']
-        if 'unit_id' in data:
-            line.unit_id = normalize_foreign_key_id(data['unit_id'])
+        if 'unit_id' in data or 'unit' in data:
+            unit_value = data.get('unit_id', data.get('unit'))
+            line.unit_id = normalize_foreign_key_id(unit_value)
         if 'discount' in data:
             discount_value = data['discount']
             if discount_value not in (None, ''):
@@ -2210,5 +2211,4 @@ def timeentry_update(request, pk):
     }
     
     return render(request, 'auftragsverwaltung/timeentries/form.html', context)
-
 
