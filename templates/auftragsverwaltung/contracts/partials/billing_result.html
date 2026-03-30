@@ -1,0 +1,73 @@
+{% if status_message %}
+<div class="alert {% if error_message %}alert-danger{% else %}alert-success{% endif %} d-flex align-items-center justify-content-between" role="alert">
+    <div>
+        {{ status_message }}
+        {% if contract_runs_count %}
+            ({{ contract_runs_count }} Lauf{% if contract_runs_count != 1 %}e{% endif %} für diesen Vertrag)
+        {% endif %}
+        {% if not error_message and new_runs_count %}
+            – insgesamt {{ new_runs_count }} Vertrag{% if new_runs_count != 1 %}e{% endif %} verarbeitet
+        {% endif %}
+    </div>
+    <small class="text-muted ms-3">{{ ran_at|date:"d.m.Y" }}</small>
+</div>
+{% endif %}
+
+{% if error_message %}
+<div class="alert alert-danger" role="alert">
+    {{ error_message }}
+    <div class="small text-muted mt-1">Bitte prüfen Sie den Vertrag oder versuchen Sie es erneut.</div>
+</div>
+{% endif %}
+
+{% with runs=recent_runs|default:runs %}
+    {% if runs %}
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Datum</th>
+                    <th>Status</th>
+                    <th>Dokument</th>
+                    <th>Nachricht</th>
+                    <th>Erstellt</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in runs %}
+                <tr>
+                    <td>{{ run.run_date|date:'d.m.Y' }}</td>
+                    <td>
+                        <span class="run-status-badge run-status-{{ run.status }}">
+                            {{ run.get_status_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if run.document %}
+                        <a href="{% url 'auftragsverwaltung:document_detail' run.document.document_type.key run.document.pk %}">
+                            {{ run.document.number }}
+                        </a>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if run.message %}
+                        <span class="text-muted small">{{ run.message|truncatewords:10 }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ run.created_at|date:'d.m.Y H:i' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-3">
+        <i class="bi bi-inbox"></i><br>
+        Noch keine Ausführungen vorhanden.
+    </p>
+    {% endif %}
+{% endwith %}

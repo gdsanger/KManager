@@ -2,22 +2,24 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum, Max
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
 import logging
+from django.utils import timezone
 
-from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, TextTemplate, TimeEntry
+from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, ContractRun, TextTemplate, TimeEntry
 from .tables import SalesDocumentTable, ContractTable, TextTemplateTable, OutgoingInvoiceJournalTable, TimeEntryTable
 from .filters import SalesDocumentFilter, ContractFilter, TextTemplateFilter, OutgoingInvoiceJournalFilter, TimeEntryFilter
 from .services import (
     DocumentCalculationService,
     TaxDeterminationService,
     PaymentTermTextService,
-    get_next_number
+    get_next_number,
+    ContractBillingService,
 )
 from .utils import sanitize_html
 from .printing import SalesDocumentInvoiceContextBuilder
@@ -156,6 +158,14 @@ def auftragsverwaltung_home(request):
         'document_type', 'company'
     ).order_by('-issue_date', '-id')[:10]
     
+    today = timezone.now().date()
+    due_contracts = Contract.objects.filter(
+        is_active=True,
+        next_run_date__lte=today
+    ).filter(
+        Q(end_date__isnull=True) | Q(end_date__gte=today)
+    ).select_related('customer', 'company').order_by('next_run_date', 'name')[:20]
+    
     # Get activity stream (last 25 activities from ALL domains and ALL companies)
     # Show global activities across all modules and all companies
     activities = ActivityStreamService.latest(n=25)
@@ -167,6 +177,7 @@ def auftragsverwaltung_home(request):
         'kpi_open_amount': kpi_open_amount,
         'open_sales_documents': open_sales_documents,
         'latest_documents': latest_documents,
+        'due_contracts': due_contracts,
         'activities': activities,
     }
     
@@ -1032,6 +1043,68 @@ def contract_detail(request, pk):
     }
     
     return render(request, 'auftragsverwaltung/contracts/detail.html', context)
+
+
+@login_required
+@require_POST
+def contract_run_billing(request, pk):
+    """
+    Trigger billing run for a single contract via HTMX (POST-only).
+    """
+    contract = get_object_or_404(Contract, pk=pk)
+    today = timezone.now().date()
+    runs_created = []
+    error_message = None
+    
+    try:
+        runs_created = ContractBillingService().generate_due(today)
+        status_message = "Rechnungslauf gestartet."
+    except Exception as exc:
+        status_message = "Fehler beim Starten des Rechnungslaufs."
+        error_message = str(exc)
+    
+    contract.refresh_from_db()
+    recent_runs = ContractRun.objects.filter(contract=contract).select_related('document').order_by('-id')[:20]
+    runs_for_contract = [run for run in runs_created if getattr(run, 'contract_id', None) == contract.id]
+    
+    context = {
+        'contract': contract,
+        'recent_runs': recent_runs,
+        'status_message': status_message,
+        'error_message': error_message,
+        'new_runs_count': len(runs_created),
+        'contract_runs_count': len(runs_for_contract),
+        'ran_at': today,
+    }
+    
+    return render(request, 'auftragsverwaltung/contracts/partials/billing_result.html', context)
+
+
+@login_required
+@require_POST
+def contracts_run_billing(request):
+    """
+    Trigger billing run for all due contracts via HTMX (POST-only).
+    """
+    today = timezone.now().date()
+    runs_created = []
+    error_message = None
+    
+    try:
+        runs_created = ContractBillingService().generate_due(today)
+        status_message = "Rechnungslauf gestartet."
+    except Exception as exc:
+        status_message = "Fehler beim Starten des Rechnungslaufs."
+        error_message = str(exc)
+    
+    context = {
+        'status_message': status_message,
+        'error_message': error_message,
+        'runs_created_count': len(runs_created),
+        'ran_at': today,
+    }
+    
+    return render(request, 'auftragsverwaltung/contracts/partials/billing_bulk_result.html', context)
 
 
 @login_required

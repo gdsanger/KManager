@@ -10,10 +10,20 @@
     <a href="{% url 'auftragsverwaltung:contract_create' %}" class="btn btn-primary" title="Neuen Vertrag erstellen">
         <i class="bi bi-plus-circle"></i> Neu erstellen
     </a>
+    <button type="button"
+            class="btn btn-outline-primary"
+            hx-post="{% url 'auftragsverwaltung:contracts_run_billing' %}"
+            hx-target="#bulk-billing-result"
+            hx-swap="innerHTML"
+            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+        <i class="bi bi-play-circle"></i> Alle fälligen abrechnen
+    </button>
 </div>
 {% endblock %}
 
 {% block content %}
+<div id="bulk-billing-result" class="mb-3"></div>
+
 <!-- Filters Section -->
 <div class="row mb-3">
     <div class="col-md-12">

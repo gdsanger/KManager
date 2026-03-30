@@ -1,0 +1,11 @@
+<div class="alert {% if error_message %}alert-danger{% else %}alert-success{% endif %} mb-2" role="alert">
+    {% if error_message %}
+        {{ status_message }} {{ error_message }}
+    {% else %}
+        {{ status_message }}
+        {% if runs_created_count is not None %}
+            ({{ runs_created_count }} Vertrag{% if runs_created_count != 1 %}e{% endif %} verarbeitet)
+        {% endif %}
+    {% endif %}
+    <div class="small text-muted mt-1">{{ ran_at|date:"d.m.Y" }}</div>
+</div>
