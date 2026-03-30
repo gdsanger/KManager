@@ -154,19 +154,16 @@
 
 /* Footer on every page (via @page) */
 @page {
-    @bottom-left {
-        content: flow(footer-content);
-    }
+    margin: 2.5cm 2.5cm 3cm 1.5cm;
     @bottom-center {
-        content: "Seite " counter(page) " von " counter(pages);
-        font-size: 5pt;
-        color: #666;
+        content: element(page-footer);
     }
 }
 
 /* 4-Column Footer Styles - displayed on every page */
 .company-footer {
-    flow: static(footer-content);
+    position: running(page-footer);
+    width: 100%;
     margin-top: 24pt;
     padding-top: 8pt;
     border-top: 1pt solid #333;
@@ -202,6 +199,17 @@
     display: inline-block;
     width: 10pt;
     color: #666;
+}
+
+.footer-meta {
+    margin-top: 6pt;
+    text-align: right;
+    font-size: 5pt;
+    color: #666;
+}
+
+.footer-meta .page-number::before {
+    content: "Seite " counter(page) " von " counter(pages);
 }
 
 /* First page specific header */
@@ -491,6 +499,9 @@
             <div class="footer-item">Inhaber: {{ company.account_holder }}</div>
             {% endif %}
         </div>
+    </div>
+    <div class="footer-meta">
+        <div class="page-number"></div>
     </div>
 </div>
 {% endblock %}
