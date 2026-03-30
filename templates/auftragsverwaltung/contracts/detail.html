@@ -778,10 +778,10 @@ $(document).ready(function() {
                 data: { q: query },
                 success: function(response) {
                     $('#articleSearchResults').empty();
-                    if (response.items && response.items.length > 0) {
-                        response.items.forEach(function(item) {
+                    if (response.articles && response.articles.length > 0) {
+                        response.articles.forEach(function(item) {
                             const resultDiv = $('<div class="article-search-result"></div>')
-                                .html(`<strong>${item.article_number}</strong> - ${item.short_text_1}<br><small class="text-muted">${item.net_price} € (${item.tax_rate_code})</small>`)
+                                .html(`<strong>${item.article_no}</strong> - ${item.short_text_1}<br><small class="text-muted">${item.net_price} € (${item.tax_rate_code})</small>`)
                                 .data('item', item)
                                 .on('click', function() {
                                     const selectedItem = $(this).data('item');
@@ -790,9 +790,9 @@ $(document).ready(function() {
                                     $('#newLineUnitPrice').val(selectedItem.net_price);
                                     $('#newLineTaxRate').val(selectedItem.tax_rate_id);
                                     $('#newLineDiscountable').prop('checked', selectedItem.is_discountable);
-                                    if (selectedItem.kostenart1_id) {
-                                        $('#newLineCostType1').val(selectedItem.kostenart1_id);
-                                        updateCostType2Options(selectedItem.kostenart1_id, selectedItem.kostenart2_id);
+                                    if (selectedItem.cost_type_1_id) {
+                                        $('#newLineCostType1').val(selectedItem.cost_type_1_id);
+                                        updateCostType2Options(selectedItem.cost_type_1_id, selectedItem.cost_type_2_id);
                                     }
                                     $('#articleSearchResults').empty();
                                     $('#articleSearchInput').val('');
