@@ -11,6 +11,8 @@ urlpatterns = [
     path('contracts/create/', views.contract_create, name='contract_create'),
     path('contracts/<int:pk>/', views.contract_detail, name='contract_detail'),
     path('contracts/<int:pk>/update/', views.contract_update, name='contract_update'),
+    path('contracts/<int:pk>/run-billing/', views.contract_run_billing, name='contract_run_billing'),
+    path('contracts/run-billing/', views.contracts_run_billing, name='contracts_run_billing'),
     
     # Contract AJAX endpoints
     path('ajax/contracts/<int:pk>/lines/add/', views.ajax_contract_add_line, name='ajax_contract_add_line'),
