@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from decimal import Decimal
@@ -430,6 +430,82 @@ class SalesDocument(models.Model):
                 raise ValidationError({
                     'source_document': 'Quelldokument ist erforderlich für Korrekturdokumente.'
                 })
+
+    def clone_as(self, target_document_type):
+        """
+        Create a copy of this SalesDocument using the provided target document type.
+        
+        Header fields are copied 1:1 except:
+        - number: generated via number range service
+        - issue_date: set to today
+        - status: always DRAFT
+        Lines are duplicated with all persisted fields.
+        """
+        if target_document_type is None or not isinstance(target_document_type, DocumentType):
+            raise ValueError('target_document_type must be a DocumentType instance')
+        if not target_document_type.is_active:
+            raise ValueError('Ziel-Dokumenttyp muss aktiv sein.')
+        
+        from auftragsverwaltung.services import get_next_number
+        from auftragsverwaltung.services.document_calculation import DocumentCalculationService
+        
+        with transaction.atomic():
+            new_issue_date = date.today()
+            new_document = SalesDocument.objects.create(
+                company=self.company,
+                document_type=target_document_type,
+                customer=self.customer,
+                number=get_next_number(self.company, target_document_type, new_issue_date),
+                status='DRAFT',
+                issue_date=new_issue_date,
+                due_date=self.due_date,
+                paid_at=None,
+                reference_number=self.reference_number,
+                subject=self.subject,
+                header_text=self.header_text,
+                footer_text=self.footer_text,
+                payment_term=self.payment_term,
+                payment_term_text=self.payment_term_text,
+                payment_term_snapshot=self.payment_term_snapshot,
+                notes_internal=self.notes_internal,
+                notes_public=self.notes_public,
+                total_net=self.total_net,
+                total_tax=self.total_tax,
+                total_gross=self.total_gross,
+            )
+            
+            for line in self.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2', 'unit').order_by('position_no'):
+                SalesDocumentLine.objects.create(
+                    document=new_document,
+                    position_no=line.position_no,
+                    line_type=line.line_type,
+                    is_selected=line.is_selected,
+                    item=line.item,
+                    tax_rate=line.tax_rate,
+                    quantity=line.quantity,
+                    unit=line.unit,
+                    short_text_1=line.short_text_1,
+                    short_text_2=line.short_text_2,
+                    long_text=line.long_text,
+                    description=line.description,
+                    unit_price_net=line.unit_price_net,
+                    is_discountable=line.is_discountable,
+                    discount=line.discount,
+                    line_net=line.line_net,
+                    line_tax=line.line_tax,
+                    line_gross=line.line_gross,
+                    kostenart1=line.kostenart1,
+                    kostenart2=line.kostenart2,
+                )
+            
+            DocumentCalculationService.recalculate(new_document, persist=True)
+            SalesDocumentSource.objects.create(
+                target_document=new_document,
+                source_document=self,
+                role='COPIED_FROM',
+            )
+            
+            return new_document
 
 
 class SalesDocumentSource(models.Model):
@@ -1409,4 +1485,3 @@ class TimeEntry(models.Model):
         if self.duration_minutes:
             return Decimal(self.duration_minutes) / Decimal(60)
         return Decimal(0)
-

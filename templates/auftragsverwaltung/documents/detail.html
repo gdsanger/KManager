@@ -20,6 +20,9 @@ Neues {{ document_type.name }}
     <button type="button" class="btn btn-primary" id="saveButton">
         <i class="bi bi-save"></i> Speichern
     </button>
+    <button type="button" class="btn btn-outline-secondary" id="copyButton">
+        <i class="bi bi-files"></i> Kopieren
+    </button>
     <a href="{% url 'auftragsverwaltung:document_preview' document.id %}" target="_blank" class="btn btn-outline-secondary">
         <i class="bi bi-file-pdf"></i> PDF voransehen
     </a>
@@ -689,6 +692,40 @@ Neues {{ document_type.name }}
     </div>
 </form>
 
+{% if document %}
+<!-- Copy Document Modal -->
+<div class="modal fade" id="copyDocumentModal" tabindex="-1" aria-labelledby="copyDocumentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="copyDocumentModalLabel">Beleg kopieren</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="copyDocumentTypeSelect" class="form-label">Ziel-Dokumenttyp</label>
+                    <select class="form-select" id="copyDocumentTypeSelect">
+                        <option value="">Bitte wählen</option>
+                        {% for dt in copy_document_types %}
+                        <option value="{{ dt.key }}" {% if document.document_type.pk == dt.pk %}selected{% endif %}>
+                            {{ dt.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Nummer wird neu vergeben, Belegdatum auf heute gesetzt.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="confirmCopyDocumentButton">
+                    <i class="bi bi-check2"></i> Kopieren
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Article Search Modal -->
 <div class="modal fade" id="articleSearchModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -1000,6 +1037,63 @@ document.addEventListener('DOMContentLoaded', function() {
                 unsavedIndicator.classList.remove('show');
             }
             form.submit();
+        });
+    }
+
+    // Copy document handler
+    const copyButton = document.getElementById('copyButton');
+    const copyModalEl = document.getElementById('copyDocumentModal');
+    const copyDocumentTypeSelect = document.getElementById('copyDocumentTypeSelect');
+    const confirmCopyDocumentButton = document.getElementById('confirmCopyDocumentButton');
+
+    if (copyButton && copyModalEl) {
+        const copyModal = new bootstrap.Modal(copyModalEl);
+        copyButton.addEventListener('click', function() {
+            if (confirmCopyDocumentButton) {
+                confirmCopyDocumentButton.disabled = false;
+                confirmCopyDocumentButton.innerHTML = '<i class="bi bi-check2"></i> Kopieren';
+            }
+            copyModal.show();
+        });
+    }
+
+    if (confirmCopyDocumentButton && copyDocumentTypeSelect) {
+        confirmCopyDocumentButton.addEventListener('click', function() {
+            const targetType = copyDocumentTypeSelect.value;
+            if (!targetType) {
+                alert('Bitte wählen Sie einen Ziel-Dokumenttyp.');
+                return;
+            }
+            confirmCopyDocumentButton.disabled = true;
+            confirmCopyDocumentButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Kopieren...';
+            
+            fetch('{% url "auftragsverwaltung:document_copy" doc_key document.pk %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: `target_document_type=${encodeURIComponent(targetType)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.redirect_url) {
+                    isDirty = false;
+                    if (unsavedIndicator) {
+                        unsavedIndicator.classList.remove('show');
+                    }
+                    window.location.href = data.redirect_url;
+                } else {
+                    throw new Error(data.error || 'Kopieren fehlgeschlagen.');
+                }
+            })
+            .catch(error => {
+                alert('Kopieren fehlgeschlagen: ' + error.message);
+            })
+            .finally(() => {
+                confirmCopyDocumentButton.disabled = false;
+                confirmCopyDocumentButton.innerHTML = '<i class="bi bi-check2"></i> Kopieren';
+            });
         });
     }
     
