@@ -210,14 +210,27 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" 
-                        id="dokumente-tab" 
+                        id="anhaenge-tab" 
                         data-bs-toggle="tab" 
-                        data-bs-target="#dokumente" 
+                        data-bs-target="#anhaenge" 
                         type="button" 
                         role="tab" 
-                        aria-controls="dokumente"
+                        aria-controls="anhaenge"
                         aria-selected="false"
-                        data-tab-id="dokumente">
+                        data-tab-id="anhaenge">
+                    <i class="bi bi-paperclip"></i> Anhänge
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" 
+                        id="sales-documents-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#sales-documents" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="sales-documents"
+                        aria-selected="false"
+                        data-tab-id="sales_documents">
                     <i class="bi bi-file-earmark-text"></i> Dokumente
                 </button>
             </li>
@@ -259,11 +272,19 @@
                 </div>
             </div>
             <div class="tab-pane fade" 
-                 id="dokumente" 
+                 id="anhaenge" 
                  role="tabpanel" 
-                 aria-labelledby="dokumente-tab">
+                 aria-labelledby="anhaenge-tab">
                 <div class="card-body">
                     {% include "vermietung/dokumente/_tab_content.html" %}
+                </div>
+            </div>
+            <div class="tab-pane fade" 
+                 id="sales-documents" 
+                 role="tabpanel" 
+                 aria-labelledby="sales-documents-tab">
+                <div class="card-body">
+                    {% include "vermietung/kunden/_sales_documents_tab.html" %}
                 </div>
             </div>
             {% if kunde.bemerkung %}
@@ -281,13 +302,13 @@
 </div>
 {% endwith %}
 
-<!-- Document Upload Modal -->
+<!-- Attachment Upload Modal -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content bg-dark text-light">
             <div class="modal-header">
                 <h5 class="modal-title" id="uploadModalLabel">
-                    <i class="bi bi-upload"></i> Dokument hochladen
+                    <i class="bi bi-upload"></i> Anhang hochladen
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -342,9 +363,10 @@
     
     function restoreActiveTab() {
         const savedTabId = localStorage.getItem(storageKey);
+        const targetTabId = savedTabId === 'dokumente' ? 'anhaenge' : savedTabId;
         
-        if (savedTabId) {
-            const savedButton = tabButtonsArray.find(btn => btn.getAttribute('data-tab-id') === savedTabId);
+        if (targetTabId) {
+            const savedButton = tabButtonsArray.find(btn => btn.getAttribute('data-tab-id') === targetTabId);
             
             if (savedButton) {
                 const tab = new bootstrap.Tab(savedButton);
