@@ -16,6 +16,7 @@ from PIL import Image
 import uuid
 import logging
 from dateutil.relativedelta import relativedelta
+from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,34 @@ class VertragQuerySet(models.QuerySet):
             start__lte=today
         ).filter(
             models.Q(ende__isnull=True) | models.Q(ende__gt=today)
+        )
+
+    def active_in_month(self, month_start):
+        """
+        Filter contracts that are active at any point within the given month.
+
+        A contract is counted as active for the month if:
+        - Status is 'active'
+        - Contract start is on or before the end of the month
+        - Contract end is empty or on/after the first day of the month
+
+        Args:
+            month_start (date): First day of the month to evaluate
+
+        Returns:
+            QuerySet: Active contracts overlapping the month
+        """
+        if not isinstance(month_start, date):
+            raise ValueError("month_start must be a date instance")
+
+        month_start = month_start.replace(day=1)
+        month_end = month_start + relativedelta(months=1) - timedelta(days=1)
+
+        return self.filter(
+            status='active',
+            start__lte=month_end
+        ).filter(
+            models.Q(ende__isnull=True) | models.Q(ende__gte=month_start)
         )
 
 

@@ -68,6 +68,7 @@ urlpatterns = [
     path('mietobjekte/<int:parent_pk>/kind-zuweisen/', views.mietobjekt_assign_child, name='mietobjekt_assign_child'),
     
     # Vertrag (Contract) URLs
+    path('mieteinnahmen/monatlich/', views.mieteinnahmen_monatlich, name='mieteinnahmen_monatlich'),
     path('vertraege/', views.vertrag_list, name='vertrag_list'),
     path('vertraege/neu/', views.vertrag_create, name='vertrag_create'),
     path('vertraege/<int:pk>/', views.vertrag_detail, name='vertrag_detail'),

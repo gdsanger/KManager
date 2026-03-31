@@ -1569,6 +1569,65 @@ def vertrag_list(request):
 
 
 @vermietung_required
+def mieteinnahmen_monatlich(request):
+    """
+    Monthly rent income overview (Soll) for active contracts.
+    Supports selecting a month (default: current month).
+    """
+    month_param = request.GET.get('monat')
+    today = timezone.now().date()
+
+    if month_param:
+        try:
+            selected_month = datetime.strptime(f"{month_param}-01", "%Y-%m-%d").date()
+        except ValueError:
+            selected_month = today.replace(day=1)
+    else:
+        selected_month = today.replace(day=1)
+
+    # Fetch active contracts for the selected month with related data
+    contracts = Vertrag.objects.select_related('mieter').prefetch_related(
+        'vertragsobjekte__mietobjekt'
+    ).active_in_month(selected_month)
+
+    entries = []
+    for vertrag in contracts:
+        # Prefer new VertragsObjekt relationship
+        mietobjekte = [vo.mietobjekt for vo in vertrag.vertragsobjekte.all()]
+
+        # Fallback to legacy mietobjekt field
+        if not mietobjekte and vertrag.mietobjekt_id:
+            mietobjekte = [vertrag.mietobjekt]
+
+        if mietobjekte:
+            first_obj = mietobjekte[0]
+            if len(mietobjekte) > 1:
+                objekt_display = f"{first_obj.name} (+{len(mietobjekte)-1} weitere)"
+            else:
+                objekt_display = first_obj.name
+        else:
+            objekt_display = '—'
+
+        entries.append({
+            'vertrag': vertrag,
+            'kunde': vertrag.mieter,
+            'objekt_display': objekt_display,
+            'betrag': vertrag.effective_net_total,
+        })
+
+    # Sort entries by customer name for consistent presentation
+    entries.sort(key=lambda entry: (entry['kunde'].full_name() if entry['kunde'] else ''))
+
+    context = {
+        'entries': entries,
+        'selected_month': selected_month,
+        'month_value': selected_month.strftime('%Y-%m'),
+    }
+
+    return render(request, 'vermietung/vertraege/mieteinnahmen_monatlich.html', context)
+
+
+@vermietung_required
 def vertrag_detail(request, pk):
     """
     Show details of a specific contract.
