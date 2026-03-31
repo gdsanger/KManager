@@ -20,6 +20,20 @@ Neues {{ document_type.name }}
     <button type="button" class="btn btn-primary" id="saveButton">
         <i class="bi bi-save"></i> Speichern
     </button>
+
+    {% if document_type.is_invoice %}
+    <!-- Invoice-specific actions -->
+    <button type="button" class="btn btn-success" id="finalizeButton" title="Rechnung finalisieren (Nummer vergeben)">
+        <i class="bi bi-check-circle"></i> Echtdruck
+    </button>
+    <button type="button" class="btn btn-info" id="sendEmailButton" title="Rechnung per E-Mail versenden">
+        <i class="bi bi-envelope"></i> Per Mail senden
+    </button>
+    <button type="button" class="btn btn-outline-secondary" id="printInternalButton" title="Rechnung drucken und interne Kopie versenden">
+        <i class="bi bi-printer"></i> Drucken
+    </button>
+    {% endif %}
+
     <button type="button" class="btn btn-outline-secondary" id="copyButton">
         <i class="bi bi-files"></i> Kopieren
     </button>
@@ -2102,7 +2116,122 @@ document.addEventListener('DOMContentLoaded', function() {
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
+
+    {% if document.pk and document_type.is_invoice %}
+    // ============================================================================
+    // Invoice-specific Actions (Echtdruck, Email Send, Print)
+    // ============================================================================
+
+    // Finalize Invoice (Echtdruck)
+    const finalizeButton = document.getElementById('finalizeButton');
+    if (finalizeButton) {
+        finalizeButton.addEventListener('click', function() {
+            if (!confirm('Rechnung finalisieren?\n\nDies vergibt eine eindeutige Rechnungsnummer (falls noch keine vorhanden) und setzt den Status auf "Versendet".')) {
+                return;
+            }
+
+            finalizeButton.disabled = true;
+            const originalHtml = finalizeButton.innerHTML;
+            finalizeButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Wird finalisiert...';
+
+            fetch('{% url "auftragsverwaltung:invoice_finalize" document.pk %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Rechnung erfolgreich finalisiert!\n\nRechnungsnummer: ${data.invoice_number}\nStatus: ${data.status_display}`);
+                    location.reload();
+                } else {
+                    alert('Fehler beim Finalisieren: ' + (data.error || 'Unbekannter Fehler'));
+                    finalizeButton.disabled = false;
+                    finalizeButton.innerHTML = originalHtml;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Finalisieren der Rechnung');
+                finalizeButton.disabled = false;
+                finalizeButton.innerHTML = originalHtml;
+            });
+        });
+    }
+
+    // Send Invoice via Email
+    const sendEmailButton = document.getElementById('sendEmailButton');
+    if (sendEmailButton) {
+        sendEmailButton.addEventListener('click', function() {
+            if (!confirm('Rechnung per E-Mail versenden?\n\nDie Rechnung wird an die hinterlegte Rechnungs-E-Mail-Adresse des Kunden gesendet.\nEine Kopie geht an die interne Buchhaltung.')) {
+                return;
+            }
+
+            sendEmailButton.disabled = true;
+            const originalHtml = sendEmailButton.innerHTML;
+            sendEmailButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Wird gesendet...';
+
+            fetch('{% url "auftragsverwaltung:invoice_send_email" document.pk %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Rechnung erfolgreich versendet!\n\nRechnungsnummer: ${data.invoice_number}\nEmpfänger: ${data.recipients.join(', ')}`);
+                    location.reload();
+                } else {
+                    alert('Fehler beim Versenden: ' + (data.error || 'Unbekannter Fehler'));
+                    sendEmailButton.disabled = false;
+                    sendEmailButton.innerHTML = originalHtml;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Fehler beim Versenden der Rechnung');
+                sendEmailButton.disabled = false;
+                sendEmailButton.innerHTML = originalHtml;
+            });
+        });
+    }
+
+    // Print Invoice (with internal email copy)
+    const printInternalButton = document.getElementById('printInternalButton');
+    if (printInternalButton) {
+        printInternalButton.addEventListener('click', function() {
+            printInternalButton.disabled = true;
+            const originalHtml = printInternalButton.innerHTML;
+            printInternalButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Wird gedruckt...';
+
+            // Create a form to submit and download the PDF
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{% url "auftragsverwaltung:invoice_print_internal" document.pk %}';
+            form.target = '_blank';
+
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            form.appendChild(csrfInput);
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+
+            // Re-enable button after a short delay
+            setTimeout(function() {
+                printInternalButton.disabled = false;
+                printInternalButton.innerHTML = originalHtml;
+                alert('Rechnung wird heruntergeladen.\nEine Kopie wurde an die interne Buchhaltung gesendet.');
+            }, 1000);
+        });
+    }
+    {% endif %}
+
     // Mark initial load as complete
     // We use setTimeout(0) to defer this until after all synchronous initialization code
     // and any immediately-queued events have been processed. This prevents:

@@ -31,9 +31,14 @@ urlpatterns = [
     
     # Document PDF download endpoint
     path('documents/<int:pk>/pdf/', views.document_pdf, name='document_pdf'),
-    
+
     # Document PDF preview endpoint (read-only, no side effects)
     path('documents/<int:pk>/preview/', views.document_preview, name='document_preview'),
+
+    # Invoice-specific actions
+    path('invoices/<int:pk>/finalize/', views.invoice_finalize, name='invoice_finalize'),
+    path('invoices/<int:pk>/send-email/', views.invoice_send_email, name='invoice_send_email'),
+    path('invoices/<int:pk>/print-internal/', views.invoice_print_internal, name='invoice_print_internal'),
     
     # AJAX endpoints
     path('ajax/calculate-payment-term/', views.ajax_calculate_payment_term, name='ajax_calculate_payment_term'),

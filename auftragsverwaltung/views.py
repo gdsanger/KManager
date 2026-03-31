@@ -2022,6 +2022,255 @@ def document_pdf(request, pk):
 
 
 @login_required
+@require_POST
+def invoice_finalize(request, pk):
+    """
+    Finalize an invoice (Echtdruck): assign number and set status to SENT.
+
+    This is an idempotent operation:
+    - If invoice already has a number, it won't be changed
+    - Status is set to SENT
+
+    Args:
+        request: HTTP request
+        pk: Primary key of the SalesDocument (must be an invoice)
+
+    Returns:
+        JsonResponse with success status and invoice details
+    """
+    from auftragsverwaltung.services.invoice_finalization import finalize_invoice
+
+    # Get invoice with related data
+    document = get_object_or_404(
+        SalesDocument.objects.select_related(
+            'company',
+            'customer',
+            'document_type'
+        ),
+        pk=pk
+    )
+
+    # Validate this is an invoice
+    if not document.document_type.is_invoice:
+        return JsonResponse({
+            'success': False,
+            'error': f'Dokument ist keine Rechnung (Typ: {document.document_type.name})'
+        }, status=400)
+
+    try:
+        # Finalize invoice
+        document, was_modified = finalize_invoice(document)
+
+        # Log activity
+        if was_modified:
+            ActivityStreamService.add(
+                company=document.company,
+                domain='ORDER',
+                activity_type='INVOICE_FINALIZED',
+                title=f'Rechnung finalisiert: {document.number}',
+                description=f'Echtdruck durchgeführt, Status: {document.get_status_display()}',
+                target_url=reverse('auftragsverwaltung:document_detail', kwargs={'doc_key': document.document_type.key, 'pk': document.pk}),
+                actor=request.user,
+                severity='INFO'
+            )
+            logger.info(f"Invoice {document.number} finalized by {request.user.username}")
+
+        return JsonResponse({
+            'success': True,
+            'was_modified': was_modified,
+            'invoice_number': document.number,
+            'status': document.status,
+            'status_display': document.get_status_display(),
+        })
+
+    except ValueError as e:
+        logger.warning(f"Invoice finalization failed: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+    except Exception as e:
+        logger.error(f"Unexpected error during invoice finalization: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Fehler beim Finalisieren: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def invoice_send_email(request, pk):
+    """
+    Send invoice via email to customer with PDF attachment.
+
+    Also sends a copy to internal accounting (template sender).
+    Automatically finalizes the invoice if not already done.
+
+    Args:
+        request: HTTP request
+        pk: Primary key of the SalesDocument (must be an invoice)
+
+    Returns:
+        JsonResponse with success status and recipient list
+    """
+    from auftragsverwaltung.services.invoice_email import send_invoice_email, InvoiceEmailError
+
+    # Get invoice with related data
+    document = get_object_or_404(
+        SalesDocument.objects.select_related(
+            'company',
+            'customer',
+            'document_type'
+        ),
+        pk=pk
+    )
+
+    # Validate this is an invoice
+    if not document.document_type.is_invoice:
+        return JsonResponse({
+            'success': False,
+            'error': f'Dokument ist keine Rechnung (Typ: {document.document_type.name})'
+        }, status=400)
+
+    try:
+        # Send email (also finalizes invoice if needed)
+        result = send_invoice_email(
+            invoice=document,
+            to_customer=True,
+            to_internal=True,  # Send copy to accounting
+            request=request
+        )
+
+        # Log activity
+        ActivityStreamService.add(
+            company=document.company,
+            domain='ORDER',
+            activity_type='INVOICE_SENT',
+            title=f'Rechnung versendet: {document.number}',
+            description=f'An: {", ".join(result["recipients"])}',
+            target_url=reverse('auftragsverwaltung:document_detail', kwargs={'doc_key': document.document_type.key, 'pk': document.pk}),
+            actor=request.user,
+            severity='INFO'
+        )
+
+        logger.info(f"Invoice {document.number} sent to {result['recipients']} by {request.user.username}")
+
+        return JsonResponse({
+            'success': True,
+            'invoice_number': document.number,
+            'recipients': result['recipients'],
+        })
+
+    except InvoiceEmailError as e:
+        logger.warning(f"Invoice email failed: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+    except Exception as e:
+        logger.error(f"Unexpected error during invoice email: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Fehler beim Versenden: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def invoice_print_internal(request, pk):
+    """
+    Print invoice (download PDF) and send internal copy to accounting.
+
+    This downloads the PDF for the user and sends an email copy to
+    internal accounting only (not to the customer).
+
+    Args:
+        request: HTTP request
+        pk: Primary key of the SalesDocument (must be an invoice)
+
+    Returns:
+        HttpResponse with PDF content (triggers download)
+    """
+    from auftragsverwaltung.services.invoice_email import send_invoice_email, InvoiceEmailError
+
+    # Get invoice with related data
+    document = get_object_or_404(
+        SalesDocument.objects.select_related(
+            'company',
+            'customer',
+            'document_type'
+        ),
+        pk=pk
+    )
+
+    # Validate this is an invoice
+    if not document.document_type.is_invoice:
+        return JsonResponse({
+            'success': False,
+            'error': f'Dokument ist keine Rechnung (Typ: {document.document_type.name})'
+        }, status=400)
+
+    try:
+        # Send internal email in background (don't fail if it errors)
+        try:
+            send_invoice_email(
+                invoice=document,
+                to_customer=False,
+                to_internal=True,  # Only to accounting
+                request=request
+            )
+            logger.info(f"Invoice {document.number} internal email sent by {request.user.username}")
+        except InvoiceEmailError as e:
+            # Log but don't fail the print operation
+            logger.warning(f"Internal email failed for invoice {document.number}: {str(e)}")
+
+        # Generate PDF for download
+        context_builder = SalesDocumentInvoiceContextBuilder()
+        context = context_builder.build_context(document)
+        template_name = context_builder.get_template_name(document)
+        base_url = get_static_base_url()
+
+        pdf_service = PdfRenderService()
+        safe_number = ''.join(c if c.isalnum() or c in ('-', '_') else '_' for c in (document.number or 'Entwurf'))
+
+        result = pdf_service.render(
+            template_name=template_name,
+            context=context,
+            base_url=base_url,
+            filename=f'Rechnung_{safe_number}.pdf'
+        )
+
+        # Log activity
+        ActivityStreamService.add(
+            company=document.company,
+            domain='ORDER',
+            activity_type='INVOICE_PRINTED',
+            title=f'Rechnung gedruckt: {document.number or "Entwurf"}',
+            description='PDF heruntergeladen und interne Kopie versendet',
+            target_url=reverse('auftragsverwaltung:document_detail', kwargs={'doc_key': document.document_type.key, 'pk': document.pk}),
+            actor=request.user,
+            severity='INFO'
+        )
+
+        # Return PDF as downloadable file
+        response = HttpResponse(result.pdf_bytes, content_type=result.content_type)
+        response['Content-Disposition'] = f'attachment; filename="{result.filename}"'
+
+        logger.info(f"Invoice {document.number or 'draft'} printed by {request.user.username}")
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Unexpected error during invoice print: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Fehler beim Drucken: {str(e)}'
+        }, status=500)
+
+
+@login_required
 @require_http_methods(["GET"])
 def document_preview(request, pk):
     """

@@ -147,6 +147,7 @@ class AdresseKundeForm(forms.ModelForm):
             'telefon',
             'mobil',
             'email',
+            'invoice_email',
             'bemerkung',
             # Tax and accounting fields
             'country_code',
@@ -166,6 +167,7 @@ class AdresseKundeForm(forms.ModelForm):
             'telefon': forms.TextInput(attrs={'class': 'form-control'}),
             'mobil': forms.TextInput(attrs={'class': 'form-control'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'invoice_email': forms.EmailInput(attrs={'class': 'form-control'}),
             'bemerkung': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'country_code': forms.Select(attrs={'class': 'form-select'}),
             'vat_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. DE123456789'}),
@@ -184,6 +186,7 @@ class AdresseKundeForm(forms.ModelForm):
             'telefon': 'Telefon (optional)',
             'mobil': 'Mobil (optional)',
             'email': 'E-Mail (optional)',
+            'invoice_email': 'E-Mail Rechnung (optional)',
             'bemerkung': 'Bemerkung (optional)',
             'country_code': 'Ländercode',
             'vat_id': 'USt-IdNr. (optional)',
@@ -192,6 +195,7 @@ class AdresseKundeForm(forms.ModelForm):
             'debitor_number': 'Debitorennummer (optional)',
         }
         help_texts = {
+            'invoice_email': 'E-Mail-Adresse für den automatischen Rechnungsversand',
             'country_code': 'ISO 3166-1 Alpha-2 Ländercode (2 Zeichen, z.B. DE, AT, FR)',
             'vat_id': 'Umsatzsteuer-Identifikationsnummer',
             'is_eu': 'Kennzeichnet EU-Kunden für Reverse Charge',
