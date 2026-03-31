@@ -25,6 +25,7 @@ class InvoiceInForm(forms.ModelForm):
             "order",
             "status",
             "approval_comment",
+            "payment_date",
         ]
         widgets = {
             "invoice_no": forms.TextInput(attrs={"class": "form-control"}),
@@ -55,6 +56,9 @@ class InvoiceInForm(forms.ModelForm):
             "approval_comment": forms.Textarea(
                 attrs={"class": "form-control", "rows": 3}
             ),
+            "payment_date": forms.DateInput(
+                attrs={"class": "form-control", "type": "date"}, format="%Y-%m-%d"
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -62,6 +66,7 @@ class InvoiceInForm(forms.ModelForm):
         # date fields need format set for initial rendering
         self.fields["invoice_date"].input_formats = ["%Y-%m-%d"]
         self.fields["due_date"].input_formats = ["%Y-%m-%d"]
+        self.fields["payment_date"].input_formats = ["%Y-%m-%d"]
         # Limit supplier choices to LIEFERANT type
         self.fields["supplier"].queryset = Adresse.objects.filter(adressen_type="LIEFERANT")
 

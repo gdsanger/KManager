@@ -93,6 +93,8 @@ def invoice_list(request):
 @login_required
 @lieferantenwesen_required
 def invoice_detail(request, pk):
+    from django.utils import timezone
+
     invoice = get_object_or_404(
         InvoiceIn.objects.select_related(
             "supplier", "cost_type_main", "cost_type_sub", "order",
@@ -115,6 +117,7 @@ def invoice_detail(request, pk):
             "lines": lines,
             "can_approve": can_approve,
             "approval_form": approval_form,
+            "today": timezone.now().date(),
         },
     )
 
@@ -261,6 +264,46 @@ def invoice_approve(request, pk):
         messages.warning(request, f'Rechnung "{invoice.invoice_no}" wurde abgelehnt.')
 
     invoice.save()
+    return redirect("lieferantenwesen:invoice_detail", pk=pk)
+
+
+@login_required
+@lieferantenwesen_required
+@require_POST
+def invoice_mark_as_paid(request, pk):
+    """Mark an invoice as paid (only for APPROVED invoices)."""
+    from django.utils import timezone
+
+    invoice = get_object_or_404(InvoiceIn, pk=pk)
+
+    # Only approved invoices can be marked as paid
+    if invoice.status != "APPROVED":
+        messages.error(
+            request,
+            "Nur freigegebene Rechnungen können als bezahlt markiert werden.",
+        )
+        return redirect("lieferantenwesen:invoice_detail", pk=pk)
+
+    # Get payment_date from POST or use today
+    payment_date_str = request.POST.get("payment_date", "")
+    if payment_date_str:
+        from datetime import datetime
+        try:
+            payment_date = datetime.strptime(payment_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            payment_date = timezone.now().date()
+    else:
+        payment_date = timezone.now().date()
+
+    # Use the model method to mark as paid
+    invoice.mark_as_paid(payment_date=payment_date)
+    invoice.updated_by = request.user
+    invoice.save()
+
+    messages.success(
+        request,
+        f'Rechnung "{invoice.invoice_no}" wurde als bezahlt markiert.',
+    )
     return redirect("lieferantenwesen:invoice_detail", pk=pk)
 
 

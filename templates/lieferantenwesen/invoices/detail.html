@@ -105,6 +105,12 @@
                         {% else %}–{% endif %}
                     </div>
                 </div>
+                {% if invoice.payment_date %}
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Zahlungsdatum</div>
+                    <div class="col-md-8"><strong>{{ invoice.payment_date|date:"d.m.Y" }}</strong></div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -190,6 +196,28 @@
                     </div>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-circle"></i> Entscheidung speichern
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Mark as Paid Section -->
+        {% if invoice.status == "APPROVED" %}
+        <div class="card mb-3 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-check-circle"></i> Als bezahlt markieren</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{% url 'lieferantenwesen:invoice_mark_as_paid' invoice.pk %}" id="mark-paid-form">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="payment_date" class="form-label">Zahlungsdatum</label>
+                        <input type="date" name="payment_date" id="payment_date" class="form-control" value="{{ today|date:'Y-m-d' }}">
+                        <small class="form-text text-muted">Optional - Standardwert ist heute</small>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-cash-coin"></i> Als bezahlt markieren
                     </button>
                 </form>
             </div>
