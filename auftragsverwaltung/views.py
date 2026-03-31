@@ -1212,6 +1212,7 @@ def contract_create(request):
 
 
 @login_required
+@require_POST
 def contract_update(request, pk):
     """
     Update an existing contract

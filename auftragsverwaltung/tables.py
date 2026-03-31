@@ -189,8 +189,8 @@ class ContractTable(tables.Table):
     )
     
     def render_name(self, value, record):
-        """Render name as an HTML link to the contract update view."""
-        url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': record.pk})
+        """Render name as an HTML link to the contract detail/edit view."""
+        url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': record.pk})
         return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
     
     def render_interval(self, value, record):
@@ -212,7 +212,7 @@ class ContractTable(tables.Table):
     def render_aktionen(self, record):
         """Render action buttons."""
         detail_url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': record.pk})
-        edit_url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': record.pk})
+        edit_url = detail_url
         return format_html(
             '<div class="btn-group btn-group-sm" role="group">'
             '<a href="{}" class="btn btn-outline-info" title="Details">'

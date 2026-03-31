@@ -126,12 +126,11 @@ class ContractViewTestCase(TestCase):
         
         self.assertEqual(response.status_code, 200)
         
-        # Check that the contract name is a link to the update view
-        update_url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': self.contract.pk})
-        self.assertContains(response, f'href="{update_url}"')
+        detail_url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': self.contract.pk})
+        # Both detail and edit actions should lead to the detail view (edit page)
+        self.assertContains(response, f'href="{detail_url}"')
         
         # Check that the detail link exists in the action buttons
-        detail_url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': self.contract.pk})
         self.assertContains(response, f'href="{detail_url}"')
         
         # Check that both action buttons are present (eye icon for detail, pencil for edit)
@@ -209,6 +208,41 @@ class ContractViewTestCase(TestCase):
         self.contract.refresh_from_db()
         self.assertEqual(self.contract.name, 'Updated Contract Name')
         self.assertEqual(self.contract.interval, 'ANNUAL')
+
+    def test_contract_detail_prefills_key_fields(self):
+        """Ensure edit view shows existing values for critical fields."""
+        self.contract.reference = 'REF-123'
+        self.contract.is_active = False
+        self.contract.save()
+        
+        url = reverse('auftragsverwaltung:contract_detail', kwargs={'pk': self.contract.pk})
+        response = self.client.get(url)
+        html = response.content.decode()
+        
+        # Name input value present
+        self.assertIn('value="Test Monthly Contract"', html)
+        # Payment term option marked as selected
+        self.assertRegex(html, rf'<option value="{self.payment_term.pk}"\s+selected>')
+        # Reference value present
+        self.assertIn('value="REF-123"', html)
+        # Status switch reflects inactive state (no checked attribute)
+        self.assertNotRegex(html, r'id="isActiveSwitch"[^>]*checked')
+
+    def test_contract_update_disallows_get_and_preserves_fields(self):
+        """GET on update endpoint must not mutate contract data."""
+        self.contract.reference = 'KEEP-REF'
+        self.contract.is_active = True
+        self.contract.save()
+        
+        url = reverse('auftragsverwaltung:contract_update', kwargs={'pk': self.contract.pk})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 405)
+        
+        self.contract.refresh_from_db()
+        self.assertEqual(self.contract.reference, 'KEEP-REF')
+        self.assertTrue(self.contract.is_active)
+        self.assertEqual(self.contract.name, 'Test Monthly Contract')
 
 
 class ContractAjaxEndpointTestCase(TestCase):
