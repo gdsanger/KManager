@@ -27,6 +27,7 @@ urlpatterns = [
     path('documents/<str:doc_key>/create/', views.document_create, name='document_create'),
     path('documents/<str:doc_key>/<int:pk>/', views.document_detail, name='document_detail'),
     path('documents/<str:doc_key>/<int:pk>/update/', views.document_update, name='document_update'),
+    path('documents/<str:doc_key>/<int:pk>/copy/', views.document_copy, name='document_copy'),
     
     # Document PDF download endpoint
     path('documents/<int:pk>/pdf/', views.document_pdf, name='document_pdf'),

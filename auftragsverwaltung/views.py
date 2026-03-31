@@ -4,6 +4,7 @@ from django.db.models import Q, Sum, Max
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
+from django.urls import reverse
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from django_tables2 import RequestConfig
@@ -257,6 +258,10 @@ def document_detail(request, doc_key, pk):
     companies = Mandant.objects.all().order_by('name')
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
     units = Unit.objects.all().order_by('name')  # All available units
+    copy_document_types = DocumentType.objects.filter(
+        key__in=['quote', 'order', 'delivery', 'invoice'],
+        is_active=True
+    ).order_by('name')
     
     # Get document lines (ordered by position_no)
     lines = document.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2', 'unit').order_by('position_no')
@@ -289,6 +294,7 @@ def document_detail(request, doc_key, pk):
         'header_templates': header_templates,
         'footer_templates': footer_templates,
         'status_choices': SalesDocument.STATUS_CHOICES,  # Add for template consistency
+        'copy_document_types': copy_document_types,
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
@@ -385,6 +391,10 @@ def document_create(request, doc_key):
     tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
     units = Unit.objects.all().order_by('name')  # All available units
+    copy_document_types = DocumentType.objects.filter(
+        key__in=['quote', 'order', 'delivery', 'invoice'],
+        is_active=True
+    ).order_by('name')
     
     # Get available text templates for this company
     header_templates = TextTemplate.objects.filter(
@@ -415,6 +425,7 @@ def document_create(request, doc_key):
         'header_templates': header_templates,
         'footer_templates': footer_templates,
         'status_choices': SalesDocument.STATUS_CHOICES,  # Add STATUS_CHOICES for create mode
+        'copy_document_types': copy_document_types,
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
@@ -498,6 +509,64 @@ def document_update(request, doc_key, pk):
     
     # Redirect to detail view
     return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
+
+
+@login_required
+@require_POST
+def document_copy(request, doc_key, pk):
+    """
+    Create a copy of an existing sales document in a (possibly) different document type.
+    
+    Expects POST parameter:
+        - target_document_type: key of the target DocumentType
+    
+    Returns:
+        JSON containing redirect_url to the new document detail page.
+    """
+    document = get_object_or_404(SalesDocument, pk=pk)
+    document_type = get_object_or_404(DocumentType, key=doc_key, is_active=True)
+    
+    if document.document_type != document_type:
+        return JsonResponse({'success': False, 'error': 'Dokumenttyp stimmt nicht überein.'}, status=400)
+    
+    target_key = request.POST.get('target_document_type')
+    if not target_key:
+        return JsonResponse({'success': False, 'error': 'Ziel-Dokumenttyp ist erforderlich.'}, status=400)
+    
+    try:
+        target_document_type = DocumentType.objects.get(key=target_key, is_active=True)
+    except DocumentType.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Ungültiger Dokumenttyp.'}, status=400)
+    
+    try:
+        new_document = document.clone_as(target_document_type)
+    except ValueError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        logger.exception("Fehler beim Kopieren des Dokuments %s", document.pk)
+        return JsonResponse({'success': False, 'error': 'Kopieren fehlgeschlagen.'}, status=500)
+    
+    ActivityStreamService.add(
+        company=new_document.company,
+        domain='ORDER',
+        activity_type='DOCUMENT_COPIED',
+        title=f'{document.document_type.name} kopiert: {new_document.number}',
+        description=f'Quelle: {document.number}',
+        target_url=f'/auftragsverwaltung/documents/{target_document_type.key}/{new_document.pk}/',
+        actor=request.user,
+        severity='INFO'
+    )
+    
+    redirect_url = reverse('auftragsverwaltung:document_detail', kwargs={
+        'doc_key': target_document_type.key,
+        'pk': new_document.pk,
+    })
+    
+    return JsonResponse({
+        'success': True,
+        'document_id': new_document.pk,
+        'redirect_url': redirect_url,
+    })
 
 
 @login_required
