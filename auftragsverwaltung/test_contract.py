@@ -13,7 +13,7 @@ from django.test import TestCase
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
 from auftragsverwaltung.models import (
@@ -311,9 +311,12 @@ class ContractLineModelTestCase(TestCase):
             is_active=True
         )
         
-        # Create cost type
+        # Create cost types
         self.cost_type = Kostenart.objects.create(
             name="General"
+        )
+        self.cost_type2 = Kostenart.objects.create(
+            name="Secondary"
         )
         
         # Create contract NumberRange
@@ -494,9 +497,12 @@ class ContractBillingServiceTestCase(TestCase):
             is_active=True
         )
         
-        # Create cost type
+        # Create cost types
         self.cost_type = Kostenart.objects.create(
             name="General"
+        )
+        self.cost_type2 = Kostenart.objects.create(
+            name="Secondary"
         )
         
         # Create contract NumberRange
@@ -563,6 +569,8 @@ class ContractBillingServiceTestCase(TestCase):
             next_run_date=date(2026, 1, 1),
             is_active=True
         )
+        period_start = contract.next_run_date
+        period_end = contract.advance_next_run_date() - timedelta(days=1)
         
         # Create contract lines
         ContractLine.objects.create(
@@ -573,6 +581,7 @@ class ContractBillingServiceTestCase(TestCase):
             unit_price_net=Decimal('1000.00'),
             tax_rate=self.tax_rate,
             cost_type_1=self.cost_type,
+            cost_type_2=self.cost_type2,
             is_discountable=True
         )
         
@@ -593,6 +602,9 @@ class ContractBillingServiceTestCase(TestCase):
         self.assertEqual(document.status, 'DRAFT')
         self.assertEqual(document.issue_date, date(2026, 1, 1))
         self.assertEqual(document.payment_term, self.payment_term)
+        self.assertEqual(document.customer, self.customer)
+        expected_subject = f"{contract.name} {period_start.strftime('%d.%m.%Y')} - {period_end.strftime('%d.%m.%Y')}"
+        self.assertEqual(document.subject, expected_subject)
         
         # Check due_date
         expected_due_date = date(2026, 1, 31)  # Jan 1 + 30 days
@@ -606,6 +618,10 @@ class ContractBillingServiceTestCase(TestCase):
         self.assertEqual(line.description, "Monthly Service")
         self.assertEqual(line.quantity, Decimal('1.0000'))
         self.assertEqual(line.unit_price_net, Decimal('1000.00'))
+        self.assertEqual(line.tax_rate, self.tax_rate)
+        self.assertEqual(line.kostenart1, self.cost_type)
+        self.assertEqual(line.kostenart2, self.cost_type2)
+        self.assertTrue(line.is_discountable)
         
         # Check totals (calculated by DocumentCalculationService)
         self.assertEqual(document.total_net, Decimal('1000.00'))
