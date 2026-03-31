@@ -2,10 +2,12 @@
 Tests for Customer (Kunde) CRUD functionality in the user area.
 """
 
+from datetime import date
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User, Group
-from core.models import Adresse
+from auftragsverwaltung.models import SalesDocument, DocumentType
+from core.models import Adresse, Mandant
 from vermietung.forms import AdresseKundeForm
 
 
@@ -64,6 +66,22 @@ class KundeCRUDTestCase(TestCase):
             plz='11111',
             ort='Lieferstadt',
             land='Deutschland'
+        )
+        # SalesDocument prerequisites
+        self.mandant = Mandant.objects.create(
+            name='Test GmbH',
+            adresse='Testweg 1',
+            plz='12345',
+            ort='Teststadt',
+            land='Deutschland'
+        )
+        self.document_type, _ = DocumentType.objects.get_or_create(
+            key='invoice',
+            defaults={
+                'name': 'Rechnung',
+                'prefix': 'R',
+                'is_invoice': True,
+            }
         )
         
         self.client = Client()
@@ -153,6 +171,34 @@ class KundeCRUDTestCase(TestCase):
         self.assertContains(response, '12345')
         self.assertContains(response, 'Musterstadt')
         self.assertContains(response, 'max@example.com')
+
+    def test_kunde_detail_shows_sales_documents(self):
+        """Ensure SalesDocuments for the customer appear in the Dokumente tab."""
+        doc = SalesDocument.objects.create(
+            company=self.mandant,
+            document_type=self.document_type,
+            customer=self.kunde1,
+            number='R-001',
+            status='DRAFT',
+            issue_date=date.today()
+        )
+        SalesDocument.objects.create(
+            company=self.mandant,
+            document_type=self.document_type,
+            customer=self.kunde2,
+            number='R-002',
+            status='DRAFT',
+            issue_date=date.today()
+        )
+
+        self.client.login(username='testuser', password='testpass123')
+        response = self.client.get(reverse('vermietung:kunde_detail', kwargs={'pk': self.kunde1.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'R-001')
+        self.assertContains(response, self.document_type.name)
+        self.assertNotContains(response, 'R-002')
+        self.assertContains(response, reverse('auftragsverwaltung:document_pdf', args=[doc.pk]))
     
     def test_kunde_detail_only_shows_kunden(self):
         """Test that kunde_detail view only shows KUNDE addresses."""

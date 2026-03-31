@@ -27,6 +27,7 @@ from .forms import (
     UebergabeprotokollForm, DokumentUploadForm, MietObjektBildUploadForm, AktivitaetAttachmentUploadForm, AktivitaetForm, AktivitaetsBereichForm,
     VertragsObjektFormSet, ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet, KostenartForm
 )
+from auftragsverwaltung.models import SalesDocument
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
 from core.services.ai.invoice_extraction import InvoiceExtractionService
@@ -709,11 +710,20 @@ def kunde_detail(request, pk):
     aktivitaeten_paginator = Paginator(aktivitaeten, 10)
     aktivitaeten_page = request.GET.get('aktivitaeten_page', 1)
     aktivitaeten_page_obj = aktivitaeten_paginator.get_page(aktivitaeten_page)
+
+    # Get SalesDocuments for this customer with pagination
+    sales_documents = SalesDocument.objects.select_related('document_type', 'company').filter(
+        customer=kunde
+    ).order_by('-issue_date', '-id')
+    sales_documents_paginator = Paginator(sales_documents, 10)
+    sales_documents_page = request.GET.get('sales_documents_page', 1)
+    sales_documents_page_obj = sales_documents_paginator.get_page(sales_documents_page)
     
     context = {
         'kunde': kunde,
         'dokumente_page_obj': dokumente_page_obj,
         'aktivitaeten_page_obj': aktivitaeten_page_obj,
+        'sales_documents_page_obj': sales_documents_page_obj,
         'aktivitaet_create_url': reverse('vermietung:aktivitaet_create_from_kunde', args=[kunde.pk]),
     }
     
@@ -4677,4 +4687,3 @@ def kontakt_delete(request, pk):
         return redirect('vermietung:standort_detail', pk=adresse.pk)
     else:
         return redirect('vermietung:adresse_detail', pk=adresse.pk)
-
