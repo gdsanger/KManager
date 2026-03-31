@@ -3,6 +3,7 @@ from .document_calculation import DocumentCalculationService, TotalsResult
 from .item_snapshot import apply_item_snapshot
 from .tax_determination import TaxDeterminationService
 from .payment_term_text import PaymentTermTextService
+from .contract_billing import ContractBillingService
 
 __all__ = [
     'get_next_number',
@@ -11,4 +12,5 @@ __all__ = [
     'apply_item_snapshot',
     'TaxDeterminationService',
     'PaymentTermTextService',
+    'ContractBillingService',
 ]
