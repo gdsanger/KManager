@@ -1,0 +1,77 @@
+{% extends "vermietung/layouts/list_layout.html" %}
+
+{% block title %}Mieteinnahmen (monatlich) - Domus{% endblock %}
+
+{% block page_title %}Mieteinnahmen (monatlich){% endblock %}
+
+{% block filters %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <form class="row g-2 align-items-center" method="get" action="{% url 'vermietung:mieteinnahmen_monatlich' %}">
+            <div class="col-auto">
+                <label for="monat" class="col-form-label">Monat</label>
+            </div>
+            <div class="col-auto">
+                <input type="month" class="form-control" id="monat" name="monat" value="{{ month_value }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-outline-secondary">
+                    <i class="bi bi-calendar-event"></i> Anzeigen
+                </button>
+            </div>
+        </form>
+    </div>
+    <div class="col-md-6 text-end">
+        <span class="text-muted">Ausgewählter Monat: {{ selected_month|date:"F Y" }}</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block table_content %}
+<div class="table-responsive">
+    <table class="table table-dark table-hover">
+        <thead>
+            <tr>
+                <th>Kunde</th>
+                <th>Objekt</th>
+                <th class="text-end">Betrag (Netto)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if entries %}
+                {% for entry in entries %}
+                <tr>
+                    <td>
+                        {% if entry.kunde %}
+                        <a href="{% url 'vermietung:kunde_detail' entry.kunde.pk %}" class="text-decoration-none">
+                            {{ entry.kunde.full_name }}
+                        </a>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if entry.vertrag %}
+                            <a href="{% url 'vermietung:vertrag_detail' entry.vertrag.pk %}" class="text-decoration-none">
+                                {{ entry.objekt_display }}
+                            </a>
+                        {% else %}
+                            {{ entry.objekt_display }}
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {{ entry.betrag|floatformat:2 }} €
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted">
+                        <i class="bi bi-inbox"></i> Keine Daten für den ausgewählten Monat
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
