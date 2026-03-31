@@ -66,7 +66,7 @@ class ActivityReminderMailTemplateTest(TestCase):
     def test_render_reminder_template_minimal_context(self):
         """Test rendering with minimal required context."""
         template = MailTemplate.objects.get(key='activity-reminder')
-        
+
         context = {
             'assignee_name': 'John Doe',
             'activity_title': 'Einfache Aufgabe',
@@ -78,13 +78,47 @@ class ActivityReminderMailTemplateTest(TestCase):
             'creator_name': '',
             'creator_email': '',
         }
-        
+
         subject, html = render_template(template, context)
-        
+
         # Should not crash with empty values
         self.assertEqual(subject, 'Erinnerung: Einfache Aufgabe fällig in 2 Tagen')
         self.assertIn('John Doe', html)
         self.assertIn('Einfache Aufgabe', html)
+
+    def test_render_reminder_template_with_html_description(self):
+        """Test that HTML in activity description is rendered as HTML, not escaped."""
+        template = MailTemplate.objects.get(key='activity-reminder')
+
+        # Activity description with HTML tags (as would come from a rich text editor)
+        html_description = '<p><strong>Wichtiger Kunde:</strong> Herr Müller</p><p>Bitte <em>dringend</em> kontaktieren!</p>'
+
+        context = {
+            'assignee_name': 'John Doe',
+            'activity_title': 'Kundenanruf',
+            'activity_description': html_description,
+            'activity_priority': 'Hoch',
+            'activity_due_date': '02.02.2026',
+            'activity_context': '',
+            'activity_url': 'http://localhost:8000/aktivitaeten/3/',
+            'creator_name': '',
+            'creator_email': '',
+        }
+
+        subject, html = render_template(template, context)
+
+        # HTML tags should be present as actual HTML, not escaped
+        # Check that <p>, <strong>, and <em> tags are in the output
+        self.assertIn('<p><strong>Wichtiger Kunde:</strong> Herr Müller</p>', html)
+        self.assertIn('<em>dringend</em>', html)
+
+        # Make sure HTML is NOT escaped (these should NOT be in the output)
+        self.assertNotIn('&lt;p&gt;', html)
+        self.assertNotIn('&lt;strong&gt;', html)
+        self.assertNotIn('&lt;em&gt;', html)
+        self.assertNotIn('&lt;/p&gt;', html)
+        self.assertNotIn('&lt;/strong&gt;', html)
+        self.assertNotIn('&lt;/em&gt;', html)
 
 
 class ActivityReminderCommandTest(TestCase):

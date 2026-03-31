@@ -88,13 +88,45 @@ class ActivityMailTemplateRenderingTest(TestCase):
             'creator_name': '',
             'creator_email': '',
         }
-        
+
         subject, html = render_template(self.assigned_template, context)
-        
+
         # Should not crash with empty values
         self.assertEqual(subject, 'Neue Aktivität zugewiesen: Simple task')
         self.assertIn('John Doe', html)
         self.assertIn('Simple task', html)
+
+    def test_render_assigned_template_with_html_description(self):
+        """Test that HTML in activity description is rendered as HTML, not escaped."""
+        # Activity description with HTML tags (as would come from a rich text editor)
+        html_description = '<p><strong>Wichtiger Kunde:</strong> Herr Schmidt</p><p>Bitte die <em>Unterlagen</em> vorbereiten.</p>'
+
+        context = {
+            'assignee_name': 'John Doe',
+            'activity_title': 'Kundengespräch vorbereiten',
+            'activity_description': html_description,
+            'activity_priority': 'Hoch',
+            'activity_due_date': '05.02.2026',
+            'activity_context': 'Kunde: Schmidt GmbH',
+            'activity_url': 'http://localhost:8000/aktivitaeten/5/',
+            'creator_name': 'Jane Manager',
+            'creator_email': 'jane@example.com',
+        }
+
+        subject, html = render_template(self.assigned_template, context)
+
+        # HTML tags should be present as actual HTML, not escaped
+        # Check that <p>, <strong>, and <em> tags are in the output
+        self.assertIn('<p><strong>Wichtiger Kunde:</strong> Herr Schmidt</p>', html)
+        self.assertIn('<em>Unterlagen</em>', html)
+
+        # Make sure HTML is NOT escaped (these should NOT be in the output)
+        self.assertNotIn('&lt;p&gt;', html)
+        self.assertNotIn('&lt;strong&gt;', html)
+        self.assertNotIn('&lt;em&gt;', html)
+        self.assertNotIn('&lt;/p&gt;', html)
+        self.assertNotIn('&lt;/strong&gt;', html)
+        self.assertNotIn('&lt;/em&gt;', html)
     
     def test_render_completed_template(self):
         """Test rendering completed template."""
