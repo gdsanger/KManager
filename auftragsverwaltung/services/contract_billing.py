@@ -12,7 +12,7 @@ Business Rules:
 - Advances next_run_date based on interval
 - No duplicate runs per contract/day
 """
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Tuple, Optional
 from django.db import transaction
@@ -154,14 +154,18 @@ class ContractBillingService:
         Returns:
             Tuple of (SalesDocument, ContractRun)
         """
+        billing_period = cls._build_billing_period(contract)
+
         # Create SalesDocument
         document = SalesDocument.objects.create(
             company=contract.company,
             document_type=contract.document_type,
+            customer=contract.customer,
             number='',  # Will be assigned by number range service
             status='DRAFT',
             issue_date=contract.next_run_date,
             payment_term=contract.payment_term,
+            subject=f"{contract.name} {billing_period}",
         )
         
         # Set payment_term snapshot
@@ -193,6 +197,8 @@ class ContractBillingService:
                 unit_price_net=contract_line.unit_price_net,
                 tax_rate=contract_line.tax_rate,
                 is_discountable=contract_line.is_discountable,
+                kostenart1=contract_line.cost_type_1,
+                kostenart2=contract_line.cost_type_2,
             )
         
         # Calculate totals
@@ -208,3 +214,12 @@ class ContractBillingService:
         )
         
         return document, run
+
+    @staticmethod
+    def _build_billing_period(contract: Contract) -> str:
+        """
+        Build billing period string for the current run based on contract dates.
+        """
+        period_start = contract.next_run_date
+        period_end = contract.advance_next_run_date() - timedelta(days=1)
+        return f"{period_start.strftime('%d.%m.%Y')} - {period_end.strftime('%d.%m.%Y')}"
