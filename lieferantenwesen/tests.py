@@ -10,6 +10,7 @@ Tests cover:
 """
 from datetime import date
 from decimal import Decimal
+from html.parser import HTMLParser
 
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
@@ -241,6 +242,87 @@ class ApprovalWorkflowTest(TestCase):
             reverse("lieferantenwesen:invoice_detail", kwargs={"pk": self.invoice.pk}),
             fetch_redirect_response=False,
         )
+
+
+class _InvoiceTableParser(HTMLParser):
+    """Simple table parser to extract cell text from invoice list HTML."""
+
+    def __init__(self):
+        super().__init__()
+        self.in_td = False
+        self.current_data = []
+        self.current_row = []
+        self.rows = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self.current_row = []
+        if tag == "td":
+            self.in_td = True
+            self.current_data = []
+
+    def handle_endtag(self, tag):
+        if tag == "td":
+            self.in_td = False
+            cell_text = "".join(self.current_data).strip()
+            self.current_row.append(cell_text)
+        if tag == "tr" and self.current_row:
+            self.rows.append(self.current_row)
+
+    def handle_data(self, data):
+        if self.in_td:
+            self.current_data.append(data)
+
+
+class InvoiceListStatusDisplayTest(TestCase):
+    """Ensure list shows approval and payment flags derived from status."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="listuser", password="listpass", is_staff=True
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="List Lieferant",
+            strasse="Listenstr. 1",
+            plz="77777",
+            ort="Liststadt",
+            land="DE",
+        )
+
+    def _create_invoice(self, invoice_no, status):
+        return InvoiceIn.objects.create(
+            invoice_no=invoice_no,
+            invoice_date=date(2026, 4, 1),
+            supplier=self.supplier,
+            status=status,
+        )
+
+    def _parse_rows(self, response):
+        parser = _InvoiceTableParser()
+        parser.feed(response.content.decode())
+        return parser.rows
+
+    def test_list_shows_approval_and_payment_indicators(self):
+        self._create_invoice("APP-001", "APPROVED")
+        self._create_invoice("PAID-001", "PAID")
+        self._create_invoice("DR-001", "DRAFT")
+
+        self.client.login(username="listuser", password="listpass")
+        response = self.client.get(reverse("lieferantenwesen:invoice_list"))
+        self.assertEqual(response.status_code, 200)
+
+        rows = self._parse_rows(response)
+        row_by_no = {row[0]: row for row in rows}
+
+        # Column order: no, supplier, date, due, gross, approved?, paid?, status, order, actions
+        self.assertEqual(row_by_no["APP-001"][5], "Ja")
+        self.assertEqual(row_by_no["APP-001"][6], "Nein")
+        self.assertEqual(row_by_no["PAID-001"][5], "Nein")
+        self.assertEqual(row_by_no["PAID-001"][6], "Ja")
+        self.assertEqual(row_by_no["DR-001"][5], "Nein")
+        self.assertEqual(row_by_no["DR-001"][6], "Nein")
 
 
 class SupplierMatchServiceTest(TestCase):
