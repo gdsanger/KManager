@@ -5,7 +5,7 @@ import os
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -24,14 +24,23 @@ logger = logging.getLogger(__name__)
 @login_required
 @lieferantenwesen_required
 def home(request):
-    recent_invoices = InvoiceIn.objects.select_related("supplier").order_by(
-        "-created_at"
+    today = timezone.now().date()
+    recent_invoices = InvoiceIn.objects.select_related("supplier", "order").order_by(
+        "-invoice_date",
+        "-created_at",
     )[:10]
-    in_review_count = InvoiceIn.objects.filter(status="IN_REVIEW").count()
-    overdue_count = InvoiceIn.objects.filter(
-        due_date__lt=timezone.now().date(),
+    overdue_qs = InvoiceIn.objects.filter(
+        due_date__lt=today,
         status__in=["DRAFT", "EXTRACTED", "IN_REVIEW"],
-    ).count()
+    )
+    paid_qs = InvoiceIn.objects.filter(status="PAID")
+    in_review_count = InvoiceIn.objects.filter(status="IN_REVIEW").count()
+    overdue_count = overdue_qs.count()
+    overdue_total_amount = overdue_qs.aggregate(total=Sum("gross_amount"))[
+        "total"
+    ]
+    paid_count = paid_qs.count()
+    paid_total_amount = paid_qs.aggregate(total=Sum("gross_amount"))["total"]
     return render(
         request,
         "lieferantenwesen/home.html",
@@ -39,6 +48,10 @@ def home(request):
             "recent_invoices": recent_invoices,
             "in_review_count": in_review_count,
             "overdue_count": overdue_count,
+            "overdue_total_amount": overdue_total_amount,
+            "paid_count": paid_count,
+            "paid_total_amount": paid_total_amount,
+            "today": today,
         },
     )
 

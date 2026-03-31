@@ -31,7 +31,20 @@
             <div class="card-body">
                 <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Überfällig</h5>
                 <p class="card-text fs-2 fw-bold">{{ overdue_count }}</p>
+                <p class="card-text mb-2">{{ overdue_total_amount|default:"–" }}</p>
                 <a href="{% url 'lieferantenwesen:invoice_list' %}?overdue=1" class="btn btn-sm btn-dark">
+                    Anzeigen
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-bg-success">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-cash-coin"></i> Bezahlt</h5>
+                <p class="card-text fs-2 fw-bold">{{ paid_count }}</p>
+                <p class="card-text mb-2">{{ paid_total_amount|default:"–" }}</p>
+                <a href="{% url 'lieferantenwesen:invoice_list' %}?status=PAID" class="btn btn-sm btn-dark">
                     Anzeigen
                 </a>
             </div>
@@ -50,32 +63,75 @@
                     <th>Rechnungsnr.</th>
                     <th>Lieferant</th>
                     <th>Datum</th>
+                    <th>Fälligkeit</th>
                     <th>Brutto</th>
+                    <th>Freigegeben zur Zahlung</th>
+                    <th>Bezahlt</th>
                     <th>Status</th>
-                    <th></th>
+                    <th>Auftrag</th>
+                    <th class="text-end">Aktionen</th>
                 </tr>
             </thead>
             <tbody>
                 {% for inv in recent_invoices %}
                 <tr>
-                    <td>{{ inv.invoice_no }}</td>
+                    <td>
+                        <a href="{% url 'lieferantenwesen:invoice_detail' inv.pk %}">{{ inv.invoice_no }}</a>
+                    </td>
                     <td>{{ inv.supplier.name }}</td>
                     <td>{{ inv.invoice_date|date:"d.m.Y" }}</td>
+                    <td>
+                        {% if inv.due_date %}
+                            {% if inv.due_date < today and inv.status in "DRAFT EXTRACTED IN_REVIEW" %}
+                            <span class="text-danger fw-bold">{{ inv.due_date|date:"d.m.Y" }}</span>
+                            {% else %}
+                            {{ inv.due_date|date:"d.m.Y" }}
+                            {% endif %}
+                        {% else %}–{% endif %}
+                    </td>
                     <td>{{ inv.gross_amount|default:"–" }}</td>
+                    <td>
+                        {% if inv.is_approved_for_payment %}
+                        <span class="badge bg-success">Ja</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Nein</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if inv.is_paid %}
+                        <span class="badge bg-success">Ja</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Nein</span>
+                        {% endif %}
+                    </td>
                     <td>
                         <span class="badge bg-{{ inv.get_status_display_class }}">
                             {{ inv.get_status_display }}
                         </span>
                     </td>
-                    <td>
-                        <a href="{% url 'lieferantenwesen:invoice_detail' inv.pk %}" class="btn btn-sm btn-outline-light">
+                    <td>{{ inv.order|default:"–" }}</td>
+                    <td class="text-end">
+                        <a href="{% url 'lieferantenwesen:invoice_detail' inv.pk %}" class="btn btn-sm btn-outline-light" title="Detail">
                             <i class="bi bi-eye"></i>
                         </a>
+                        {% if inv.status not in "APPROVED REJECTED" %}
+                        <a href="{% url 'lieferantenwesen:invoice_edit' inv.pk %}" class="btn btn-sm btn-outline-warning" title="Bearbeiten">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% endif %}
+                        {% if inv.status == "APPROVED" %}
+                        <form method="post" action="{% url 'lieferantenwesen:invoice_mark_as_paid' inv.pk %}" style="display: inline;" onsubmit="return confirm('Möchten Sie diese Rechnung als bezahlt markieren?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Als bezahlt markieren">
+                                <i class="bi bi-cash-coin"></i>
+                            </button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-3">
+                    <td colspan="10" class="text-center text-muted py-3">
                         <i class="bi bi-inbox"></i> Keine Eingangsrechnungen vorhanden
                     </td>
                 </tr>
