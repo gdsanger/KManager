@@ -79,6 +79,12 @@ class Adresse(models.Model):
         verbose_name="Debitorennummer",
         help_text="Debitorennummer für die Buchhaltung (optional)"
     )
+    invoice_email = models.EmailField(
+        blank=True,
+        null=True,
+        verbose_name="E-Mail Rechnung",
+        help_text="E-Mail-Adresse für den Rechnungsversand"
+    )
     
     def full_name(self):
         if self.firma:

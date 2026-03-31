@@ -4,6 +4,7 @@ Mail service for rendering and sending emails via SMTP
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 from email.header import Header
 from django.template import Template, Context, TemplateSyntaxError
 from core.models import SmtpSettings, MailTemplate
@@ -54,16 +55,17 @@ def render_template(mail_template, context):
         raise TemplateRenderError(f"Fehler beim Rendern des Templates: {str(e)}")
 
 
-def send_mail(template_key, to, context, cc=None):
+def send_mail(template_key, to, context, cc=None, attachments=None):
     """
     Send an email using a template.
-    
+
     Args:
         template_key: str, the unique key of the MailTemplate
         to: list of recipient email addresses
         context: dict with template variables
         cc: optional list of CC recipient email addresses
-        
+        attachments: optional list of tuples (filename, bytes_content, mime_type)
+
     Raises:
         MailServiceError: If template not found or inactive
         TemplateRenderError: If template rendering fails
@@ -128,7 +130,14 @@ def send_mail(template_key, to, context, cc=None):
     # Attach HTML body
     html_part = MIMEText(html_body, 'html', 'utf-8')
     msg.attach(html_part)
-    
+
+    # Attach files if provided
+    if attachments:
+        for filename, bytes_content, mime_type in attachments:
+            part = MIMEApplication(bytes_content, _subtype=mime_type.split('/')[-1])
+            part.add_header('Content-Disposition', 'attachment', filename=filename)
+            msg.attach(part)
+
     # Send via SMTP
     try:
         if smtp_settings.use_tls:
