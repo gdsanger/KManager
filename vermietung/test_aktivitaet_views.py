@@ -3,6 +3,7 @@ Tests for Aktivitaet (Activity/Task) CRUD views and UI integration.
 """
 
 from django.test import TestCase, Client
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from decimal import Decimal
@@ -209,6 +210,53 @@ class AktivitaetViewTest(TestCase):
         self.assertEqual(aktivitaet.titel, 'Updated Title')
         self.assertEqual(aktivitaet.status, 'IN_BEARBEITUNG')
         self.assertEqual(aktivitaet.prioritaet, 'HOCH')
+
+    @patch('vermietung.signals.send_mail')
+    def test_cc_users_persist_when_saving_activity(self, mock_send_mail):
+        """Benachrichtigungs-Empfänger (cc_users) werden beim Speichern gespeichert und vorbefüllt."""
+        cc_user_1 = User.objects.create_user(
+            username='cc_user_1',
+            password='testpass123',
+            email='cc1@example.com',
+            is_staff=True
+        )
+        cc_user_2 = User.objects.create_user(
+            username='cc_user_2',
+            password='testpass123',
+            email='cc2@example.com',
+            is_staff=True
+        )
+
+        aktivitaet = Aktivitaet.objects.create(
+            ersteller=self.user,
+            titel='Mit Benachrichtigungen',
+            vertrag=self.vertrag,
+            status='OFFEN',
+            prioritaet='NORMAL'
+        )
+
+        url = reverse('vermietung:aktivitaet_edit', args=[aktivitaet.pk])
+        response = self.client.post(url, {
+            'titel': 'Mit Benachrichtigungen',
+            'beschreibung': 'Aktivität mit CC',
+            'status': 'IN_BEARBEITUNG',
+            'prioritaet': 'HOCH',
+            'vertrag': self.vertrag.pk,
+            'ersteller': self.user.pk,
+            'cc_users': [cc_user_1.pk, cc_user_2.pk],
+        })
+
+        self.assertEqual(response.status_code, 302)
+
+        aktivitaet.refresh_from_db()
+        cc_ids = set(aktivitaet.cc_users.values_list('id', flat=True))
+        self.assertEqual(cc_ids, {cc_user_1.pk, cc_user_2.pk})
+
+        # Ensure form is prefilled with saved CC users
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        form_cc_values = set(map(int, response.context['form']['cc_users'].value()))
+        self.assertEqual(form_cc_values, {cc_user_1.pk, cc_user_2.pk})
     
     def test_delete_aktivitaet(self):
         """Test deleting an activity."""

@@ -1226,6 +1226,11 @@ class AktivitaetForm(forms.ModelForm):
         
         if commit:
             instance.save()
+            # Persist M2M fields like cc_users when saving via the form
+            self.save_m2m()
+        else:
+            # Preserve save_m2m for callers when commit=False
+            self._save_m2m = self.save_m2m
         
         return instance
 
