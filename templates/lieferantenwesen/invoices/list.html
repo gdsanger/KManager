@@ -72,6 +72,8 @@
                     <th>Datum</th>
                     <th>Fälligkeit</th>
                     <th>Brutto</th>
+                    <th>Freigegeben zur Zahlung</th>
+                    <th>Bezahlt</th>
                     <th>Status</th>
                     <th>Auftrag</th>
                     <th class="text-end">Aktionen</th>
@@ -96,6 +98,20 @@
                     </td>
                     <td>{{ inv.gross_amount|default:"–" }}</td>
                     <td>
+                        {% if inv.is_approved_for_payment %}
+                        <span class="badge bg-success">Ja</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Nein</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if inv.is_paid %}
+                        <span class="badge bg-success">Ja</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Nein</span>
+                        {% endif %}
+                    </td>
+                    <td>
                         <span class="badge bg-{{ inv.get_status_display_class }}">
                             {{ inv.get_status_display }}
                         </span>
@@ -114,7 +130,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-3">
+                    <td colspan="10" class="text-center text-muted py-3">
                         <i class="bi bi-inbox"></i> Keine Eingangsrechnungen gefunden
                     </td>
                 </tr>

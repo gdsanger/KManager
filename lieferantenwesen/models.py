@@ -286,6 +286,16 @@ class InvoiceIn(models.Model):
         }
         return mapping.get(self.status, "secondary")
 
+    @property
+    def is_approved_for_payment(self):
+        """Return True when invoice is approved for payment."""
+        return self.status == "APPROVED"
+
+    @property
+    def is_paid(self):
+        """Return True when invoice is paid."""
+        return self.status == "PAID"
+
     def mark_as_paid(self, payment_date=None):
         """Mark invoice as paid with the given payment date."""
         from django.utils import timezone
