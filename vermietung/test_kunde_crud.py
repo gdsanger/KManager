@@ -163,6 +163,8 @@ class KundeCRUDTestCase(TestCase):
     def test_kunde_detail_view(self):
         """Test that kunde_detail view shows customer details."""
         self.client.login(username='testuser', password='testpass123')
+        self.kunde1.invoice_email = 'rechnung@example.com'
+        self.kunde1.save()
         response = self.client.get(reverse('vermietung:kunde_detail', kwargs={'pk': self.kunde1.pk}))
         
         self.assertEqual(response.status_code, 200)
@@ -171,6 +173,7 @@ class KundeCRUDTestCase(TestCase):
         self.assertContains(response, '12345')
         self.assertContains(response, 'Musterstadt')
         self.assertContains(response, 'max@example.com')
+        self.assertContains(response, 'rechnung@example.com')
 
     def test_kunde_detail_shows_sales_documents(self):
         """Ensure SalesDocuments for the customer appear in the Dokumente tab."""
@@ -246,6 +249,7 @@ class KundeCRUDTestCase(TestCase):
         response = self.client.get(reverse('vermietung:kunde_edit', kwargs={'pk': self.kunde1.pk}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Max Mustermann')
+        self.assertContains(response, 'name="invoice_email"')
         
         # POST request with updated data
         updated_data = {
@@ -254,7 +258,8 @@ class KundeCRUDTestCase(TestCase):
             'plz': '12345',
             'ort': 'Musterstadt',
             'land': 'Deutschland',
-            'email': 'max.updated@example.com'
+            'email': 'max.updated@example.com',
+            'invoice_email': 'rechnung.updated@example.com'
         }
         response = self.client.post(
             reverse('vermietung:kunde_edit', kwargs={'pk': self.kunde1.pk}),
@@ -269,6 +274,7 @@ class KundeCRUDTestCase(TestCase):
         self.assertEqual(self.kunde1.name, 'Max Mustermann Updated')
         self.assertEqual(self.kunde1.strasse, 'Neue Strasse 456')
         self.assertEqual(self.kunde1.email, 'max.updated@example.com')
+        self.assertEqual(self.kunde1.invoice_email, 'rechnung.updated@example.com')
         # adressen_type should still be KUNDE
         self.assertEqual(self.kunde1.adressen_type, 'KUNDE')
     
