@@ -2466,7 +2466,7 @@ def timeentry_create(request):
             # Log activity
             ActivityStreamService.add(
                 company=company,
-                domain='TIMEENTRY',
+                domain='ORDER',
                 activity_type='TIMEENTRY_CREATED',
                 title=f'Zeiterfassung erstellt: {timeentry.service_date} - {timeentry.customer.name}',
                 target_url=f'/auftragsverwaltung/timeentries/{timeentry.pk}/',
@@ -2570,7 +2570,7 @@ def timeentry_update(request, pk):
             # Log activity
             ActivityStreamService.add(
                 company=timeentry.company,
-                domain='TIMEENTRY',
+                domain='ORDER',
                 activity_type='TIMEENTRY_UPDATED',
                 title=f'Zeiterfassung aktualisiert: {timeentry.service_date} - {timeentry.customer.name}',
                 target_url=f'/auftragsverwaltung/timeentries/{timeentry.pk}/',
