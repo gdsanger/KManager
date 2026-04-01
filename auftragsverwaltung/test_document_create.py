@@ -104,6 +104,14 @@ class SalesDocumentCreateTestCase(TestCase):
         self.assertContains(response, 'btn-secondary')
         self.assertContains(response, 'disabled')
         self.assertContains(response, 'Bitte speichern Sie das Dokument zuerst')
+
+    def test_copy_ui_not_rendered_in_create_mode(self):
+        """Copy dialog and script must be hidden when document has no PK"""
+        url = reverse('auftragsverwaltung:document_create', kwargs={'doc_key': 'quote'})
+        response = self.client.get(url)
+
+        self.assertNotContains(response, 'copyDocumentModal')
+        self.assertNotContains(response, 'auftragsverwaltung:document_copy')
     
     def test_create_view_requires_login(self):
         """Test that login is required to access create view"""
