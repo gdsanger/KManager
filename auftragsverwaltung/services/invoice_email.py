@@ -3,12 +3,17 @@ Invoice Email Service
 
 Handles sending invoices via email to customers with PDF attachments.
 """
-from django.urls import reverse
+import logging
+
+from django.urls import NoReverseMatch, reverse
 from django.conf import settings
 from core.mailing.service import send_mail, MailServiceError, MailSendError
 from core.printing.service import PdfRenderService
 from auftragsverwaltung.printing.context import SalesDocumentInvoiceContextBuilder
 from auftragsverwaltung.services.invoice_finalization import finalize_invoice
+
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceEmailError(Exception):
@@ -124,8 +129,27 @@ def send_invoice_email(invoice, to_customer=True, to_internal=False, request=Non
 
     # Add document URL if request is available
     if request:
-        document_path = reverse('auftragsverwaltung:document_detail', kwargs={'pk': invoice.pk})
-        email_context['document_url'] = request.build_absolute_uri(document_path)
+        try:
+            document_path = reverse(
+                'auftragsverwaltung:document_detail',
+                kwargs={'doc_key': invoice.document_type.key, 'pk': invoice.pk}
+            )
+            email_context['document_url'] = request.build_absolute_uri(document_path)
+        except NoReverseMatch as exc:
+            logger.error(
+                "Failed to build document URL for invoice %s: %s",
+                invoice.pk,
+                exc
+            )
+            raise InvoiceEmailError("Fehler beim Erzeugen des Dokument-Links zur Rechnung.") from exc
+        except Exception as exc:
+            logger.error(
+                "Unexpected error while building document URL for invoice %s: %s",
+                invoice.pk,
+                exc,
+                exc_info=True
+            )
+            raise InvoiceEmailError(f"Fehler beim Erzeugen des Dokument-Links: {exc}") from exc
 
     # Prepare PDF attachment
     attachments = [

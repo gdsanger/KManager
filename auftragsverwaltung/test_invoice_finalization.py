@@ -1,8 +1,8 @@
 """
 Tests for Invoice Finalization (Echtdruck) and Email Sending
 """
-from django.test import TestCase, Client
-from django.urls import reverse
+from django.test import Client, RequestFactory, TestCase
+from django.urls import NoReverseMatch, reverse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from unittest.mock import patch, MagicMock
@@ -22,6 +22,7 @@ class InvoiceFinalizationTestCase(TestCase):
 
     def setUp(self):
         """Create test data"""
+        self.request_factory = RequestFactory()
         self.company = Mandant.objects.create(
             name="Test Company",
             adresse="Test Street 1",
@@ -378,6 +379,64 @@ class InvoiceEmailServiceTestCase(TestCase):
         # Should now have a number and status SENT
         self.assertTrue(self.invoice.number)
         self.assertEqual(self.invoice.status, 'SENT')
+
+    def test_document_url_includes_doc_key(self):
+        """Ensure document link in email context points to invoice detail with doc_key"""
+        with patch('auftragsverwaltung.services.invoice_email.PdfRenderService') as mock_pdf_service, \
+             patch('auftragsverwaltung.services.invoice_email.send_mail') as mock_send_mail:
+            mock_pdf_instance = MagicMock()
+            mock_pdf_instance.render.return_value = MagicMock(
+                pdf_bytes=b'fake-pdf-content',
+                filename='Rechnung_R26-00001.pdf'
+            )
+            mock_pdf_service.return_value = mock_pdf_instance
+
+            request = self.request_factory.post(
+                f'/auftragsverwaltung/invoices/{self.invoice.pk}/send-email/'
+            )
+
+            result = send_invoice_email(
+                invoice=self.invoice,
+                to_customer=True,
+                to_internal=False,
+                request=request
+            )
+
+            self.assertTrue(result['success'])
+            mock_send_mail.assert_called_once()
+            mail_kwargs = mock_send_mail.call_args[1]
+            context = mail_kwargs['context']
+            self.assertIn('document_url', context)
+            self.assertIn(
+                f'/auftragsverwaltung/documents/invoice/{self.invoice.pk}/',
+                context['document_url']
+            )
+
+    def test_document_url_reverse_error_is_reported(self):
+        """Reverse errors must surface as InvoiceEmailError instead of 500"""
+        with patch('auftragsverwaltung.services.invoice_email.PdfRenderService') as mock_pdf_service, \
+             patch('auftragsverwaltung.services.invoice_email.send_mail') as mock_send_mail, \
+             patch('auftragsverwaltung.services.invoice_email.reverse', side_effect=NoReverseMatch("boom")):
+            mock_pdf_instance = MagicMock()
+            mock_pdf_instance.render.return_value = MagicMock(
+                pdf_bytes=b'fake-pdf-content',
+                filename='Rechnung_R26-00001.pdf'
+            )
+            mock_pdf_service.return_value = mock_pdf_instance
+
+            request = self.request_factory.post(
+                f'/auftragsverwaltung/invoices/{self.invoice.pk}/send-email/'
+            )
+
+            with self.assertRaises(InvoiceEmailError):
+                send_invoice_email(
+                    invoice=self.invoice,
+                    to_customer=True,
+                    to_internal=False,
+                    request=request
+                )
+
+            mock_send_mail.assert_not_called()
 
 
 class InvoiceViewsTestCase(TestCase):
