@@ -11,6 +11,7 @@ Tests the time tracking functionality for billable services, ensuring:
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
+from django.urls import reverse
 from decimal import Decimal
 from datetime import date
 
@@ -19,7 +20,7 @@ from auftragsverwaltung.models import (
     SalesDocument,
     TimeEntry,
 )
-from core.models import Mandant, Adresse
+from core.models import Activity, Mandant, Adresse
 
 
 class TimeEntryModelTestCase(TestCase):
@@ -345,3 +346,122 @@ class TimeEntryModelTestCase(TestCase):
         self.assertIn("2026-02-09", str_repr)
         self.assertIn(self.customer.name, str_repr)
         self.assertIn("120", str_repr)
+
+
+class TimeEntryViewTestCase(TestCase):
+    """Test TimeEntry create/update views"""
+    
+    def setUp(self):
+        # Company and customer setup
+        self.company = Mandant.objects.create(
+            name="Test Company",
+            adresse="Test Street 1",
+            plz="12345",
+            ort="Test City"
+        )
+        self.customer = Adresse.objects.create(
+            name="Test Customer",
+            strasse="Customer Street 1",
+            plz="54321",
+            ort="Customer City",
+            land="Germany",
+            adressen_type="KUNDE"
+        )
+        
+        # Order document type and order
+        self.order_doc_type, _ = DocumentType.objects.get_or_create(
+            key="order",
+            defaults={
+                "name": "Auftrag",
+                "prefix": "AB",
+                "is_active": True
+            }
+        )
+        self.order = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.order_doc_type,
+            customer=self.customer,
+            number="AB26-00001",
+            status="DRAFT",
+            issue_date=date.today(),
+            subject="Test Order"
+        )
+        
+        # User for authentication
+        self.user = User.objects.create_user(
+            username="testuser",
+            password="testpass"
+        )
+        self.client.login(username="testuser", password="testpass")
+    
+    def test_timeentry_create_logs_order_domain_activity(self):
+        """Time entry create view logs activity using ORDER domain"""
+        response = self.client.post(
+            reverse('auftragsverwaltung:timeentry_create'),
+            {
+                'company_id': self.company.id,
+                'customer_id': self.customer.id,
+                'order_id': self.order.id,
+                'performed_by_id': self.user.id,
+                'service_date': date.today().strftime('%Y-%m-%d'),
+                'duration_minutes': 75,
+                'description': 'Installation work',
+            },
+            follow=False,
+        )
+        
+        self.assertEqual(response.status_code, 302)
+        timeentry = TimeEntry.objects.get()
+        self.assertRedirects(
+            response,
+            reverse('auftragsverwaltung:timeentry_detail', kwargs={'pk': timeentry.pk})
+        )
+        
+        activity = Activity.objects.order_by('-created_at').first()
+        self.assertIsNotNone(activity)
+        self.assertEqual(activity.domain, 'ORDER')
+        self.assertEqual(activity.activity_type, 'TIMEENTRY_CREATED')
+        self.assertEqual(activity.company, self.company)
+    
+    def test_timeentry_update_logs_order_domain_activity(self):
+        """Time entry update view logs activity using ORDER domain"""
+        timeentry = TimeEntry.objects.create(
+            company=self.company,
+            customer=self.customer,
+            order=self.order,
+            performed_by=self.user,
+            service_date=date.today(),
+            duration_minutes=60,
+            description="Initial work"
+        )
+        
+        response = self.client.post(
+            reverse('auftragsverwaltung:timeentry_update', kwargs={'pk': timeentry.pk}),
+            {
+                'company_id': self.company.id,
+                'customer_id': self.customer.id,
+                'order_id': self.order.id,
+                'performed_by_id': self.user.id,
+                'service_date': date.today().strftime('%Y-%m-%d'),
+                'duration_minutes': 90,
+                'description': 'Updated description',
+                'is_billed': 'on',
+            },
+            follow=False,
+        )
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(
+            response,
+            reverse('auftragsverwaltung:timeentry_detail', kwargs={'pk': timeentry.pk})
+        )
+        
+        activity = Activity.objects.order_by('-created_at').first()
+        self.assertIsNotNone(activity)
+        self.assertEqual(activity.domain, 'ORDER')
+        self.assertEqual(activity.activity_type, 'TIMEENTRY_UPDATED')
+        self.assertEqual(activity.company, self.company)
+        
+        timeentry.refresh_from_db()
+        self.assertEqual(timeentry.duration_minutes, 90)
+        self.assertEqual(timeentry.description, 'Updated description')
