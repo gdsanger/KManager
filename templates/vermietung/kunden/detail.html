@@ -86,6 +86,16 @@
                         {% endif %}
                     </div>
                 </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">E-Mail Rechnung:</div>
+                    <div class="col-md-8">
+                        {% if kunde.invoice_email %}
+                        <a href="mailto:{{ kunde.invoice_email }}">{{ kunde.invoice_email }}</a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
 
