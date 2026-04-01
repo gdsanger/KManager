@@ -12,6 +12,8 @@ from django.test import TestCase
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
 from django.urls import reverse
+from django.db.models import Sum
+from django.utils.formats import number_format
 from decimal import Decimal
 from datetime import date
 
@@ -465,3 +467,110 @@ class TimeEntryViewTestCase(TestCase):
         timeentry.refresh_from_db()
         self.assertEqual(timeentry.duration_minutes, 90)
         self.assertEqual(timeentry.description, 'Updated description')
+
+
+class TimeEntryListSummaryTestCase(TestCase):
+    """Test aggregation and summary row in time entry list view"""
+    
+    def setUp(self):
+        # Company and customer setup
+        self.company = Mandant.objects.create(
+            name="Test Company",
+            adresse="Test Street 1",
+            plz="12345",
+            ort="Test City"
+        )
+        self.customer = Adresse.objects.create(
+            name="Test Customer",
+            strasse="Customer Street 1",
+            plz="54321",
+            ort="Customer City",
+            land="Germany",
+            adressen_type="KUNDE"
+        )
+        
+        # Order document type and order
+        self.order_doc_type, _ = DocumentType.objects.get_or_create(
+            key="order",
+            defaults={
+                "name": "Auftrag",
+                "prefix": "AB",
+                "is_active": True
+            }
+        )
+        self.order = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.order_doc_type,
+            customer=self.customer,
+            number="AB26-00001",
+            status="DRAFT",
+            issue_date=date.today(),
+            subject="Test Order"
+        )
+        
+        # User for authentication
+        self.user = User.objects.create_user(
+            username="testuser",
+            password="testpass"
+        )
+        self.client.login(username="testuser", password="testpass")
+        self.list_url = reverse('auftragsverwaltung:timeentry_list')
+    
+    def create_time_entry(self, duration_minutes, **kwargs):
+        """Helper to create a time entry with defaults"""
+        return TimeEntry.objects.create(
+            company=kwargs.get('company', self.company),
+            customer=kwargs.get('customer', self.customer),
+            order=kwargs.get('order', self.order),
+            performed_by=kwargs.get('performed_by', self.user),
+            service_date=kwargs.get('service_date', date.today()),
+            duration_minutes=duration_minutes,
+            description=kwargs.get('description', 'Work'),
+            is_travel_cost=kwargs.get('is_travel_cost', False),
+            is_billed=kwargs.get('is_billed', False),
+        )
+    
+    def test_totals_include_all_filtered_entries_across_pages(self):
+        """Totals should include all filtered entries, ignoring pagination"""
+        for _ in range(30):
+            self.create_time_entry(10)
+        
+        expected_minutes = TimeEntry.objects.aggregate(total=Sum('duration_minutes'))['total'] or 0
+        expected_hours = (Decimal(expected_minutes) / Decimal('60')) if expected_minutes else Decimal('0')
+        formatted_hours = number_format(expected_hours, 2)
+        
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_minutes'], expected_minutes)
+        self.assertEqual(response.context['total_hours'], expected_hours)
+        self.assertContains(response, "Gesamt")
+        self.assertContains(response, f"{expected_minutes} min")
+        self.assertContains(response, f"{formatted_hours} h")
+        
+        # Second page should show the same totals
+        response_page2 = self.client.get(self.list_url, {'page': 2})
+        self.assertEqual(response_page2.context['total_minutes'], expected_minutes)
+        self.assertEqual(response_page2.context['total_hours'], expected_hours)
+    
+    def test_totals_respect_filters(self):
+        """Totals should honor active filters"""
+        self.create_time_entry(60, is_billed=True)
+        self.create_time_entry(90, is_billed=False)
+        
+        response = self.client.get(self.list_url, {'is_billed': 'true'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_minutes'], 60)
+        self.assertEqual(response.context['total_hours'], Decimal('1'))
+        self.assertContains(response, "60 min")
+        self.assertContains(response, f"{number_format(Decimal('1'), 2)} h")
+    
+    def test_totals_zero_when_no_results(self):
+        """Totals should be zero for an empty filtered queryset"""
+        self.create_time_entry(45)
+        
+        response = self.client.get(self.list_url, {'q': 'nomatch123'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_minutes'], 0)
+        self.assertEqual(response.context['total_hours'], Decimal('0'))
+        self.assertContains(response, "0 min")
+        self.assertContains(response, f"{number_format(Decimal('0'), 2)} h")

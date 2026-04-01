@@ -498,7 +498,7 @@ class TimeEntryTable(tables.Table):
     
     class Meta:
         model = TimeEntry
-        template_name = 'django_tables2/bootstrap5-dark.html'
+        template_name = 'auftragsverwaltung/timeentries/table.html'
         fields = (
             'service_date',
             'customer',
