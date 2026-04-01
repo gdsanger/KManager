@@ -37,7 +37,8 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,app.ebner-vermie
 CSRF_TRUSTED_ORIGINS = [
     "https://app.ebner-vermietung.de",
     "http://localhost",
-    "https://116.202.48.216"
+    "https://116.202.48.216",
+    "https://app.angermeier.net:8443"
     # optional Wildcard, falls mehrere Subdomains:
     # "https://*.angermeier.net",
 ]
