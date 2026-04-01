@@ -2357,8 +2357,15 @@ def timeentry_list(request):
     # Create table with filtered data
     table = TimeEntryTable(filter_set.qs)
     
+    # Calculate total duration across full filtered queryset (no pagination)
+    aggregates = filter_set.qs.aggregate(total_minutes=Sum('duration_minutes'))
+    total_minutes = aggregates['total_minutes'] or 0
+    total_hours = (Decimal(total_minutes) / Decimal('60')) if total_minutes else Decimal('0')
+    
     # Set default ordering to -service_date, -created_at
     table.order_by = request.GET.get('sort', '-service_date')
+    table.total_minutes = total_minutes
+    table.total_hours = total_hours
     
     # Configure pagination (25 per page)
     RequestConfig(request, paginate={'per_page': 25}).configure(table)
@@ -2367,6 +2374,8 @@ def timeentry_list(request):
     context = {
         'table': table,
         'filter': filter_set,
+        'total_minutes': total_minutes,
+        'total_hours': total_hours,
     }
     
     return render(request, 'auftragsverwaltung/timeentries/list.html', context)
