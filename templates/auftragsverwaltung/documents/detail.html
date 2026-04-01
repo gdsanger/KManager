@@ -706,7 +706,7 @@ Neues {{ document_type.name }}
     </div>
 </form>
 
-{% if document %}
+{% if document and document.pk %}
 <!-- Copy Document Modal -->
 <div class="modal fade" id="copyDocumentModal" tabindex="-1" aria-labelledby="copyDocumentModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -1054,6 +1054,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    {% if document and document.pk %}
     // Copy document handler
     const copyButton = document.getElementById('copyButton');
     const copyModalEl = document.getElementById('copyDocumentModal');
@@ -1110,6 +1111,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+    {% endif %}
     
     // Unsaved changes warning
     window.addEventListener('beforeunload', function(e) {
