@@ -61,8 +61,8 @@
             {% if table.total_minutes is not None and table.total_hours is not None %}
             <tfoot>
                 <tr class="table-secondary fw-semibold">
-                    <th colspan="4" class="text-end">Gesamt</th>
-                    <th class="text-end">{{ table.total_minutes }} min / {{ table.total_hours|floatformat:2 }} h</th>
+                    <th colspan="4" class="text-end text-white">Gesamt</th>
+                    <th class="text-end text-white">{{ table.total_hours|floatformat:2 }} h</th>
                     <th colspan="{{ table.columns|length|add:'-5' }}"></th>
                 </tr>
             </tfoot>
