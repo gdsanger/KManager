@@ -123,6 +123,7 @@ class InvoiceEmailServiceTestCase(TestCase):
 
     def setUp(self):
         """Create test data"""
+        self.request_factory = RequestFactory()
         self.company = Mandant.objects.create(
             name="Test Company",
             adresse="Test Street 1",
@@ -437,6 +438,67 @@ class InvoiceEmailServiceTestCase(TestCase):
                 )
 
             mock_send_mail.assert_not_called()
+
+    @patch('auftragsverwaltung.services.invoice_email.PdfRenderService')
+    @patch('auftragsverwaltung.services.invoice_email.send_mail')
+    def test_pdf_render_uses_file_based_base_url(self, mock_send_mail, mock_pdf_service):
+        """PDF rendering must use a file:// base_url (not an HTTP URL) so that
+        WeasyPrint can resolve print.css from the local filesystem without
+        making HTTP requests that may return 404."""
+        mock_pdf_instance = MagicMock()
+        mock_pdf_instance.render.return_value = MagicMock(
+            pdf_bytes=b'fake-pdf-content',
+            filename='Rechnung_R26-00001.pdf'
+        )
+        mock_pdf_service.return_value = mock_pdf_instance
+
+        send_invoice_email(
+            invoice=self.invoice,
+            to_customer=True,
+            to_internal=False,
+        )
+
+        self.assertTrue(mock_pdf_instance.render.called)
+        call_kwargs = mock_pdf_instance.render.call_args[1]
+        base_url = call_kwargs.get('base_url', '')
+        self.assertTrue(
+            base_url.startswith('file://'),
+            f"Expected a file:// base_url for PDF rendering, got: {base_url!r}"
+        )
+
+    @patch('auftragsverwaltung.services.invoice_email.PdfRenderService')
+    @patch('auftragsverwaltung.services.invoice_email.send_mail')
+    def test_pdf_render_base_url_does_not_use_request_host(self, mock_send_mail, mock_pdf_service):
+        """Even when a request is provided, the PDF base_url must still be a
+        file:// URL — not the request's scheme/host — so that print.css is
+        loaded from the filesystem and not via an HTTP path that may return 404."""
+        mock_pdf_instance = MagicMock()
+        mock_pdf_instance.render.return_value = MagicMock(
+            pdf_bytes=b'fake-pdf-content',
+            filename='Rechnung_R26-00001.pdf'
+        )
+        mock_pdf_service.return_value = mock_pdf_instance
+
+        # Use testserver (Django default for RequestFactory) as the host
+        request = self.request_factory.post(
+            f'/auftragsverwaltung/invoices/{self.invoice.pk}/send-email/',
+        )
+
+        send_invoice_email(
+            invoice=self.invoice,
+            to_customer=True,
+            to_internal=False,
+            request=request,
+        )
+
+        self.assertTrue(mock_pdf_instance.render.called)
+        call_kwargs = mock_pdf_instance.render.call_args[1]
+        base_url = call_kwargs.get('base_url', '')
+        self.assertTrue(
+            base_url.startswith('file://'),
+            f"Expected a file:// base_url for PDF rendering, got: {base_url!r}"
+        )
+        self.assertNotIn('testserver', base_url)
 
 
 class InvoiceViewsTestCase(TestCase):

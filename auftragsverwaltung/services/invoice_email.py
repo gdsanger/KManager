@@ -9,6 +9,7 @@ from django.urls import NoReverseMatch, reverse
 from django.conf import settings
 from core.mailing.service import send_mail, MailServiceError, MailSendError
 from core.printing.service import PdfRenderService
+from core.printing.utils import get_static_base_url
 from auftragsverwaltung.printing.context import SalesDocumentInvoiceContextBuilder
 from auftragsverwaltung.services.invoice_finalization import finalize_invoice
 
@@ -99,11 +100,11 @@ def send_invoice_email(invoice, to_customer=True, to_internal=False, request=Non
 
         pdf_service = PdfRenderService()
 
-        # Build base URL for static assets
-        if request:
-            base_url = request.build_absolute_uri('/')[:-1]
-        else:
-            base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
+        # Use file-based static URL so WeasyPrint can resolve print.css
+        # from the local filesystem rather than making HTTP requests.
+        # This is consistent with the document_pdf view and avoids 404 errors
+        # when the reverse proxy does not forward the correct scheme/port.
+        base_url = get_static_base_url()
 
         result = pdf_service.render(
             template_name=template_name,
