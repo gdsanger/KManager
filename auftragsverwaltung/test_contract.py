@@ -782,3 +782,61 @@ class ContractBillingServiceTestCase(TestCase):
         # Verify no database constraint violation occurred
         # If there was a constraint violation, the test would have failed earlier
 
+    def test_kurztext_fields_copied_to_sales_document_line(self):
+        """Test that kurztext fields (short_text_1, short_text_2, long_text) are copied from ContractLine to SalesDocumentLine during billing run"""
+        # Create contract
+        contract = Contract.objects.create(
+            company=self.company,
+            name="Test Contract Kurztext",
+            customer=self.customer,
+            document_type=self.doc_type,
+            payment_term=self.payment_term,
+            currency='EUR',
+            interval='MONTHLY',
+            start_date=date(2026, 1, 1),
+            next_run_date=date(2026, 1, 1),
+            is_active=True
+        )
+
+        # Create contract line with kurztext fields populated
+        contract_line = ContractLine.objects.create(
+            contract=contract,
+            position_no=1,
+            short_text_1="Test Kurztext 1",
+            short_text_2="Test Kurztext 2",
+            long_text="This is a detailed long text description for the contract line.",
+            description="Monthly Service with Kurztext",
+            quantity=Decimal('2.0000'),
+            unit_price_net=Decimal('500.00'),
+            tax_rate=self.tax_rate,
+            cost_type_1=self.cost_type,
+            is_discountable=True
+        )
+
+        # Generate invoice
+        runs = ContractBillingService.generate_due(today=date(2026, 1, 1))
+
+        # Verify run success
+        self.assertEqual(len(runs), 1)
+        run = runs[0]
+        self.assertEqual(run.status, 'SUCCESS')
+        self.assertIsNotNone(run.document)
+
+        # Get generated document and its lines
+        document = run.document
+        lines = document.lines.all()
+        self.assertEqual(len(lines), 1)
+        sales_line = lines[0]
+
+        # Assert that kurztext fields are copied 1:1 from ContractLine to SalesDocumentLine
+        self.assertEqual(sales_line.short_text_1, contract_line.short_text_1)
+        self.assertEqual(sales_line.short_text_2, contract_line.short_text_2)
+        self.assertEqual(sales_line.long_text, contract_line.long_text)
+        self.assertEqual(sales_line.description, contract_line.description)
+
+        # Verify exact values
+        self.assertEqual(sales_line.short_text_1, "Test Kurztext 1")
+        self.assertEqual(sales_line.short_text_2, "Test Kurztext 2")
+        self.assertEqual(sales_line.long_text, "This is a detailed long text description for the contract line.")
+        self.assertEqual(sales_line.description, "Monthly Service with Kurztext")
+

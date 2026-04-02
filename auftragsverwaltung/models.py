@@ -1113,11 +1113,33 @@ class ContractLine(models.Model):
         related_name='contract_lines_cost_type_2',
         verbose_name="Kostenart 2"
     )
-    
+
     # Position Fields
     position_no = models.IntegerField(
         verbose_name="Positionsnummer",
         help_text="Positionsnummer innerhalb des Vertrags"
+    )
+
+    # Text fields
+    short_text_1 = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Kurztext 1",
+        help_text="Primärer Kurztext"
+    )
+    short_text_2 = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        verbose_name="Kurztext 2",
+        help_text="Optionaler zweiter Kurztext"
+    )
+    long_text = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Langtext",
+        help_text="Detaillierter Langtext"
     )
     description = models.TextField(
         verbose_name="Beschreibung",
