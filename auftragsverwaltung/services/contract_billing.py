@@ -2,15 +2,17 @@
 Contract Billing Service
 
 Provides automated invoice generation for recurring contracts.
-Finds active contracts due for billing and creates draft invoices.
+Finds active contracts due for billing and creates invoices with unique numbers.
 
 Business Rules:
 - Finds contracts with next_run_date <= today
-- Creates SalesDocument (invoice) in DRAFT status
+- Creates SalesDocument (invoice) with unique number (via NumberRange service)
+- Status set to DRAFT (default) or SENT (if auto_finalize=True)
 - Copies ContractLine to SalesDocumentLine (snapshot)
 - Creates ContractRun for audit trail
 - Advances next_run_date based on interval
 - No duplicate runs per contract/day
+- Numbers are always assigned immediately to avoid unique constraint violations
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -26,6 +28,7 @@ from auftragsverwaltung.models import (
     SalesDocumentLine,
 )
 from auftragsverwaltung.services.document_calculation import DocumentCalculationService
+from auftragsverwaltung.services.number_range import get_next_number
 from core.services.activity_stream import ActivityStreamService
 
 
@@ -105,14 +108,19 @@ class ContractBillingService:
                 contract.last_run_date = contract.next_run_date
                 contract.next_run_date = contract.advance_next_run_date()
                 contract.save(update_fields=['last_run_date', 'next_run_date'])
-                
+
                 # Log successful invoice generation
+                if contract.auto_finalize:
+                    description = f'Rechnung {document.number} für {contract.customer.name if contract.customer else "N/A"} finalisiert'
+                else:
+                    description = f'Rechnung {document.number} (Entwurf) für {contract.customer.name if contract.customer else "N/A"} erstellt'
+
                 ActivityStreamService.add(
                     company=contract.company,
                     domain='ORDER',
                     activity_type='CONTRACT_INVOICE_GENERATED',
                     title=f'Rechnung aus Vertrag erstellt: {contract.name}',
-                    description=f'Rechnung {document.number} für {contract.customer.name if contract.customer else "N/A"}',
+                    description=description,
                     target_url=f'/auftragsverwaltung/documents/{document.pk}/',
                     actor=None,  # Automated process
                     severity='INFO'
@@ -121,12 +129,23 @@ class ContractBillingService:
             return run
         
         except Exception as e:
-            # Create failed run on error
+            # Create failed run on error with user-friendly message
+            # Avoid exposing raw database constraint errors
+            error_msg = str(e)
+
+            # Sanitize database constraint errors for user display
+            if 'unique_salesdocument_number_per_company_doctype' in error_msg.lower():
+                user_friendly_msg = 'Fehler bei der Nummernvergabe: Dokumentnummer konnte nicht eindeutig zugewiesen werden. Bitte prüfen Sie die Nummernkreiskonfiguration.'
+            elif 'integrity' in error_msg.lower() or 'constraint' in error_msg.lower():
+                user_friendly_msg = f'Datenbankfehler bei Rechnungserstellung. Details: {error_msg[:200]}'
+            else:
+                user_friendly_msg = error_msg[:200]  # Limit message length
+
             run = ContractRun.objects.create(
                 contract=contract,
                 run_date=contract.next_run_date,
                 status='FAILED',
-                message=str(e)
+                message=user_friendly_msg
             )
             
             # Log failed invoice generation
@@ -156,13 +175,19 @@ class ContractBillingService:
         """
         billing_period = cls._build_billing_period(contract)
 
+        # Determine status based on auto_finalize flag
+        if contract.auto_finalize and contract.document_type.is_invoice:
+            status = 'SENT'  # Finalized invoices are marked as SENT
+        else:
+            status = 'DRAFT'  # Default to DRAFT
+
         # Create SalesDocument
         document = SalesDocument.objects.create(
             company=contract.company,
             document_type=contract.document_type,
             customer=contract.customer,
-            number='',  # Will be assigned by number range service
-            status='DRAFT',
+            number='',  # Will be assigned immediately below
+            status=status,
             issue_date=contract.next_run_date,
             payment_term=contract.payment_term,
             subject=f"{contract.name} {billing_period}",
@@ -203,16 +228,35 @@ class ContractBillingService:
         
         # Calculate totals
         DocumentCalculationService.recalculate(document, persist=True)
-        
-        # Create ContractRun
+
+        # Assign unique document number using race-safe number range service
+        # This is done for ALL invoices (both DRAFT and SENT) to avoid duplicate key violations
+        # on the unique constraint (company_id, document_type_id, number)
+        try:
+            document.number = get_next_number(
+                document.company,
+                document.document_type,
+                document.issue_date
+            )
+            document.save(update_fields=['number'])
+        except Exception as e:
+            # If number assignment fails, raise exception to trigger FAILED ContractRun
+            raise ValueError(f'Fehler bei Nummernvergabe: {str(e)}')
+
+        # Create ContractRun with appropriate message
+        if contract.auto_finalize:
+            message = f'Rechnung {document.number} erfolgreich finalisiert'
+        else:
+            message = f'Rechnung {document.number} (Entwurf) erfolgreich erstellt'
+
         run = ContractRun.objects.create(
             contract=contract,
             run_date=contract.next_run_date,
             document=document,
             status='SUCCESS',
-            message=f'Invoice {document.number} generated successfully'
+            message=message
         )
-        
+
         return document, run
 
     @staticmethod

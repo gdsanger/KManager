@@ -676,3 +676,109 @@ class ContractBillingServiceTestCase(TestCase):
         # Verify only one run exists
         total_runs = ContractRun.objects.filter(contract=contract, run_date=date(2026, 1, 1)).count()
         self.assertEqual(total_runs, 1)
+
+    def test_generate_multiple_invoices_without_auto_finalize(self):
+        """Test that multiple invoices can be generated without auto_finalize (draft invoices with unique numbers)"""
+        # Create contract WITHOUT auto_finalize
+        contract = Contract.objects.create(
+            company=self.company,
+            name="Test Contract",
+            customer=self.customer,
+            document_type=self.doc_type,
+            payment_term=self.payment_term,
+            currency='EUR',
+            interval='MONTHLY',
+            start_date=date(2026, 1, 1),
+            next_run_date=date(2026, 1, 1),
+            is_active=True,
+            auto_finalize=False  # Do NOT auto-finalize
+        )
+
+        # Create contract line
+        ContractLine.objects.create(
+            contract=contract,
+            position_no=1,
+            description="Monthly Service",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('1000.00'),
+            tax_rate=self.tax_rate,
+            is_discountable=True
+        )
+
+        # Generate first invoice
+        runs1 = ContractBillingService.generate_due(today=date(2026, 1, 1))
+        self.assertEqual(len(runs1), 1)
+        self.assertEqual(runs1[0].status, 'SUCCESS')
+        doc1 = runs1[0].document
+        self.assertEqual(doc1.status, 'DRAFT')  # Draft status
+        self.assertNotEqual(doc1.number, '')  # But number IS assigned to avoid unique constraint violation
+        self.assertTrue(doc1.number.startswith('R'))  # Invoice prefix
+
+        # Generate second invoice
+        runs2 = ContractBillingService.generate_due(today=date(2026, 2, 1))
+        self.assertEqual(len(runs2), 1)
+        self.assertEqual(runs2[0].status, 'SUCCESS')
+        doc2 = runs2[0].document
+        self.assertEqual(doc2.status, 'DRAFT')  # Draft status
+        self.assertNotEqual(doc2.number, '')  # But number IS assigned to avoid unique constraint violation
+        self.assertTrue(doc2.number.startswith('R'))  # Invoice prefix
+
+        # Verify both documents exist with DIFFERENT numbers
+        self.assertNotEqual(doc1.pk, doc2.pk)
+        self.assertNotEqual(doc1.number, doc2.number)  # Different invoice numbers
+        self.assertEqual(SalesDocument.objects.filter(company=self.company, document_type=self.doc_type).count(), 2)
+
+    def test_generate_multiple_invoices_with_auto_finalize(self):
+        """Test that multiple invoices can be generated WITH auto_finalize (unique numbers assigned)"""
+        # Create contract WITH auto_finalize
+        contract = Contract.objects.create(
+            company=self.company,
+            name="Test Contract",
+            customer=self.customer,
+            document_type=self.doc_type,
+            payment_term=self.payment_term,
+            currency='EUR',
+            interval='MONTHLY',
+            start_date=date(2026, 1, 1),
+            next_run_date=date(2026, 1, 1),
+            is_active=True,
+            auto_finalize=True  # Auto-finalize to assign numbers
+        )
+
+        # Create contract line
+        ContractLine.objects.create(
+            contract=contract,
+            position_no=1,
+            description="Monthly Service",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('1000.00'),
+            tax_rate=self.tax_rate,
+            is_discountable=True
+        )
+
+        # Generate first invoice
+        runs1 = ContractBillingService.generate_due(today=date(2026, 1, 1))
+        self.assertEqual(len(runs1), 1)
+        self.assertEqual(runs1[0].status, 'SUCCESS')
+        doc1 = runs1[0].document
+        self.assertEqual(doc1.status, 'SENT')  # Finalized
+        self.assertNotEqual(doc1.number, '')  # Number assigned
+        self.assertTrue(doc1.number.startswith('R'))  # Invoice prefix
+
+        # Generate second invoice
+        runs2 = ContractBillingService.generate_due(today=date(2026, 2, 1))
+        self.assertEqual(len(runs2), 1)
+        self.assertEqual(runs2[0].status, 'SUCCESS')
+        doc2 = runs2[0].document
+        self.assertEqual(doc2.status, 'SENT')  # Finalized
+        self.assertNotEqual(doc2.number, '')  # Number assigned
+        self.assertTrue(doc2.number.startswith('R'))  # Invoice prefix
+
+        # Verify both documents exist with DIFFERENT numbers
+        self.assertNotEqual(doc1.pk, doc2.pk)
+        self.assertNotEqual(doc1.number, doc2.number)  # Different invoice numbers
+        self.assertEqual(SalesDocument.objects.filter(company=self.company, document_type=self.doc_type).count(), 2)
+
+        # Verify no database constraint violation occurred
+        # If there was a constraint violation, the test would have failed earlier
+
