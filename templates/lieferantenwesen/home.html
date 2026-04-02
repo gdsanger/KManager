@@ -31,7 +31,7 @@
             <div class="card-body">
                 <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Überfällig</h5>
                 <p class="card-text fs-2 fw-bold">{{ overdue_count }}</p>
-                <p class="card-text mb-2">{{ overdue_total_amount|default:"–" }}</p>
+                <p class="card-text mb-2">{{ overdue_total_amount|default:"–" }} €</p>
                 <a href="{% url 'lieferantenwesen:invoice_list' %}?overdue=1" class="btn btn-sm btn-dark">
                     Anzeigen
                 </a>
@@ -43,7 +43,7 @@
             <div class="card-body">
                 <h5 class="card-title"><i class="bi bi-cash-coin"></i> Bezahlt</h5>
                 <p class="card-text fs-2 fw-bold">{{ paid_count }}</p>
-                <p class="card-text mb-2">{{ paid_total_amount|default:"–" }}</p>
+                <p class="card-text mb-2">{{ paid_total_amount|default:"–" }} €</p>
                 <a href="{% url 'lieferantenwesen:invoice_list' %}?status=PAID" class="btn btn-sm btn-dark">
                     Anzeigen
                 </a>
@@ -89,7 +89,7 @@
                             {% endif %}
                         {% else %}–{% endif %}
                     </td>
-                    <td>{{ inv.gross_amount|default:"–" }}</td>
+                    <td style="text-align: right;">{{ inv.gross_amount|default:"–" }} €</td>
                     <td>
                         {% if inv.is_approved_for_payment %}
                         <span class="badge bg-success">Ja</span>
