@@ -1135,17 +1135,18 @@ def contract_run_billing(request, pk):
     contract.refresh_from_db()
     recent_runs = ContractRun.objects.filter(contract=contract).select_related('document').order_by('-id')[:20]
     runs_for_contract = [run for run in runs_created if getattr(run, 'contract_id', None) == contract.id]
-    
+
     context = {
         'contract': contract,
         'recent_runs': recent_runs,
+        'runs': recent_runs,  # Add runs for template compatibility
         'status_message': status_message,
         'error_message': error_message,
         'new_runs_count': len(runs_created),
         'contract_runs_count': len(runs_for_contract),
         'ran_at': today,
     }
-    
+
     return render(request, 'auftragsverwaltung/contracts/partials/billing_result.html', context)
 
 
