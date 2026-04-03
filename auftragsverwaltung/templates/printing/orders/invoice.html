@@ -269,6 +269,12 @@
                     <td>{{ customer.debitor_number }}</td>
                 </tr>
                 {% endif %}
+                {% if doc.performance_date_from %}
+                <tr>
+                    <td class="label">{% if doc.performance_date_to %}Leistungszeitraum:{% else %}Leistungsdatum:{% endif %}</td>
+                    <td>{{ doc.performance_date_from|date:"d.m.Y" }}{% if doc.performance_date_to %} – {{ doc.performance_date_to|date:"d.m.Y" }}{% endif %}</td>
+                </tr>
+                {% endif %}
                 {% if customer.vat_id %}
                 <tr>
                     <td class="label">USt-IdNr. Kunde:</td>

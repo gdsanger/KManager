@@ -288,6 +288,18 @@ class SalesDocument(models.Model):
         verbose_name="Bezahlt am",
         help_text="Zeitpunkt der Zahlung"
     )
+    performance_date_from = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Leistungszeitraum von",
+        help_text="Beginn des Leistungszeitraums (bei Einzeltag: nur dieses Feld setzen)"
+    )
+    performance_date_to = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Leistungszeitraum bis",
+        help_text="Ende des Leistungszeitraums (optional, nur bei Zeitraum)"
+    )
     reference_number = models.CharField(
         max_length=50,
         blank=True,
@@ -410,26 +422,38 @@ class SalesDocument(models.Model):
     
     def clean(self):
         """Validate sales document data
-        
+
         Business rules:
         1. If document_type.requires_due_date == True, then due_date is required
         2. If document_type.is_correction == True, then source_document is required
+        3. If performance_date_to is set, then performance_date_from must be set
+        4. If both performance dates are set, then performance_date_to >= performance_date_from
         """
         super().clean()
-        
+
+        errors = {}
+
         # Validation 1: requires_due_date => due_date required
         if self.document_type and self.document_type.requires_due_date:
             if not self.due_date:
-                raise ValidationError({
-                    'due_date': 'Fälligkeitsdatum ist erforderlich für diesen Dokumenttyp.'
-                })
-        
+                errors['due_date'] = 'Fälligkeitsdatum ist erforderlich für diesen Dokumenttyp.'
+
         # Validation 2: is_correction => source_document required
         if self.document_type and self.document_type.is_correction:
             if not self.source_document:
-                raise ValidationError({
-                    'source_document': 'Quelldokument ist erforderlich für Korrekturdokumente.'
-                })
+                errors['source_document'] = 'Quelldokument ist erforderlich für Korrekturdokumente.'
+
+        # Validation 3: performance_date_to requires performance_date_from
+        if self.performance_date_to and not self.performance_date_from:
+            errors['performance_date_from'] = 'Leistungszeitraum von muss gesetzt sein, wenn Leistungszeitraum bis gesetzt ist.'
+
+        # Validation 4: performance_date_to >= performance_date_from
+        if self.performance_date_from and self.performance_date_to:
+            if self.performance_date_to < self.performance_date_from:
+                errors['performance_date_to'] = 'Leistungszeitraum bis muss nach dem Von-Datum liegen.'
+
+        if errors:
+            raise ValidationError(errors)
 
     def clone_as(self, target_document_type):
         """
