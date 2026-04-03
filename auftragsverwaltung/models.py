@@ -119,6 +119,7 @@ class NumberRange(models.Model):
     TARGET_CHOICES = [
         ('DOCUMENT', 'Dokument'),
         ('CONTRACT', 'Vertrag'),
+        ('ITEM', 'Artikel'),
     ]
     
     RESET_POLICY_CHOICES = [
@@ -130,7 +131,10 @@ class NumberRange(models.Model):
         'core.Mandant',
         on_delete=models.PROTECT,
         related_name='number_ranges',
-        verbose_name="Mandant"
+        verbose_name="Mandant",
+        null=True,
+        blank=True,
+        help_text="Required for DOCUMENT and CONTRACT targets, not used for ITEM target"
     )
     target = models.CharField(
         max_length=10,
@@ -195,15 +199,36 @@ class NumberRange(models.Model):
                 name='unique_numberrange_contract_per_company',
                 violation_error_message='Es kann nur einen Vertrags-Nummernkreis pro Mandant geben.'
             ),
+            # Unique constraint for ITEM target: exactly one global ITEM NumberRange
+            models.UniqueConstraint(
+                fields=['target'],
+                condition=models.Q(target='ITEM'),
+                name='unique_numberrange_item_global',
+                violation_error_message='Es kann nur einen globalen Artikel-Nummernkreis geben.'
+            ),
             # Check constraint: DOCUMENT target requires document_type
             models.CheckConstraint(
-                check=models.Q(target='DOCUMENT', document_type__isnull=False) | models.Q(target='CONTRACT'),
+                check=models.Q(target='DOCUMENT', document_type__isnull=False) | models.Q(target='CONTRACT') | models.Q(target='ITEM'),
                 name='numberrange_document_requires_doctype',
                 violation_error_message='Dokumenttyp ist erforderlich für DOCUMENT-Nummernkreis.'
+            ),
+            # Check constraint: DOCUMENT and CONTRACT targets require company
+            models.CheckConstraint(
+                check=models.Q(target='ITEM') | models.Q(company__isnull=False),
+                name='numberrange_company_required_for_non_item',
+                violation_error_message='Mandant ist erforderlich für DOCUMENT und CONTRACT Nummernkreise.'
+            ),
+            # Check constraint: ITEM target must not have company
+            models.CheckConstraint(
+                check=~models.Q(target='ITEM', company__isnull=False),
+                name='numberrange_item_no_company',
+                violation_error_message='Artikel-Nummernkreis darf keinen Mandanten haben (global).'
             )
         ]
     
     def __str__(self):
+        if self.target == 'ITEM':
+            return f"Artikel-Nummernkreis (global, {self.reset_policy})"
         if self.target == 'CONTRACT':
             return f"{self.company.name} - Vertrag ({self.reset_policy})"
         return f"{self.company.name} - {self.document_type.name if self.document_type else 'N/A'} ({self.reset_policy})"
