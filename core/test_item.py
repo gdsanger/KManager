@@ -143,7 +143,7 @@ class ItemModelTestCase(TestCase):
             item_type="MATERIAL"
         )
         self.assertEqual(item_material.item_type, "MATERIAL")
-        
+
         # Test SERVICE
         item_service = Item.objects.create(
             article_no="ART-SRV-001",
@@ -155,6 +155,19 @@ class ItemModelTestCase(TestCase):
             item_type="SERVICE"
         )
         self.assertEqual(item_service.item_type, "SERVICE")
+
+        # Test VERMIETUNG
+        item_rental = Item.objects.create(
+            article_no="ART-VRM-001",
+            short_text_1="Rental Item",
+            net_price=Decimal("150.00"),
+            purchase_price=Decimal("75.00"),
+            tax_rate=self.tax_rate,
+            cost_type_1=self.cost_type_1,
+            item_type="VERMIETUNG"
+        )
+        self.assertEqual(item_rental.item_type, "VERMIETUNG")
+        self.assertEqual(item_rental.get_item_type_display(), "Vermietung")
     
     def test_optional_fields(self):
         """Test that optional fields work correctly"""

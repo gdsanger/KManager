@@ -905,6 +905,7 @@ class Item(models.Model):
     ITEM_TYPE_CHOICES = [
         ('MATERIAL', 'Material'),
         ('SERVICE', 'Dienstleistung'),
+        ('VERMIETUNG', 'Vermietung'),
     ]
     
     # Core identification
@@ -985,7 +986,7 @@ class Item(models.Model):
         max_length=20,
         choices=ITEM_TYPE_CHOICES,
         verbose_name="Artikeltyp",
-        help_text="Klassifizierung: Material oder Dienstleistung"
+        help_text="Klassifizierung: Material, Dienstleistung oder Vermietung"
     )
     
     # Flags

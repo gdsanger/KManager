@@ -80,6 +80,7 @@ class ItemTable(tables.Table):
         type_classes = {
             'MATERIAL': 'bg-primary',
             'SERVICE': 'bg-info',
+            'VERMIETUNG': 'bg-success',
         }
         badge_class = type_classes.get(record.item_type, 'bg-secondary')
         display_value = record.get_item_type_display()
