@@ -662,6 +662,49 @@ def ajax_search_articles(request):
 
 
 @login_required
+@require_http_methods(["GET"])
+def ajax_search_customers(request):
+    """
+    AJAX endpoint for customer search (partial string)
+
+    GET parameters:
+        - q: Search query
+
+    Returns:
+        JSON: List of matching customers with details
+    """
+    try:
+        query = request.GET.get('q', '').strip()
+
+        if not query or len(query) < 2:
+            return JsonResponse({'customers': []})
+
+        # Search across name and firma fields using partial match (icontains)
+        # OR-combination: match if query is found in either name or firma
+        customers = (
+            Adresse.objects.filter(
+                Q(name__icontains=query) | Q(firma__icontains=query),
+                adressen_type='KUNDE'
+            )
+            .order_by('name')[:20]
+        )
+
+        # Format results
+        results = []
+        for customer in customers:
+            results.append({
+                'id': customer.pk,
+                'name': customer.name,
+                'firma': customer.firma or '',
+                'full_name': customer.full_name(),
+            })
+
+        return JsonResponse({'customers': results})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
 @require_http_methods(["POST"])
 def ajax_add_line(request, doc_key, pk):
     """
