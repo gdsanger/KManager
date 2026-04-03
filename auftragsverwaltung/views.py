@@ -2103,7 +2103,115 @@ def document_pdf(request, pk):
     response['Content-Disposition'] = f'inline; filename="{result.filename}"'
     
     logger.info(f"Generated PDF for document {document.number} ({len(result.pdf_bytes)} bytes)")
-    
+
+    return response
+
+
+@login_required
+@require_POST
+def documents_bulk_print(request, doc_key):
+    """
+    Generate a merged PDF for multiple selected documents.
+
+    Args:
+        request: HTTP request with POST data containing 'document_ids[]'
+        doc_key: The document type key (e.g., 'quote', 'order', 'invoice')
+
+    Returns:
+        HttpResponse with merged PDF content or error message
+    """
+    from pypdf import PdfWriter, PdfReader
+    from io import BytesIO
+
+    # Get document IDs from POST data
+    document_ids = request.POST.getlist('document_ids[]')
+
+    if not document_ids:
+        return JsonResponse({
+            'success': False,
+            'error': 'Keine Dokumente ausgewählt.'
+        }, status=400)
+
+    # Validate document_ids are integers
+    try:
+        document_ids = [int(doc_id) for doc_id in document_ids]
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Ungültige Dokument-IDs.'
+        }, status=400)
+
+    # Get the document type
+    document_type = get_object_or_404(DocumentType, key=doc_key, is_active=True)
+
+    # Get all selected documents with validation
+    documents = SalesDocument.objects.select_related(
+        'company', 'customer', 'document_type'
+    ).filter(
+        pk__in=document_ids,
+        document_type=document_type
+    ).order_by('issue_date', 'number')
+
+    if not documents.exists():
+        return JsonResponse({
+            'success': False,
+            'error': 'Keine gültigen Dokumente gefunden.'
+        }, status=404)
+
+    # Initialize context builder and PDF service
+    context_builder = SalesDocumentInvoiceContextBuilder()
+    pdf_service = PdfRenderService()
+    base_url = get_static_base_url()
+
+    # Create PDF merger
+    pdf_writer = PdfWriter()
+
+    # Generate and merge PDFs for each document
+    for document in documents:
+        try:
+            # Build context and get template
+            context = context_builder.build_context(document)
+            template_name = context_builder.get_template_name(document)
+
+            # Generate PDF for this document
+            result = pdf_service.render(
+                template_name=template_name,
+                context=context,
+                base_url=base_url,
+                filename=f'{document.number}.pdf'
+            )
+
+            # Add to merger
+            pdf_reader = PdfReader(BytesIO(result.pdf_bytes))
+            for page in pdf_reader.pages:
+                pdf_writer.add_page(page)
+
+        except Exception as e:
+            logger.error(f"Error generating PDF for document {document.number}: {e}")
+            # Continue with other documents
+            continue
+
+    # Check if we have any pages
+    if len(pdf_writer.pages) == 0:
+        return JsonResponse({
+            'success': False,
+            'error': 'Fehler beim Erstellen der PDFs.'
+        }, status=500)
+
+    # Write merged PDF to bytes
+    output_buffer = BytesIO()
+    pdf_writer.write(output_buffer)
+    merged_pdf_bytes = output_buffer.getvalue()
+
+    # Generate filename
+    filename = f'{document_type.name}_Sammeldruck_{len(documents)}_Dokumente.pdf'
+
+    # Return merged PDF
+    response = HttpResponse(merged_pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+
+    logger.info(f"Generated merged PDF for {len(documents)} documents ({len(merged_pdf_bytes)} bytes)")
+
     return response
 
 

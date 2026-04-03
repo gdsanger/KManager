@@ -10,7 +10,17 @@ from finanzen.models import OutgoingInvoiceJournalEntry
 
 class SalesDocumentTable(tables.Table):
     """Table for displaying Sales Documents (Angebote, Aufträge, Rechnungen, etc.)."""
-    
+
+    selection = tables.CheckBoxColumn(
+        verbose_name='',
+        accessor='pk',
+        attrs={
+            'th__input': {'id': 'select-all-checkbox'},
+            'td__input': {'class': 'document-checkbox'}
+        },
+        orderable=False
+    )
+
     number = tables.Column(
         verbose_name='Nummer',
         attrs={'td': {'class': 'text-nowrap'}}
@@ -110,6 +120,7 @@ class SalesDocumentTable(tables.Table):
         model = SalesDocument
         template_name = 'django_tables2/bootstrap5-dark.html'
         fields = (
+            'selection',
             'number',
             'company',
             'customer',

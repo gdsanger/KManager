@@ -275,17 +275,18 @@ class SalesDocumentListViewTestCase(TestCase):
         self.assertContains(response, 'Erika Beispiel')
     
     def test_customer_column_position(self):
-        """Test that customer column is in third position after number and company"""
+        """Test that customer column is in fourth position after selection, number and company"""
         url = reverse('auftragsverwaltung:quotes')
         response = self.client.get(url)
-        
+
         table = response.context['table']
         column_names = [col.name for col in table.columns]
-        
-        # Check column ordering: number, company, customer
-        self.assertEqual(column_names[0], 'number')
-        self.assertEqual(column_names[1], 'company')
-        self.assertEqual(column_names[2], 'customer')
+
+        # Check column ordering: selection, number, company, customer
+        self.assertEqual(column_names[0], 'selection')
+        self.assertEqual(column_names[1], 'number')
+        self.assertEqual(column_names[2], 'company')
+        self.assertEqual(column_names[3], 'customer')
     
     def test_customer_filter(self):
         """Test the customer filter"""
