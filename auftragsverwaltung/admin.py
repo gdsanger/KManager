@@ -122,7 +122,7 @@ class SalesDocumentAdmin(admin.ModelAdmin):
             'fields': ('company', 'document_type', 'number', 'status', 'subject', 'reference_number')
         }),
         ('Datumsangaben', {
-            'fields': ('issue_date', 'due_date', 'paid_at')
+            'fields': ('issue_date', 'due_date', 'paid_at', 'performance_date_from', 'performance_date_to')
         }),
         ('Beziehungen', {
             'fields': ('payment_term', 'source_document')
