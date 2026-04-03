@@ -6,14 +6,14 @@ from datetime import date
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User, Group
-from auftragsverwaltung.models import SalesDocument, DocumentType
+from auftragsverwaltung.models import SalesDocument, DocumentType, NumberRange
 from core.models import Adresse, Mandant
 from vermietung.forms import AdresseKundeForm
 
 
 class KundeCRUDTestCase(TestCase):
     """Test case for Customer CRUD operations in the user area."""
-    
+
     def setUp(self):
         """Set up test data for all tests."""
         # Create a user with Vermietung access
@@ -25,14 +25,14 @@ class KundeCRUDTestCase(TestCase):
         # Create Vermietung group and add user to it
         self.vermietung_group = Group.objects.create(name='Vermietung')
         self.user.groups.add(self.vermietung_group)
-        
+
         # Create a regular user without Vermietung access
         self.regular_user = User.objects.create_user(
             username='regularuser',
             password='testpass123',
             is_staff=False
         )
-        
+
         # Create test customers
         self.kunde1 = Adresse.objects.create(
             adressen_type='KUNDE',

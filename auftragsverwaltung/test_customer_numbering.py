@@ -18,6 +18,9 @@ class CustomerNumberRangeModelTestCase(TestCase):
 
     def test_create_customer_number_range(self):
         """Test creating a customer number range"""
+        # Delete the default one first
+        NumberRange.objects.filter(target='CUSTOMER').delete()
+
         nr = NumberRange.objects.create(
             target='CUSTOMER',
             reset_policy='YEARLY',
@@ -35,21 +38,15 @@ class CustomerNumberRangeModelTestCase(TestCase):
 
     def test_str_representation_customer(self):
         """Test __str__ method for customer NumberRange"""
-        nr = NumberRange.objects.create(
-            target='CUSTOMER',
-            reset_policy='YEARLY'
-        )
+        # Use the default NumberRange created by migration
+        nr = NumberRange.objects.get(target='CUSTOMER')
 
         expected = "Kunden-Nummernkreis (global, YEARLY)"
         self.assertEqual(str(nr), expected)
 
     def test_unique_constraint_customer_global(self):
         """Test that only one CUSTOMER NumberRange is allowed globally"""
-        NumberRange.objects.create(
-            target='CUSTOMER',
-            reset_policy='YEARLY'
-        )
-
+        # Default NumberRange already exists from migration
         # Try to create another CUSTOMER NumberRange
         with self.assertRaises(IntegrityError):
             NumberRange.objects.create(
@@ -68,7 +65,8 @@ class CustomerNumberRangeModelTestCase(TestCase):
             ort="Test City"
         )
 
-        # Try to create CUSTOMER NumberRange with company
+        # Delete default and try to create CUSTOMER NumberRange with company
+        NumberRange.objects.filter(target='CUSTOMER').delete()
         with self.assertRaises(IntegrityError):
             NumberRange.objects.create(
                 company=company,
@@ -86,7 +84,8 @@ class CustomerNumberRangeModelTestCase(TestCase):
             prefix="T"
         )
 
-        # Create CUSTOMER NumberRange with document_type (allowed but not used)
+        # Delete default and create CUSTOMER NumberRange with document_type (allowed but not used)
+        NumberRange.objects.filter(target='CUSTOMER').delete()
         nr = NumberRange.objects.create(
             target='CUSTOMER',
             document_type=doc_type,
@@ -102,14 +101,13 @@ class CustomerNumberRangeServiceTestCase(TestCase):
     """Test customer number generation service"""
 
     def setUp(self):
-        """Create test NumberRange"""
-        NumberRange.objects.create(
-            target='CUSTOMER',
-            reset_policy='YEARLY',
-            format='DEB{yy}-{seq:05d}',
-            current_year=0,
-            current_seq=0
-        )
+        """Reset the default NumberRange sequence for consistent test results"""
+        nr = NumberRange.objects.get(target='CUSTOMER')
+        nr.current_year = 0
+        nr.current_seq = 0
+        nr.format = 'DEB{yy}-{seq:05d}'
+        nr.reset_policy = 'YEARLY'
+        nr.save()
 
     def test_get_next_customer_number(self):
         """Test getting next customer number"""
@@ -179,14 +177,13 @@ class CustomerAutoNumberingTestCase(TestCase):
     """Test automatic customer number assignment"""
 
     def setUp(self):
-        """Create test NumberRange for customers"""
-        NumberRange.objects.create(
-            target='CUSTOMER',
-            reset_policy='YEARLY',
-            format='DEB{yy}-{seq:05d}',
-            current_year=26,
-            current_seq=0
-        )
+        """Reset the default NumberRange sequence for consistent test results"""
+        nr = NumberRange.objects.get(target='CUSTOMER')
+        nr.current_year = 26
+        nr.current_seq = 0
+        nr.format = 'DEB{yy}-{seq:05d}'
+        nr.reset_policy = 'YEARLY'
+        nr.save()
 
     def test_auto_assign_debitor_number_on_create(self):
         """Test that debitor_number is auto-assigned when creating customer without number"""
@@ -364,14 +361,13 @@ class CustomerNumberConcurrencyTestCase(TestCase):
     """Test race-safe customer number generation under concurrent access"""
 
     def setUp(self):
-        """Create test NumberRange for customers"""
-        NumberRange.objects.create(
-            target='CUSTOMER',
-            reset_policy='YEARLY',
-            format='DEB{yy}-{seq:05d}',
-            current_year=26,
-            current_seq=0
-        )
+        """Reset the default NumberRange sequence for consistent test results"""
+        nr = NumberRange.objects.get(target='CUSTOMER')
+        nr.current_year = 26
+        nr.current_seq = 0
+        nr.format = 'DEB{yy}-{seq:05d}'
+        nr.reset_policy = 'YEARLY'
+        nr.save()
 
     def test_concurrent_customer_creation(self):
         """Test that concurrent customer creation produces unique sequential numbers"""
