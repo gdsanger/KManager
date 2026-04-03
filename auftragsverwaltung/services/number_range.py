@@ -220,3 +220,72 @@ def get_next_item_number(date_obj=None):
         )
 
         return formatted_number
+
+
+def get_next_customer_number(date_obj=None):
+    """
+    Get next number for a customer (global, company-independent).
+
+    This function is atomic and race-safe using database transactions and row-level locking.
+    Raises ValueError if no CUSTOMER NumberRange is configured.
+
+    Args:
+        date_obj: datetime.date or datetime.datetime (defaults to today)
+
+    Returns:
+        str: Formatted number string (e.g., "DEB26-00001")
+
+    Raises:
+        ValueError: If no CUSTOMER NumberRange exists
+
+    Example:
+        >>> from datetime import date
+        >>> number = get_next_customer_number(date(2026, 1, 15))
+        >>> print(number)  # "DEB26-00001"
+    """
+    if date_obj is None:
+        date_obj = date.today()
+
+    # Extract datetime.date from datetime.datetime if needed
+    if hasattr(date_obj, 'date'):
+        date_obj = date_obj.date()
+
+    # Get two-digit year
+    yy = date_obj.year % 100
+
+    with transaction.atomic():
+        # Try to get existing customer number range with row-level lock
+        try:
+            number_range = NumberRange.objects.select_for_update().get(
+                target='CUSTOMER'
+            )
+        except NumberRange.DoesNotExist:
+            raise ValueError(
+                'Kein Nummernkreis für Kunden konfiguriert. '
+                'Bitte legen Sie einen Nummernkreis mit Ziel "CUSTOMER" an.'
+            )
+
+        # Check if we need to reset the sequence based on policy
+        if number_range.reset_policy == 'YEARLY' and number_range.current_year != yy:
+            # Year has changed with YEARLY policy, reset sequence
+            number_range.current_year = yy
+            number_range.current_seq = 0
+        elif number_range.reset_policy == 'NEVER' and number_range.current_year != yy:
+            # Year has changed with NEVER policy, update year but don't reset sequence
+            number_range.current_year = yy
+
+        # Increment sequence
+        number_range.current_seq += 1
+
+        # Save the updated number range
+        number_range.save()
+
+        # Generate the formatted number with 'DEB' prefix for customers
+        # Use format from NumberRange, with 'DEB' as default prefix
+        formatted_number = number_range.format.format(
+            prefix='DEB',  # Default prefix for customers (Debitor)
+            yy=f"{yy:02d}",
+            seq=number_range.current_seq
+        )
+
+        return formatted_number
