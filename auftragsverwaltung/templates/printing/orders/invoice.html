@@ -263,7 +263,7 @@
                     <td>{{ doc.due_date|date:"d.m.Y" }}</td>
                 </tr>
                 {% endif %}
-                {% if customer %}
+                {% if customer.debitor_number %}
                 <tr>
                     <td class="label">Kunden-Nr.:</td>
                     <td>{{ customer.debitor_number }}</td>

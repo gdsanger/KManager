@@ -143,15 +143,82 @@ class SalesDocumentInvoiceContextBuilderTest(TestCase):
         """Test customer context building"""
         builder = SalesDocumentInvoiceContextBuilder()
         context = builder.build_context(self.document)
-        
+
         self.assertIn('customer', context)
         customer_ctx = context['customer']
-        
+
         self.assertEqual(customer_ctx['name'], 'Kunde GmbH')
         self.assertEqual(customer_ctx['vat_id'], 'DE987654321')
         self.assertEqual(customer_ctx['country_code'], 'DE')
         self.assertIn('Kunde GmbH', customer_ctx['address_lines'])
         self.assertIn('Kundenstraße 10', customer_ctx['address_lines'])
+
+    def test_build_context_customer_with_debitor_number(self):
+        """Test customer context includes debitor_number when set"""
+        # Set a debitor number on the customer
+        self.customer.debitor_number = '12345'
+        self.customer.save()
+
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        self.assertIn('customer', context)
+        customer_ctx = context['customer']
+
+        # Verify debitor_number is included in context
+        self.assertIn('debitor_number', customer_ctx)
+        self.assertEqual(customer_ctx['debitor_number'], '12345')
+
+    def test_build_context_customer_without_debitor_number(self):
+        """Test customer context when debitor_number is not set"""
+        # Ensure debitor_number is None/empty
+        self.customer.debitor_number = None
+        self.customer.save()
+
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        self.assertIn('customer', context)
+        customer_ctx = context['customer']
+
+        # Verify debitor_number is included but empty
+        self.assertIn('debitor_number', customer_ctx)
+        self.assertEqual(customer_ctx['debitor_number'], '')
+
+    def test_html_output_shows_debitor_number_when_set(self):
+        """Test that rendered HTML includes customer number when debitor_number is set"""
+        # Set a debitor number on the customer
+        self.customer.debitor_number = 'DEBI-9999'
+        self.customer.save()
+
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+
+        # Verify customer number appears in HTML
+        self.assertIn('Kunden-Nr.:', html)
+        self.assertIn('DEBI-9999', html)
+
+    def test_html_output_hides_debitor_number_when_not_set(self):
+        """Test that rendered HTML does not show customer number row when debitor_number is not set"""
+        # Ensure debitor_number is None
+        self.customer.debitor_number = None
+        self.customer.save()
+
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+
+        # Render template to HTML
+        from django.template.loader import render_to_string
+        html = render_to_string('printing/orders/invoice.html', context)
+
+        # Verify customer number label does NOT appear when number is not set
+        # Using a more specific check to avoid false positives
+        self.assertNotIn('<td class="label">Kunden-Nr.:</td>', html)
+
     
     def test_build_context_document(self):
         """Test document context building"""
