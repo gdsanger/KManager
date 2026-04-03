@@ -223,11 +223,38 @@ Neues {{ document_type.name }}
     .article-suggestion-item:hover {
         background: var(--bs-secondary-bg);
     }
-    
+
     .article-suggestion-item:last-child {
         border-bottom: none;
     }
-    
+
+    .customer-search-dropdown {
+        position: absolute;
+        z-index: 1000;
+        background: white;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        width: 100%;
+        margin-top: 2px;
+    }
+
+    .customer-search-result {
+        padding: 10px;
+        border-bottom: 1px solid var(--bs-border-color);
+        cursor: pointer;
+    }
+
+    .customer-search-result:hover {
+        background: var(--bs-secondary-bg);
+    }
+
+    .customer-search-result:last-child {
+        border-bottom: none;
+    }
+
     .form-label-sm {
         font-size: 0.75rem;
         margin-bottom: 0.25rem;
@@ -358,21 +385,27 @@ Neues {{ document_type.name }}
                                value="{% if document %}{{ document.subject }}{% endif %}" 
                                placeholder="Betreff oder Kurzbeschreibung" required>
                     </div>
-                    
+
                     <!-- Customer -->
                     <div class="col-md-6">
                         <label class="form-label">Kunde</label>
-                        <select class="form-select" name="customer_id" id="customerSelect">
-                            <option value="">-- Bitte wählen --</option>
-                            {% for customer in customers %}
-                            <option value="{{ customer.pk }}" 
-                                    {% if document and document.customer and document.customer.pk == customer.pk %}selected{% endif %}>
-                                {{ customer.full_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <div class="position-relative">
+                            <input type="text" class="form-control" id="customerSearchInput"
+                                   placeholder="Kundenname oder Firma eingeben..." autocomplete="off">
+                            <input type="hidden" name="customer_id" id="customerIdInput"
+                                   value="{% if document and document.customer %}{{ document.customer.pk }}{% endif %}">
+                            <div id="customerSearchResults" class="customer-search-dropdown" style="display: none;"></div>
+                            {% if document and document.customer %}
+                            <div id="selectedCustomerDisplay" class="mt-2 p-2 bg-light border rounded">
+                                <strong>Ausgewählt:</strong> {{ document.customer.full_name }}
+                                <button type="button" class="btn btn-sm btn-outline-danger float-end" onclick="clearCustomerSelection()">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
-                    
+
                     <!-- Issue Date -->
                     <div class="col-md-3">
                         <label class="form-label">Belegdatum</label>
@@ -1394,7 +1427,116 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 300);
         });
     }
-    
+
+    // Customer search
+    const customerSearchInput = document.getElementById('customerSearchInput');
+    const customerSearchResults = document.getElementById('customerSearchResults');
+    const customerIdInput = document.getElementById('customerIdInput');
+    const selectedCustomerDisplay = document.getElementById('selectedCustomerDisplay');
+    let customerSearchTimeout;
+
+    if (customerSearchInput && customerSearchResults) {
+        customerSearchInput.addEventListener('input', function() {
+            clearTimeout(customerSearchTimeout);
+            const query = this.value.trim();
+
+            if (query.length < 2) {
+                customerSearchResults.innerHTML = '';
+                customerSearchResults.style.display = 'none';
+                return;
+            }
+
+            customerSearchTimeout = setTimeout(function() {
+                fetch(`{% url "auftragsverwaltung:ajax_search_customers" %}?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.customers && data.customers.length > 0) {
+                        let html = '';
+                        data.customers.forEach(customer => {
+                            const displayText = customer.firma
+                                ? `${customer.firma} - (${customer.name})`
+                                : customer.name;
+                            html += `
+                                <div class="customer-search-result" data-customer-id="${customer.id}"
+                                     data-customer-name="${customer.full_name}">
+                                    <strong>${displayText}</strong>
+                                </div>
+                            `;
+                        });
+                        customerSearchResults.innerHTML = html;
+                        customerSearchResults.style.display = 'block';
+
+                        // Add click handlers
+                        document.querySelectorAll('.customer-search-result').forEach(el => {
+                            el.addEventListener('click', function() {
+                                const customerId = this.dataset.customerId;
+                                const customerName = this.dataset.customerName;
+                                selectCustomer(customerId, customerName);
+                            });
+                        });
+                    } else {
+                        customerSearchResults.innerHTML = '<div class="customer-search-result text-muted">Keine Kunden gefunden</div>';
+                        customerSearchResults.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    customerSearchResults.innerHTML = '<div class="customer-search-result text-danger">Fehler bei der Suche</div>';
+                    customerSearchResults.style.display = 'block';
+                });
+            }, 300);
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('#customerSearchInput') && !event.target.closest('#customerSearchResults')) {
+                customerSearchResults.style.display = 'none';
+            }
+        });
+    }
+
+    function selectCustomer(customerId, customerName) {
+        if (customerIdInput) {
+            customerIdInput.value = customerId;
+        }
+        if (customerSearchInput) {
+            customerSearchInput.value = '';
+        }
+        if (customerSearchResults) {
+            customerSearchResults.style.display = 'none';
+            customerSearchResults.innerHTML = '';
+        }
+
+        // Update or create selected customer display
+        let displayDiv = document.getElementById('selectedCustomerDisplay');
+        if (!displayDiv) {
+            displayDiv = document.createElement('div');
+            displayDiv.id = 'selectedCustomerDisplay';
+            displayDiv.className = 'mt-2 p-2 bg-light border rounded';
+            customerSearchInput.parentElement.appendChild(displayDiv);
+        }
+        displayDiv.innerHTML = `
+            <strong>Ausgewählt:</strong> ${customerName}
+            <button type="button" class="btn btn-sm btn-outline-danger float-end" onclick="clearCustomerSelection()">
+                <i class="bi bi-x"></i>
+            </button>
+        `;
+        displayDiv.style.display = 'block';
+    }
+
+    window.clearCustomerSelection = function() {
+        if (customerIdInput) {
+            customerIdInput.value = '';
+        }
+        if (customerSearchInput) {
+            customerSearchInput.value = '';
+        }
+        const displayDiv = document.getElementById('selectedCustomerDisplay');
+        if (displayDiv) {
+            displayDiv.style.display = 'none';
+        }
+    };
+
     {% if document.pk %}
     // Add line from article
     function addLineFromArticle(article) {
