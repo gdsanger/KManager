@@ -114,7 +114,7 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
     def _build_customer_context(self, customer) -> dict:
         """Build customer address block context."""
         address_lines = []
-        
+
         # Company name or personal name
         if customer.firma:
             address_lines.append(customer.firma)
@@ -123,24 +123,25 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
                 address_lines.append(f"{customer.get_anrede_display()} {customer.name}")
             else:
                 address_lines.append(customer.name)
-        
+
         # Street address
         if customer.strasse:
             address_lines.append(customer.strasse)
-        
+
         # City/ZIP
         if customer.plz and customer.ort:
             address_lines.append(f"{customer.plz} {customer.ort}")
-        
+
         # Country (only if not default)
         if customer.land and customer.land.upper() not in ['DEUTSCHLAND', 'GERMANY', 'DE']:
             address_lines.append(customer.land)
-        
+
         return {
             'name': customer.firma or customer.name,
             'address_lines': address_lines,
             'country_code': customer.country_code or 'DE',
             'vat_id': customer.vat_id or '',
+            'debitor_number': customer.debitor_number or '',
         }
     
     def _build_document_context(self, document) -> dict:
