@@ -192,11 +192,15 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
                     'qty': line.quantity,
                     'unit': line.unit.symbol if line.unit else '',
                     'short_text': line.short_text_1 or '',
+                    'short_text_2': line.short_text_2 or '',
                     'long_text': line.long_text or '',
                     'unit_price_net': line.unit_price_net,
                     'discount_percent': line.discount,
                     'net': line.line_net,
-                    'tax_rate': line.tax_rate.rate,
+                    'tax_rate': {
+                        'name': line.tax_rate.name if line.tax_rate else '',
+                        'rate': line.tax_rate.rate if line.tax_rate else None,
+                    } if line.tax_rate else None,
                     'tax': line.line_tax,
                     'gross': line.line_gross,
                 })
