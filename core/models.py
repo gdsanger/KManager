@@ -913,7 +913,9 @@ class Item(models.Model):
         max_length=100,
         unique=True,
         verbose_name="Artikelnummer",
-        help_text="Eindeutige Artikelnummer (global)"
+        help_text="Eindeutige Artikelnummer (global, wird automatisch vergeben)",
+        blank=True,
+        null=True
     )
     
     # Text fields
@@ -1033,7 +1035,28 @@ class Item(models.Model):
     
     def __str__(self):
         return f"{self.article_no}: {self.short_text_1}"
-    
+
+    def save(self, *args, **kwargs):
+        """
+        Save item and auto-assign article_no if not set.
+
+        Auto-generates article number on first save if article_no is not manually set.
+        Uses race-safe number generation from NumberRange service.
+        """
+        # Auto-assign article_no only if not already set and this is a new instance
+        if not self.article_no and not self.pk:
+            from auftragsverwaltung.services.number_range import get_next_item_number
+            try:
+                self.article_no = get_next_item_number()
+            except ValueError as e:
+                # Re-raise as ValidationError for better user feedback
+                from django.core.exceptions import ValidationError
+                raise ValidationError({
+                    'article_no': str(e)
+                })
+
+        super().save(*args, **kwargs)
+
     def clean(self):
         """Validate item data"""
         super().clean()
