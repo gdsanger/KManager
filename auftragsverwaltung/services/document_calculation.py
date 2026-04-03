@@ -96,23 +96,36 @@ class DocumentCalculationService:
         total_tax = Decimal('0.00')
         total_gross = Decimal('0.00')
         
+        # Collect lines that need to be saved if persist=True
+        lines_to_update = []
+
         # Process each line
         for line in lines:
             # Apply selection logic: determine if line should be included
             if not cls._is_line_included(line):
+                # Even excluded lines should have their totals calculated and persisted
+                # so they don't show stale 0.00 values
+                line_net, line_tax, line_gross = cls._calculate_line_totals(line)
+                line.line_net = line_net
+                line.line_tax = line_tax
+                line.line_gross = line_gross
+                if persist:
+                    lines_to_update.append(line)
                 continue
-            
+
             # Calculate line totals with rounding
             line_net, line_tax, line_gross = cls._calculate_line_totals(line)
-            
-            # Optionally update line fields (for display purposes)
-            # Note: We don't save individual lines here to avoid performance issues
-            # The caller can decide whether to update line fields
+
+            # Update line fields in memory
             line.line_net = line_net
             line.line_tax = line_tax
             line.line_gross = line_gross
-            
-            # Accumulate to document totals
+
+            # Track line for batch update if persist=True
+            if persist:
+                lines_to_update.append(line)
+
+            # Accumulate to document totals (only included lines)
             total_net += line_net
             total_tax += line_tax
             total_gross += line_gross
@@ -131,8 +144,21 @@ class DocumentCalculationService:
         
         # Persist if requested
         if persist:
+            # Bulk update all lines with their calculated totals
+            # This is more efficient than saving each line individually
+            if lines_to_update:
+                # Use bulk_update with update_fields for performance
+                # Import the model to get the correct class
+                from auftragsverwaltung.models import SalesDocumentLine
+                SalesDocumentLine.objects.bulk_update(
+                    lines_to_update,
+                    fields=['line_net', 'line_tax', 'line_gross'],
+                    batch_size=100
+                )
+
+            # Save document totals
             document.save(update_fields=['total_net', 'total_tax', 'total_gross'])
-        
+
         return result
     
     @classmethod
