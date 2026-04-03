@@ -561,34 +561,55 @@ class InvoiceViewsTestCase(TestCase):
             template.save()
 
     def test_invoice_finalize_view(self):
-        """Test invoice finalize view assigns number and sets status"""
+        """Test invoice finalize view assigns number, sets status, and returns PDF"""
+        url = reverse('auftragsverwaltung:invoice_finalize', kwargs={'pk': self.invoice.pk})
+
+        response = self.client.post(url)
+
+        # Should return PDF
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertIn('inline', response['Content-Disposition'])
+        self.assertTrue(len(response.content) > 0)
+
+        # Verify invoice was finalized
+        self.invoice.refresh_from_db()
+        self.assertTrue(self.invoice.number)
+        self.assertEqual(self.invoice.status, 'SENT')
+
+    def test_invoice_finalize_is_idempotent_via_view(self):
+        """Test that calling finalize view twice doesn't change number but still returns PDF"""
+        url = reverse('auftragsverwaltung:invoice_finalize', kwargs={'pk': self.invoice.pk})
+
+        # First call
+        response1 = self.client.post(url)
+        self.assertEqual(response1.status_code, 200)
+        self.assertEqual(response1['Content-Type'], 'application/pdf')
+
+        self.invoice.refresh_from_db()
+        first_number = self.invoice.number
+
+        # Second call
+        response2 = self.client.post(url)
+        self.assertEqual(response2.status_code, 200)
+        self.assertEqual(response2['Content-Type'], 'application/pdf')
+
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.number, first_number)
+
+    def test_invoice_finalize_pdf_filename_contains_number(self):
+        """Test that PDF filename contains invoice number"""
         url = reverse('auftragsverwaltung:invoice_finalize', kwargs={'pk': self.invoice.pk})
 
         response = self.client.post(url)
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        self.assertIn('filename=', response['Content-Disposition'])
 
-        self.assertTrue(data['success'])
-        self.assertTrue(data['was_modified'])
-        self.assertTrue(data['invoice_number'])
-        self.assertEqual(data['status'], 'SENT')
-
-    def test_invoice_finalize_is_idempotent_via_view(self):
-        """Test that calling finalize view twice doesn't change number"""
-        url = reverse('auftragsverwaltung:invoice_finalize', kwargs={'pk': self.invoice.pk})
-
-        # First call
-        response1 = self.client.post(url)
-        data1 = response1.json()
-        first_number = data1['invoice_number']
-
-        # Second call
-        response2 = self.client.post(url)
-        data2 = response2.json()
-
-        self.assertEqual(data2['invoice_number'], first_number)
-        self.assertFalse(data2['was_modified'])
+        # Reload invoice to get number
+        self.invoice.refresh_from_db()
+        safe_number = ''.join(c if c.isalnum() or c in ('-', '_') else '_' for c in self.invoice.number)
+        self.assertIn(f'Rechnung_{safe_number}.pdf', response['Content-Disposition'])
 
     @patch('auftragsverwaltung.services.invoice_email.send_invoice_email')
     def test_invoice_send_email_view(self, mock_send_email):

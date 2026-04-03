@@ -2128,7 +2128,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const finalizeButton = document.getElementById('finalizeButton');
     if (finalizeButton) {
         finalizeButton.addEventListener('click', function() {
-            if (!confirm('Rechnung finalisieren?\n\nDies vergibt eine eindeutige Rechnungsnummer (falls noch keine vorhanden) und setzt den Status auf "Versendet".')) {
+            if (!confirm('Rechnung finalisieren und PDF herunterladen?\n\nDies vergibt eine eindeutige Rechnungsnummer (falls noch keine vorhanden) und setzt den Status auf "Versendet".')) {
                 return;
             }
 
@@ -2136,29 +2136,28 @@ document.addEventListener('DOMContentLoaded', function() {
             const originalHtml = finalizeButton.innerHTML;
             finalizeButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Wird finalisiert...';
 
-            fetch('{% url "auftragsverwaltung:invoice_finalize" document.pk %}', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(`Rechnung erfolgreich finalisiert!\n\nRechnungsnummer: ${data.invoice_number}\nStatus: ${data.status_display}`);
-                    location.reload();
-                } else {
-                    alert('Fehler beim Finalisieren: ' + (data.error || 'Unbekannter Fehler'));
-                    finalizeButton.disabled = false;
-                    finalizeButton.innerHTML = originalHtml;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Fehler beim Finalisieren der Rechnung');
+            // Create a form to submit and download the PDF
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{% url "auftragsverwaltung:invoice_finalize" document.pk %}';
+            form.target = '_blank';
+
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            form.appendChild(csrfInput);
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+
+            // Re-enable button and reload page after a short delay to show updated status
+            setTimeout(function() {
                 finalizeButton.disabled = false;
                 finalizeButton.innerHTML = originalHtml;
-            });
+                location.reload();
+            }, 1000);
         });
     }
 
