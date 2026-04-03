@@ -231,24 +231,26 @@ Neues {{ document_type.name }}
     .customer-search-dropdown {
         position: absolute;
         z-index: 1000;
-        background: white;
-        border: 1px solid var(--bs-border-color);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         max-height: 300px;
         overflow-y: auto;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         width: 100%;
         margin-top: 2px;
     }
 
     .customer-search-result {
         padding: 10px;
-        border-bottom: 1px solid var(--bs-border-color);
+        border-bottom: 1px solid var(--border-color);
         cursor: pointer;
+        color: var(--text-primary);
     }
 
     .customer-search-result:hover {
-        background: var(--bs-secondary-bg);
+        background: var(--bg-card-hover);
     }
 
     .customer-search-result:last-child {
