@@ -85,7 +85,18 @@ class Adresse(models.Model):
         verbose_name="E-Mail Rechnung",
         help_text="E-Mail-Adresse für den Rechnungsversand"
     )
-    
+
+    class Meta:
+        constraints = [
+            # Unique constraint for debitor_number when not null
+            models.UniqueConstraint(
+                fields=['debitor_number'],
+                condition=models.Q(debitor_number__isnull=False),
+                name='unique_debitor_number',
+                violation_error_message='Diese Debitorennummer ist bereits vergeben.'
+            )
+        ]
+
     def full_name(self):
         if self.firma:
             return f"{self.firma} - ({self.name})"
@@ -111,15 +122,26 @@ class Adresse(models.Model):
             self.vat_id = self.vat_id.strip().upper()
     
     def save(self, *args, **kwargs):
-        """Override save to normalize fields before saving"""
+        """Override save to normalize fields and auto-assign debitor_number for customers"""
         # Normalize country_code
         if self.country_code:
             self.country_code = self.country_code.strip().upper()
-        
+
         # Normalize vat_id
         if self.vat_id:
             self.vat_id = self.vat_id.strip().upper()
-        
+
+        # Auto-assign debitor_number only for customers (KUNDE) if not already set and this is a new instance
+        if self.adressen_type == 'KUNDE' and not self.debitor_number and not self.pk:
+            from auftragsverwaltung.services.number_range import get_next_customer_number
+            try:
+                self.debitor_number = get_next_customer_number()
+            except ValueError as e:
+                # Re-raise as ValidationError for better user feedback
+                raise ValidationError({
+                    'debitor_number': str(e)
+                })
+
         super().save(*args, **kwargs)
 
 
