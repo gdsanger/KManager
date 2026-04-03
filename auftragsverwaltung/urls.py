@@ -22,7 +22,10 @@ urlpatterns = [
     
     # Document list views (generic view with doc_key parameter)
     path('documents/<str:doc_key>/', views.document_list, name='document_list'),
-    
+
+    # Bulk actions for documents
+    path('documents/<str:doc_key>/bulk-print/', views.documents_bulk_print, name='documents_bulk_print'),
+
     # Document detail, create, update views
     path('documents/<str:doc_key>/create/', views.document_create, name='document_create'),
     path('documents/<str:doc_key>/<int:pk>/', views.document_detail, name='document_detail'),

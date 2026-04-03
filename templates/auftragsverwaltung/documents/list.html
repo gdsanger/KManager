@@ -10,6 +10,9 @@
     <a href="{% url 'auftragsverwaltung:document_create' doc_key %}" class="btn btn-primary">
         <i class="bi bi-plus-circle"></i> Neu erstellen
     </a>
+    <button type="button" id="bulk-print-btn" class="btn btn-outline-primary" disabled>
+        <i class="bi bi-printer"></i> Ausgewählte drucken <span id="selected-count" class="badge bg-secondary">0</span>
+    </button>
 </div>
 {% endblock %}
 
@@ -110,4 +113,89 @@
     {% endif %}
 </div>
 {% endif %}
+
+<form id="bulk-print-form" method="post" action="{% url 'auftragsverwaltung:documents_bulk_print' doc_key %}" style="display: none;">
+    {% csrf_token %}
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all-checkbox');
+    const documentCheckboxes = document.querySelectorAll('.document-checkbox');
+    const bulkPrintBtn = document.getElementById('bulk-print-btn');
+    const selectedCountBadge = document.getElementById('selected-count');
+    const bulkPrintForm = document.getElementById('bulk-print-form');
+
+    function updateBulkPrintButton() {
+        const checkedBoxes = document.querySelectorAll('.document-checkbox:checked');
+        const count = checkedBoxes.length;
+
+        selectedCountBadge.textContent = count;
+
+        if (count > 0) {
+            bulkPrintBtn.disabled = false;
+            bulkPrintBtn.classList.remove('btn-outline-primary');
+            bulkPrintBtn.classList.add('btn-primary');
+        } else {
+            bulkPrintBtn.disabled = true;
+            bulkPrintBtn.classList.remove('btn-primary');
+            bulkPrintBtn.classList.add('btn-outline-primary');
+        }
+    }
+
+    // Select all checkbox handler
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            documentCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBulkPrintButton();
+        });
+    }
+
+    // Individual checkbox handler
+    documentCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            // Update select-all state
+            const allChecked = Array.from(documentCheckboxes).every(cb => cb.checked);
+            const someChecked = Array.from(documentCheckboxes).some(cb => cb.checked);
+
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = someChecked && !allChecked;
+            }
+
+            updateBulkPrintButton();
+        });
+    });
+
+    // Bulk print button handler
+    bulkPrintBtn.addEventListener('click', function() {
+        const checkedBoxes = document.querySelectorAll('.document-checkbox:checked');
+
+        if (checkedBoxes.length === 0) {
+            alert('Bitte wählen Sie mindestens ein Dokument aus.');
+            return;
+        }
+
+        // Clear existing hidden inputs
+        bulkPrintForm.querySelectorAll('input[name="document_ids[]"]').forEach(input => input.remove());
+
+        // Add selected document IDs to form
+        checkedBoxes.forEach(checkbox => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'document_ids[]';
+            input.value = checkbox.value;
+            bulkPrintForm.appendChild(input);
+        });
+
+        // Submit form
+        bulkPrintForm.submit();
+    });
+
+    // Initial state
+    updateBulkPrintButton();
+});
+</script>
 {% endblock %}
