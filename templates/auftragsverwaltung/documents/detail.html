@@ -414,7 +414,7 @@ Neues {{ document_type.name }}
                         <input type="date" class="form-control" name="issue_date" id="issueDateInput"
                                value="{% if document %}{{ document.issue_date|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}">
                     </div>
-                    
+
                     <!-- Status -->
                     <div class="col-md-3">
                         <label class="form-label">Status</label>
@@ -425,6 +425,22 @@ Neues {{ document_type.name }}
                             </option>
                             {% endfor %}
                         </select>
+                    </div>
+
+                    <!-- Performance Date From -->
+                    <div class="col-md-3">
+                        <label class="form-label">Leistungszeitraum von</label>
+                        <input type="date" class="form-control" name="performance_date_from"
+                               value="{% if document and document.performance_date_from %}{{ document.performance_date_from|date:'Y-m-d' }}{% endif %}"
+                               placeholder="Optional">
+                    </div>
+
+                    <!-- Performance Date To -->
+                    <div class="col-md-3">
+                        <label class="form-label">Leistungszeitraum bis</label>
+                        <input type="date" class="form-control" name="performance_date_to"
+                               value="{% if document and document.performance_date_to %}{{ document.performance_date_to|date:'Y-m-d' }}{% endif %}"
+                               placeholder="Optional">
                     </div>
                     
                     <!-- Payment Term -->

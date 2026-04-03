@@ -349,7 +349,17 @@ def document_create(request, doc_key):
             document.issue_date = datetime.strptime(issue_date_str, '%Y-%m-%d').date()
         else:
             document.issue_date = date.today()
-        
+
+        # Set performance_date_from if provided
+        performance_date_from_str = request.POST.get('performance_date_from')
+        if performance_date_from_str:
+            document.performance_date_from = datetime.strptime(performance_date_from_str, '%Y-%m-%d').date()
+
+        # Set performance_date_to if provided
+        performance_date_to_str = request.POST.get('performance_date_to')
+        if performance_date_to_str:
+            document.performance_date_to = datetime.strptime(performance_date_to_str, '%Y-%m-%d').date()
+
         # Set payment_term if provided
         payment_term_id = request.POST.get('payment_term_id')
         if payment_term_id:
@@ -471,7 +481,21 @@ def document_update(request, doc_key, pk):
     issue_date_str = request.POST.get('issue_date')
     if issue_date_str:
         document.issue_date = datetime.strptime(issue_date_str, '%Y-%m-%d').date()
-    
+
+    # Update performance_date_from if provided
+    performance_date_from_str = request.POST.get('performance_date_from')
+    if performance_date_from_str:
+        document.performance_date_from = datetime.strptime(performance_date_from_str, '%Y-%m-%d').date()
+    else:
+        document.performance_date_from = None
+
+    # Update performance_date_to if provided
+    performance_date_to_str = request.POST.get('performance_date_to')
+    if performance_date_to_str:
+        document.performance_date_to = datetime.strptime(performance_date_to_str, '%Y-%m-%d').date()
+    else:
+        document.performance_date_to = None
+
     # Update payment_term if provided
     payment_term_id = request.POST.get('payment_term_id')
     if payment_term_id:
