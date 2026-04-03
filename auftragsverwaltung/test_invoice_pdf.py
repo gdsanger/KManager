@@ -14,7 +14,7 @@ from django.conf import settings
 
 from auftragsverwaltung.models import SalesDocument, SalesDocumentLine, DocumentType
 from auftragsverwaltung.printing import SalesDocumentInvoiceContextBuilder
-from core.models import Mandant, Adresse, Item, TaxRate, Unit
+from core.models import Mandant, Adresse, Item, TaxRate, Unit, Kostenart
 from core.printing import PdfRenderService
 
 
@@ -184,6 +184,51 @@ class SalesDocumentInvoiceContextBuilderTest(TestCase):
         # Verify debitor_number is included but empty
         self.assertIn('debitor_number', customer_ctx)
         self.assertEqual(customer_ctx['debitor_number'], '')
+
+    def test_lines_context_uses_line_texts(self):
+        """Ensure line texts in context come from SalesDocumentLine, not Item"""
+        kostenart1 = Kostenart.objects.create(name='KA1')
+        item = Item.objects.create(
+            article_no='ART-CTX',
+            short_text_1='Artikel Kurz 1',
+            short_text_2='Artikel Kurz 2',
+            long_text='Artikel Langtext',
+            net_price=Decimal('12.50'),
+            purchase_price=Decimal('5.00'),
+            tax_rate=self.tax_19,
+            cost_type_1=kostenart1,
+            item_type='SERVICE',
+            is_active=True
+        )
+
+        SalesDocumentLine.objects.create(
+            document=self.document,
+            item=item,
+            position_no=3,
+            line_type='NORMAL',
+            is_selected=True,
+            short_text_1='Zeilen Kurz 1',
+            short_text_2='Zeilen Kurz 2',
+            long_text='Zeilen Langtext',
+            description='Custom description',
+            unit=self.unit,
+            quantity=Decimal('2.00'),
+            unit_price_net=Decimal('25.00'),
+            discount=Decimal('0.00'),
+            line_net=Decimal('50.00'),
+            line_tax=Decimal('9.50'),
+            line_gross=Decimal('59.50'),
+            tax_rate=self.tax_19
+        )
+
+        builder = SalesDocumentInvoiceContextBuilder()
+        context = builder.build_context(self.document)
+        line_ctx = next(l for l in context['lines'] if l['pos'] == 3)
+
+        self.assertEqual(line_ctx['short_text'], 'Zeilen Kurz 1')
+        self.assertEqual(line_ctx['short_text_2'], 'Zeilen Kurz 2')
+        self.assertEqual(line_ctx['long_text'], 'Zeilen Langtext')
+        self.assertEqual(line_ctx['tax_rate']['rate'], self.tax_19.rate)
 
     def test_html_output_shows_debitor_number_when_set(self):
         """Test that rendered HTML includes customer number when debitor_number is set"""

@@ -326,9 +326,12 @@
             <td class="col-pos">{{ line.pos }}</td>
             <td class="col-qty">{{ line.qty|floatformat:2 }} <br>{{ line.unit }}</td>            
             <td class="col-desc">
-                {{ line.short_text }}
+                {{ line.short_text|default:"" }}
+                {% if line.short_text_2 %}
+                <div class="long-text">{{ line.short_text_2|default:"" }}</div>
+                {% endif %}
                 {% if line.long_text %}
-                <div class="long-text">{{ line.long_text|safe }}</div>
+                <div class="long-text">{{ line.long_text|default:""|safe }}</div>
                 {% endif %}
             </td>
             <td class="col-price">
@@ -340,7 +343,7 @@
             <td class="col-net">
                 {{ line.net|floatformat:2 }} €
                 {% if line.tax_rate %}
-                <div class="tax-rate-text">{{ line.tax_rate.name }}</div>
+                <div class="tax-rate-text">{{ line.tax_rate.name|default:"" }}</div>
                 {% endif %}
             </td>
         </tr>

@@ -12,7 +12,7 @@ import json
 from auftragsverwaltung.models import (
     SalesDocument, SalesDocumentLine, DocumentType, NumberRange
 )
-from core.models import Mandant, Adresse, TaxRate, PaymentTerm, Unit
+from core.models import Mandant, Adresse, TaxRate, PaymentTerm, Unit, Item, Kostenart
 
 User = get_user_model()
 
@@ -438,3 +438,47 @@ class AjaxLineUpdateTestCase(TestCase):
         # Check that response includes unit_id and unit_symbol
         self.assertEqual(response_data['line']['unit_id'], unit.pk)
         self.assertEqual(response_data['line']['unit_symbol'], 'Stk.')
+
+    def test_ajax_update_line_sets_texts_when_item_selected(self):
+        """Selecting an item copies its texts into the line"""
+        kostenart1 = Kostenart.objects.create(name='KA1')
+        item = Item.objects.create(
+            article_no='ART-100',
+            short_text_1='Artikel Kurztext',
+            short_text_2='Artikel Zusatz',
+            long_text='<p>Artikel Langtext</p>',
+            net_price=Decimal('42.00'),
+            purchase_price=Decimal('20.00'),
+            tax_rate=self.tax_rate,
+            cost_type_1=kostenart1,
+            item_type='SERVICE',
+            is_active=True
+        )
+
+        url = reverse(
+            'auftragsverwaltung:ajax_update_line',
+            kwargs={'doc_key': 'invoice', 'pk': self.document.pk, 'line_id': self.line.pk}
+        )
+
+        response = self.client.post(
+            url,
+            data=json.dumps({'item_id': item.pk}),
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        response_data = json.loads(response.content)
+        self.assertTrue(response_data.get('success'))
+
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.item, item)
+        self.assertEqual(self.line.short_text_1, item.short_text_1)
+        self.assertEqual(self.line.short_text_2, item.short_text_2)
+        self.assertIn('Artikel Langtext', self.line.long_text)
+        self.assertEqual(self.line.tax_rate, self.tax_rate)
+        self.assertEqual(self.line.unit_price_net, item.net_price)
+
+        self.assertEqual(response_data['line']['short_text_1'], item.short_text_1)
+        self.assertEqual(response_data['line']['short_text_2'], item.short_text_2)
+        self.assertEqual(response_data['line']['item_id'], item.pk)

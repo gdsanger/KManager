@@ -11,6 +11,7 @@ from django_tables2 import RequestConfig
 import json
 import logging
 from django.utils import timezone
+from django.utils.html import strip_tags
 
 from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, ContractRun, TextTemplate, TimeEntry
 from .tables import SalesDocumentTable, ContractTable, TextTemplateTable, OutgoingInvoiceJournalTable, TimeEntryTable
@@ -873,12 +874,25 @@ def ajax_update_line(request, doc_key, pk, line_id):
             # Fall back to form-encoded data (from HTMX hx-vals)
             data = request.POST.dict()
         
+        provided_short_text_1 = 'short_text_1' in data
+        provided_short_text_2 = 'short_text_2' in data
+        provided_long_text = 'long_text' in data
+        provided_description = 'description' in data
+        provided_tax_rate = 'tax_rate_id' in data
+        provided_unit_price = 'unit_price_net' in data
+
+        new_item = None
+        item_changed = False
+
         # Update fields
         if 'item_id' in data:
             item_id = normalize_foreign_key_id(data['item_id'])
             if item_id is not None:
-                line.item = get_object_or_404(Item, pk=item_id)
+                new_item = get_object_or_404(Item, pk=item_id)
+                item_changed = line.item_id != new_item.pk
+                line.item = new_item
             else:
+                item_changed = line.item_id is not None
                 line.item = None
         if 'quantity' in data:
             line.quantity = Decimal(data['quantity'])
@@ -917,6 +931,34 @@ def ajax_update_line(request, doc_key, pk, line_id):
             line.kostenart1_id = normalize_foreign_key_id(data['kostenart1_id'])
         if 'kostenart2_id' in data:
             line.kostenart2_id = normalize_foreign_key_id(data['kostenart2_id'])
+
+        if item_changed and new_item:
+            if not provided_short_text_1:
+                line.short_text_1 = new_item.short_text_1 or ''
+            if not provided_short_text_2:
+                line.short_text_2 = new_item.short_text_2 or ''
+            if not provided_long_text:
+                line.long_text = sanitize_html(new_item.long_text) if new_item.long_text else ''
+            if not provided_description:
+                description_parts = [
+                    line.short_text_1,
+                    line.short_text_2,
+                    strip_tags(line.long_text) if line.long_text else '',
+                ]
+                line.description = '\n'.join([p for p in description_parts if p])
+            if not provided_unit_price:
+                line.unit_price_net = new_item.net_price
+            if not provided_tax_rate:
+                line.tax_rate = TaxDeterminationService.determine_tax_rate(
+                    customer=document.customer,
+                    item_tax_rate=new_item.tax_rate
+                )
+            if 'is_discountable' not in data:
+                line.is_discountable = new_item.is_discountable
+            if 'kostenart1_id' not in data and new_item.cost_type_1:
+                line.kostenart1 = new_item.cost_type_1
+            if 'kostenart2_id' not in data:
+                line.kostenart2 = new_item.cost_type_2
         
         # Recalculate line totals using the service before saving
         line_net, line_tax, line_gross = DocumentCalculationService.calculate_line_totals(line)
