@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#
+# pre-push Hook: verhindert direkte Pushes auf geschützte Branches (main/master).
+#
+# Aktivieren (einmalig pro Klon):
+#   git config core.hooksPath .githooks
+#
+# Bewusst umgehen (Ausnahmefall):
+#   git push --no-verify ...
+#
+# Hintergrund: In diesem Repo wird ausschließlich über Feature-Branches
+# (claude/<beschreibung>) und (Draft-)Pull-Requests gearbeitet. Der Merge
+# nach main erfolgt über GitHub, nicht per direktem Push.
+
+protected_branches="main master"
+remote="$1"
+
+# Format je gepushter Ref (stdin):  <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+    for branch in $protected_branches; do
+        if [ "$remote_ref" = "refs/heads/$branch" ]; then
+            echo "" >&2
+            echo "⛔  Push auf geschützten Branch '$branch' (remote: $remote) blockiert." >&2
+            echo "    Bitte einen Feature-Branch pushen (z. B. claude/<beschreibung>)" >&2
+            echo "    und den Merge über einen Pull Request auf GitHub durchführen." >&2
+            echo "" >&2
+            echo "    Nur im Ausnahmefall bewusst umgehen mit:  git push --no-verify" >&2
+            echo "" >&2
+            exit 1
+        fi
+    done
+done
+
+exit 0
