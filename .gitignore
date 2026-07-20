@@ -222,3 +222,8 @@ csrf.txt
 node_modules/
 package-lock.json
 test_invoice_manual.py
+
+# Claude Code / KI-Agenten (lokale, nicht geteilte Konfiguration)
+.claude/settings.local.json
+.claude/*.local.json
+CLAUDE.local.md
