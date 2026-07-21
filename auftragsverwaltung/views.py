@@ -1170,7 +1170,7 @@ def ajax_update_line(request, doc_key, pk, line_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except Exception as e:
         logger.exception(f"Error updating line {line_id} in document {pk}: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'error': 'An internal error occurred.'}, status=500)
 
     # Return updated line data
     return JsonResponse({
