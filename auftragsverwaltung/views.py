@@ -1,7 +1,8 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Q, Sum, Max
-from django.http import JsonResponse, HttpResponse
+from django.http import Http404, JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
 from django.urls import reverse
@@ -733,49 +734,66 @@ def ajax_search_customers(request):
 def ajax_add_line(request, doc_key, pk):
     """
     AJAX endpoint to add a new line to a document
-    
+
     POST parameters (JSON):
         - item_id: Item/Article ID (optional for manual lines)
-        - quantity: Quantity
+        - quantity: Quantity (German or English decimal format)
         - description: Description (required for manual lines)
-        - unit_price_net: Unit price (required for manual lines)
+        - unit_price_net: Unit price (required for manual lines; German or English decimal format)
         - tax_rate_id: Tax rate ID (required)
         - line_type: Line type (NORMAL, OPTIONAL, ALTERNATIVE)
         - kostenart1_id: Kostenart 1 ID (optional)
         - kostenart2_id: Kostenart 2 ID (optional)
-    
+
     Returns:
-        JSON: {success, line_id, line_data}
+        JSON: {success, line_id, line_data} on success.
+        Validation errors (invalid decimal, unknown tax_rate_id/item_id, missing
+        required fields, empty payload) return HTTP 400 with {'success': False, 'error': ...}.
     """
+    document = get_object_or_404(SalesDocument, pk=pk)
+
     try:
-        document = get_object_or_404(SalesDocument, pk=pk)
-        
-        # Parse JSON body
-        data = json.loads(request.body)
-        
-        item_id = data.get('item_id')
-        quantity = Decimal(data.get('quantity', '1.0'))
-        line_type = data.get('line_type', 'NORMAL')
-        description = data.get('description', '')
-        short_text_1 = data.get('short_text_1', '')
-        short_text_2 = data.get('short_text_2', '')
-        long_text = data.get('long_text', '')
-        unit_price_net = data.get('unit_price_net')
-        tax_rate_id = data.get('tax_rate_id')
-        kostenart1_id = data.get('kostenart1_id')
-        kostenart2_id = data.get('kostenart2_id')
-        
+        data = json.loads(request.body) if request.body else {}
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Ungültiger JSON-Body.'}, status=400)
+
+    if not data:
+        return JsonResponse({'success': False, 'error': 'Keine Felder für die neue Position übermittelt.'}, status=400)
+
+    item_id = data.get('item_id')
+    line_type = data.get('line_type', 'NORMAL')
+    description = data.get('description', '')
+    short_text_1 = data.get('short_text_1', '')
+    short_text_2 = data.get('short_text_2', '')
+    long_text = data.get('long_text', '')
+    unit_price_net = data.get('unit_price_net')
+    tax_rate_id = data.get('tax_rate_id')
+    kostenart1_id = data.get('kostenart1_id')
+    kostenart2_id = data.get('kostenart2_id')
+
+    try:
+        quantity = normalize_decimal_input(data.get('quantity', '1.0'))
+    except (ValueError, TypeError) as e:
+        return JsonResponse({'success': False, 'error': f'Ungültige Menge: {e}'}, status=400)
+
+    try:
         # Determine line data based on whether item is provided
         if item_id:
             # Article-based line
-            item = get_object_or_404(Item, pk=item_id)
-            
+            try:
+                item = Item.objects.get(pk=item_id)
+            except Item.DoesNotExist:
+                return JsonResponse(
+                    {'success': False, 'error': f'Ungültiger Artikel: Kein Artikel mit ID {item_id} gefunden.'},
+                    status=400
+                )
+
             # Determine tax rate (using TaxDeterminationService)
             tax_rate = TaxDeterminationService.determine_tax_rate(
                 customer=document.customer,
                 item_tax_rate=item.tax_rate
             )
-            
+
             # Use item data
             if not short_text_1:
                 short_text_1 = item.short_text_1
@@ -788,7 +806,7 @@ def ajax_add_line(request, doc_key, pk):
             if not unit_price_net:
                 unit_price_net = item.net_price
             is_discountable = item.is_discountable
-            
+
             # Use item's kostenart if not provided
             if not kostenart1_id and item.cost_type_1:
                 kostenart1_id = item.cost_type_1.pk
@@ -797,24 +815,23 @@ def ajax_add_line(request, doc_key, pk):
         else:
             # Manual line without item
             item = None
-            
-            # Allow empty positions for initial creation (user will fill them in)
-            # Only validate if we have some non-empty content
-            try:
-                price_value = float(unit_price_net) if unit_price_net else 0.0
-            except (ValueError, TypeError):
-                price_value = 0.0
-            
+
             # Validate mandatory fields only if user has entered description content
             # Allow positions with just short_text_1 and zero price for initial creation
             if description and description.strip():
                 # If user entered description, require short_text_1 too
                 if not short_text_1 or not short_text_1.strip():
-                    return JsonResponse({'error': 'Short text 1 is required when description is provided'}, status=400)
-            
+                    return JsonResponse(
+                        {'success': False, 'error': 'Kurztext 1 ist erforderlich, wenn eine Beschreibung angegeben wird.'},
+                        status=400
+                    )
+
             if not tax_rate_id:
-                return JsonResponse({'error': 'Tax rate is required for manual lines'}, status=400)
-            
+                return JsonResponse(
+                    {'success': False, 'error': 'Steuersatz ist für manuelle Positionen erforderlich.'},
+                    status=400
+                )
+
             # Generate description from short texts if not provided
             if not description and short_text_1:
                 parts = [short_text_1]
@@ -823,87 +840,107 @@ def ajax_add_line(request, doc_key, pk):
                 if long_text:
                     parts.append(long_text)
                 description = '\n'.join(parts)
-            
+
             # Set default empty description if still empty
             if not description:
                 description = ''
-            
-            tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
-            unit_price_net = Decimal(unit_price_net) if unit_price_net else Decimal('0.00')
+
+            try:
+                tax_rate = TaxRate.objects.get(pk=tax_rate_id)
+            except TaxRate.DoesNotExist:
+                return JsonResponse(
+                    {'success': False, 'error': f'Ungültiger Steuersatz: Kein Steuersatz mit ID {tax_rate_id} gefunden.'},
+                    status=400
+                )
             is_discountable = data.get('is_discountable', True)
-        
-        # Get next position number
-        max_position = document.lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
-        position_no = max_position + 1
-        
+
+        try:
+            if isinstance(unit_price_net, Decimal):
+                unit_price_net_decimal = unit_price_net
+            elif unit_price_net in (None, ''):
+                unit_price_net_decimal = Decimal('0.00')
+            else:
+                unit_price_net_decimal = normalize_decimal_input(unit_price_net)
+        except (ValueError, TypeError) as e:
+            return JsonResponse({'success': False, 'error': f'Ungültiger Netto-Stückpreis: {e}'}, status=400)
+
         # Get unit and discount if provided
         unit_id = data.get('unit_id')
         discount = data.get('discount')
-        
-        # Safely convert discount to Decimal
-        if discount not in (None, ''):
-            try:
-                discount_value = Decimal(str(discount))
-            except (ValueError, TypeError):
-                discount_value = Decimal('0.00')
-        else:
-            discount_value = Decimal('0.00')
-        
-        # Create line
-        line = SalesDocumentLine.objects.create(
-            document=document,
-            item=item,
-            tax_rate=tax_rate,
-            position_no=position_no,
-            line_type=line_type,
-            is_selected=True if line_type == 'NORMAL' else data.get('is_selected', False),
-            short_text_1=short_text_1,
-            short_text_2=short_text_2,
-            long_text=sanitize_html(long_text) if long_text else '',
-            description=description,
-            quantity=quantity,
-            unit_id=normalize_foreign_key_id(unit_id),
-            unit_price_net=unit_price_net,
-            discount=discount_value,
-            is_discountable=is_discountable,
-            kostenart1_id=normalize_foreign_key_id(kostenart1_id),
-            kostenart2_id=normalize_foreign_key_id(kostenart2_id),
-        )
-        
-        # Recalculate document totals
-        DocumentCalculationService.recalculate(document, persist=True)
-        
-        # Return line data
-        return JsonResponse({
-            'success': True,
-            'line_id': line.pk,
-            'line': {
-                'id': line.pk,
-                'position_no': line.position_no,
-                'short_text_1': line.short_text_1,
-                'short_text_2': line.short_text_2,
-                'long_text': line.long_text,
-                'description': line.description,
-                'quantity': str(line.quantity),
-                'unit_id': line.unit.pk if line.unit else None,
-                'unit_price_net': str(line.unit_price_net),
-                'discount': str(line.discount),
-                'tax_rate': str(line.tax_rate.rate),
-                'tax_rate_id': line.tax_rate.pk,
-                'line_net': str(line.line_net),
-                'line_tax': str(line.line_tax),
-                'line_gross': str(line.line_gross),
-                'kostenart1_id': line.kostenart1.pk if line.kostenart1 else None,
-                'kostenart2_id': line.kostenart2.pk if line.kostenart2 else None,
-            },
-            'totals': {
-                'total_net': str(document.total_net),
-                'total_tax': str(document.total_tax),
-                'total_gross': str(document.total_gross),
-            }
-        })
+
+        try:
+            discount_value = (
+                normalize_decimal_input(discount) if discount not in (None, '') else Decimal('0.00')
+            )
+        except (ValueError, TypeError) as e:
+            return JsonResponse({'success': False, 'error': f'Ungültiger Rabatt: {e}'}, status=400)
+
+        with transaction.atomic():
+            # Get next position number
+            max_position = document.lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
+            position_no = max_position + 1
+
+            # Create line
+            line = SalesDocumentLine.objects.create(
+                document=document,
+                item=item,
+                tax_rate=tax_rate,
+                position_no=position_no,
+                line_type=line_type,
+                is_selected=True if line_type == 'NORMAL' else data.get('is_selected', False),
+                short_text_1=short_text_1,
+                short_text_2=short_text_2,
+                # long_text is rendered with the `|safe` filter in PDF templates, so it must be
+                # bleach-sanitized. short_text_1/2 and description are always auto-escaped by
+                # Django templates and are stored as plain text, so no sanitization is applied.
+                long_text=sanitize_html(long_text) if long_text else '',
+                description=description,
+                quantity=quantity,
+                unit_id=normalize_foreign_key_id(unit_id),
+                unit_price_net=unit_price_net_decimal,
+                discount=discount_value,
+                is_discountable=is_discountable,
+                kostenart1_id=normalize_foreign_key_id(kostenart1_id),
+                kostenart2_id=normalize_foreign_key_id(kostenart2_id),
+            )
+
+            # Recalculate document totals
+            DocumentCalculationService.recalculate(document, persist=True)
+    except Http404:
+        raise
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.exception(f"Error adding line to document {pk}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    # Return line data
+    return JsonResponse({
+        'success': True,
+        'line_id': line.pk,
+        'line': {
+            'id': line.pk,
+            'position_no': line.position_no,
+            'short_text_1': line.short_text_1,
+            'short_text_2': line.short_text_2,
+            'long_text': line.long_text,
+            'description': line.description,
+            'quantity': str(line.quantity),
+            'unit_id': line.unit.pk if line.unit else None,
+            'unit_price_net': str(line.unit_price_net),
+            'discount': str(line.discount),
+            'tax_rate': str(line.tax_rate.rate),
+            'tax_rate_id': line.tax_rate.pk,
+            'line_net': str(line.line_net),
+            'line_tax': str(line.line_tax),
+            'line_gross': str(line.line_gross),
+            'kostenart1_id': line.kostenart1.pk if line.kostenart1 else None,
+            'kostenart2_id': line.kostenart2.pk if line.kostenart2 else None,
+        },
+        'totals': {
+            'total_net': str(document.total_net),
+            'total_tax': str(document.total_tax),
+            'total_gross': str(document.total_gross),
+        }
+    })
 
 
 @login_required
@@ -927,149 +964,239 @@ def ajax_update_line(request, doc_key, pk, line_id):
         - kostenart2_id: New kostenart2 ID
     
     Returns:
-        JSON: {success, line_data, totals}
+        JSON: {success, line_data, totals} on success.
+        Validation errors (invalid decimal, unknown tax_rate_id/item_id, empty or
+        unrecognized payload) return HTTP 400 with {'success': False, 'error': ...}
+        instead of a 500 and never discard the fields that were valid.
     """
-    try:
-        document = get_object_or_404(SalesDocument, pk=pk)
-        line = get_object_or_404(SalesDocumentLine, pk=line_id, document=document)
-        
-        # Parse request data - support both JSON and form-encoded data
-        # HTMX with hx-vals sends form-encoded data, while tests send JSON
+    document = get_object_or_404(SalesDocument, pk=pk)
+
+    # Parse request data - support both JSON and form-encoded data.
+    # HTMX with hx-vals sends form-encoded data, while tests send JSON.
+    # A JSON content-type with an unparsable/truncated body must fail loudly
+    # instead of silently falling back to an empty payload (root cause of the
+    # "success:True but nothing saved" no-op described in Issue #721).
+    content_type = (request.content_type or '').lower()
+    if 'application/json' in content_type:
+        if not request.body:
+            return JsonResponse({'success': False, 'error': 'Leerer Request-Body.'}, status=400)
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Ungültiger JSON-Body.'}, status=400)
+    else:
         try:
             data = json.loads(request.body) if request.body else {}
         except (json.JSONDecodeError, ValueError):
             # Fall back to form-encoded data (from HTMX hx-vals)
             data = request.POST.dict()
-        
-        provided_short_text_1 = 'short_text_1' in data
-        provided_short_text_2 = 'short_text_2' in data
-        provided_long_text = 'long_text' in data
-        provided_description = 'description' in data
-        provided_tax_rate = 'tax_rate_id' in data
-        provided_unit_price = 'unit_price_net' in data
 
-        new_item = None
-        item_changed = False
+    if not data:
+        return JsonResponse({'success': False, 'error': 'Keine Felder zum Aktualisieren übermittelt.'}, status=400)
 
-        # Update fields
-        if 'item_id' in data:
-            item_id = normalize_foreign_key_id(data['item_id'])
-            if item_id is not None:
-                new_item = get_object_or_404(Item, pk=item_id)
-                item_changed = line.item_id != new_item.pk
-                line.item = new_item
-            else:
-                item_changed = line.item_id is not None
-                line.item = None
-        if 'quantity' in data:
-            line.quantity = Decimal(data['quantity'])
-        if 'unit_price_net' in data:
-            line.unit_price_net = Decimal(data['unit_price_net'])
-        if 'short_text_1' in data:
-            line.short_text_1 = data['short_text_1']
-        if 'short_text_2' in data:
-            line.short_text_2 = data['short_text_2']
-        if 'long_text' in data:
-            # Log the update for debugging Issue #377
-            logger.debug(f"Updating long_text for line {line_id}: old_value='{line.long_text}', new_value='{data['long_text']}'")
-            # Sanitize HTML content before saving
-            line.long_text = sanitize_html(data['long_text'])
-        if 'description' in data:
-            line.description = data['description']
-        if 'tax_rate_id' in data:
-            tax_rate_id = normalize_foreign_key_id(data['tax_rate_id'])
-            if tax_rate_id is not None:
-                line.tax_rate = get_object_or_404(TaxRate, pk=tax_rate_id)
-        if 'is_selected' in data:
-            line.is_selected = data['is_selected']
-        if 'unit_id' in data or 'unit' in data:
-            unit_value = data.get('unit_id', data.get('unit'))
-            line.unit_id = normalize_foreign_key_id(unit_value)
-        if 'discount' in data:
-            discount_value = data['discount']
-            if discount_value not in (None, ''):
+    try:
+        with transaction.atomic():
+            # Lock the row for the duration of the read-modify-write so that
+            # overlapping edits of the same line are serialized instead of
+            # racing on a full-row save() (last-writer-wins over stale fields).
+            line = get_object_or_404(
+                SalesDocumentLine.objects.select_for_update(),
+                pk=line_id, document=document
+            )
+
+            provided_short_text_1 = 'short_text_1' in data
+            provided_short_text_2 = 'short_text_2' in data
+            provided_long_text = 'long_text' in data
+            provided_description = 'description' in data
+            provided_tax_rate = 'tax_rate_id' in data
+            provided_unit_price = 'unit_price_net' in data
+
+            new_item = None
+            item_changed = False
+
+            # recognized_keys tracks which submitted keys this endpoint understood
+            # (regardless of whether they changed anything); touched_fields tracks
+            # which model fields actually need to be written, so save() only
+            # overwrites the fields that were part of this request.
+            recognized_keys = set()
+            touched_fields = set()
+
+            if 'item_id' in data:
+                recognized_keys.add('item_id')
+                item_id = normalize_foreign_key_id(data['item_id'])
+                if item_id is not None:
+                    try:
+                        new_item = Item.objects.get(pk=item_id)
+                    except Item.DoesNotExist:
+                        raise ValueError(f'Ungültiger Artikel: Kein Artikel mit ID {item_id} gefunden.')
+                    item_changed = line.item_id != new_item.pk
+                    line.item = new_item
+                else:
+                    item_changed = line.item_id is not None
+                    line.item = None
+                touched_fields.add('item')
+            if 'quantity' in data:
+                recognized_keys.add('quantity')
                 try:
-                    line.discount = Decimal(str(discount_value))
-                except (ValueError, TypeError):
-                    line.discount = Decimal('0.00')
-            else:
-                line.discount = Decimal('0.00')
-        if 'kostenart1_id' in data:
-            line.kostenart1_id = normalize_foreign_key_id(data['kostenart1_id'])
-        if 'kostenart2_id' in data:
-            line.kostenart2_id = normalize_foreign_key_id(data['kostenart2_id'])
+                    line.quantity = normalize_decimal_input(data['quantity'])
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f'Ungültige Menge: {e}')
+                touched_fields.add('quantity')
+            if 'unit_price_net' in data:
+                recognized_keys.add('unit_price_net')
+                try:
+                    line.unit_price_net = normalize_decimal_input(data['unit_price_net'])
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f'Ungültiger Netto-Stückpreis: {e}')
+                touched_fields.add('unit_price_net')
+            if 'short_text_1' in data:
+                recognized_keys.add('short_text_1')
+                line.short_text_1 = data['short_text_1']
+                touched_fields.add('short_text_1')
+            if 'short_text_2' in data:
+                recognized_keys.add('short_text_2')
+                line.short_text_2 = data['short_text_2']
+                touched_fields.add('short_text_2')
+            if 'long_text' in data:
+                recognized_keys.add('long_text')
+                # Log the update for debugging Issue #377
+                logger.debug(f"Updating long_text for line {line_id}: old_value='{line.long_text}', new_value='{data['long_text']}'")
+                # long_text is rendered with the `|safe` filter in PDF templates, so it must be
+                # bleach-sanitized. short_text_1/2 and description are always auto-escaped by
+                # Django templates and stored as plain text, so no sanitization is applied there.
+                line.long_text = sanitize_html(data['long_text'])
+                touched_fields.add('long_text')
+            if 'description' in data:
+                recognized_keys.add('description')
+                line.description = data['description']
+                touched_fields.add('description')
+            if 'tax_rate_id' in data:
+                recognized_keys.add('tax_rate_id')
+                tax_rate_id = normalize_foreign_key_id(data['tax_rate_id'])
+                if tax_rate_id is not None:
+                    try:
+                        line.tax_rate = TaxRate.objects.get(pk=tax_rate_id)
+                    except TaxRate.DoesNotExist:
+                        raise ValueError(f'Ungültiger Steuersatz: Kein Steuersatz mit ID {tax_rate_id} gefunden.')
+                    touched_fields.add('tax_rate')
+            if 'is_selected' in data:
+                recognized_keys.add('is_selected')
+                line.is_selected = data['is_selected']
+                touched_fields.add('is_selected')
+            if 'unit_id' in data or 'unit' in data:
+                recognized_keys.update({'unit_id', 'unit'} & data.keys())
+                unit_value = data.get('unit_id', data.get('unit'))
+                line.unit_id = normalize_foreign_key_id(unit_value)
+                touched_fields.add('unit')
+            if 'discount' in data:
+                recognized_keys.add('discount')
+                discount_value = data['discount']
+                try:
+                    line.discount = (
+                        normalize_decimal_input(discount_value)
+                        if discount_value not in (None, '') else Decimal('0.00')
+                    )
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f'Ungültiger Rabatt: {e}')
+                touched_fields.add('discount')
+            if 'kostenart1_id' in data:
+                recognized_keys.add('kostenart1_id')
+                line.kostenart1_id = normalize_foreign_key_id(data['kostenart1_id'])
+                touched_fields.add('kostenart1')
+            if 'kostenart2_id' in data:
+                recognized_keys.add('kostenart2_id')
+                line.kostenart2_id = normalize_foreign_key_id(data['kostenart2_id'])
+                touched_fields.add('kostenart2')
 
-        if item_changed and new_item:
-            if not provided_short_text_1:
-                line.short_text_1 = new_item.short_text_1 or ''
-            if not provided_short_text_2:
-                line.short_text_2 = new_item.short_text_2 or ''
-            if not provided_long_text:
-                line.long_text = sanitize_html(new_item.long_text) if new_item.long_text else ''
-            if not provided_description:
-                description_parts = [
-                    line.short_text_1,
-                    line.short_text_2,
-                    strip_tags(line.long_text) if line.long_text else '',
-                ]
-                line.description = '\n'.join([p for p in description_parts if p])
-            if not provided_unit_price:
-                line.unit_price_net = new_item.net_price
-            if not provided_tax_rate:
-                line.tax_rate = TaxDeterminationService.determine_tax_rate(
-                    customer=document.customer,
-                    item_tax_rate=new_item.tax_rate
-                )
-            if 'is_discountable' not in data:
-                line.is_discountable = new_item.is_discountable
-            if 'kostenart1_id' not in data and new_item.cost_type_1:
-                line.kostenart1 = new_item.cost_type_1
-            if 'kostenart2_id' not in data:
-                line.kostenart2 = new_item.cost_type_2
-        
-        # Recalculate line totals using the service before saving
-        line_net, line_tax, line_gross = DocumentCalculationService.calculate_line_totals(line)
-        line.line_net = line_net
-        line.line_tax = line_tax
-        line.line_gross = line_gross
-        
-        # Save all line changes in a single database write
-        line.save()
-        
-        # Recalculate and persist document totals
-        DocumentCalculationService.recalculate(document, persist=True)
-        
-        # Return updated line data
-        return JsonResponse({
-            'success': True,
-            'line': {
-                'id': line.pk,
-                'item_id': line.item.pk if line.item else None,
-                'short_text_1': line.short_text_1,
-                'short_text_2': line.short_text_2,
-                'long_text': line.long_text,
-                'quantity': str(line.quantity),
-                'unit_id': line.unit.pk if line.unit else None,
-                'unit_symbol': line.unit.symbol if line.unit else '',
-                'unit_price_net': str(line.unit_price_net),
-                'discount': str(line.discount),
-                'tax_rate_id': line.tax_rate.pk if line.tax_rate else None,
-                'description': line.description,
-                'line_net': str(line.line_net),
-                'line_tax': str(line.line_tax),
-                'line_gross': str(line.line_gross),
-                'kostenart1_id': line.kostenart1.pk if line.kostenart1 else None,
-                'kostenart2_id': line.kostenart2.pk if line.kostenart2 else None,
-            },
-            'totals': {
-                'total_net': str(document.total_net),
-                'total_tax': str(document.total_tax),
-                'total_gross': str(document.total_gross),
-            }
-        })
+            if not recognized_keys:
+                raise ValueError('Keine bekannten Felder in der Anfrage gefunden.')
+
+            if item_changed and new_item:
+                if not provided_short_text_1:
+                    line.short_text_1 = new_item.short_text_1 or ''
+                    touched_fields.add('short_text_1')
+                if not provided_short_text_2:
+                    line.short_text_2 = new_item.short_text_2 or ''
+                    touched_fields.add('short_text_2')
+                if not provided_long_text:
+                    line.long_text = sanitize_html(new_item.long_text) if new_item.long_text else ''
+                    touched_fields.add('long_text')
+                if not provided_description:
+                    description_parts = [
+                        line.short_text_1,
+                        line.short_text_2,
+                        strip_tags(line.long_text) if line.long_text else '',
+                    ]
+                    line.description = '\n'.join([p for p in description_parts if p])
+                    touched_fields.add('description')
+                if not provided_unit_price:
+                    line.unit_price_net = new_item.net_price
+                    touched_fields.add('unit_price_net')
+                if not provided_tax_rate:
+                    line.tax_rate = TaxDeterminationService.determine_tax_rate(
+                        customer=document.customer,
+                        item_tax_rate=new_item.tax_rate
+                    )
+                    touched_fields.add('tax_rate')
+                if 'is_discountable' not in data:
+                    line.is_discountable = new_item.is_discountable
+                    touched_fields.add('is_discountable')
+                if 'kostenart1_id' not in data and new_item.cost_type_1:
+                    line.kostenart1 = new_item.cost_type_1
+                    touched_fields.add('kostenart1')
+                if 'kostenart2_id' not in data:
+                    line.kostenart2 = new_item.cost_type_2
+                    touched_fields.add('kostenart2')
+
+            # Recalculate line totals using the service before saving
+            line_net, line_tax, line_gross = DocumentCalculationService.calculate_line_totals(line)
+            line.line_net = line_net
+            line.line_tax = line_tax
+            line.line_gross = line_gross
+            touched_fields.update({'line_net', 'line_tax', 'line_gross'})
+
+            # Only write the fields this request actually touched, so an overlapping
+            # save of a different field on the same line can never clobber it.
+            line.save(update_fields=sorted(touched_fields))
+
+            # Recalculate and persist document totals
+            DocumentCalculationService.recalculate(document, persist=True)
+    except Http404:
+        raise
+    except ValueError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except Exception as e:
-        logger.exception(f"Error updating line {line_id} in document {pk}: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.exception(f"Error updating line {line_id} in document {pk}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    # Return updated line data
+    return JsonResponse({
+        'success': True,
+        'line': {
+            'id': line.pk,
+            'item_id': line.item.pk if line.item else None,
+            'short_text_1': line.short_text_1,
+            'short_text_2': line.short_text_2,
+            'long_text': line.long_text,
+            'quantity': str(line.quantity),
+            'unit_id': line.unit.pk if line.unit else None,
+            'unit_symbol': line.unit.symbol if line.unit else '',
+            'unit_price_net': str(line.unit_price_net),
+            'discount': str(line.discount),
+            'tax_rate_id': line.tax_rate.pk if line.tax_rate else None,
+            'description': line.description,
+            'line_net': str(line.line_net),
+            'line_tax': str(line.line_tax),
+            'line_gross': str(line.line_gross),
+            'kostenart1_id': line.kostenart1.pk if line.kostenart1 else None,
+            'kostenart2_id': line.kostenart2.pk if line.kostenart2 else None,
+        },
+        'totals': {
+            'total_net': str(document.total_net),
+            'total_tax': str(document.total_tax),
+            'total_gross': str(document.total_gross),
+        }
+    })
 
 
 @login_required
