@@ -913,7 +913,7 @@ def ajax_add_line(request, doc_key, pk):
         raise
     except Exception as e:
         logger.exception(f"Error adding line to document {pk}: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'error': 'An internal error has occurred.'}, status=500)
 
     # Return line data
     return JsonResponse({
