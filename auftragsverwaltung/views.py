@@ -863,7 +863,8 @@ def ajax_add_line(request, doc_key, pk):
             else:
                 unit_price_net_decimal = normalize_decimal_input(unit_price_net)
         except (ValueError, TypeError) as e:
-            return JsonResponse({'success': False, 'error': f'Ungültiger Netto-Stückpreis: {e}'}, status=400)
+            logger.warning("Ungültiger Netto-Stückpreis in add/update line request.", exc_info=True)
+            return JsonResponse({'success': False, 'error': 'Ungültiger Netto-Stückpreis.'}, status=400)
 
         # Get unit and discount if provided
         unit_id = data.get('unit_id')
@@ -874,7 +875,8 @@ def ajax_add_line(request, doc_key, pk):
                 normalize_decimal_input(discount) if discount not in (None, '') else Decimal('0.00')
             )
         except (ValueError, TypeError) as e:
-            return JsonResponse({'success': False, 'error': f'Ungültiger Rabatt: {e}'}, status=400)
+            logger.warning("Ungültiger Rabatt in add/update line request.", exc_info=True)
+            return JsonResponse({'success': False, 'error': 'Ungültiger Rabatt.'}, status=400)
 
         with transaction.atomic():
             # Get next position number
