@@ -211,6 +211,28 @@ coverage run --source='.' manage.py test
 coverage report
 ```
 
+### Browser-/Integrationstests (Playwright)
+
+Die Django-Testclient-Tests senden Requests direkt gegen den Endpunkt und
+prüfen damit nicht das im Browser laufende Autosave-/Debounce-JavaScript der
+Positionserfassung (`templates/auftragsverwaltung/documents/detail.html`).
+Für diese Timing-/Race-Ebene (überlappende Autosaves, `blur`-Timing,
+`location.reload()`-Races) gibt es zusätzlich Playwright-basierte
+Browser-Tests in `auftragsverwaltung/test_browser_position_entry.py`.
+
+```bash
+# Einmalig: Playwright + Chromium installieren
+pip install -r requirements-dev.txt
+playwright install --with-deps chromium
+
+# Browser-Tests ausführen (Teil der normalen Test-Discovery)
+python manage.py test --settings=test_settings auftragsverwaltung.test_browser_position_entry
+```
+
+Ist Playwright oder der Chromium-Browser nicht installiert, überspringt
+`python manage.py test` diese Tests automatisch (mit Begründung) statt die
+restliche Suite fehlschlagen zu lassen.
+
 ## Bootstrap Komponenten
 
 ### Cards
