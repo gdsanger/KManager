@@ -774,7 +774,8 @@ def ajax_add_line(request, doc_key, pk):
     try:
         quantity = normalize_decimal_input(data.get('quantity', '1.0'))
     except (ValueError, TypeError) as e:
-        return JsonResponse({'success': False, 'error': f'Ungültige Menge: {e}'}, status=400)
+        logger.warning("Ungültige Menge in add-document-line Request.", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'Ungültige Menge.'}, status=400)
 
     try:
         # Determine line data based on whether item is provided
