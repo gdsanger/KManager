@@ -186,9 +186,42 @@ Neues {{ document_type.name }}
         margin-left: 10px;
         display: none;
     }
-    
+
     .unsaved-indicator.show {
         display: inline;
+    }
+
+    .line-save-status {
+        display: none;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        background: var(--bs-body-bg);
+        padding: 1px 6px;
+        border-radius: 4px;
+    }
+
+    .line-save-status.show {
+        display: inline-flex;
+    }
+
+    .line-save-status.status-saving {
+        color: var(--bs-secondary-color);
+    }
+
+    .line-save-status.status-saved {
+        color: var(--bs-success);
+    }
+
+    .line-save-status.status-error {
+        color: var(--bs-danger);
+    }
+
+    .line-save-status .retry-line-save-btn {
+        font-size: 0.7rem;
+        padding: 0 6px;
+        line-height: 1.4;
     }
     
     .article-search-result {
@@ -566,8 +599,9 @@ Neues {{ document_type.name }}
                                                     <div class="flex-grow-1">
                                                         <div class="long-text-preview" data-line-id="{{ line.pk }}">{{ line.long_text|striptags|truncatewords:30 }}</div>
                                                     </div>
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-secondary edit-longtext-btn" 
+                                                    <span class="line-save-status" data-line-id="{{ line.pk }}" aria-live="polite"></span>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary edit-longtext-btn"
                                                             data-line-id="{{ line.pk }}"
                                                             title="Langtext bearbeiten">
                                                         <i class="bi bi-pencil-square"></i>
@@ -881,6 +915,7 @@ Neues {{ document_type.name }}
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div id="longtextEditorError" class="alert alert-danger d-none mb-3" role="alert"></div>
                 <div id="longtextEditor" style="height: 400px;"></div>
             </div>
             <div class="modal-footer">
@@ -914,26 +949,88 @@ document.addEventListener('DOMContentLoaded', function() {
     // Request gesendet; ein zweiter Save derselben Zeile wartet auf den ersten,
     // statt parallel zu laufen.
     // ============================================================================
-    const lineSaveState = new Map(); // lineId -> { pending, timer, inFlight }
+    const lineSaveState = new Map(); // lineId -> { pending, timer, inFlight, lastFailedPayload }
     const LINE_SAVE_DEBOUNCE_MS = 500;
+    const LINE_SAVE_SUCCESS_FADE_MS = 2500;
 
     function getLineSaveEntry(lineId) {
         let entry = lineSaveState.get(lineId);
         if (!entry) {
-            entry = { pending: {}, timer: null, inFlight: null };
+            entry = { pending: {}, timer: null, inFlight: null, lastFailedPayload: null };
             lineSaveState.set(lineId, entry);
         }
         return entry;
     }
 
+    // A line still counts as "unsaved" not only while a request is pending or
+    // in flight, but also after a failed save whose fields haven't been
+    // retried yet - otherwise a lost error would silently stop blocking
+    // navigation the moment the failed request settles.
     function hasPendingLineSaves() {
         for (const entry of lineSaveState.values()) {
-            if (entry.timer || Object.keys(entry.pending).length || entry.inFlight) {
+            if (entry.timer || Object.keys(entry.pending).length || entry.inFlight || entry.lastFailedPayload) {
                 return true;
             }
         }
         return false;
     }
+
+    function refreshUnsavedIndicator() {
+        if (!unsavedIndicator) return;
+        if (isDirty || hasPendingLineSaves()) {
+            unsavedIndicator.classList.add('show');
+        } else {
+            unsavedIndicator.classList.remove('show');
+        }
+    }
+
+    // Renders the visible per-line save status (speichert.../gespeichert/Fehler)
+    // so a failed or in-flight save is never invisible to the user.
+    function setLineSaveStatus(lineId, status, errorMessage) {
+        const el = document.querySelector(`.line-save-status[data-line-id="${lineId}"]`);
+        if (!el) return;
+        clearTimeout(el._fadeTimer);
+        el.classList.remove('status-saving', 'status-saved', 'status-error');
+
+        if (status === 'saving') {
+            el.classList.add('status-saving', 'show');
+            el.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> speichert…';
+        } else if (status === 'saved') {
+            el.classList.add('status-saved', 'show');
+            el.innerHTML = '<i class="bi bi-check-circle"></i> gespeichert';
+            el._fadeTimer = setTimeout(function() {
+                el.classList.remove('show');
+            }, LINE_SAVE_SUCCESS_FADE_MS);
+        } else if (status === 'error') {
+            el.classList.add('status-error', 'show');
+            const safeMessage = errorMessage || 'Fehler beim Speichern';
+            el.innerHTML = `<i class="bi bi-exclamation-triangle"></i> <span></span> `
+                + `<button type="button" class="btn btn-sm btn-outline-danger retry-line-save-btn" data-line-id="${lineId}">Erneut versuchen</button>`;
+            el.querySelector('span').textContent = safeMessage;
+        } else {
+            el.classList.remove('show');
+            el.innerHTML = '';
+        }
+        refreshUnsavedIndicator();
+    }
+
+    // Retries the fields that failed on the last attempt for this line, merged
+    // under any newer edits so nothing typed in the meantime gets lost.
+    function retryLineSave(lineId) {
+        const entry = getLineSaveEntry(lineId);
+        if (entry.lastFailedPayload) {
+            entry.pending = Object.assign({}, entry.lastFailedPayload, entry.pending);
+            entry.lastFailedPayload = null;
+        }
+        flushLineSave(lineId);
+    }
+
+    document.addEventListener('click', function(event) {
+        const retryBtn = event.target.closest('.retry-line-save-btn');
+        if (retryBtn) {
+            retryLineSave(retryBtn.dataset.lineId);
+        }
+    });
 
     // Sends the currently pending fields of one line as a single request. If a
     // save for this line is already in flight, the new one is chained after it
@@ -950,13 +1047,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const payload = entry.pending;
         entry.pending = {};
+        setLineSaveStatus(lineId, 'saving');
 
         entry.inFlight = (entry.inFlight || Promise.resolve())
             .then(function() { return updateLineField(lineId, payload); })
+            .then(function(result) {
+                if (result && result.success) {
+                    entry.lastFailedPayload = null;
+                    setLineSaveStatus(lineId, 'saved');
+                } else {
+                    // Keep the failed fields around (merged under any fields already
+                    // re-edited since) so Retry and the dirty-guard both see them.
+                    entry.lastFailedPayload = Object.assign({}, payload, entry.lastFailedPayload);
+                    setLineSaveStatus(lineId, 'error', result && result.error);
+                }
+                return result;
+            })
             .finally(function() {
                 if (!Object.keys(entry.pending).length) {
                     entry.inFlight = null;
                 }
+                refreshUnsavedIndicator();
             });
 
         return entry.inFlight;
@@ -972,6 +1083,7 @@ document.addEventListener('DOMContentLoaded', function() {
             clearTimeout(entry.timer);
         }
         entry.timer = setTimeout(function() { flushLineSave(lineId); }, LINE_SAVE_DEBOUNCE_MS);
+        refreshUnsavedIndicator();
     }
 
     // For discrete actions (select change, modal "Speichern") that should commit
@@ -981,17 +1093,33 @@ document.addEventListener('DOMContentLoaded', function() {
         return flushLineSave(lineId);
     }
 
-    // Flushes every line with unsaved edits right away; must be awaited before
-    // Add/Delete/Artikel/Submit so a still-pending debounce can't be dropped by
-    // the ensuing reload/navigation.
+    // Flushes every line with unsaved edits right away, retrying any line
+    // that previously failed; must be awaited before Add/Delete/Artikel/Submit
+    // so a still-pending debounce can't be dropped by the ensuing
+    // reload/navigation.
     function flushAllLineSaves() {
         const flushes = [];
         lineSaveState.forEach(function(entry, lineId) {
+            if (entry.lastFailedPayload && !entry.timer && !Object.keys(entry.pending).length && !entry.inFlight) {
+                entry.pending = Object.assign({}, entry.lastFailedPayload, entry.pending);
+                entry.lastFailedPayload = null;
+            }
             if (entry.timer || Object.keys(entry.pending).length || entry.inFlight) {
                 flushes.push(flushLineSave(lineId));
             }
         });
         return Promise.all(flushes);
+    }
+
+    // Flushes and reports whether every line is now saved. Actions that are
+    // about to reload or navigate away (Add/Delete/Artikel/Submit) must check
+    // this and abort instead of proceeding, otherwise a save that keeps
+    // failing would be silently discarded by the reload - exactly the
+    // data-loss scenario this ticket exists to close.
+    function flushAllLineSavesAndCheck() {
+        return flushAllLineSaves().then(function() {
+            return !hasPendingLineSaves();
+        });
     }
     {% endif %}
 
@@ -1091,8 +1219,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             saveButton.disabled = true;
             // Flush any still-pending/debounced line edits before navigating away,
-            // otherwise a save that hasn't fired yet would be lost on submit.
-            ({% if document.pk %}flushAllLineSaves(){% else %}Promise.resolve(){% endif %}).finally(function() {
+            // otherwise a save that hasn't fired yet - or one that keeps failing -
+            // would be silently lost on submit.
+            ({% if document.pk %}flushAllLineSavesAndCheck(){% else %}Promise.resolve(true){% endif %}).then(function(allSaved) {
+                if (!allSaved) {
+                    saveButton.disabled = false;
+                    showToast('Einige Positionen konnten nicht gespeichert werden. Bitte beheben Sie die Fehler an der jeweiligen Position (Symbol "Erneut versuchen") und speichern Sie dann erneut.', 'error');
+                    return;
+                }
                 // Reset isDirty flag before submission to prevent warning
                 isDirty = false;
                 if (unsavedIndicator) {
@@ -1261,9 +1395,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Flush pending edits on other lines first, so the reload below can't
-        // race ahead of a still-debounced save and drop it.
-        flushAllLineSaves().finally(function() {
+        // Flush pending edits on other lines first (retrying any that failed),
+        // so the reload below can't race ahead of a still-debounced save or
+        // silently discard one that keeps failing.
+        flushAllLineSavesAndCheck().then(function(allSaved) {
+            if (!allSaved) {
+                showToast('Es gibt Positionen, die nicht gespeichert werden konnten. Bitte beheben Sie die Fehler, bevor Sie eine neue Position hinzufügen.', 'error');
+                return;
+            }
             fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
                 method: 'POST',
                 headers: {
@@ -1288,13 +1427,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Reload page to show new line
                     location.reload();
                 } else if (data.error) {
-                    // Silent fail - no alert shown, just console log
-                    console.error('Fehler beim Hinzufügen der Position:', data.error);
+                    showToast('Fehler beim Hinzufügen der Position: ' + data.error, 'error');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                // Silent fail - no alert shown
+                showToast('Fehler beim Hinzufügen der Position.', 'error');
             });
         });
     }
@@ -1368,9 +1506,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             {% if document.pk %}
-            // Flush pending edits on other lines first, so the reload below
-            // can't drop a still-debounced save.
-            flushAllLineSaves().finally(function() {
+            // Flush pending edits on other lines first (retrying any that
+            // failed), so the reload below can't drop a still-debounced save
+            // or discard one that keeps failing.
+            flushAllLineSavesAndCheck().then(function(allSaved) {
+                if (!allSaved) {
+                    showToast('Es gibt Positionen, die nicht gespeichert werden konnten. Bitte beheben Sie die Fehler, bevor Sie eine neue Position hinzufügen.', 'error');
+                    return;
+                }
                 fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
                     method: 'POST',
                     headers: {
@@ -1594,9 +1737,14 @@ document.addEventListener('DOMContentLoaded', function() {
             articleSearchResults.innerHTML = '';
         }
 
-        // Flush pending edits on other lines first, so the reload below can't
-        // drop a still-debounced save.
-        flushAllLineSaves().finally(function() {
+        // Flush pending edits on other lines first (retrying any that
+        // failed), so the reload below can't drop a still-debounced save or
+        // discard one that keeps failing.
+        flushAllLineSavesAndCheck().then(function(allSaved) {
+            if (!allSaved) {
+                showToast('Es gibt Positionen, die nicht gespeichert werden konnten. Bitte beheben Sie die Fehler, bevor Sie eine neue Position hinzufügen.', 'error');
+                return;
+            }
             fetch('{% url "auftragsverwaltung:ajax_add_line" doc_key document.pk %}', {
                 method: 'POST',
                 headers: {
@@ -1627,7 +1775,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     {% endif %}
-    
+
     {% if document.pk %}
     // Delete line buttons
     document.querySelectorAll('.delete-line-btn').forEach(btn => {
@@ -1635,9 +1783,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!confirm('Position wirklich löschen?')) return;
 
             const lineId = this.dataset.lineId;
-            // Flush pending edits on other lines first, so the reload below
-            // can't drop a still-debounced save.
-            flushAllLineSaves().finally(function() {
+            // Flush pending edits on other lines first (retrying any that
+            // failed), so the reload below can't drop a still-debounced save
+            // or discard one that keeps failing.
+            flushAllLineSavesAndCheck().then(function(allSaved) {
+                if (!allSaved) {
+                    showToast('Es gibt Positionen, die nicht gespeichert werden konnten. Bitte beheben Sie die Fehler, bevor Sie eine Position löschen.', 'error');
+                    return;
+                }
                 fetch(`/auftragsverwaltung/ajax/documents/{{ doc_key }}/{{ document.pk }}/lines/${lineId}/delete/`, {
                     method: 'POST',
                     headers: {
@@ -1829,26 +1982,49 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Store line ID for saving
             currentEditingLineId = lineId;
-            
+
+            // Reset any error left over from a previous failed save of this modal
+            hideLongtextModalError();
+
             // Show modal
             const modal = new bootstrap.Modal(document.getElementById('longtextEditorModal'));
             modal.show();
         });
     });
-    
+
+    // Inline (non-blocking) error feedback inside the longtext modal, so a
+    // failed save is visible right where the user is editing instead of an
+    // alert() they might dismiss without reading, or a swallowed error.
+    const longtextEditorError = document.getElementById('longtextEditorError');
+    function showLongtextModalError(message) {
+        if (!longtextEditorError) return;
+        longtextEditorError.textContent = message;
+        longtextEditorError.classList.remove('d-none');
+    }
+    function hideLongtextModalError() {
+        if (!longtextEditorError) return;
+        longtextEditorError.classList.add('d-none');
+        longtextEditorError.textContent = '';
+    }
+
     {% if document.pk %}
     // Save longtext button
     const saveLongtextButton = document.getElementById('saveLongtextButton');
     if (saveLongtextButton) {
+        const saveLongtextButtonDefaultHtml = saveLongtextButton.innerHTML;
         saveLongtextButton.addEventListener('click', function() {
             if (!currentEditingLineId) return;
-            
+
             // Get HTML content from Quill editor
             const longtextHTML = quillEditor.root.innerHTML.trim();
             // Check if content is truly empty (Quill can produce various empty states)
             const plainText = quillEditor.getText().trim();
             const cleanedHTML = plainText ? longtextHTML : '';
-            
+
+            hideLongtextModalError();
+            saveLongtextButton.disabled = true;
+            saveLongtextButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Speichert…';
+
             // Update the line via the same queue as the other line fields, so
             // this can't race a debounced autosave already pending for this line
             saveLineFieldsNow(currentEditingLineId, { long_text: cleanedHTML })
@@ -1859,28 +2035,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (lineData) {
                         lineData.long_text = cleanedHTML;
                     }
-                    
+
                     // Update preview with plain text version (reuse plainText from above)
                     const lineItem = document.querySelector(`.line-item[data-line-id="${currentEditingLineId}"]`);
                     const preview = lineItem.querySelector('.long-text-preview');
                     preview.textContent = plainText || '';
-                    
+
                     // Close modal
                     const modal = bootstrap.Modal.getInstance(document.getElementById('longtextEditorModal'));
                     if (modal) {
                         modal.hide();
                     }
-                    
+
                     showToast('Langtext gespeichert', 'success');
-                } else if (data && data.error) {
-                    alert('Fehler: ' + data.error);
                 } else {
-                    alert('Fehler beim Speichern des Langtexts');
+                    // Keep the modal open with the entered text intact and show the
+                    // error inline - the same fields stay queued as "failed" in the
+                    // line's save state, so Speichern (or the row's Retry) can
+                    // resubmit them without the user having to retype anything.
+                    showLongtextModalError((data && data.error) || 'Fehler beim Speichern des Langtexts. Bitte erneut versuchen.');
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Fehler beim Speichern des Langtexts');
+            .finally(() => {
+                saveLongtextButton.disabled = false;
+                saveLongtextButton.innerHTML = saveLongtextButtonDefaultHtml;
             });
         });
     }
@@ -2099,6 +2277,11 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Error:', error);
+            // Network failure, a non-JSON error page (e.g. an expired session
+            // redirecting to the login page) or similar - always resolve a
+            // shaped result so the caller shows a visible error instead of
+            // silently treating a lost save as successful.
+            return { success: false, error: 'Netzwerk- oder Sitzungsfehler. Bitte erneut versuchen.' };
         });
     }
 
