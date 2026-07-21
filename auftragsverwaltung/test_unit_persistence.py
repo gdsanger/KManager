@@ -326,7 +326,7 @@ class UnitPersistenceTestCase(TestCase):
         self.assertIn(self.unit_lfm.symbol, units)
 
     def test_unit_select_has_name_attribute(self):
-        """Detail view should render unit select with name for HTMX payloads"""
+        """Detail view should render unit select with name for the line-save payload"""
         self.line.unit = self.unit_stk
         self.line.save()
 
@@ -338,5 +338,5 @@ class UnitPersistenceTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
-        self.assertIn('class="form-select form-select-sm line-unit"', content)
+        self.assertIn('class="form-select form-select-sm line-unit line-autosave-field"', content)
         self.assertIn('name="unit_id"', content)
