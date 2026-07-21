@@ -1,0 +1,8 @@
+# Zusätzliche Abhängigkeiten für die lokale Entwicklung/CI, die in
+# Produktion nicht benötigt werden.
+-r requirements.txt
+
+# Browser-/Integrationstests der Positionserfassung (Issue #721 Sub 4/4).
+# Nach der Installation zusätzlich die Browser-Binaries laden:
+#   playwright install --with-deps chromium
+playwright>=1.40,<2.0
