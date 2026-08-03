@@ -431,7 +431,7 @@ Neues {{ document_type.name }}
                                    value="{% if document and document.customer %}{{ document.customer.pk }}{% endif %}">
                             <div id="customerSearchResults" class="customer-search-dropdown" style="display: none;"></div>
                             {% if document and document.customer %}
-                            <div id="selectedCustomerDisplay" class="mt-2 p-2 bg-light border rounded">
+                            <div id="selectedCustomerDisplay" class="mt-2 p-2 selected-entity-display border rounded">
                                 <strong>Ausgewählt:</strong> {{ document.customer.full_name }}
                                 <button type="button" class="btn btn-sm btn-outline-danger float-end" onclick="clearCustomerSelection()">
                                     <i class="bi bi-x"></i>
@@ -1697,7 +1697,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!displayDiv) {
             displayDiv = document.createElement('div');
             displayDiv.id = 'selectedCustomerDisplay';
-            displayDiv.className = 'mt-2 p-2 bg-light border rounded';
+            displayDiv.className = 'mt-2 p-2 selected-entity-display border rounded';
             customerSearchInput.parentElement.appendChild(displayDiv);
         }
         displayDiv.innerHTML = `
