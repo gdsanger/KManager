@@ -1327,9 +1327,10 @@ def contract_detail(request, pk):
     companies = Mandant.objects.all().order_by('name')
     document_types = DocumentType.objects.filter(is_active=True).order_by('key')
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
-    
+    units = Unit.objects.all().order_by('name')  # All available units
+
     # Get contract lines (ordered by position_no)
-    lines = contract.lines.select_related('item', 'tax_rate', 'cost_type_1', 'cost_type_2').order_by('position_no')
+    lines = contract.lines.select_related('item', 'tax_rate', 'unit', 'cost_type_1', 'cost_type_2').order_by('position_no')
     
     # Get contract runs (execution history)
     runs = contract.runs.select_related('document').order_by('-run_date')[:50]  # Last 50 runs
@@ -1347,10 +1348,11 @@ def contract_detail(request, pk):
         'companies': companies,
         'document_types': document_types,
         'kostenarten1': kostenarten1,
+        'units': units,
         'max_position': max_position,
         'is_create': False,
     }
-    
+
     return render(request, 'auftragsverwaltung/contracts/detail.html', context)
 
 
@@ -1645,23 +1647,25 @@ def ajax_contract_add_line(request, pk):
         - item_id: Item/Article ID (optional for manual lines)
         - quantity: Quantity
         - description: Description (required for manual lines)
+        - unit_id: Unit of measure ID (optional)
         - unit_price_net: Unit price (required for manual lines)
         - tax_rate_id: Tax rate ID (required)
         - cost_type_1_id: Cost type 1 ID (optional)
         - cost_type_2_id: Cost type 2 ID (optional)
         - is_discountable: Whether the line is discountable (default: True)
-    
+
     Returns:
         JSON: {success, line_id, line_data, preview_totals}
     """
     try:
         contract = get_object_or_404(Contract, pk=pk)
-        
+
         # Parse JSON body
         data = json.loads(request.body)
-        
+
         item_id = data.get('item_id')
         description = data.get('description', '')
+        unit_id = data.get('unit_id')
         tax_rate_id = data.get('tax_rate_id')
         cost_type_1_id = data.get('cost_type_1_id')
         cost_type_2_id = data.get('cost_type_2_id')
@@ -1730,6 +1734,7 @@ def ajax_contract_add_line(request, pk):
             item_id=item_id if item_id else None,
             position_no=position_no,
             description=description,
+            unit_id=normalize_foreign_key_id(unit_id),
             quantity=quantity,
             unit_price_net=unit_price_net_decimal,
             tax_rate=tax_rate,
@@ -1761,6 +1766,8 @@ def ajax_contract_add_line(request, pk):
                 'id': line.pk,
                 'position_no': line.position_no,
                 'description': line.description,
+                'unit_id': line.unit.pk if line.unit else None,
+                'unit_code': line.unit.code if line.unit else '',
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
                 'tax_rate_id': line.tax_rate.pk,
@@ -1791,6 +1798,7 @@ def ajax_contract_update_line(request, pk, line_id):
         - quantity: New quantity
         - unit_price_net: New unit price
         - description: New description
+        - unit_id: New unit of measure ID
         - tax_rate_id: New tax rate ID
         - cost_type_1_id: New cost type 1 ID
         - cost_type_2_id: New cost type 2 ID
@@ -1821,6 +1829,8 @@ def ajax_contract_update_line(request, pk, line_id):
         
         if 'description' in data:
             line.description = data['description']
+        if 'unit_id' in data:
+            line.unit_id = normalize_foreign_key_id(data['unit_id'])
         if 'tax_rate_id' in data:
             line.tax_rate = get_object_or_404(TaxRate, pk=data['tax_rate_id'])
         if 'is_discountable' in data:
@@ -1856,6 +1866,8 @@ def ajax_contract_update_line(request, pk, line_id):
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
                 'description': line.description,
+                'unit_id': line.unit.pk if line.unit else None,
+                'unit_code': line.unit.code if line.unit else '',
                 'tax_rate_id': line.tax_rate.pk,
                 'tax_rate_code': line.tax_rate.code,
                 'tax_rate_rate': str(line.tax_rate.rate),

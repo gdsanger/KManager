@@ -54,6 +54,7 @@ class ContractLineForm(forms.ModelForm):
         fields = [
             'item',
             'description',
+            'unit',
             'quantity',
             'unit_price_net',
             'tax_rate',

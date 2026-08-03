@@ -412,15 +412,26 @@ Vertrag: {{ contract.name }}
                                         <textarea class="form-control form-control-sm line-description" rows="2" 
                                                   placeholder="Beschreibung">{{ line.description }}</textarea>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <label class="form-label-sm">Menge</label>
-                                        <input type="text" class="form-control form-control-sm line-quantity" 
-                                               value="{{ line.quantity }}" placeholder="Menge" 
+                                        <input type="text" class="form-control form-control-sm line-quantity"
+                                               value="{{ line.quantity }}" placeholder="Menge"
                                                pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
+                                        <label class="form-label-sm">Einheit</label>
+                                        <select class="form-select form-select-sm line-unit">
+                                            <option value="">--</option>
+                                            {% for u in units %}
+                                            <option value="{{ u.pk }}" {% if line.unit and line.unit.pk == u.pk %}selected{% endif %}>
+                                                {{ u.code }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
                                         <label class="form-label-sm">Einzelpreis (netto)</label>
-                                        <input type="text" class="form-control form-control-sm line-unit-price" 
+                                        <input type="text" class="form-control form-control-sm line-unit-price"
                                                value="{{ line.unit_price_net }}" placeholder="Preis"
                                                pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben">
                                     </div>
@@ -559,12 +570,21 @@ Vertrag: {{ contract.name }}
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Menge <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="newLineQuantity" value="1.0000" 
+                        <input type="text" class="form-control" id="newLineQuantity" value="1.0000"
                                pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben" required>
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label">Einheit</label>
+                        <select class="form-select" id="newLineUnit">
+                            <option value="">--</option>
+                            {% for u in units %}
+                            <option value="{{ u.pk }}">{{ u.code }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">Einzelpreis <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="newLineUnitPrice" value="0.00" 
+                        <input type="text" class="form-control" id="newLineUnitPrice" value="0.00"
                                pattern="[0-9.,]+" title="Bitte nur Zahlen, Komma oder Punkt eingeben" required>
                     </div>
                     <div class="col-md-3">
@@ -753,6 +773,7 @@ $(document).ready(function() {
         $('#articleSearchResults').empty();
         $('#newLineDescription').val('');
         $('#newLineQuantity').val('1.0000');
+        $('#newLineUnit').val('');
         $('#newLineUnitPrice').val('0.00');
         $('#newLineDiscountable').prop('checked', true);
         $('#newLineCostType1').val('');
@@ -837,6 +858,7 @@ $(document).ready(function() {
     $('#confirmAddLineBtn').on('click', function() {
         const description = $('#newLineDescription').val();
         const quantity = normalizeDecimalInput($('#newLineQuantity').val());
+        const unitId = $('#newLineUnit').val() || null;
         const unitPrice = normalizeDecimalInput($('#newLineUnitPrice').val());
         const taxRateId = $('#newLineTaxRate').val();
         const isDiscountable = $('#newLineDiscountable').is(':checked');
@@ -858,6 +880,7 @@ $(document).ready(function() {
             data: JSON.stringify({
                 description: description,
                 quantity: quantity,
+                unit_id: unitId,
                 unit_price_net: unitPrice,
                 tax_rate_id: taxRateId,
                 is_discountable: isDiscountable,
@@ -902,18 +925,19 @@ $(document).ready(function() {
     });
     
     // Update line on change
-    $(document).on('change', '.line-description, .line-quantity, .line-unit-price, .line-tax-rate, .line-is-discountable, .line-cost-type-1, .line-cost-type-2', function() {
+    $(document).on('change', '.line-description, .line-quantity, .line-unit, .line-unit-price, .line-tax-rate, .line-is-discountable, .line-cost-type-1, .line-cost-type-2', function() {
         const lineItem = $(this).closest('.line-item');
         const lineId = lineItem.data('line-id');
-        
+
         const description = lineItem.find('.line-description').val();
         const quantity = normalizeDecimalInput(lineItem.find('.line-quantity').val());
+        const unitId = lineItem.find('.line-unit').val() || null;
         const unitPrice = normalizeDecimalInput(lineItem.find('.line-unit-price').val());
         const taxRateId = lineItem.find('.line-tax-rate').val();
         const isDiscountable = lineItem.find('.line-is-discountable').is(':checked');
         const costType1Id = lineItem.find('.line-cost-type-1').val() || null;
         const costType2Id = lineItem.find('.line-cost-type-2').val() || null;
-        
+
         $.ajax({
             url: '{% url "auftragsverwaltung:ajax_contract_update_line" contract.pk 0 %}'.replace('/0/', `/${lineId}/`),
             method: 'POST',
@@ -924,6 +948,7 @@ $(document).ready(function() {
             data: JSON.stringify({
                 description: description,
                 quantity: quantity,
+                unit_id: unitId,
                 unit_price_net: unitPrice,
                 tax_rate_id: taxRateId,
                 is_discountable: isDiscountable,
