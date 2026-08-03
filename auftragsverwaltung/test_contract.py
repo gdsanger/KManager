@@ -840,3 +840,98 @@ class ContractBillingServiceTestCase(TestCase):
         self.assertEqual(sales_line.long_text, "This is a detailed long text description for the contract line.")
         self.assertEqual(sales_line.description, "Monthly Service with Kurztext")
 
+    def test_generate_due_multiple_lines_full_position_data(self):
+        """Regression test: a contract with several positions (different tax rates/prices)
+        must produce a SalesDocument whose lines carry the full ContractLine data
+        (texts, quantity, price, tax rate) and correctly calculated totals."""
+        tax_rate_7 = TaxRate.objects.create(
+            code="VAT_7",
+            name="7% VAT",
+            rate=Decimal('0.07'),
+            is_active=True
+        )
+
+        contract = Contract.objects.create(
+            company=self.company,
+            name="Test Contract Multi-Line",
+            customer=self.customer,
+            document_type=self.doc_type,
+            payment_term=self.payment_term,
+            currency='EUR',
+            interval='MONTHLY',
+            start_date=date(2026, 1, 1),
+            next_run_date=date(2026, 1, 1),
+            is_active=True
+        )
+
+        line_1 = ContractLine.objects.create(
+            contract=contract,
+            position_no=1,
+            short_text_1="Leasingrate",
+            short_text_2="Fahrzeug",
+            long_text="Monatliche Leasingrate für Fahrzeug XY",
+            description="Monatliche Leasingrate",
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('1000.00'),
+            tax_rate=self.tax_rate,
+            cost_type_1=self.cost_type,
+            is_discountable=True
+        )
+        line_2 = ContractLine.objects.create(
+            contract=contract,
+            position_no=2,
+            short_text_1="Wartungspauschale",
+            short_text_2="",
+            long_text="Monatliche Wartungspauschale",
+            description="Wartungspauschale",
+            quantity=Decimal('3.0000'),
+            unit_price_net=Decimal('50.00'),
+            tax_rate=tax_rate_7,
+            cost_type_2=self.cost_type2,
+            is_discountable=False
+        )
+
+        runs = ContractBillingService.generate_due(today=date(2026, 1, 1))
+
+        self.assertEqual(len(runs), 1)
+        run = runs[0]
+        self.assertEqual(run.status, 'SUCCESS')
+        document = run.document
+
+        lines = list(document.lines.order_by('position_no'))
+        self.assertEqual(len(lines), 2)
+
+        sales_line_1, sales_line_2 = lines
+
+        self.assertEqual(sales_line_1.position_no, 1)
+        self.assertEqual(sales_line_1.short_text_1, line_1.short_text_1)
+        self.assertEqual(sales_line_1.short_text_2, line_1.short_text_2)
+        self.assertEqual(sales_line_1.long_text, line_1.long_text)
+        self.assertEqual(sales_line_1.description, line_1.description)
+        self.assertEqual(sales_line_1.quantity, line_1.quantity)
+        self.assertEqual(sales_line_1.unit_price_net, line_1.unit_price_net)
+        self.assertEqual(sales_line_1.tax_rate, self.tax_rate)
+        self.assertEqual(sales_line_1.kostenart1, self.cost_type)
+        self.assertTrue(sales_line_1.is_discountable)
+
+        self.assertEqual(sales_line_2.position_no, 2)
+        self.assertEqual(sales_line_2.short_text_1, line_2.short_text_1)
+        self.assertEqual(sales_line_2.long_text, line_2.long_text)
+        self.assertEqual(sales_line_2.description, line_2.description)
+        self.assertEqual(sales_line_2.quantity, line_2.quantity)
+        self.assertEqual(sales_line_2.unit_price_net, line_2.unit_price_net)
+        self.assertEqual(sales_line_2.tax_rate, tax_rate_7)
+        self.assertEqual(sales_line_2.kostenart2, self.cost_type2)
+        self.assertFalse(sales_line_2.is_discountable)
+
+        # None of the position data may be empty/zero
+        for sales_line in (sales_line_1, sales_line_2):
+            self.assertTrue(sales_line.description)
+            self.assertGreater(sales_line.unit_price_net, Decimal('0.00'))
+            self.assertGreater(sales_line.quantity, Decimal('0.0000'))
+
+        # Totals: 1x1000.00 @19% + 3x50.00 @7% = 1150.00 net, 190.00 + 10.50 tax
+        self.assertEqual(document.total_net, Decimal('1150.00'))
+        self.assertEqual(document.total_tax, Decimal('200.50'))
+        self.assertEqual(document.total_gross, Decimal('1350.50'))
+
