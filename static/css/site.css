@@ -94,6 +94,13 @@ body {
     border-top: 1px solid var(--border-color);
 }
 
+/* Selected-entity display (e.g. "Ausgewählt: <Kunde>") - dark theme contrast */
+.selected-entity-display {
+    background-color: var(--bg-card-hover);
+    border-color: var(--border-color) !important;
+    color: var(--text-primary);
+}
+
 /* Button Styles */
 .btn-primary {
     background-color: var(--primary-color);
