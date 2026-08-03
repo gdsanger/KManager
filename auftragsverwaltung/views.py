@@ -54,6 +54,30 @@ def normalize_foreign_key_id(value):
     return value
 
 
+def _build_contract_line_description(short_text_1, short_text_2='', long_text=''):
+    """
+    Build the (secondary) description of a contract line from its short texts.
+
+    short_text_1 and long_text are the leading, user-facing fields; description is a
+    generated convenience/fallback field and must never replace short_text_1. The
+    long_text may contain sanitized HTML, so tags are stripped for the plain-text
+    description.
+
+    Returns:
+        str: newline-joined non-empty parts, or '' if nothing is set.
+    """
+    parts = []
+    if short_text_1:
+        parts.append(short_text_1)
+    if short_text_2:
+        parts.append(short_text_2)
+    if long_text:
+        stripped = strip_tags(long_text).strip()
+        if stripped:
+            parts.append(stripped)
+    return '\n'.join(parts)
+
+
 def normalize_decimal_input(value):
     """
     Normalize decimal input from various formats (German and English).
@@ -1646,7 +1670,10 @@ def ajax_contract_add_line(request, pk):
     POST parameters (JSON):
         - item_id: Item/Article ID (optional for manual lines)
         - quantity: Quantity
-        - description: Description (required for manual lines)
+        - short_text_1: Primary short text (required for manual lines; leading field)
+        - short_text_2: Optional second short text
+        - long_text: Optional long text (sanitized)
+        - description: Legacy fallback; otherwise generated from the short texts
         - unit_id: Unit of measure ID (optional)
         - unit_price_net: Unit price (required for manual lines)
         - tax_rate_id: Tax rate ID (required)
@@ -1665,6 +1692,9 @@ def ajax_contract_add_line(request, pk):
 
         item_id = data.get('item_id')
         description = data.get('description', '')
+        short_text_1 = data.get('short_text_1', '')
+        short_text_2 = data.get('short_text_2', '')
+        long_text = data.get('long_text', '')
         unit_id = data.get('unit_id')
         tax_rate_id = data.get('tax_rate_id')
         cost_type_1_id = data.get('cost_type_1_id')
@@ -1683,31 +1713,46 @@ def ajax_contract_add_line(request, pk):
         if item_id:
             # Article-based line
             item = get_object_or_404(Item, pk=item_id)
-            
-            # Use item data
-            if not description:
-                description = f"{item.short_text_1}\n{item.long_text}" if item.long_text else item.short_text_1
+
+            # Use item data as fallback for any text field the caller did not supply
+            if not short_text_1:
+                short_text_1 = item.short_text_1
+            if not short_text_2:
+                short_text_2 = item.short_text_2
+            if not long_text:
+                long_text = item.long_text
             if not unit_price_net:
                 unit_price_net = item.net_price  # Already a Decimal from the model
-            
+
             # Use item's tax rate if not provided
             if not tax_rate_id and item.tax_rate:
                 tax_rate_id = item.tax_rate.pk
-            
+
             # Use item's cost types if not provided
             if not cost_type_1_id and item.kostenart1:
                 cost_type_1_id = item.kostenart1.pk
             if not cost_type_2_id and item.kostenart2:
                 cost_type_2_id = item.kostenart2.pk
-            
+
             is_discountable = item.is_discountable
         else:
-            # Manual line - ensure required fields are present
-            if not description:
-                return JsonResponse({'error': 'Beschreibung ist erforderlich'}, status=400)
+            # Manual line - ensure required fields are present.
+            # Backward compatibility: legacy callers may still send only `description`.
+            # Seed the leading text fields from it so no text is lost.
+            if not short_text_1 and description:
+                first_line = description.split('\n', 1)[0].strip()
+                short_text_1 = first_line[:200]
+                if not long_text and ('\n' in description or len(first_line) > 200):
+                    long_text = description
+            if not short_text_1:
+                return JsonResponse({'error': 'Kurztext 1 ist erforderlich'}, status=400)
             if not unit_price_net:
                 return JsonResponse({'error': 'Netto-Stückpreis ist erforderlich'}, status=400)
-        
+
+        # Generate description consistently from the short texts. It is a secondary
+        # display field and must never replace short_text_1.
+        description = _build_contract_line_description(short_text_1, short_text_2, long_text)
+
         # Ensure tax rate is provided
         if not tax_rate_id:
             return JsonResponse({'error': 'Steuersatz ist erforderlich'}, status=400)
@@ -1733,6 +1778,12 @@ def ajax_contract_add_line(request, pk):
             contract=contract,
             item_id=item_id if item_id else None,
             position_no=position_no,
+            short_text_1=short_text_1,
+            short_text_2=short_text_2,
+            # long_text is rendered with the `|safe` filter in PDF templates, so it must be
+            # bleach-sanitized. short_text_1/2 and description are always auto-escaped by
+            # Django templates and stored as plain text, so no sanitization is applied there.
+            long_text=sanitize_html(long_text) if long_text else '',
             description=description,
             unit_id=normalize_foreign_key_id(unit_id),
             quantity=quantity,
@@ -1765,6 +1816,9 @@ def ajax_contract_add_line(request, pk):
             'line': {
                 'id': line.pk,
                 'position_no': line.position_no,
+                'short_text_1': line.short_text_1,
+                'short_text_2': line.short_text_2,
+                'long_text': line.long_text,
                 'description': line.description,
                 'unit_id': line.unit.pk if line.unit else None,
                 'unit_code': line.unit.code if line.unit else '',
@@ -1797,7 +1851,10 @@ def ajax_contract_update_line(request, pk, line_id):
     POST parameters (JSON):
         - quantity: New quantity
         - unit_price_net: New unit price
-        - description: New description
+        - short_text_1: New primary short text (leading field)
+        - short_text_2: New second short text
+        - long_text: New long text (sanitized)
+        - description: Legacy field; regenerated from the short texts when those change
         - unit_id: New unit of measure ID
         - tax_rate_id: New tax rate ID
         - cost_type_1_id: New cost type 1 ID
@@ -1827,7 +1884,22 @@ def ajax_contract_update_line(request, pk, line_id):
             except (ValueError, TypeError) as e:
                 return JsonResponse({'error': f'Ungültiger Netto-Stückpreis: {str(e)}'}, status=400)
         
-        if 'description' in data:
+        if 'short_text_1' in data:
+            line.short_text_1 = data['short_text_1']
+        if 'short_text_2' in data:
+            line.short_text_2 = data['short_text_2']
+        if 'long_text' in data:
+            # long_text is rendered with the `|safe` filter in PDF templates, so it must be
+            # bleach-sanitized. short_text_1/2 and description are always auto-escaped by
+            # Django templates and stored as plain text, so no sanitization is applied there.
+            line.long_text = sanitize_html(data['long_text'])
+        # Regenerate the (secondary) description from the short texts whenever any of
+        # them changed. description never replaces short_text_1.
+        if 'short_text_1' in data or 'short_text_2' in data or 'long_text' in data:
+            line.description = _build_contract_line_description(
+                line.short_text_1, line.short_text_2, line.long_text
+            )
+        elif 'description' in data:
             line.description = data['description']
         if 'unit_id' in data:
             line.unit_id = normalize_foreign_key_id(data['unit_id'])
@@ -1865,6 +1937,9 @@ def ajax_contract_update_line(request, pk, line_id):
                 'id': line.pk,
                 'quantity': str(line.quantity),
                 'unit_price_net': str(line.unit_price_net),
+                'short_text_1': line.short_text_1,
+                'short_text_2': line.short_text_2,
+                'long_text': line.long_text,
                 'description': line.description,
                 'unit_id': line.unit.pk if line.unit else None,
                 'unit_code': line.unit.code if line.unit else '',

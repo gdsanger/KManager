@@ -944,3 +944,191 @@ class ContractBillingServiceTestCase(TestCase):
         self.assertEqual(document.total_tax, Decimal('200.50'))
         self.assertEqual(document.total_gross, Decimal('1350.50'))
 
+
+class ContractLineTextUnificationTestCase(TestCase):
+    """
+    Regression tests for unifying ContractLine and SalesDocumentLine text
+    structure (short_text_1 + long_text as leading fields) and the lossless
+    migration of legacy description-only data.
+    """
+
+    def setUp(self):
+        self.company = Mandant.objects.create(
+            name="Test Company",
+            adresse="Test Street 1",
+            plz="12345",
+            ort="Test City",
+        )
+        self.customer = Adresse.objects.create(
+            name="Test Customer",
+            strasse="Customer Street 1",
+            plz="54321",
+            ort="Customer City",
+            land="Germany",
+        )
+        self.doc_type = DocumentType.objects.get(key="invoice")
+        self.payment_term = PaymentTerm.objects.create(
+            name="Net 30", net_days=30, is_default=True
+        )
+        self.tax_19 = TaxRate.objects.create(
+            code="VAT_19", name="19% VAT", rate=Decimal('0.19'), is_active=True
+        )
+        self.tax_7 = TaxRate.objects.create(
+            code="VAT_7", name="7% VAT", rate=Decimal('0.07'), is_active=True
+        )
+        self.unit = Unit.objects.create(code="MON", name="Monat")
+        NumberRange.objects.create(
+            company=self.company,
+            target='CONTRACT',
+            reset_policy='YEARLY',
+            format='V{yy}-{seq:05d}',
+        )
+        self.contract = Contract.objects.create(
+            company=self.company,
+            name="Test Contract",
+            customer=self.customer,
+            document_type=self.doc_type,
+            payment_term=self.payment_term,
+            currency='EUR',
+            interval='MONTHLY',
+            start_date=date(2026, 1, 1),
+            next_run_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+    def test_billing_copies_leading_text_fields_visibly(self):
+        """
+        Billing must carry short_text_1 (and long_text) to the invoice line so
+        the text is visible in the invoice grid (retest case from #1044/#1053).
+        Also verifies quantity/price/tax/unit and ordering for two lines with
+        different tax rates.
+        """
+        line_1 = ContractLine.objects.create(
+            contract=self.contract,
+            position_no=1,
+            short_text_1="KFZ Miete Hyundai i30 Grau LA-HR-1111",
+            long_text="Inkl. Versicherung und Wartung",
+            description="KFZ Miete Hyundai i30 Grau LA-HR-1111\nInkl. Versicherung und Wartung",
+            unit=self.unit,
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('1000.00'),
+            tax_rate=self.tax_19,
+            is_discountable=True,
+        )
+        line_2 = ContractLine.objects.create(
+            contract=self.contract,
+            position_no=2,
+            short_text_1="Zusatzleistung",
+            long_text="",
+            description="Zusatzleistung",
+            quantity=Decimal('3.0000'),
+            unit_price_net=Decimal('50.00'),
+            tax_rate=self.tax_7,
+            is_discountable=False,
+        )
+
+        runs = ContractBillingService.generate_due(today=date(2026, 1, 1))
+        self.assertEqual(len(runs), 1)
+        document = runs[0].document
+
+        sales_lines = list(document.lines.order_by('position_no'))
+        self.assertEqual(len(sales_lines), 2)
+        sl1, sl2 = sales_lines
+
+        # Leading text fields are visible on the invoice line
+        self.assertEqual(sl1.short_text_1, line_1.short_text_1)
+        self.assertEqual(sl1.long_text, line_1.long_text)
+        self.assertEqual(sl2.short_text_1, line_2.short_text_1)
+
+        # Regression to #1044: quantity, price, tax and unit carry over
+        self.assertEqual(sl1.position_no, 1)
+        self.assertEqual(sl1.quantity, Decimal('1.0000'))
+        self.assertEqual(sl1.unit_price_net, Decimal('1000.00'))
+        self.assertEqual(sl1.tax_rate, self.tax_19)
+        self.assertEqual(sl1.unit, self.unit)
+        self.assertEqual(sl2.position_no, 2)
+        self.assertEqual(sl2.tax_rate, self.tax_7)
+
+        # Totals: 1x1000.00 @19% + 3x50.00 @7%
+        self.assertEqual(document.total_net, Decimal('1150.00'))
+        self.assertEqual(document.total_tax, Decimal('200.50'))
+        self.assertEqual(document.total_gross, Decimal('1350.50'))
+
+    def _run_forward_migration(self):
+        """Invoke the data migration's forward function against the real model."""
+        import importlib
+
+        module = importlib.import_module(
+            'auftragsverwaltung.migrations.'
+            '0023_migrate_contractline_description_to_texts'
+        )
+
+        class _Apps:
+            def get_model(self, app_label, model_name):
+                return ContractLine
+
+        module.forwards(_Apps(), None)
+
+    def _make_line(self, position_no, description, short_text_1="", long_text=""):
+        return ContractLine.objects.create(
+            contract=self.contract,
+            position_no=position_no,
+            short_text_1=short_text_1,
+            long_text=long_text,
+            description=description,
+            quantity=Decimal('1.0000'),
+            unit_price_net=Decimal('10.00'),
+            tax_rate=self.tax_19,
+        )
+
+    def test_migration_migrates_description_only_lines_losslessly(self):
+        """description-only lines get short_text_1 (+ long_text) without data loss."""
+        short_line = self._make_line(1, "KFZ Miete Hyundai i30")
+        multiline = self._make_line(2, "Erste Zeile\nZweite Zeile mit Details")
+        long_desc = " ".join(["Wort"] * 60)  # 299 chars, single line, no trailing space
+        long_single = self._make_line(3, long_desc)
+        already_set = self._make_line(4, "Beschreibung", short_text_1="Bestehend")
+
+        self._run_forward_migration()
+
+        # Short single line -> copied verbatim into short_text_1, long_text stays empty
+        short_line.refresh_from_db()
+        self.assertEqual(short_line.short_text_1, "KFZ Miete Hyundai i30")
+        self.assertEqual(short_line.long_text, "")
+        self.assertEqual(short_line.description, "KFZ Miete Hyundai i30")  # untouched
+
+        # Multiline -> first line to short_text_1, full text preserved in long_text
+        multiline.refresh_from_db()
+        self.assertEqual(multiline.short_text_1, "Erste Zeile")
+        self.assertEqual(multiline.long_text, "Erste Zeile\nZweite Zeile mit Details")
+        self.assertEqual(multiline.description, "Erste Zeile\nZweite Zeile mit Details")
+
+        # Long single line -> short_text_1 truncated to <= 200 at a word boundary,
+        # full text preserved in long_text
+        long_single.refresh_from_db()
+        self.assertLessEqual(len(long_single.short_text_1), 200)
+        self.assertTrue(long_single.short_text_1)
+        self.assertFalse(long_single.short_text_1.endswith(' '))
+        self.assertTrue(long_desc.startswith(long_single.short_text_1))
+        self.assertEqual(long_single.long_text, long_desc)
+        self.assertEqual(long_single.description, long_desc)
+
+        # Line that already had a short_text_1 is left untouched
+        already_set.refresh_from_db()
+        self.assertEqual(already_set.short_text_1, "Bestehend")
+        self.assertEqual(already_set.long_text, "")
+
+    def test_migration_is_idempotent(self):
+        """Running the migration twice does not change already-migrated data."""
+        multiline = self._make_line(1, "Kopf\nDetails hier")
+
+        self._run_forward_migration()
+        multiline.refresh_from_db()
+        first_short = multiline.short_text_1
+        first_long = multiline.long_text
+
+        self._run_forward_migration()
+        multiline.refresh_from_db()
+        self.assertEqual(multiline.short_text_1, first_short)
+        self.assertEqual(multiline.long_text, first_long)
+

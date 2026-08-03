@@ -104,6 +104,7 @@ class ContractViewTestCase(TestCase):
         self.contract_line = ContractLine.objects.create(
             contract=self.contract,
             position_no=1,
+            short_text_1='Test Service',
             description='Test Service',
             quantity=Decimal('1.0000'),
             unit_price_net=Decimal('100.00'),
@@ -337,30 +338,53 @@ class ContractAjaxEndpointTestCase(TestCase):
         url = reverse('auftragsverwaltung:ajax_contract_add_line', kwargs={'pk': self.contract.pk})
         
         data = {
-            'description': 'New Test Line',
+            'short_text_1': 'New Test Line',
+            'long_text': 'Detaillierter Langtext',
             'quantity': '2.0000',
             'unit_price_net': '50.00',
             'tax_rate_id': self.tax_rate.pk,
             'is_discountable': True,
         }
-        
+
         response = self.client.post(
             url,
             data=json.dumps(data),
             content_type='application/json'
         )
-        
+
         self.assertEqual(response.status_code, 200)
-        
+
         response_data = json.loads(response.content)
         self.assertTrue(response_data['success'])
         self.assertIn('line', response_data)
         self.assertIn('preview_totals', response_data)
-        
-        # Check that line was created
-        line = ContractLine.objects.get(contract=self.contract, description='New Test Line')
+
+        # Check that line was created with the leading text fields populated
+        line = ContractLine.objects.get(contract=self.contract, short_text_1='New Test Line')
+        self.assertEqual(line.long_text, 'Detaillierter Langtext')
+        # description is a generated, secondary field built from the short texts
+        self.assertEqual(line.description, 'New Test Line\nDetaillierter Langtext')
         self.assertEqual(line.quantity, Decimal('2.0000'))
         self.assertEqual(line.unit_price_net, Decimal('50.00'))
+
+    def test_ajax_add_line_requires_short_text_1(self):
+        """A manual line without short_text_1 is rejected."""
+        url = reverse('auftragsverwaltung:ajax_contract_add_line', kwargs={'pk': self.contract.pk})
+
+        data = {
+            'quantity': '2.0000',
+            'unit_price_net': '50.00',
+            'tax_rate_id': self.tax_rate.pk,
+        }
+
+        response = self.client.post(
+            url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Kurztext 1', json.loads(response.content)['error'])
     
     def test_ajax_update_line(self):
         """Test updating a line via AJAX"""
@@ -379,27 +403,31 @@ class ContractAjaxEndpointTestCase(TestCase):
                      kwargs={'pk': self.contract.pk, 'line_id': line.pk})
         
         data = {
-            'description': 'Updated Description',
+            'short_text_1': 'Updated Short Text',
+            'long_text': 'Updated Long Text',
             'quantity': '3.0000',
             'unit_price_net': '75.00',
         }
-        
+
         response = self.client.post(
             url,
             data=json.dumps(data),
             content_type='application/json'
         )
-        
+
         self.assertEqual(response.status_code, 200)
-        
+
         response_data = json.loads(response.content)
         self.assertTrue(response_data['success'])
         self.assertIn('line', response_data)
         self.assertIn('preview_totals', response_data)
-        
-        # Check that line was updated
+
+        # Check that line was updated: leading text fields persisted and
+        # description regenerated from them
         line.refresh_from_db()
-        self.assertEqual(line.description, 'Updated Description')
+        self.assertEqual(line.short_text_1, 'Updated Short Text')
+        self.assertEqual(line.long_text, 'Updated Long Text')
+        self.assertEqual(line.description, 'Updated Short Text\nUpdated Long Text')
         self.assertEqual(line.quantity, Decimal('3.0000'))
         self.assertEqual(line.unit_price_net, Decimal('75.00'))
     

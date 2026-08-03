@@ -409,8 +409,14 @@ Vertrag: {{ contract.name }}
                             <div class="line-content">
                                 <div class="row g-2">
                                     <div class="col-md-12">
-                                        <textarea class="form-control form-control-sm line-description" rows="2" 
-                                                  placeholder="Beschreibung">{{ line.description }}</textarea>
+                                        <label class="form-label-sm">Kurztext 1</label>
+                                        <input type="text" class="form-control form-control-sm line-short-text-1"
+                                               value="{{ line.short_text_1 }}" placeholder="Kurztext 1" maxlength="200">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label-sm">Langtext</label>
+                                        <textarea class="form-control form-control-sm line-long-text" rows="2"
+                                                  placeholder="Langtext">{{ line.long_text }}</textarea>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label-sm">Menge</label>
@@ -565,8 +571,12 @@ Vertrag: {{ contract.name }}
                 <!-- Manual Entry -->
                 <div class="row g-3">
                     <div class="col-md-12">
-                        <label class="form-label">Beschreibung <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="newLineDescription" rows="2" required></textarea>
+                        <label class="form-label">Kurztext 1 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newLineShortText1" maxlength="200" required>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Langtext</label>
+                        <textarea class="form-control" id="newLineLongText" rows="2"></textarea>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Menge <span class="text-danger">*</span></label>
@@ -771,7 +781,8 @@ $(document).ready(function() {
         $('#addLineModal').modal('show');
         $('#articleSearchInput').val('');
         $('#articleSearchResults').empty();
-        $('#newLineDescription').val('');
+        $('#newLineShortText1').val('');
+        $('#newLineLongText').val('');
         $('#newLineQuantity').val('1.0000');
         $('#newLineUnit').val('');
         $('#newLineUnitPrice').val('0.00');
@@ -805,7 +816,8 @@ $(document).ready(function() {
                                 .data('item', item)
                                 .on('click', function() {
                                     const selectedItem = $(this).data('item');
-                                    $('#newLineDescription').val(selectedItem.short_text_1);
+                                    $('#newLineShortText1').val(selectedItem.short_text_1);
+                                    $('#newLineLongText').val(selectedItem.long_text || '');
                                     $('#newLineQuantity').val('1.0000');
                                     $('#newLineUnitPrice').val(selectedItem.net_price);
                                     $('#newLineTaxRate').val(selectedItem.tax_rate_id);
@@ -856,7 +868,8 @@ $(document).ready(function() {
     
     // Confirm add line
     $('#confirmAddLineBtn').on('click', function() {
-        const description = $('#newLineDescription').val();
+        const shortText1 = $('#newLineShortText1').val();
+        const longText = $('#newLineLongText').val();
         const quantity = normalizeDecimalInput($('#newLineQuantity').val());
         const unitId = $('#newLineUnit').val() || null;
         const unitPrice = normalizeDecimalInput($('#newLineUnitPrice').val());
@@ -864,12 +877,12 @@ $(document).ready(function() {
         const isDiscountable = $('#newLineDiscountable').is(':checked');
         const costType1Id = $('#newLineCostType1').val() || null;
         const costType2Id = $('#newLineCostType2').val() || null;
-        
-        if (!description || !quantity || !unitPrice || !taxRateId) {
+
+        if (!shortText1 || !quantity || !unitPrice || !taxRateId) {
             alert('Bitte füllen Sie alle Pflichtfelder aus.');
             return;
         }
-        
+
         $.ajax({
             url: '{% url "auftragsverwaltung:ajax_contract_add_line" contract.pk %}',
             method: 'POST',
@@ -878,7 +891,8 @@ $(document).ready(function() {
             },
             contentType: 'application/json',
             data: JSON.stringify({
-                description: description,
+                short_text_1: shortText1,
+                long_text: longText,
                 quantity: quantity,
                 unit_id: unitId,
                 unit_price_net: unitPrice,
@@ -925,11 +939,12 @@ $(document).ready(function() {
     });
     
     // Update line on change
-    $(document).on('change', '.line-description, .line-quantity, .line-unit, .line-unit-price, .line-tax-rate, .line-is-discountable, .line-cost-type-1, .line-cost-type-2', function() {
+    $(document).on('change', '.line-short-text-1, .line-long-text, .line-quantity, .line-unit, .line-unit-price, .line-tax-rate, .line-is-discountable, .line-cost-type-1, .line-cost-type-2', function() {
         const lineItem = $(this).closest('.line-item');
         const lineId = lineItem.data('line-id');
 
-        const description = lineItem.find('.line-description').val();
+        const shortText1 = lineItem.find('.line-short-text-1').val();
+        const longText = lineItem.find('.line-long-text').val();
         const quantity = normalizeDecimalInput(lineItem.find('.line-quantity').val());
         const unitId = lineItem.find('.line-unit').val() || null;
         const unitPrice = normalizeDecimalInput(lineItem.find('.line-unit-price').val());
@@ -946,7 +961,8 @@ $(document).ready(function() {
             },
             contentType: 'application/json',
             data: JSON.stringify({
-                description: description,
+                short_text_1: shortText1,
+                long_text: longText,
                 quantity: quantity,
                 unit_id: unitId,
                 unit_price_net: unitPrice,
