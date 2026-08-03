@@ -1204,6 +1204,14 @@ class ContractLine(models.Model):
         verbose_name="Beschreibung",
         help_text="Positionsbeschreibung"
     )
+    unit = models.ForeignKey(
+        'core.Unit',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='contract_lines',
+        verbose_name="Mengeneinheit"
+    )
     quantity = models.DecimalField(
         max_digits=12,
         decimal_places=4,

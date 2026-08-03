@@ -26,7 +26,7 @@ from auftragsverwaltung.models import (
     NumberRange,
 )
 from auftragsverwaltung.services.contract_billing import ContractBillingService
-from core.models import Mandant, Adresse, PaymentTerm, TaxRate, Kostenart, Item
+from core.models import Mandant, Adresse, PaymentTerm, TaxRate, Kostenart, Item, Unit
 
 
 class ContractModelTestCase(TestCase):
@@ -488,7 +488,7 @@ class ContractBillingServiceTestCase(TestCase):
             net_days=30,
             is_default=True
         )
-        
+
         # Create tax rate
         self.tax_rate = TaxRate.objects.create(
             code="VAT_19",
@@ -496,7 +496,7 @@ class ContractBillingServiceTestCase(TestCase):
             rate=Decimal('0.19'),
             is_active=True
         )
-        
+
         # Create cost types
         self.cost_type = Kostenart.objects.create(
             name="General"
@@ -504,7 +504,13 @@ class ContractBillingServiceTestCase(TestCase):
         self.cost_type2 = Kostenart.objects.create(
             name="Secondary"
         )
-        
+
+        # Create unit of measure
+        self.unit = Unit.objects.create(
+            code="MON",
+            name="Monat"
+        )
+
         # Create contract NumberRange
         NumberRange.objects.create(
             company=self.company,
@@ -843,7 +849,7 @@ class ContractBillingServiceTestCase(TestCase):
     def test_generate_due_multiple_lines_full_position_data(self):
         """Regression test: a contract with several positions (different tax rates/prices)
         must produce a SalesDocument whose lines carry the full ContractLine data
-        (texts, quantity, price, tax rate) and correctly calculated totals."""
+        (texts, unit, quantity, price, tax rate) and correctly calculated totals."""
         tax_rate_7 = TaxRate.objects.create(
             code="VAT_7",
             name="7% VAT",
@@ -871,6 +877,7 @@ class ContractBillingServiceTestCase(TestCase):
             short_text_2="Fahrzeug",
             long_text="Monatliche Leasingrate für Fahrzeug XY",
             description="Monatliche Leasingrate",
+            unit=self.unit,
             quantity=Decimal('1.0000'),
             unit_price_net=Decimal('1000.00'),
             tax_rate=self.tax_rate,
@@ -908,6 +915,7 @@ class ContractBillingServiceTestCase(TestCase):
         self.assertEqual(sales_line_1.short_text_2, line_1.short_text_2)
         self.assertEqual(sales_line_1.long_text, line_1.long_text)
         self.assertEqual(sales_line_1.description, line_1.description)
+        self.assertEqual(sales_line_1.unit, self.unit)
         self.assertEqual(sales_line_1.quantity, line_1.quantity)
         self.assertEqual(sales_line_1.unit_price_net, line_1.unit_price_net)
         self.assertEqual(sales_line_1.tax_rate, self.tax_rate)
@@ -918,6 +926,7 @@ class ContractBillingServiceTestCase(TestCase):
         self.assertEqual(sales_line_2.short_text_1, line_2.short_text_1)
         self.assertEqual(sales_line_2.long_text, line_2.long_text)
         self.assertEqual(sales_line_2.description, line_2.description)
+        self.assertIsNone(sales_line_2.unit)
         self.assertEqual(sales_line_2.quantity, line_2.quantity)
         self.assertEqual(sales_line_2.unit_price_net, line_2.unit_price_net)
         self.assertEqual(sales_line_2.tax_rate, tax_rate_7)

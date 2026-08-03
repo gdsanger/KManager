@@ -295,6 +295,7 @@ class ContractLineInline(admin.TabularInline):
         'position_no',
         'item',
         'description',
+        'unit',
         'quantity',
         'unit_price_net',
         'tax_rate',

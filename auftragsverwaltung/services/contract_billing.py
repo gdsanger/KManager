@@ -208,8 +208,8 @@ class ContractBillingService:
         document.save(update_fields=['payment_term_snapshot', 'due_date'])
         
         # Copy ContractLine -> SalesDocumentLine
-        contract_lines = contract.lines.select_related('item', 'tax_rate', 'cost_type_1', 'cost_type_2').order_by('position_no')
-        
+        contract_lines = contract.lines.select_related('item', 'tax_rate', 'unit', 'cost_type_1', 'cost_type_2').order_by('position_no')
+
         for contract_line in contract_lines:
             SalesDocumentLine.objects.create(
                 document=document,
@@ -221,6 +221,7 @@ class ContractBillingService:
                 short_text_2=contract_line.short_text_2,
                 long_text=contract_line.long_text,
                 description=contract_line.description,
+                unit=contract_line.unit,
                 quantity=contract_line.quantity,
                 unit_price_net=contract_line.unit_price_net,
                 tax_rate=contract_line.tax_rate,
