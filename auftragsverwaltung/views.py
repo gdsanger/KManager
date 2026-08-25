@@ -1,7 +1,8 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q, Sum, Max
+from django.db.models import Q, Sum, Max, Value
+from django.db.models.functions import Coalesce
 from django.http import Http404, JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
@@ -2792,6 +2793,19 @@ def document_preview(request, pk):
 
 # TimeEntry (Zeiterfassung) Views
 
+def get_timeentry_customers():
+    """
+    Kunden-Queryset für die Auswahlliste der Zeiterfassungs-Formulare.
+
+    Sortiert nach Firma, dann Name. `firma` ist nullable und kann zusätzlich
+    leer sein; über Coalesce werden NULL und '' gleich behandelt, damit Kunden
+    ohne Firma datenbankunabhängig (SQLite/PostgreSQL) am Anfang stehen.
+    """
+    return Adresse.objects.filter(adressen_type='KUNDE').order_by(
+        Coalesce('firma', Value('')), 'name'
+    )
+
+
 @login_required
 def timeentry_list(request):
     """
@@ -2943,7 +2957,7 @@ def timeentry_create(request):
                 'error': str(e),
                 'timeentry': timeentry,
                 'companies': Mandant.objects.all().order_by('name'),
-                'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+                'customers': get_timeentry_customers(),
                 'orders': SalesDocument.objects.filter(
                     document_type__key__iexact='order'
                 ).order_by('-issue_date'),
@@ -2956,7 +2970,7 @@ def timeentry_create(request):
     from django.contrib.auth.models import User
     context = {
         'companies': Mandant.objects.all().order_by('name'),
-        'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+        'customers': get_timeentry_customers(),
         'orders': SalesDocument.objects.filter(
             document_type__key__iexact='order'
         ).order_by('-issue_date'),
@@ -3048,7 +3062,7 @@ def timeentry_update(request, pk):
                 'error': str(e),
                 'timeentry': timeentry,
                 'companies': Mandant.objects.all().order_by('name'),
-                'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+                'customers': get_timeentry_customers(),
                 'orders': SalesDocument.objects.filter(
                     document_type__key__iexact='order'
                 ).order_by('-issue_date'),
@@ -3062,7 +3076,7 @@ def timeentry_update(request, pk):
     context = {
         'timeentry': timeentry,
         'companies': Mandant.objects.all().order_by('name'),
-        'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+        'customers': get_timeentry_customers(),
         'orders': SalesDocument.objects.filter(
             document_type__key__iexact='order'
         ).order_by('-issue_date'),
