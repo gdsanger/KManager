@@ -14,3 +14,4 @@ django-filter>=24.0,<25.0
 bleach>=6.0.0,<7.0.0
 weasyprint>=63.0,<69.0
 pypdf>=5.1.0,<7.0.0
+psycopg
