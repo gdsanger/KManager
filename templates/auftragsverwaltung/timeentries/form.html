@@ -64,7 +64,7 @@ Zeiterfassung bearbeiten
                         <option value="">-- Bitte wählen --</option>
                         {% for customer in customers %}
                         <option value="{{ customer.pk }}" {% if not is_create and customer == timeentry.customer %}selected{% endif %}>
-                            {{ customer.name }}
+                            {{ customer.full_name }}
                         </option>
                         {% endfor %}
                     </select>

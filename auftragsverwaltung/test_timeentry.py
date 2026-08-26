@@ -469,6 +469,132 @@ class TimeEntryViewTestCase(TestCase):
         self.assertEqual(timeentry.description, 'Updated description')
 
 
+class TimeEntryCustomerChoicesTestCase(TestCase):
+    """Kunden-Dropdown der Zeiterfassungs-Formulare zeigt Firma und Name"""
+
+    def setUp(self):
+        self.company = Mandant.objects.create(
+            name="Test Company",
+            adresse="Test Street 1",
+            plz="12345",
+            ort="Test City"
+        )
+        # Zwei Kunden mit identischem Namen, aber unterschiedlicher Firma
+        self.customer_beta = Adresse.objects.create(
+            name="Max Mustermann",
+            firma="Beta GmbH",
+            strasse="Customer Street 1",
+            plz="54321",
+            ort="Customer City",
+            land="Germany",
+            adressen_type="KUNDE"
+        )
+        self.customer_alpha = Adresse.objects.create(
+            name="Max Mustermann",
+            firma="Alpha AG",
+            strasse="Customer Street 2",
+            plz="54321",
+            ort="Customer City",
+            land="Germany",
+            adressen_type="KUNDE"
+        )
+        # Kunde ohne Firma (NULL) und Kunde mit leerer Firma ('')
+        self.customer_no_firma = Adresse.objects.create(
+            name="Erika Einzel",
+            firma=None,
+            strasse="Customer Street 3",
+            plz="54321",
+            ort="Customer City",
+            land="Germany",
+            adressen_type="KUNDE"
+        )
+        self.customer_empty_firma = Adresse.objects.create(
+            name="Anton Allein",
+            firma="",
+            strasse="Customer Street 4",
+            plz="54321",
+            ort="Customer City",
+            land="Germany",
+            adressen_type="KUNDE"
+        )
+
+        self.order_doc_type, _ = DocumentType.objects.get_or_create(
+            key="order",
+            defaults={
+                "name": "Auftrag",
+                "prefix": "AB",
+                "is_active": True
+            }
+        )
+
+        self.user = User.objects.create_user(
+            username="testuser",
+            password="testpass"
+        )
+        self.client.login(username="testuser", password="testpass")
+
+    def test_create_form_shows_firma_and_name(self):
+        """Create-Formular listet Kunden als 'Firma - (Name)' auf"""
+        response = self.client.get(reverse('auftragsverwaltung:timeentry_create'))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('Alpha AG - (Max Mustermann)', content)
+        self.assertIn('Beta GmbH - (Max Mustermann)', content)
+        # Kunde ohne Firma wird nur mit Namen dargestellt
+        self.assertIn('Erika Einzel', content)
+        self.assertNotIn(' - (Erika Einzel)', content)
+
+    def test_update_form_shows_firma_and_name_and_preselects_customer(self):
+        """Update-Formular zeigt Firma + Name und behält die Vorauswahl bei"""
+        order = SalesDocument.objects.create(
+            company=self.company,
+            document_type=self.order_doc_type,
+            customer=self.customer_alpha,
+            number="AB26-00002",
+            status="DRAFT",
+            issue_date=date.today(),
+            subject="Test Order"
+        )
+        timeentry = TimeEntry.objects.create(
+            company=self.company,
+            customer=self.customer_alpha,
+            order=order,
+            performed_by=self.user,
+            service_date=date.today(),
+            duration_minutes=60,
+            description="Initial work"
+        )
+
+        response = self.client.get(
+            reverse('auftragsverwaltung:timeentry_update', kwargs={'pk': timeentry.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('Alpha AG - (Max Mustermann)', content)
+        self.assertIn(
+            f'<option value="{self.customer_alpha.pk}" selected>',
+            content
+        )
+
+    def test_customer_queryset_is_ordered_by_firma_then_name(self):
+        """Kunden ohne Firma stehen vorn, danach alphabetisch nach Firma/Name"""
+        from auftragsverwaltung.views import get_timeentry_customers
+
+        ordered = list(get_timeentry_customers())
+
+        self.assertEqual(
+            ordered,
+            [
+                self.customer_empty_firma,   # firma '' -> Name "Anton Allein"
+                self.customer_no_firma,      # firma NULL -> Name "Erika Einzel"
+                self.customer_alpha,         # Alpha AG
+                self.customer_beta,          # Beta GmbH
+            ]
+        )
+
+
 class TimeEntryListSummaryTestCase(TestCase):
     """Test aggregation and summary row in time entry list view"""
     
