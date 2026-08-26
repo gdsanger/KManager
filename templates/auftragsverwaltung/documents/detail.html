@@ -226,39 +226,52 @@ Neues {{ document_type.name }}
     
     .article-search-result {
         padding: 10px;
-        border-bottom: 1px solid var(--bs-border-color);
+        border-bottom: 1px solid var(--border-color);
         cursor: pointer;
+        color: var(--text-primary);
     }
-    
+
     .article-search-result:hover {
-        background: var(--bs-secondary-bg);
+        background: var(--bg-card-hover);
     }
-    
+
+    .article-search-result:last-child {
+        border-bottom: none;
+    }
+
     .article-suggestions {
         position: absolute;
         z-index: 1000;
-        background: white;
-        border: 1px solid var(--bs-border-color);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         max-height: 300px;
         overflow-y: auto;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         width: calc(100% - 30px);
         margin-top: 2px;
     }
-    
+
     .article-suggestion-item {
         padding: 8px 12px;
         cursor: pointer;
-        border-bottom: 1px solid var(--bs-border-color-translucent);
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-primary);
     }
-    
+
     .article-suggestion-item:hover {
-        background: var(--bs-secondary-bg);
+        background: var(--bg-card-hover);
     }
 
     .article-suggestion-item:last-child {
         border-bottom: none;
+    }
+
+    /* Sekundaerzeile (z. B. "Preis: ...") und Leer-/Hinweistexte in
+       Suchergebnis-Listen - themefaehig statt Bootstrap-.text-muted */
+    .search-result-secondary {
+        color: var(--text-secondary);
     }
 
     .customer-search-dropdown {
@@ -1583,7 +1596,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <div class="article-search-result" data-article-id="${article.id}" 
                                      data-article='${JSON.stringify(article)}'>
                                     <strong>${article.article_no}</strong> - ${article.short_text_1}<br>
-                                    <small class="text-muted">Preis: ${article.net_price} € (${article.tax_rate_code})</small>
+                                    <small class="search-result-secondary">Preis: ${article.net_price} € (${article.tax_rate_code})</small>
                                 </div>
                             `;
                         });
@@ -1602,7 +1615,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                         });
                     } else {
-                        articleSearchResults.innerHTML = '<p class="text-muted">Keine Artikel gefunden</p>';
+                        articleSearchResults.innerHTML = '<p class="search-result-secondary">Keine Artikel gefunden</p>';
                     }
                 })
                 .catch(error => {
@@ -2123,7 +2136,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             html += `
                                 <div class="article-suggestion-item" data-article-key="${articleKey}" data-line-id="${lineId}">
                                     <strong>${escapeHtml(article.article_no)}</strong> - ${escapeHtml(article.short_text_1)}<br>
-                                    <small class="text-muted">Preis: ${escapeHtml(article.net_price)} €</small>
+                                    <small class="search-result-secondary">Preis: ${escapeHtml(article.net_price)} €</small>
                                 </div>
                             `;
                         });
@@ -2143,7 +2156,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                         });
                     } else {
-                        suggestionsDiv.innerHTML = '<div class="article-suggestion-item text-muted">Keine Artikel gefunden</div>';
+                        suggestionsDiv.innerHTML = '<div class="article-suggestion-item search-result-secondary">Keine Artikel gefunden</div>';
                         suggestionsDiv.style.display = 'block';
                     }
                 })
