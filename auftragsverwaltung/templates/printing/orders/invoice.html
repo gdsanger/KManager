@@ -77,11 +77,42 @@
 .positions-table .col-price { width: 55pt; text-align: right; }
 .positions-table .col-net { width: 55pt; text-align: right; }
 
+/* Zusatz-Kurztext (short_text_2): Klartext, daher müssen Zeilenumbrüche
+   aus der Eingabe über pre-wrap erhalten bleiben. */
 .long-text {
     font-size: 8pt;
     color: #555;
     margin-top: 2pt;
     white-space: pre-wrap;
+}
+
+/* Positions-Langtext (long_text): sanitisiertes Quill-HTML. Bewusst OHNE
+   pre-wrap, sonst würden Zeilenumbrüche zwischen den Tags zusätzlichen
+   Leerraum erzeugen. Der globale p-Abstand aus print.css wird hier
+   neutralisiert, damit der Text zeilengetreu wie im Editor gedruckt wird. */
+.long-text-html {
+    font-size: 8pt;
+    color: #555;
+    margin-top: 2pt;
+}
+
+.long-text-html p {
+    margin: 0;
+}
+
+/* Bewusst leer gelassene Absätze bleiben als Leerzeile sichtbar. */
+.long-text-html p:empty {
+    min-height: 1em;
+}
+
+.long-text-html ul,
+.long-text-html ol {
+    margin: 0;
+    padding-left: 14pt;
+}
+
+.long-text-html li {
+    margin-bottom: 0;
 }
 
 .discount-text {
@@ -337,7 +368,7 @@
                 <div class="long-text">{{ line.short_text_2|default:"" }}</div>
                 {% endif %}
                 {% if line.long_text %}
-                <div class="long-text">{{ line.long_text|default:""|safe }}</div>
+                <div class="long-text-html">{{ line.long_text|default:""|safe }}</div>
                 {% endif %}
             </td>
             <td class="col-price">
