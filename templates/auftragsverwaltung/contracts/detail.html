@@ -507,8 +507,7 @@ Vertrag: {{ contract.name }}
                             class="btn btn-outline-primary btn-sm"
                             hx-post="{% url 'auftragsverwaltung:contract_run_billing' contract.pk %}"
                             hx-target="#billing-result"
-                            hx-swap="innerHTML"
-                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                            hx-swap="innerHTML">
                         <i class="bi bi-play-circle"></i> Rechnungslauf starten
                     </button>
                 </div>
