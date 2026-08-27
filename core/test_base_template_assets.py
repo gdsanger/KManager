@@ -29,6 +29,9 @@ SIDEBAR_BASES = [
 
 #: Marker aus den früheren Inline-Skripten. Tauchen sie im gerenderten HTML
 #: auf, wurde JS wieder ins Template kopiert.
+#: Einzige erlaubte Ausnahme ist das Anti-Flicker-Snippet in
+#: includes/_sidebar_boot.html (muss vor dem ersten Paint laufen) - es wird in
+#: test_base_template_layout.py geprüft.
 INLINE_JS_MARKERS = [
     "htmx:configRequest",
     "nav.expandedMenuGroupIds",
