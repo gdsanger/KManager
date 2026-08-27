@@ -4,6 +4,8 @@ Tests for Projekt and ProjektFile models and views.
 import os
 import tempfile
 import shutil
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from django.test import TestCase, Client, override_settings
@@ -11,7 +13,16 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.core.exceptions import ValidationError
 
-from core.models import Projekt, ProjektFile, PROJEKT_STATUS_CHOICES, PROJEKT_MAX_FILE_SIZE
+from auftragsverwaltung.models import TimeEntry
+from core.forms import ProjektForm
+from core.models import (
+    Adresse,
+    Mandant,
+    Projekt,
+    ProjektFile,
+    PROJEKT_STATUS_CHOICES,
+    PROJEKT_MAX_FILE_SIZE,
+)
 
 
 TEMP_PROJECT_DIR = None
@@ -498,3 +509,155 @@ class ProjektFileSymlinkSafetyTestCase(TestCase):
                 saved = Path(str(link_dir)) / rel_path
                 self.assertTrue(saved.exists(), 'File must exist under the symlinked root')
                 self.assertEqual(saved.read_bytes(), content)
+
+
+class ProjektKundeMandantTestCase(TestCase):
+    """Projekt-Stammdaten mit optionalem Kunden- und Mandantenbezug (#1174)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='stammuser', password='password')
+        self.client.login(username='stammuser', password='password')
+        self.company = Mandant.objects.create(
+            name='Test Company', adresse='Test Street 1', plz='12345', ort='Test City'
+        )
+        self.kunde = Adresse.objects.create(
+            name='Test Customer', strasse='Customer Street 1', plz='54321',
+            ort='Customer City', land='Germany', adressen_type='KUNDE'
+        )
+
+    def test_projekt_without_kunde_and_company(self):
+        """Interne Projekte ohne Kunde/Mandant bleiben möglich."""
+        projekt = Projekt.objects.create(titel='Internes Projekt')
+        projekt.full_clean()
+
+        self.assertIsNone(projekt.kunde)
+        self.assertIsNone(projekt.company)
+
+    def test_create_projekt_with_kunde_and_company(self):
+        """Kunde und Mandant lassen sich über das Formular setzen."""
+        response = self.client.post(reverse('projekt_create'), {
+            'titel': 'Kundenprojekt',
+            'kunde': self.kunde.pk,
+            'company': self.company.pk,
+            'beschreibung': 'Beschreibung',
+            'status': 'NEU',
+        })
+
+        projekt = Projekt.objects.get(titel='Kundenprojekt')
+        self.assertRedirects(response, reverse('projekt_detail', kwargs={'pk': projekt.pk}))
+        self.assertEqual(projekt.kunde, self.kunde)
+        self.assertEqual(projekt.company, self.company)
+
+    def test_edit_projekt_can_clear_kunde(self):
+        """Der Kundenbezug lässt sich wieder entfernen."""
+        projekt = Projekt.objects.create(titel='Kundenprojekt', kunde=self.kunde)
+
+        self.client.post(reverse('projekt_edit', kwargs={'pk': projekt.pk}), {
+            'titel': 'Kundenprojekt',
+            'kunde': '',
+            'company': '',
+            'beschreibung': '',
+            'status': 'NEU',
+        })
+
+        projekt.refresh_from_db()
+        self.assertIsNone(projekt.kunde)
+
+    def test_form_only_offers_kunden_addresses(self):
+        """Das Kundenfeld bietet nur Adressen vom Typ KUNDE an."""
+        lieferant = Adresse.objects.create(
+            name='Ein Lieferant', strasse='L 1', plz='11111', ort='L-Stadt',
+            land='Germany', adressen_type='LIEFERANT'
+        )
+
+        form = ProjektForm()
+
+        self.assertIn(self.kunde, form.fields['kunde'].queryset)
+        self.assertNotIn(lieferant, form.fields['kunde'].queryset)
+
+
+class ProjektStundenuebersichtTestCase(TestCase):
+    """Stundenübersicht und -erfassung in der Projekt-Detailansicht (#1174)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='stundenuser', password='password')
+        self.client.login(username='stundenuser', password='password')
+        self.company = Mandant.objects.create(
+            name='Test Company', adresse='Test Street 1', plz='12345', ort='Test City'
+        )
+        self.kunde = Adresse.objects.create(
+            name='Test Customer', strasse='Customer Street 1', plz='54321',
+            ort='Customer City', land='Germany', adressen_type='KUNDE'
+        )
+        self.projekt = Projekt.objects.create(
+            titel='Hosting Neu', kunde=self.kunde, company=self.company
+        )
+
+    def _time_entry(self, minutes, is_billed=False, description='Arbeit'):
+        return TimeEntry.objects.create(
+            company=self.company,
+            customer=self.kunde,
+            projekt=self.projekt,
+            performed_by=self.user,
+            service_date=date(2026, 8, 27),
+            duration_minutes=minutes,
+            description=description,
+            is_billed=is_billed,
+        )
+
+    def test_detail_shows_hours_totals(self):
+        """Gesamt-, abgerechnete und offene Stunden werden ausgewiesen."""
+        self._time_entry(90, is_billed=True)
+        self._time_entry(30, is_billed=False)
+
+        response = self.client.get(reverse('projekt_detail', kwargs={'pk': self.projekt.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_minutes'], 120)
+        self.assertEqual(response.context['total_hours'], Decimal('2'))
+        self.assertEqual(response.context['billed_minutes'], 90)
+        self.assertEqual(response.context['unbilled_minutes'], 30)
+
+    def test_detail_lists_entries_and_groupings(self):
+        """Einzelne Zeiterfassungen sowie Auswertungen je Benutzer/Monat sind vorhanden."""
+        entry = self._time_entry(60, description='Serverumzug')
+
+        response = self.client.get(reverse('projekt_detail', kwargs={'pk': self.projekt.pk}))
+
+        self.assertEqual(list(response.context['time_entries']), [entry])
+        self.assertContains(response, 'Serverumzug')
+        self.assertContains(response, '1h')
+        self.assertEqual(
+            response.context['stunden_by_user'],
+            [{'user': 'stundenuser', 'minutes': 60, 'hours': Decimal('1')}],
+        )
+        self.assertEqual(response.context['stunden_by_month'][0]['minutes'], 60)
+
+    def test_detail_without_entries_shows_zero(self):
+        """Ohne Zeiterfassungen bleiben die Summen bei null."""
+        response = self.client.get(reverse('projekt_detail', kwargs={'pk': self.projekt.pk}))
+
+        self.assertEqual(response.context['total_minutes'], 0)
+        self.assertEqual(response.context['total_hours'], Decimal('0'))
+        self.assertContains(response, 'Keine Stunden für dieses Projekt erfasst')
+
+    def test_detail_links_to_prefilled_timeentry_form(self):
+        """Der Button „Stunden erfassen" verlinkt mit vorbelegtem Projekt."""
+        response = self.client.get(reverse('projekt_detail', kwargs={'pk': self.projekt.pk}))
+
+        expected = (
+            f"{reverse('auftragsverwaltung:timeentry_create')}?projekt={self.projekt.pk}"
+        )
+        self.assertContains(response, expected)
+        self.assertContains(response, 'Stunden erfassen')
+
+    def test_delete_is_blocked_while_time_entries_exist(self):
+        """Ein Projekt mit Stunden lässt sich nicht löschen (PROTECT)."""
+        self._time_entry(60)
+
+        response = self.client.post(
+            reverse('projekt_delete', kwargs={'pk': self.projekt.pk}), follow=True
+        )
+
+        self.assertTrue(Projekt.objects.filter(pk=self.projekt.pk).exists())
+        self.assertContains(response, 'kann nicht gelöscht werden')

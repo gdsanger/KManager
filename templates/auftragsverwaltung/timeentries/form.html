@@ -63,23 +63,39 @@ Zeiterfassung bearbeiten
                     <select class="form-select" id="customer_id" name="customer_id" required>
                         <option value="">-- Bitte wählen --</option>
                         {% for customer in customers %}
-                        <option value="{{ customer.pk }}" {% if not is_create and customer == timeentry.customer %}selected{% endif %}>
+                        <option value="{{ customer.pk }}" {% if is_create and customer == default_customer %}selected{% elif not is_create and customer == timeentry.customer %}selected{% endif %}>
                             {{ customer.matchkey }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label for="order_id" class="form-label">Auftrag <span class="text-danger">*</span></label>
-                    <select class="form-select" id="order_id" name="order_id" required>
-                        <option value="">-- Bitte wählen --</option>
+                    <label for="projekt_id" class="form-label">Projekt</label>
+                    <select class="form-select" id="projekt_id" name="projekt_id">
+                        <option value="">-- Kein Projekt --</option>
+                        {% for projekt in projekte %}
+                        <option value="{{ projekt.pk }}" data-kunde="{{ projekt.kunde_id|default_if_none:'' }}"
+                                {% if is_create and projekt == default_projekt %}selected{% elif not is_create and projekt == timeentry.projekt %}selected{% endif %}>
+                            {{ projekt.titel }}{% if projekt.kunde %} ({{ projekt.kunde.matchkey }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Optional. Abgeschlossene Projekte werden nicht angezeigt.</div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="order_id" class="form-label">Auftrag</label>
+                    <select class="form-select" id="order_id" name="order_id">
+                        <option value="">-- Kein Auftrag --</option>
                         {% for order in orders %}
                         <option value="{{ order.pk }}" {% if not is_create and order == timeentry.order %}selected{% endif %}>
                             {{ order.number }} - {{ order.subject|truncatewords:10 }}
                         </option>
                         {% endfor %}
                     </select>
-                    <div class="form-text">Nur Aufträge vom Typ ORDER werden angezeigt</div>
+                    <div class="form-text">Optional. Nur Aufträge vom Typ ORDER werden angezeigt.</div>
                 </div>
             </div>
 
@@ -145,4 +161,44 @@ Zeiterfassung bearbeiten
         </button>
     </div>
 </form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    const customerSelect = document.getElementById('customer_id');
+    const projektSelect = document.getElementById('projekt_id');
+    if (!customerSelect || !projektSelect) return;
+
+    // Projekte ohne Kundenbezug passen immer; Projekte mit Kunde nur zum
+    // gewählten Kunden - das entspricht der Validierung in TimeEntry.clean().
+    function filterProjekte() {
+        const customerId = customerSelect.value;
+        for (const option of projektSelect.options) {
+            if (!option.value) continue;
+            const projektKunde = option.dataset.kunde || '';
+            const matches = !projektKunde || !customerId || projektKunde === customerId;
+            option.hidden = !matches;
+            if (!matches && option.selected) {
+                projektSelect.value = '';
+            }
+        }
+    }
+
+    // Projekt gewählt: Kunde des Projekts übernehmen, solange noch keiner gesetzt ist.
+    projektSelect.addEventListener('change', () => {
+        const selected = projektSelect.selectedOptions[0];
+        const projektKunde = selected ? selected.dataset.kunde : '';
+        if (projektKunde && !customerSelect.value) {
+            customerSelect.value = projektKunde;
+        }
+        filterProjekte();
+    });
+
+    customerSelect.addEventListener('change', filterProjekte);
+    filterProjekte();
+})();
+</script>
 {% endblock %}

@@ -1425,10 +1425,14 @@ class TimeEntry(models.Model):
     """
     Time Entry (Zeiterfassung) - time tracking for billable services
     
-    Tracks billable service time entries related to customer orders (SalesDocument type ORDER).
-    Each entry records who performed the work, when it was performed, how long it took,
-    and whether it was travel time or has been billed.
-    
+    Tracks billable service time entries. Each entry records who performed the work,
+    when it was performed, how long it took, and whether it was travel time or has
+    been billed.
+
+    Der Kunde ist Pflicht. Auftrag (SalesDocument vom Typ ORDER) und Projekt
+    (core.Projekt) sind beide optional und schließen sich nicht gegenseitig aus -
+    Leistungen ohne Auftrag lassen sich damit ohne Alibi-Auftrag erfassen.
+
     Scope: Tenant-specific (company FK required)
     """
     
@@ -1449,9 +1453,20 @@ class TimeEntry(models.Model):
     order = models.ForeignKey(
         SalesDocument,
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name='time_entries',
         verbose_name="Auftrag",
-        help_text="Auftrag (SalesDocument vom Typ ORDER)"
+        help_text="Optionaler Auftrag (SalesDocument vom Typ ORDER)"
+    )
+    projekt = models.ForeignKey(
+        'core.Projekt',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='time_entries',
+        verbose_name="Projekt",
+        help_text="Optionales Projekt, dem die Leistung zugeordnet wird"
     )
     performed_by = models.ForeignKey(
         User,
@@ -1517,6 +1532,7 @@ class TimeEntry(models.Model):
             models.Index(fields=['company', 'service_date']),
             models.Index(fields=['customer']),
             models.Index(fields=['order']),
+            models.Index(fields=['projekt']),
             models.Index(fields=['performed_by', 'service_date']),
             models.Index(fields=['-service_date', '-created_at']),
             models.Index(fields=['is_billed']),
@@ -1533,6 +1549,12 @@ class TimeEntry(models.Model):
         2. order must be of type ORDER
         3. order.customer must match customer
         4. order.company must match company (if order has company)
+        5. projekt.kunde must match customer (if the project has a customer)
+        6. projekt.company must match company (if the project has a company)
+
+        Auftrag und Projekt sind jeweils optional; ihre Regeln greifen nur, wenn
+        das jeweilige Feld gesetzt ist. Sind beide gesetzt, wird bewusst keine
+        zusätzliche Kopplung zwischen Auftrag und Projekt erzwungen.
         """
         super().clean()
         
@@ -1563,7 +1585,47 @@ class TimeEntry(models.Model):
                     'order': 'Der Mandant des Auftrags stimmt nicht mit dem ausgewählten Mandanten überein.',
                     'company': 'Der Mandant muss mit dem Mandanten des Auftrags übereinstimmen.'
                 })
-    
+
+        # Validation 5-6: Project validations (only if projekt is set)
+        if self.projekt_id:
+            # Validation 5: projekt.kunde must match customer (if project has a customer)
+            if self.customer and self.projekt.kunde and self.projekt.kunde != self.customer:
+                raise ValidationError({
+                    'projekt': (
+                        f'Das Projekt „{self.projekt.titel}" ist dem Kunden '
+                        f'„{self.projekt.kunde.matchkey}" zugeordnet und passt nicht zum '
+                        f'ausgewählten Kunden.'
+                    ),
+                    'customer': 'Der Kunde muss mit dem Kunden des Projekts übereinstimmen.'
+                })
+
+            # Validation 6: projekt.company must match company (if project has a company)
+            if self.company and self.projekt.company and self.projekt.company != self.company:
+                raise ValidationError({
+                    'projekt': 'Der Mandant des Projekts stimmt nicht mit dem ausgewählten Mandanten überein.',
+                    'company': 'Der Mandant muss mit dem Mandanten des Projekts übereinstimmen.'
+                })
+
+    def get_duration_display(self):
+        """
+        Get duration in a friendly format (hours and minutes)
+
+        Single source of truth for the duration formatting used in the time entry
+        table, the project hours overview and the admin.
+
+        Returns:
+            str: e.g. "1h 30min", "2h" or "45min"
+        """
+        total_minutes = self.duration_minutes or 0
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        if hours > 0 and minutes > 0:
+            return f"{hours}h {minutes}min"
+        elif hours > 0:
+            return f"{hours}h"
+        else:
+            return f"{minutes}min"
+
     def get_duration_hours(self):
         """
         Get duration in hours as a decimal

@@ -26,7 +26,7 @@ from .services import (
 )
 from .utils import sanitize_html
 from .printing import SalesDocumentInvoiceContextBuilder
-from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit
+from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit, Projekt
 from core.services.activity_stream import ActivityStreamService
 from core.printing import PdfRenderService, get_static_base_url
 from finanzen.models import OutgoingInvoiceJournalEntry
@@ -2806,6 +2806,41 @@ def get_timeentry_customers():
     return Adresse.objects.filter(adressen_type='KUNDE').order_by('matchkey')
 
 
+def get_timeentry_projekte(selected_projekt_id=None):
+    """
+    Projekt-Queryset für die Auswahlliste der Zeiterfassungs-Formulare.
+
+    Abgeschlossene Projekte werden ausgeblendet, damit die Liste kurz bleibt.
+    Ein bereits zugeordnetes Projekt bleibt aber immer wählbar - sonst würde
+    eine Bearbeitung die Zuordnung stillschweigend verlieren.
+    """
+    selectable = ~Q(status='ABGESCHLOSSEN')
+    if selected_projekt_id:
+        selectable |= Q(pk=selected_projekt_id)
+    return Projekt.objects.select_related('kunde').filter(selectable).order_by('titel')
+
+
+def get_timeentry_form_choices(selected_projekt_id=None):
+    """
+    Auswahllisten für das Zeiterfassungs-Formular (Anlegen und Bearbeiten).
+
+    Args:
+        selected_projekt_id: PK des bereits zugeordneten Projekts, damit es auch
+            dann in der Liste steht, wenn es abgeschlossen ist.
+    """
+    from django.contrib.auth.models import User
+
+    return {
+        'companies': Mandant.objects.all().order_by('name'),
+        'customers': get_timeentry_customers(),
+        'orders': SalesDocument.objects.filter(
+            document_type__key__iexact='order'
+        ).order_by('-issue_date'),
+        'projekte': get_timeentry_projekte(selected_projekt_id),
+        'users': User.objects.all().order_by('username'),
+    }
+
+
 @login_required
 def timeentry_list(request):
     """
@@ -2815,9 +2850,9 @@ def timeentry_list(request):
     """
     # Base queryset with optimized select/prefetch
     queryset = TimeEntry.objects.select_related(
-        'customer', 'order', 'order__document_type', 'performed_by', 'company'
+        'customer', 'order', 'order__document_type', 'projekt', 'performed_by', 'company'
     )
-    
+
     # Apply filters
     filter_set = TimeEntryFilter(request.GET, queryset=queryset)
     
@@ -2859,7 +2894,7 @@ def timeentry_detail(request, pk):
         pk: Primary key of the time entry
     """
     timeentry = get_object_or_404(TimeEntry.objects.select_related(
-        'customer', 'order', 'order__document_type', 'performed_by', 'company'
+        'customer', 'order', 'order__document_type', 'projekt', 'performed_by', 'company'
     ), pk=pk)
     
     context = {
@@ -2874,11 +2909,13 @@ def timeentry_create(request):
     """
     Create a new time entry
     
-    GET: Show empty form for creating a new time entry
+    GET: Show empty form for creating a new time entry.
+        Optionaler Query-Parameter ``?projekt=<pk>`` belegt Projekt sowie den am
+        Projekt hinterlegten Kunden/Mandanten vor (Einstieg aus dem Projekt).
     POST: Create the time entry and redirect to detail view
     """
     company = Mandant.objects.first()
-    
+
     if request.method == 'POST':
         # Get company from form
         company_id = request.POST.get('company_id')
@@ -2899,11 +2936,16 @@ def timeentry_create(request):
         if customer_id:
             timeentry.customer = get_object_or_404(Adresse, pk=customer_id)
         
-        # Set order if provided
+        # Set order if provided (optional)
         order_id = normalize_foreign_key_id(request.POST.get('order_id'))
         if order_id:
             timeentry.order = get_object_or_404(SalesDocument, pk=order_id)
-        
+
+        # Set projekt if provided (optional)
+        projekt_id = normalize_foreign_key_id(request.POST.get('projekt_id'))
+        if projekt_id:
+            timeentry.projekt = get_object_or_404(Projekt, pk=projekt_id)
+
         # Set performed_by (user)
         performed_by_id = normalize_foreign_key_id(request.POST.get('performed_by_id'))
         if performed_by_id:
@@ -2956,31 +2998,33 @@ def timeentry_create(request):
             context = {
                 'error': str(e),
                 'timeentry': timeentry,
-                'companies': Mandant.objects.all().order_by('name'),
-                'customers': get_timeentry_customers(),
-                'orders': SalesDocument.objects.filter(
-                    document_type__key__iexact='order'
-                ).order_by('-issue_date'),
-                'users': User.objects.all().order_by('username'),
                 'is_create': True,
+                **get_timeentry_form_choices(timeentry.projekt_id),
             }
             return render(request, 'auftragsverwaltung/timeentries/form.html', context)
-    
-    # GET: Show empty form
-    from django.contrib.auth.models import User
+
+    # GET: Show empty form - optionally prefilled from a project (?projekt=<pk>)
+    default_projekt = None
+    default_customer = None
+    projekt_id = normalize_foreign_key_id(request.GET.get('projekt'))
+    if projekt_id:
+        default_projekt = get_object_or_404(
+            Projekt.objects.select_related('kunde', 'company'), pk=projekt_id
+        )
+        default_customer = default_projekt.kunde
+        if default_projekt.company:
+            company = default_projekt.company
+
     context = {
-        'companies': Mandant.objects.all().order_by('name'),
-        'customers': get_timeentry_customers(),
-        'orders': SalesDocument.objects.filter(
-            document_type__key__iexact='order'
-        ).order_by('-issue_date'),
-        'users': User.objects.all().order_by('username'),
         'is_create': True,
         'default_company': company,
+        'default_customer': default_customer,
+        'default_projekt': default_projekt,
         'default_user': request.user,
         'default_date': date.today().strftime('%Y-%m-%d'),
+        **get_timeentry_form_choices(projekt_id),
     }
-    
+
     return render(request, 'auftragsverwaltung/timeentries/form.html', context)
 
 
@@ -3008,11 +3052,15 @@ def timeentry_update(request, pk):
         if customer_id:
             timeentry.customer = get_object_or_404(Adresse, pk=customer_id)
         
-        # Update order if changed
+        # Update order - beide Felder sind optional, eine leere Auswahl muss die
+        # bestehende Zuordnung daher auch entfernen können.
         order_id = normalize_foreign_key_id(request.POST.get('order_id'))
-        if order_id:
-            timeentry.order = get_object_or_404(SalesDocument, pk=order_id)
-        
+        timeentry.order = get_object_or_404(SalesDocument, pk=order_id) if order_id else None
+
+        # Update projekt
+        projekt_id = normalize_foreign_key_id(request.POST.get('projekt_id'))
+        timeentry.projekt = get_object_or_404(Projekt, pk=projekt_id) if projekt_id else None
+
         # Update performed_by if changed
         performed_by_id = normalize_foreign_key_id(request.POST.get('performed_by_id'))
         if performed_by_id:
@@ -3057,31 +3105,19 @@ def timeentry_update(request, pk):
         except Exception as e:
             logger.error(f"Error updating time entry: {str(e)}")
             # Re-render form with error
-            from django.contrib.auth.models import User
             context = {
                 'error': str(e),
                 'timeentry': timeentry,
-                'companies': Mandant.objects.all().order_by('name'),
-                'customers': get_timeentry_customers(),
-                'orders': SalesDocument.objects.filter(
-                    document_type__key__iexact='order'
-                ).order_by('-issue_date'),
-                'users': User.objects.all().order_by('username'),
                 'is_create': False,
+                **get_timeentry_form_choices(timeentry.projekt_id),
             }
             return render(request, 'auftragsverwaltung/timeentries/form.html', context)
-    
+
     # GET: Show form with current data
-    from django.contrib.auth.models import User
     context = {
         'timeentry': timeentry,
-        'companies': Mandant.objects.all().order_by('name'),
-        'customers': get_timeentry_customers(),
-        'orders': SalesDocument.objects.filter(
-            document_type__key__iexact='order'
-        ).order_by('-issue_date'),
-        'users': User.objects.all().order_by('username'),
         'is_create': False,
+        **get_timeentry_form_choices(timeentry.projekt_id),
     }
-    
+
     return render(request, 'auftragsverwaltung/timeentries/form.html', context)

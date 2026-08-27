@@ -511,6 +511,7 @@ class TimeEntryAdmin(admin.ModelAdmin):
         'company',
         'customer',
         'order_info',
+        'projekt',
         'performed_by',
         'duration_display',
         'is_travel_cost',
@@ -531,6 +532,7 @@ class TimeEntryAdmin(admin.ModelAdmin):
         'customer__firma',
         'order__number',
         'order__subject',
+        'projekt__titel',
         'performed_by__username',
         'performed_by__first_name',
         'performed_by__last_name',
@@ -540,7 +542,7 @@ class TimeEntryAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Zuordnung', {
-            'fields': ('company', 'customer', 'order', 'performed_by')
+            'fields': ('company', 'customer', 'order', 'projekt', 'performed_by')
         }),
         ('Zeiterfassung', {
             'fields': ('service_date', 'duration_minutes', 'description')
@@ -565,12 +567,5 @@ class TimeEntryAdmin(admin.ModelAdmin):
     
     def duration_display(self, obj):
         """Show duration in a friendly format"""
-        hours = obj.duration_minutes // 60
-        minutes = obj.duration_minutes % 60
-        if hours > 0 and minutes > 0:
-            return f"{hours}h {minutes}min"
-        elif hours > 0:
-            return f"{hours}h"
-        else:
-            return f"{minutes}min"
+        return obj.get_duration_display()
     duration_display.short_description = "Dauer"

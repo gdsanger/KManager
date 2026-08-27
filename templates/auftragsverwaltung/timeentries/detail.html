@@ -57,6 +57,19 @@
 
                 <div class="row mb-3">
                     <div class="col-md-6">
+                        <label class="text-muted small">Projekt</label>
+                        {% if timeentry.projekt %}
+                        <p class="mb-0">
+                            <a href="{% url 'projekt_detail' timeentry.projekt.pk %}">{{ timeentry.projekt.titel }}</a>
+                        </p>
+                        {% else %}
+                        <p class="mb-0 text-muted">—</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
                         <label class="text-muted small">Ausgeführt von</label>
                         <p class="mb-0">{{ timeentry.performed_by.username }} {% if timeentry.performed_by.get_full_name %}({{ timeentry.performed_by.get_full_name }}){% endif %}</p>
                     </div>

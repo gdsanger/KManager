@@ -20,10 +20,18 @@
                         <i class="bi bi-exclamation-circle"></i>
                         <strong>Alle Projektdateien und Ordner werden unwiderruflich gelöscht!</strong>
                     </p>
+                    {% if time_entry_count %}
+                    <div class="alert alert-danger" role="alert">
+                        <i class="bi bi-clock-history"></i>
+                        Dem Projekt sind <strong>{{ time_entry_count }}</strong> Zeiterfassung(en)
+                        zugeordnet. Das Projekt kann erst gelöscht werden, wenn diese Zuordnungen
+                        entfernt wurden.
+                    </div>
+                    {% endif %}
                     <form method="post">
                         {% csrf_token %}
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-danger">
+                            <button type="submit" class="btn btn-danger" {% if time_entry_count %}disabled{% endif %}>
                                 <i class="bi bi-trash"></i> Ja, löschen
                             </button>
                             <a href="{% url 'projekt_detail' projekt.pk %}" class="btn btn-secondary">

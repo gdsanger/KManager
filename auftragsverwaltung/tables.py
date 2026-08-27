@@ -439,7 +439,14 @@ class TimeEntryTable(tables.Table):
         orderable=False,
         attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 250px;'}}
     )
-    
+
+    projekt = tables.Column(
+        verbose_name='Projekt',
+        accessor='projekt.titel',
+        default='—',
+        attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 200px;'}}
+    )
+
     performed_by = tables.Column(
         verbose_name='Benutzer',
         accessor='performed_by.username',
@@ -483,15 +490,8 @@ class TimeEntryTable(tables.Table):
     
     def render_duration(self, record):
         """Render duration in a friendly format (hours and minutes)."""
-        hours = record.duration_minutes // 60
-        minutes = record.duration_minutes % 60
-        if hours > 0 and minutes > 0:
-            return f"{hours}h {minutes}min"
-        elif hours > 0:
-            return f"{hours}h"
-        else:
-            return f"{minutes}min"
-    
+        return record.get_duration_display()
+
     def render_aktionen(self, record):
         """Render action buttons."""
         detail_url = reverse('auftragsverwaltung:timeentry_detail', kwargs={'pk': record.pk})
@@ -514,6 +514,7 @@ class TimeEntryTable(tables.Table):
             'service_date',
             'customer',
             'order_info',
+            'projekt',
             'performed_by',
             'duration',
             'is_travel_cost',

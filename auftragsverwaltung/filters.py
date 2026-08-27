@@ -339,6 +339,15 @@ class TimeEntryFilter(django_filters.FilterSet):
         })
     )
     
+    projekt = django_filters.ModelChoiceFilter(
+        queryset=None,  # Will be set in __init__
+        label='Projekt',
+        empty_label='Alle Projekte',
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+
     performed_by = django_filters.ModelChoiceFilter(
         queryset=None,  # Will be set in __init__
         label='Benutzer',
@@ -371,7 +380,7 @@ class TimeEntryFilter(django_filters.FilterSet):
     def search_filter(self, queryset, name, value):
         """
         Full-text search across multiple fields using OR.
-        Searches in: description, order.number, order.subject,
+        Searches in: description, order.number, order.subject, projekt.titel,
         customer.matchkey, customer.name
         """
         if not value:
@@ -381,6 +390,7 @@ class TimeEntryFilter(django_filters.FilterSet):
             Q(description__icontains=value) |
             Q(order__number__icontains=value) |
             Q(order__subject__icontains=value) |
+            Q(projekt__titel__icontains=value) |
             # Matchkey deckt Firma + Name ab; name bleibt als OR erhalten,
             # damit die Suche nach dem reinen Personennamen weiter greift.
             Q(customer__matchkey__icontains=value) |
@@ -407,9 +417,9 @@ class TimeEntryFilter(django_filters.FilterSet):
         """Initialize filter and set up querysets."""
         super().__init__(*args, **kwargs)
         # Import here to avoid circular imports
-        from core.models import Adresse
+        from core.models import Adresse, Projekt
         from django.contrib.auth.models import User
-        
+
         # Set customer queryset with ordering by name
         self.filters['customer'].queryset = Adresse.objects.filter(
             adressen_type='KUNDE'
@@ -420,13 +430,17 @@ class TimeEntryFilter(django_filters.FilterSet):
             document_type__key__iexact='order'
         ).order_by('-issue_date')
         
+        # Set projekt queryset - alle Projekte, damit auch abgeschlossene
+        # Projekte weiterhin auswertbar bleiben
+        self.filters['projekt'].queryset = Projekt.objects.all().order_by('titel')
+
         # Set performed_by queryset with ordering by username
         self.filters['performed_by'].queryset = User.objects.all().order_by('username')
-    
+
     class Meta:
         model = TimeEntry
         fields = [
-            'q', 'service_date_from', 'service_date_to', 
-            'customer', 'order', 'performed_by', 
+            'q', 'service_date_from', 'service_date_to',
+            'customer', 'order', 'projekt', 'performed_by',
             'is_travel_cost', 'is_billed'
         ]

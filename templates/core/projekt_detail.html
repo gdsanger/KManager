@@ -6,6 +6,9 @@
 
 {% block page_actions %}
 <div class="btn-toolbar gap-2">
+    <a href="{% url 'auftragsverwaltung:timeentry_create' %}?projekt={{ projekt.pk }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-clock-history"></i> Stunden erfassen
+    </a>
     <a href="{% url 'projekt_edit' projekt.pk %}" class="btn btn-outline-warning btn-sm">
         <i class="bi bi-pencil"></i> Bearbeiten
     </a>
@@ -62,6 +65,24 @@
                     {% endif %}
                 </div>
                 <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="text-muted small">Kunde</label>
+                            {% if projekt.kunde %}
+                            <p class="mb-0">{{ projekt.kunde.matchkey }}</p>
+                            {% else %}
+                            <p class="mb-0 text-muted">— (internes Projekt)</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Mandant</label>
+                            {% if projekt.company %}
+                            <p class="mb-0">{{ projekt.company.name }}</p>
+                            {% else %}
+                            <p class="mb-0 text-muted">—</p>
+                            {% endif %}
+                        </div>
+                    </div>
                     {% if projekt.beschreibung %}
                     <p class="mb-2">{{ projekt.beschreibung|linebreaksbr }}</p>
                     {% else %}
@@ -222,6 +243,127 @@
         </div><!-- /col-lg-4 -->
 
     </div><!-- /row -->
+
+    <!-- Stunden / Zeiterfassung -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history"></i> Stunden</span>
+                    <a href="{% url 'auftragsverwaltung:timeentry_create' %}?projekt={{ projekt.pk }}"
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-plus-circle"></i> Stunden erfassen
+                    </a>
+                </div>
+                <div class="card-body">
+
+                    <!-- Summenzeile -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <div class="border rounded p-2">
+                                <div class="text-muted small">Gesamt</div>
+                                <div class="fs-5">{{ total_hours|floatformat:2 }} h</div>
+                                <div class="text-muted small">{{ total_minutes }} Minuten</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-2">
+                                <div class="text-muted small">Abgerechnet</div>
+                                <div class="fs-5 text-success">{{ billed_hours|floatformat:2 }} h</div>
+                                <div class="text-muted small">{{ billed_minutes }} Minuten</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-2">
+                                <div class="text-muted small">Nicht abgerechnet</div>
+                                <div class="fs-5 text-warning">{{ unbilled_hours|floatformat:2 }} h</div>
+                                <div class="text-muted small">{{ unbilled_minutes }} Minuten</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if stunden_by_user or stunden_by_month %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted small text-uppercase">Je Benutzer</h6>
+                            <ul class="list-group list-group-flush">
+                                {% for row in stunden_by_user %}
+                                <li class="list-group-item list-group-item-dark d-flex justify-content-between py-1 px-2">
+                                    <span>{{ row.user }}</span>
+                                    <span>{{ row.hours|floatformat:2 }} h</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted small text-uppercase">Je Monat</h6>
+                            <ul class="list-group list-group-flush">
+                                {% for row in stunden_by_month %}
+                                <li class="list-group-item list-group-item-dark d-flex justify-content-between py-1 px-2">
+                                    <span>{{ row.month|date:"m/Y" }}</span>
+                                    <span>{{ row.hours|floatformat:2 }} h</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Einzelne Zeiterfassungen -->
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Datum</th>
+                                    <th>Kunde</th>
+                                    <th>Ausführender</th>
+                                    <th class="text-end">Dauer</th>
+                                    <th>Beschreibung</th>
+                                    <th class="text-center">Abgerechnet</th>
+                                    <th class="text-end">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in time_entries %}
+                                <tr>
+                                    <td class="text-nowrap">
+                                        <a href="{% url 'auftragsverwaltung:timeentry_detail' pk=entry.pk %}">
+                                            {{ entry.service_date|date:"d.m.Y" }}
+                                        </a>
+                                    </td>
+                                    <td class="text-nowrap">{{ entry.customer.matchkey }}</td>
+                                    <td class="text-nowrap">{{ entry.performed_by.username }}</td>
+                                    <td class="text-nowrap text-end">{{ entry.get_duration_display }}</td>
+                                    <td class="text-truncate" style="max-width: 320px;">{{ entry.description }}</td>
+                                    <td class="text-center">
+                                        {% if entry.is_billed %}
+                                        <span class="badge bg-success">Ja</span>
+                                        {% else %}
+                                        <span class="badge bg-warning text-dark">Nein</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'auftragsverwaltung:timeentry_detail' pk=entry.pk %}"
+                                           class="btn btn-sm btn-outline-info" title="Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">
+                                        <i class="bi bi-inbox"></i> Keine Stunden für dieses Projekt erfasst
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- New Folder Modal -->

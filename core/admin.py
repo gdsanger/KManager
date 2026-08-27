@@ -612,15 +612,15 @@ class ProjektFileInline(admin.TabularInline):
 
 @admin.register(Projekt)
 class ProjektAdmin(admin.ModelAdmin):
-    list_display = ('titel', 'status', 'erstellt_am', 'erstellt_von')
-    list_filter = ('status',)
-    search_fields = ('titel', 'beschreibung')
+    list_display = ('titel', 'kunde', 'company', 'status', 'erstellt_am', 'erstellt_von')
+    list_filter = ('status', 'company', 'kunde')
+    search_fields = ('titel', 'beschreibung', 'kunde__name', 'kunde__firma', 'company__name')
     readonly_fields = ('erstellt_am', 'aktualisiert_am')
     inlines = [ProjektFileInline]
 
     fieldsets = (
         ('Grunddaten', {
-            'fields': ('titel', 'beschreibung', 'status', 'erstellt_von')
+            'fields': ('titel', 'kunde', 'company', 'beschreibung', 'status', 'erstellt_von')
         }),
         ('Zeitstempel', {
             'fields': ('erstellt_am', 'aktualisiert_am'),
