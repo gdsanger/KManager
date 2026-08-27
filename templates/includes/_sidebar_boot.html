@@ -1,0 +1,20 @@
+{% comment %}
+    Anti-Flicker-Snippet für die eingeklappte Sidebar.
+
+    Muss direkt nach <body> stehen und synchron laufen: die Klasse
+    `sidebar-collapsed` muss gesetzt sein, bevor die Sidebar gezeichnet wird -
+    sonst blitzt bei jedem Seitenaufbau kurz die ausgeklappte Sidebar auf.
+    Deshalb bewusst das einzige verbleibende Inline-Skript der Base-Templates;
+    die restliche Sidebar-Logik liegt in static/js/sidebar.js.
+{% endcomment %}
+<script>
+    (function () {
+        try {
+            if (window.innerWidth >= 768 && window.localStorage.getItem('nav.sidebarCollapsed') === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+        } catch (e) {
+            /* localStorage nicht verfügbar - Sidebar bleibt ausgeklappt */
+        }
+    })();
+</script>
