@@ -78,25 +78,30 @@ class SalesDocumentFilter(django_filters.FilterSet):
     def search_filter(self, queryset, name, value):
         """
         Full-text search across multiple fields using OR.
-        Searches in: number, subject, notes_public, notes_internal
+        Searches in: number, subject, notes_public, notes_internal,
+        customer.matchkey, customer.name
         """
         if not value:
             return queryset
-        
+
         return queryset.filter(
             Q(number__icontains=value) |
             Q(subject__icontains=value) |
             Q(notes_public__icontains=value) |
-            Q(notes_internal__icontains=value)
+            Q(notes_internal__icontains=value) |
+            # Matchkey deckt Firma + Name ab; name bleibt als OR erhalten,
+            # damit die Suche nach dem reinen Personennamen weiter greift.
+            Q(customer__matchkey__icontains=value) |
+            Q(customer__name__icontains=value)
         )
-    
+
     def __init__(self, *args, **kwargs):
         """Initialize filter and set up customer queryset."""
         super().__init__(*args, **kwargs)
         # Import here to avoid circular imports
         from core.models import Adresse
-        # Set customer queryset with ordering by name for easier searching
-        self.filters['customer'].queryset = Adresse.objects.all().order_by('name')
+        # Set customer queryset ordered by matchkey (= displayed label)
+        self.filters['customer'].queryset = Adresse.objects.all().order_by('matchkey')
     
     class Meta:
         model = SalesDocument
@@ -157,13 +162,16 @@ class ContractFilter(django_filters.FilterSet):
     def search_filter(self, queryset, name, value):
         """
         Full-text search across multiple fields using OR.
-        Searches in: name, customer.name
+        Searches in: name, customer.matchkey, customer.name
         """
         if not value:
             return queryset
-        
+
         return queryset.filter(
             Q(name__icontains=value) |
+            # Matchkey deckt Firma + Name ab; name bleibt als OR erhalten,
+            # damit die Suche nach dem reinen Personennamen weiter greift.
+            Q(customer__matchkey__icontains=value) |
             Q(customer__name__icontains=value)
         )
     
@@ -363,15 +371,19 @@ class TimeEntryFilter(django_filters.FilterSet):
     def search_filter(self, queryset, name, value):
         """
         Full-text search across multiple fields using OR.
-        Searches in: description, order.number, order.subject, customer.name
+        Searches in: description, order.number, order.subject,
+        customer.matchkey, customer.name
         """
         if not value:
             return queryset
-        
+
         return queryset.filter(
             Q(description__icontains=value) |
             Q(order__number__icontains=value) |
             Q(order__subject__icontains=value) |
+            # Matchkey deckt Firma + Name ab; name bleibt als OR erhalten,
+            # damit die Suche nach dem reinen Personennamen weiter greift.
+            Q(customer__matchkey__icontains=value) |
             Q(customer__name__icontains=value)
         )
     

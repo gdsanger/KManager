@@ -246,7 +246,7 @@
                             <div>
                                 <div class="fw-semibold">{{ contract.name }}</div>
                                 <div class="small text-muted">
-                                    {% if contract.customer %}{{ contract.customer.name }} · {% endif %}
+                                    {% if contract.customer %}{{ contract.customer.matchkey }} · {% endif %}
                                     Nächster Lauf: {{ contract.next_run_date|date:"d.m.Y" }}
                                 </div>
                             </div>

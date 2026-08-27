@@ -150,7 +150,7 @@ class OutgoingInvoiceJournalEntry(models.Model):
     customer_name = models.CharField(
         max_length=200,
         verbose_name="Kundenname",
-        help_text="Snapshot: Kundenname"
+        help_text="Snapshot: Matchkey des Kunden („Firma (Name)“ bzw. „Name“)"
     )
     debtor_number = models.CharField(
         max_length=32,
