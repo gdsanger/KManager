@@ -14,8 +14,7 @@
             class="btn btn-outline-primary"
             hx-post="{% url 'auftragsverwaltung:contracts_run_billing' %}"
             hx-target="#bulk-billing-result"
-            hx-swap="innerHTML"
-            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+            hx-swap="innerHTML">
         <i class="bi bi-play-circle"></i> Alle fälligen abrechnen
     </button>
 </div>
