@@ -37,18 +37,12 @@
     }
 }
 
-/* Left pages (even) - for double-sided printing */
-@page :left {
-    margin-left: 2.5cm;
-    margin-right: 1.5cm;
-}
-
-/* Right pages (odd) - for double-sided printing */
-@page :right {
-    margin-left: 2.5cm;
-    margin-right: 1.5cm;
-}
-
+/* Es ist kein doppelseitiger Druck vorgesehen (keine gebundenen Belege),
+   daher gilt für alle Seiten ausschließlich die Basis-@page-Regel oben.
+   Frühere @page :left / :right Regeln wurden entfernt: sie waren identisch
+   statt gespiegelt und haben dadurch links/rechts gegenüber der Basisregel
+   vertauscht (links 2.5cm/rechts 1.5cm statt links 1.5cm/rechts 2.5cm) und
+   den Satzspiegel auf allen Nicht-Erstseiten unvorhersehbar verschoben. */
 
 /* ============================================
    Basic Typography

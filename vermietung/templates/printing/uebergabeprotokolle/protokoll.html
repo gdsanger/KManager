@@ -120,7 +120,10 @@
     font-weight: bold;
 }
 
-/* Footer on every page */
+/* Footer on every page. @bottom-left und @bottom-center teilen sich hier
+   bewusst die Breite (Firmeninfo links, Seitenzahl mittig); anders als bei
+   der allein stehenden @bottom-center-Box in invoice.html KEIN width: 100%
+   setzen, sonst überlappt die Firmeninfo die Seitenzahl. */
 @page {
     @bottom-left {
         content: flow(footer-content);
@@ -132,6 +135,8 @@
     }
 }
 
+/* Seitenränder gehören ausschließlich in die @page-Regel, nie zusätzlich
+   als horizontale margin/padding hier. */
 .company-footer {
     flow: static(footer-content);
     margin-top: 24pt;

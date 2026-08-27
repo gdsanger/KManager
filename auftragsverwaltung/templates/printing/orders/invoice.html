@@ -4,6 +4,9 @@
 
 {% block inline_styles %}
 /* Invoice-specific styles */
+/* Grundsatz: Seitenränder gehören ausschließlich in die @page-Regel, nie
+   zusätzlich als horizontale margin/padding in Inhaltselemente — sonst
+   addieren sich die Ränder und der Satzspiegel wird eingerückt/verschmälert. */
 .address-block {
     margin-bottom: 24pt;
 }
@@ -173,7 +176,9 @@
 }
 
 .footer-text {
-    margin: 16pt 2.5cm 0 1.5cm;
+    /* Seitenränder kommen ausschließlich aus @page; hier keine
+       zusätzlichen horizontalen Ränder setzen. */
+    margin: 16pt 0 0 0;
     font-size: 9pt;
     color: #555;
 }
@@ -189,13 +194,20 @@
     margin: 2.5cm 2.5cm 3cm 1.5cm;
     @bottom-center {
         content: element(page-footer);
+        /* Ohne width wird eine allein stehende bottom-center-Randbox nur so
+           breit wie ihr Inhalt und horizontal zentriert (CSS Paged Media).
+           width: 100% zwingt sie auf die volle Satzbreite. */
+        width: 100%;
+        padding: 0;
     }
 }
 
 /* 4-Column Footer Styles - displayed on every page */
 .company-footer {
     position: running(page-footer);
-    margin: 24pt 2.5cm 12pt 1.5cm;
+    /* Seitenränder kommen ausschließlich aus @page; hier keine
+       zusätzlichen horizontalen Ränder setzen. */
+    margin: 24pt 0 12pt 0;
     padding-top: 8pt;
     page-break-inside: avoid;
 }
