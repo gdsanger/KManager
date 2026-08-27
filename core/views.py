@@ -2,7 +2,11 @@ import logging
 import os
 import json
 
+from decimal import Decimal
+
 from django.db import models
+from django.db.models import Q, Sum
+from django.db.models.functions import TruncMonth
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
@@ -923,7 +927,7 @@ def unit_delete(request, pk):
 @login_required
 def projekt_list(request):
     """List all projects with optional search/filter."""
-    projekte = Projekt.objects.all()
+    projekte = Projekt.objects.select_related('kunde', 'company')
 
     search = request.GET.get('search', '').strip()
     if search:
@@ -942,8 +946,10 @@ def projekt_list(request):
 
 @login_required
 def projekt_detail(request, pk):
-    """Detail view for a project including its files and folders."""
-    projekt = get_object_or_404(Projekt, pk=pk)
+    """Detail view for a project including its files, folders and time entries."""
+    projekt = get_object_or_404(
+        Projekt.objects.select_related('kunde', 'company'), pk=pk
+    )
 
     # Current folder from query string
     current_ordner = request.GET.get('ordner', '').strip()
@@ -970,7 +976,69 @@ def projekt_detail(request, pk):
         'breadcrumb': breadcrumb,
         'upload_form': upload_form,
         'ordner_form': ordner_form,
+        **get_projekt_stunden_context(projekt),
     })
+
+
+def get_projekt_stunden_context(projekt):
+    """
+    Stundenübersicht eines Projekts: Einzeleinträge plus Summen.
+
+    Returns:
+        dict mit ``time_entries`` (Liste der Zeiterfassungen), den Summen in
+        Minuten/Stunden (gesamt, abgerechnet, offen) sowie Auswertungen je
+        Benutzer und je Monat.
+    """
+    time_entries = list(
+        projekt.time_entries.select_related('customer', 'performed_by', 'order')
+        .order_by('-service_date', '-created_at')
+    )
+
+    aggregates = projekt.time_entries.aggregate(
+        total=Sum('duration_minutes'),
+        billed=Sum('duration_minutes', filter=Q(is_billed=True)),
+    )
+    total_minutes = aggregates['total'] or 0
+    billed_minutes = aggregates['billed'] or 0
+    unbilled_minutes = total_minutes - billed_minutes
+
+    def _hours(minutes):
+        return (Decimal(minutes) / Decimal('60')) if minutes else Decimal('0')
+
+    by_user = [
+        {
+            'user': row['performed_by__username'],
+            'minutes': row['minutes'] or 0,
+            'hours': _hours(row['minutes'] or 0),
+        }
+        for row in projekt.time_entries.values('performed_by__username')
+        .annotate(minutes=Sum('duration_minutes'))
+        .order_by('performed_by__username')
+    ]
+
+    by_month = [
+        {
+            'month': row['month'],
+            'minutes': row['minutes'] or 0,
+            'hours': _hours(row['minutes'] or 0),
+        }
+        for row in projekt.time_entries.annotate(month=TruncMonth('service_date'))
+        .values('month')
+        .annotate(minutes=Sum('duration_minutes'))
+        .order_by('-month')
+    ]
+
+    return {
+        'time_entries': time_entries,
+        'total_minutes': total_minutes,
+        'total_hours': _hours(total_minutes),
+        'billed_minutes': billed_minutes,
+        'billed_hours': _hours(billed_minutes),
+        'unbilled_minutes': unbilled_minutes,
+        'unbilled_hours': _hours(unbilled_minutes),
+        'stunden_by_user': by_user,
+        'stunden_by_month': by_month,
+    }
 
 
 @login_required
@@ -1015,7 +1083,18 @@ def projekt_delete(request, pk):
     from pathlib import Path
 
     projekt = get_object_or_404(Projekt, pk=pk)
+    time_entry_count = projekt.time_entries.count()
+
     if request.method == 'POST':
+        # Zeiterfassungen sind über PROTECT gesichert - erst die Zuordnung lösen
+        if time_entry_count:
+            messages.error(
+                request,
+                f'Projekt „{projekt.titel}" kann nicht gelöscht werden: Es sind noch '
+                f'{time_entry_count} Zeiterfassung(en) zugeordnet.'
+            )
+            return redirect('projekt_detail', pk=projekt.pk)
+
         titel = projekt.titel
         # Remove all physical files (cascade delete handles DB records)
         project_dir = Path(settings.PROJECT_DOCUMENTS_ROOT) / str(projekt.pk)
@@ -1027,7 +1106,11 @@ def projekt_delete(request, pk):
         projekt.delete()
         messages.success(request, f'Projekt „{titel}" wurde gelöscht.')
         return redirect('projekt_list')
-    return render(request, 'core/projekt_confirm_delete.html', {'projekt': projekt})
+
+    return render(request, 'core/projekt_confirm_delete.html', {
+        'projekt': projekt,
+        'time_entry_count': time_entry_count,
+    })
 
 
 @login_required

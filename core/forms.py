@@ -6,7 +6,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
-from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart, Unit, Projekt
+from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart, Unit, Projekt, Adresse
 
 
 class SmtpSettingsForm(forms.ModelForm):
@@ -358,17 +358,34 @@ class ProjektForm(forms.ModelForm):
 
     class Meta:
         model = Projekt
-        fields = ['titel', 'beschreibung', 'status']
+        fields = ['titel', 'kunde', 'company', 'beschreibung', 'status']
         widgets = {
             'titel': forms.TextInput(attrs={'class': 'form-control'}),
+            'kunde': forms.Select(attrs={'class': 'form-select'}),
+            'company': forms.Select(attrs={'class': 'form-select'}),
             'beschreibung': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
             'titel': 'Titel *',
+            'kunde': 'Kunde',
+            'company': 'Mandant',
             'beschreibung': 'Beschreibung',
             'status': 'Status *',
         }
+        help_texts = {
+            'kunde': 'Optional - leer lassen für interne Projekte ohne Kundenbezug',
+            'company': 'Optional - Mandant, dem das Projekt zugeordnet ist',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Nur Kundenadressen zur Auswahl stellen, sortiert wie im Dropdown angezeigt
+        self.fields['kunde'].queryset = Adresse.objects.filter(
+            adressen_type='KUNDE'
+        ).order_by('matchkey')
+        self.fields['kunde'].empty_label = '-- Kein Kunde (intern) --'
+        self.fields['company'].empty_label = '-- Kein Mandant --'
 
 
 class ProjektOrdnerForm(forms.Form):

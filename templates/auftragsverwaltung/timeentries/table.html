@@ -60,10 +60,12 @@
 
             {% if table.total_minutes is not None and table.total_hours is not None %}
             <tfoot>
+                {# Die Summe steht unter der Spalte "Dauer" (6. Spalte: Datum, Kunde,
+                   Auftrag, Projekt, Benutzer, Dauer). #}
                 <tr class="table-secondary fw-semibold">
-                    <th colspan="4" class="text-end text-white">Gesamt</th>
+                    <th colspan="5" class="text-end text-white">Gesamt</th>
                     <th class="text-end text-white">{{ table.total_hours|floatformat:2 }} h</th>
-                    <th colspan="{{ table.columns|length|add:'-5' }}"></th>
+                    <th colspan="{{ table.columns|length|add:'-6' }}"></th>
                 </tr>
             </tfoot>
             {% endif %}

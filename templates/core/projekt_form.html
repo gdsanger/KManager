@@ -27,6 +27,25 @@
                             {% endif %}
                         </div>
 
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.kunde.id_for_label }}" class="form-label">{{ form.kunde.label }}</label>
+                                {{ form.kunde }}
+                                <div class="form-text">{{ form.kunde.help_text }}</div>
+                                {% if form.kunde.errors %}
+                                    <div class="text-danger small mt-1">{{ form.kunde.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.company.id_for_label }}" class="form-label">{{ form.company.label }}</label>
+                                {{ form.company }}
+                                <div class="form-text">{{ form.company.help_text }}</div>
+                                {% if form.company.errors %}
+                                    <div class="text-danger small mt-1">{{ form.company.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="{{ form.beschreibung.id_for_label }}" class="form-label">{{ form.beschreibung.label }}</label>
                             {{ form.beschreibung }}

@@ -1349,11 +1349,33 @@ class Projekt(models.Model):
     """
     Projekt model for project management.
     Projects can have files and folders attached to them.
+
+    Kunde und Mandant sind optional: interne Projekte ohne Kundenbezug bleiben
+    möglich. Ist ein Kunde bzw. Mandant hinterlegt, wird er bei der Zeiterfassung
+    aus dem Projekt heraus vorbelegt und gegen abweichende Zuordnungen geprüft.
     """
     titel = models.CharField(
         max_length=255,
         verbose_name="Titel",
         help_text="Projektbezeichnung"
+    )
+    kunde = models.ForeignKey(
+        'core.Adresse',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='projekte',
+        verbose_name="Kunde",
+        help_text="Optionaler Kunde des Projekts (leer = internes Projekt)"
+    )
+    company = models.ForeignKey(
+        'core.Mandant',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='projekte',
+        verbose_name="Mandant",
+        help_text="Optionaler Mandant des Projekts"
     )
     beschreibung = models.TextField(
         blank=True,
