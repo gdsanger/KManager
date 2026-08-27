@@ -3063,7 +3063,7 @@ class Eingangsrechnung(models.Model):
         ordering = ['-belegdatum', '-erstellt_am']
     
     def __str__(self):
-        return f"{self.belegnummer} - {self.lieferant.name} - {self.belegdatum}"
+        return f"{self.belegnummer} - {self.lieferant.matchkey} - {self.belegdatum}"
     
     @property
     def nettobetrag(self):

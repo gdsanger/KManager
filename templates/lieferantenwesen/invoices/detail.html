@@ -51,7 +51,7 @@
                     <div class="col-md-4 text-muted">Lieferant</div>
                     <div class="col-md-8">
                         <a href="{% url 'vermietung:lieferant_detail' invoice.supplier.pk %}">
-                            {{ invoice.supplier.name }}
+                            {{ invoice.supplier.matchkey }}
                         </a>
                     </div>
                 </div>

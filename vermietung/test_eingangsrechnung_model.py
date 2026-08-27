@@ -87,7 +87,7 @@ class EingangsrechnungModelTestCase(TestCase):
             betreff='Test'
         )
         
-        expected = f"RE-2024-001 - {self.lieferant.name} - {rechnung.belegdatum}"
+        expected = f"RE-2024-001 - {self.lieferant.matchkey} - {rechnung.belegdatum}"
         self.assertEqual(str(rechnung), expected)
     
     def test_leistungszeitraum_validation(self):
