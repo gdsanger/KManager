@@ -10,7 +10,7 @@
 </a>
 {% endif %}
 {% if invoice.pdf_file %}
-<a href="{{ invoice.pdf_file.url }}" class="btn btn-outline-light" target="_blank">
+<a href="{% url 'lieferantenwesen:invoice_pdf' invoice.pk %}" class="btn btn-outline-light" target="_blank">
     <i class="bi bi-file-earmark-pdf"></i> PDF
 </a>
 {% endif %}
@@ -25,10 +25,35 @@
 </form>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .invoice-pdf-card {
+        position: sticky;
+        top: 80px;
+    }
+
+    .invoice-pdf-frame {
+        width: 100%;
+        height: calc(100vh - 220px);
+        min-height: 600px;
+        border: 0;
+    }
+
+    .invoice-pdf-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 400px;
+        color: var(--bs-secondary-color);
+    }
+</style>
+{% endblock %}
+
 {% block main_content %}
 <div class="row">
     <!-- Left column: invoice data -->
-    <div class="col-lg-8">
+    <div class="col-lg-7">
 
         <!-- Header data -->
         <div class="card mb-3">
@@ -233,10 +258,8 @@
             </div>
         </div>
         {% endif %}
-    </div>
 
-    <!-- Right column: metadata -->
-    <div class="col-lg-4">
+        <!-- Informationen -->
         <div class="card mb-3">
             <div class="card-header"><h5 class="mb-0"><i class="bi bi-info-circle"></i> Informationen</h5></div>
             <div class="card-body small">
@@ -268,6 +291,30 @@
                 <div class="row mb-2">
                     <div class="col-6 text-muted">Abgelehnt von</div>
                     <div class="col-6">{{ invoice.rejected_by.get_full_name|default:invoice.rejected_by.username }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right column: PDF preview -->
+    <div class="col-lg-5">
+        <div class="card mb-3 invoice-pdf-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-pdf"></i> Beleg</h5>
+                {% if invoice.pdf_file %}
+                <a href="{% url 'lieferantenwesen:invoice_pdf' invoice.pk %}" class="btn btn-sm btn-outline-light" target="_blank">
+                    <i class="bi bi-box-arrow-up-right"></i> In neuem Tab öffnen
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if invoice.pdf_file %}
+                <iframe src="{% url 'lieferantenwesen:invoice_pdf' invoice.pk %}" class="invoice-pdf-frame" title="PDF-Vorschau der Eingangsrechnung"></iframe>
+                {% else %}
+                <div class="invoice-pdf-placeholder">
+                    <i class="bi bi-file-earmark-x display-4 mb-2"></i>
+                    <p class="mb-0">Kein PDF hinterlegt</p>
                 </div>
                 {% endif %}
             </div>

@@ -14,6 +14,7 @@ urlpatterns = [
     path("eingangsrechnungen/neu/", views.invoice_create, name="invoice_create"),
     path("eingangsrechnungen/pdf-upload/", views.invoice_upload_pdf, name="invoice_upload_pdf"),
     path("eingangsrechnungen/<int:pk>/", views.invoice_detail, name="invoice_detail"),
+    path("eingangsrechnungen/<int:pk>/pdf/", views.invoice_pdf, name="invoice_pdf"),
     path("eingangsrechnungen/<int:pk>/bearbeiten/", views.invoice_edit, name="invoice_edit"),
     path("eingangsrechnungen/<int:pk>/freigabe/", views.invoice_approve, name="invoice_approve"),
     path("eingangsrechnungen/<int:pk>/bezahlt/", views.invoice_mark_as_paid, name="invoice_mark_as_paid"),

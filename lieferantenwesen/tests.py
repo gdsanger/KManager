@@ -8,13 +8,17 @@ Tests cover:
 - Approval workflow
 - Supplier (Adresse with LIEFERANT type) matching
 """
+import shutil
+import tempfile
 from datetime import date
 from decimal import Decimal
 from html.parser import HTMLParser
 
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
-from django.test import Client, TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from core.models import Adresse
@@ -631,3 +635,100 @@ class LineItemsExtractionTest(TestCase):
         line2 = lines.get(position_no=2)
         self.assertEqual(line2.description, "Test Item 2")
         self.assertEqual(line2.net_amount, Decimal("200.00"))
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class InvoicePdfViewTest(TestCase):
+    """Test the authenticated inline PDF delivery view (invoice_pdf)."""
+
+    MINIMAL_PDF = b"%PDF-1.4\n%%EOF"
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.client = Client()
+        self.staff_user = User.objects.create_user(
+            username="pdfstaff", password="pdfpass", is_staff=True
+        )
+        self.outsider = User.objects.create_user(
+            username="pdfoutsider", password="pdfpass"
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="PDF Test Lieferant",
+            strasse="PDFstr. 1",
+            plz="77777",
+            ort="PDFstadt",
+            land="DE",
+        )
+        self.invoice_without_pdf = InvoiceIn.objects.create(
+            invoice_no="PDF-000",
+            invoice_date=date(2026, 4, 1),
+            supplier=self.supplier,
+        )
+        self.invoice_with_pdf = InvoiceIn.objects.create(
+            invoice_no="PDF-001",
+            invoice_date=date(2026, 4, 1),
+            supplier=self.supplier,
+            pdf_file=SimpleUploadedFile(
+                "test_invoice.pdf", self.MINIMAL_PDF, content_type="application/pdf"
+            ),
+        )
+
+    def test_pdf_requires_login(self):
+        url = reverse("lieferantenwesen:invoice_pdf", kwargs={"pk": self.invoice_with_pdf.pk})
+        response = self.client.get(url)
+        self.assertRedirects(response, f"/login/?next={url}", fetch_redirect_response=False)
+
+    def test_pdf_requires_lieferantenwesen_access(self):
+        self.client.login(username="pdfoutsider", password="pdfpass")
+        url = reverse("lieferantenwesen:invoice_pdf", kwargs={"pk": self.invoice_with_pdf.pk})
+        response = self.client.get(url)
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_pdf_streamed_inline_for_authorized_user(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        url = reverse("lieferantenwesen:invoice_pdf", kwargs={"pk": self.invoice_with_pdf.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("inline", response["Content-Disposition"])
+        self.assertNotIn("attachment", response["Content-Disposition"])
+
+    def test_pdf_sets_sameorigin_frame_header(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        url = reverse("lieferantenwesen:invoice_pdf", kwargs={"pk": self.invoice_with_pdf.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.get("X-Frame-Options"), "SAMEORIGIN")
+
+    def test_pdf_404_when_no_file_attached(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        url = reverse("lieferantenwesen:invoice_pdf", kwargs={"pk": self.invoice_without_pdf.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_detail_page_links_to_pdf_route_not_media_url(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        detail_url = reverse(
+            "lieferantenwesen:invoice_detail", kwargs={"pk": self.invoice_with_pdf.pk}
+        )
+        pdf_url = reverse(
+            "lieferantenwesen:invoice_pdf", kwargs={"pk": self.invoice_with_pdf.pk}
+        )
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, pdf_url)
+        self.assertNotContains(response, self.invoice_with_pdf.pdf_file.url)
+
+    def test_detail_page_shows_placeholder_without_pdf(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        detail_url = reverse(
+            "lieferantenwesen:invoice_detail", kwargs={"pk": self.invoice_without_pdf.pk}
+        )
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Kein PDF hinterlegt")
+        self.assertNotContains(response, "<iframe")

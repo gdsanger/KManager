@@ -6,8 +6,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q, Sum
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 
 from .forms import ApprovalForm, InvoiceInForm, InvoiceInLineFormSet
@@ -133,6 +135,29 @@ def invoice_detail(request, pk):
             "today": timezone.now().date(),
         },
     )
+
+
+@login_required
+@lieferantenwesen_required
+@xframe_options_sameorigin
+def invoice_pdf(request, pk):
+    """Stream the PDF file of an invoice inline for preview in an iframe."""
+    invoice = get_object_or_404(InvoiceIn, pk=pk)
+
+    if not invoice.pdf_file:
+        raise Http404("Kein PDF-Dokument für diese Rechnung hinterlegt.")
+
+    if not os.path.exists(invoice.pdf_file.path):
+        raise Http404("PDF-Datei wurde nicht gefunden im Filesystem.")
+
+    response = FileResponse(
+        invoice.pdf_file.open("rb"),
+        content_type="application/pdf",
+    )
+    response["Content-Disposition"] = (
+        f'inline; filename="{os.path.basename(invoice.pdf_file.name)}"'
+    )
+    return response
 
 
 @login_required
