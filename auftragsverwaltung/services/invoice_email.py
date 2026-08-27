@@ -73,7 +73,7 @@ def send_invoice_email(invoice, to_customer=True, to_internal=False, request=Non
             recipients.append(invoice.customer.invoice_email)
         else:
             raise InvoiceEmailError(
-                f"Kunde '{invoice.customer.name if invoice.customer else 'N/A'}' "
+                f"Kunde '{invoice.customer.matchkey if invoice.customer else 'N/A'}' "
                 "hat keine Rechnungs-E-Mail-Adresse hinterlegt."
             )
 
@@ -122,7 +122,7 @@ def send_invoice_email(invoice, to_customer=True, to_internal=False, request=Non
     # Build email context
     email_context = {
         'invoice_number': invoice.number,
-        'customer_name': invoice.customer.name if invoice.customer else 'N/A',
+        'customer_name': invoice.customer.matchkey if invoice.customer else 'N/A',
         'amount_net': f"{invoice.total_net:.2f}",
         'amount_gross': f"{invoice.total_gross:.2f}",
         'due_date': invoice.due_date.strftime('%d.%m.%Y') if invoice.due_date else '',

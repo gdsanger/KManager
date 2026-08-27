@@ -36,6 +36,14 @@
                     <div class="col-md-4 text-muted">Firma:</div>
                     <div class="col-md-8">{{ adresse.firma|default:"-" }}</div>
                 </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Matchkey:</div>
+                    <div class="col-md-8">
+                        <span class="font-monospace">{{ adresse.matchkey }}</span>
+                        <i class="bi bi-info-circle text-muted ms-1"
+                           title="Systemweiter Anzeigeschlüssel. Ergibt sich automatisch aus Firma und Name und ist nicht editierbar."></i>
+                    </div>
+                </div>
             </div>
         </div>
 

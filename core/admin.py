@@ -25,14 +25,15 @@ class AdresseKontaktInline(admin.TabularInline):
 
 @admin.register(Adresse)
 class AdressenAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'strasse', 'plz', 'ort', 'land', 'country_code', 'is_business', 'is_eu', 'telefon', 'email')
-    search_fields = ('firma', 'name', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'vat_id', 'debitor_number')
+    list_display = ('matchkey', 'strasse', 'plz', 'ort', 'land', 'country_code', 'is_business', 'is_eu', 'telefon', 'email')
+    search_fields = ('matchkey', 'firma', 'name', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'vat_id', 'debitor_number')
     list_filter = ('adressen_type', 'land', 'country_code', 'is_business', 'is_eu')
+    readonly_fields = ('matchkey',)
     inlines = [AdresseKontaktInline]
-    
+
     fieldsets = (
         ('Basisdaten', {
-            'fields': ('adressen_type', 'firma', 'anrede', 'name')
+            'fields': ('adressen_type', 'firma', 'anrede', 'name', 'matchkey')
         }),
         ('Adresse', {
             'fields': ('strasse', 'plz', 'ort', 'land')

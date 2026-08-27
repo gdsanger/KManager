@@ -364,7 +364,7 @@
                                                     <i class="bi bi-person-badge"></i> {{ aktivitaet.assigned_user.username }}
                                                 {% endif %}
                                                 {% if aktivitaet.assigned_supplier %}
-                                                    <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.name }}
+                                                    <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.matchkey }}
                                                 {% endif %}
                                                 {% if not aktivitaet.assigned_user and not aktivitaet.assigned_supplier %}
                                                     <span class="text-muted">-</span>

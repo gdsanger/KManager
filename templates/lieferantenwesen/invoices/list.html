@@ -85,7 +85,7 @@
                     <td>
                         <a href="{% url 'lieferantenwesen:invoice_detail' inv.pk %}">{{ inv.invoice_no }}</a>
                     </td>
-                    <td>{{ inv.supplier.name }}</td>
+                    <td>{{ inv.supplier.matchkey }}</td>
                     <td>{{ inv.invoice_date|date:"d.m.Y" }}</td>
                     <td>
                         {% if inv.due_date %}

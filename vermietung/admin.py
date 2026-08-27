@@ -845,7 +845,7 @@ class AktivitaetAdmin(admin.ModelAdmin):
         elif obj.vertrag:
             return f"Vertrag: {obj.vertrag.vertragsnummer}"
         elif obj.kunde:
-            return f"Kunde: {obj.kunde.name}"
+            return f"Kunde: {obj.kunde.matchkey}"
         return '-'
     get_context_type.short_description = 'Kontext'
     

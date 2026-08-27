@@ -166,7 +166,7 @@
                                     {% endif %}
                                 {% endif %}
                                 {% if aktivitaet.assigned_supplier %}
-                                    <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.name }}
+                                    <br><i class="bi bi-truck"></i> {{ aktivitaet.assigned_supplier.matchkey }}
                                 {% endif %}
                                 {% if aktivitaet.cc_users.exists %}
                                     <br><i class="bi bi-eye"></i> 

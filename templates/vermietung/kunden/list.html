@@ -40,7 +40,7 @@
         <thead>
             <tr>
                 {% block table_headers %}
-                <th>Name</th>
+                <th>Matchkey</th>
                 <th>Firma</th>
                 <th>Adresse</th>
                 <th>Land</th>
@@ -57,8 +57,11 @@
                 <tr>
                     <td>
                         <a href="{% url 'vermietung:kunde_detail' kunde.pk %}" class="text-decoration-none">
-                            {% if kunde.anrede %}{{ kunde.get_anrede_display }} {% endif %}{{ kunde.name }}
+                            {{ kunde.matchkey }}
                         </a>
+                        {% if kunde.anrede %}
+                        <br><small class="text-muted">{{ kunde.get_anrede_display }} {{ kunde.name }}</small>
+                        {% endif %}
                     </td>
                     <td>{{ kunde.firma|default:"-" }}</td>
                     <td>

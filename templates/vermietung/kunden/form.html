@@ -57,6 +57,18 @@
                         {% endif %}
                     </div>
 
+                    <div class="mb-3">
+                        <label for="matchkey_readonly" class="form-label">Matchkey</label>
+                        <input type="text" class="form-control" id="matchkey_readonly"
+                               value="{{ kunde.matchkey|default_if_none:"" }}"
+                               placeholder="Wird beim Speichern automatisch erzeugt"
+                               disabled readonly>
+                        <div class="form-text">
+                            Systemweiter Anzeigeschlüssel. Ergibt sich automatisch aus Firma und Name
+                            („Firma (Name)“ bzw. „Name“) und kann nicht bearbeitet werden.
+                        </div>
+                    </div>
+
                     <hr class="my-4">
                     <h5 class="mb-3"><i class="bi bi-geo-alt"></i> Adressdaten</h5>
                     

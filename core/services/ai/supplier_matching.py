@@ -167,8 +167,11 @@ Rules:
         normalized_target = self._normalize_name(name)
         
         for supplier in suppliers:
-            # Check both name and firma fields
-            for field in [supplier.name, supplier.firma]:
+            # Check name, firma and matchkey. Der Matchkey ist nur ein
+            # zusätzliches Matchfeld - die Einzelfelder bleiben maßgeblich,
+            # weil Lieferantennamen aus OCR selten das Format "Firma (Name)"
+            # haben.
+            for field in [supplier.name, supplier.firma, supplier.matchkey]:
                 if field:
                     normalized_supplier = self._normalize_name(field)
                     if normalized_supplier == normalized_target:
@@ -181,8 +184,8 @@ Rules:
         for supplier in suppliers:
             max_similarity = 0.0
             
-            # Check similarity with both name and firma
-            for field in [supplier.name, supplier.firma]:
+            # Check similarity with name, firma and matchkey (siehe oben)
+            for field in [supplier.name, supplier.firma, supplier.matchkey]:
                 if field:
                     similarity = self._calculate_similarity(name, field)
                     max_similarity = max(max_similarity, similarity)

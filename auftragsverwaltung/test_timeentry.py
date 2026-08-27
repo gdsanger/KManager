@@ -534,16 +534,16 @@ class TimeEntryCustomerChoicesTestCase(TestCase):
         self.client.login(username="testuser", password="testpass")
 
     def test_create_form_shows_firma_and_name(self):
-        """Create-Formular listet Kunden als 'Firma - (Name)' auf"""
+        """Create-Formular listet Kunden mit ihrem Matchkey 'Firma (Name)' auf"""
         response = self.client.get(reverse('auftragsverwaltung:timeentry_create'))
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn('Alpha AG - (Max Mustermann)', content)
-        self.assertIn('Beta GmbH - (Max Mustermann)', content)
+        self.assertIn('Alpha AG (Max Mustermann)', content)
+        self.assertIn('Beta GmbH (Max Mustermann)', content)
         # Kunde ohne Firma wird nur mit Namen dargestellt
         self.assertIn('Erika Einzel', content)
-        self.assertNotIn(' - (Erika Einzel)', content)
+        self.assertNotIn('(Erika Einzel)', content)
 
     def test_update_form_shows_firma_and_name_and_preselects_customer(self):
         """Update-Formular zeigt Firma + Name und behält die Vorauswahl bei"""
@@ -572,14 +572,14 @@ class TimeEntryCustomerChoicesTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn('Alpha AG - (Max Mustermann)', content)
+        self.assertIn('Alpha AG (Max Mustermann)', content)
         self.assertIn(
             f'<option value="{self.customer_alpha.pk}" selected>',
             content
         )
 
-    def test_customer_queryset_is_ordered_by_firma_then_name(self):
-        """Kunden ohne Firma stehen vorn, danach alphabetisch nach Firma/Name"""
+    def test_customer_queryset_is_ordered_by_matchkey(self):
+        """Kunden werden alphabetisch nach ihrem Matchkey sortiert"""
         from auftragsverwaltung.views import get_timeentry_customers
 
         ordered = list(get_timeentry_customers())
@@ -587,10 +587,10 @@ class TimeEntryCustomerChoicesTestCase(TestCase):
         self.assertEqual(
             ordered,
             [
-                self.customer_empty_firma,   # firma '' -> Name "Anton Allein"
-                self.customer_no_firma,      # firma NULL -> Name "Erika Einzel"
-                self.customer_alpha,         # Alpha AG
-                self.customer_beta,          # Beta GmbH
+                self.customer_alpha,         # "Alpha AG (Max Mustermann)"
+                self.customer_empty_firma,   # firma '' -> "Anton Allein"
+                self.customer_beta,          # "Beta GmbH (Max Mustermann)"
+                self.customer_no_firma,      # firma NULL -> "Erika Einzel"
             ]
         )
 

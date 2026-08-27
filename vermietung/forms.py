@@ -96,7 +96,7 @@ class MietObjektForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Filter standort to only show STANDORT addresses
-        self.fields['standort'].queryset = Adresse.objects.filter(adressen_type='STANDORT').order_by('name')
+        self.fields['standort'].queryset = Adresse.objects.filter(adressen_type='STANDORT').order_by('matchkey')
         # Order mandanten by name
         self.fields['mandant'].queryset = Mandant.objects.all().order_by('name')
         
@@ -592,7 +592,7 @@ class VertragForm(forms.ModelForm):
         # Filter mieter to only show KUNDE addresses
         self.fields['mieter'].queryset = Adresse.objects.filter(
             adressen_type='KUNDE'
-        ).order_by('name')
+        ).order_by('matchkey')
         
         # Make vertragsnummer, miete and manual_net_total not required
         self.fields['vertragsnummer'].required = False
@@ -1128,7 +1128,7 @@ class AktivitaetForm(forms.ModelForm):
         # Filter assigned_supplier to only show LIEFERANT addresses
         self.fields['assigned_supplier'].queryset = Adresse.objects.filter(
             adressen_type='LIEFERANT'
-        ).order_by('name')
+        ).order_by('matchkey')
         self.fields['assigned_supplier'].required = False
         
         # Filter ersteller to show all users
@@ -1146,7 +1146,7 @@ class AktivitaetForm(forms.ModelForm):
         # Filter kunde to only show KUNDE addresses
         self.fields['kunde'].queryset = Adresse.objects.filter(
             adressen_type='KUNDE'
-        ).order_by('name')
+        ).order_by('matchkey')
         self.fields['kunde'].required = False
         
         # Configure bereich field - make it optional
@@ -1412,7 +1412,7 @@ class EingangsrechnungForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Filter lieferant to only show suppliers
-        self.fields['lieferant'].queryset = Adresse.objects.filter(adressen_type='LIEFERANT')
+        self.fields['lieferant'].queryset = Adresse.objects.filter(adressen_type='LIEFERANT').order_by('matchkey')
 
         # Fix date field formatting for HTML5 date input
         # HTML5 date inputs require ISO format (YYYY-MM-DD)

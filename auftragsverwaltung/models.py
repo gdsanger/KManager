@@ -1523,7 +1523,7 @@ class TimeEntry(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.service_date} - {self.customer.name} - {self.duration_minutes} min"
+        return f"{self.service_date} - {self.customer.matchkey} - {self.duration_minutes} min"
     
     def clean(self):
         """Validate time entry data

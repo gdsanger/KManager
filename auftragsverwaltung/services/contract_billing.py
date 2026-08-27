@@ -111,9 +111,9 @@ class ContractBillingService:
 
                 # Log successful invoice generation
                 if contract.auto_finalize:
-                    description = f'Rechnung {document.number} für {contract.customer.name if contract.customer else "N/A"} finalisiert'
+                    description = f'Rechnung {document.number} für {contract.customer.matchkey if contract.customer else "N/A"} finalisiert'
                 else:
-                    description = f'Rechnung {document.number} (Entwurf) für {contract.customer.name if contract.customer else "N/A"} erstellt'
+                    description = f'Rechnung {document.number} (Entwurf) für {contract.customer.matchkey if contract.customer else "N/A"} erstellt'
 
                 ActivityStreamService.add(
                     company=contract.company,

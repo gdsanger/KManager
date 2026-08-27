@@ -1,8 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q, Sum, Max, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q, Sum, Max
 from django.http import Http404, JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
@@ -729,14 +728,14 @@ def ajax_search_customers(request):
         if not query or len(query) < 2:
             return JsonResponse({'customers': []})
 
-        # Search across name and firma fields using partial match (icontains)
-        # OR-combination: match if query is found in either name or firma
+        # Search across matchkey, name and firma using partial match (icontains)
+        # OR-combination: match if query is found in any of them
         customers = (
             Adresse.objects.filter(
-                Q(name__icontains=query) | Q(firma__icontains=query),
+                Q(matchkey__icontains=query) | Q(name__icontains=query) | Q(firma__icontains=query),
                 adressen_type='KUNDE'
             )
-            .order_by('name')[:20]
+            .order_by('matchkey')[:20]
         )
 
         # Format results
@@ -746,6 +745,8 @@ def ajax_search_customers(request):
                 'id': customer.pk,
                 'name': customer.name,
                 'firma': customer.firma or '',
+                'matchkey': customer.matchkey,
+                # Rückwärtskompatibler Alias; identisch zum Matchkey.
                 'full_name': customer.full_name(),
             })
 
@@ -1514,7 +1515,7 @@ def contract_create(request):
             domain='ORDER',
             activity_type='CONTRACT_CREATED',
             title=f'Vertrag erstellt: {contract.name}',
-            description=f'Kunde: {contract.customer.name}' if contract.customer else None,
+            description=f'Kunde: {contract.customer.matchkey}' if contract.customer else None,
             target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
             actor=request.user,
             severity='INFO'
@@ -1564,7 +1565,7 @@ def contract_update(request, pk):
     # Track changes for activity logging
     old_is_active = contract.is_active
     old_customer = contract.customer
-    old_customer_name = contract.customer.name if contract.customer else None
+    old_customer_name = contract.customer.matchkey if contract.customer else None
     
     # Update fields from form
     contract.name = request.POST.get('name', '')
@@ -1629,7 +1630,7 @@ def contract_update(request, pk):
     
     # 2. Log customer assignment change if it occurred
     if old_customer != contract.customer:
-        new_customer_name = contract.customer.name if contract.customer else None
+        new_customer_name = contract.customer.matchkey if contract.customer else None
         ActivityStreamService.add(
             company=contract.company,
             domain='ORDER',
@@ -1648,7 +1649,7 @@ def contract_update(request, pk):
             domain='ORDER',
             activity_type='CONTRACT_UPDATED',
             title=f'Vertrag aktualisiert: {contract.name}',
-            description=f'Kunde: {contract.customer.name}' if contract.customer else None,
+            description=f'Kunde: {contract.customer.matchkey}' if contract.customer else None,
             target_url=f'/auftragsverwaltung/contracts/{contract.pk}/',
             actor=request.user,
             severity='INFO'
@@ -2797,13 +2798,12 @@ def get_timeentry_customers():
     """
     Kunden-Queryset für die Auswahlliste der Zeiterfassungs-Formulare.
 
-    Sortiert nach Firma, dann Name. `firma` ist nullable und kann zusätzlich
-    leer sein; über Coalesce werden NULL und '' gleich behandelt, damit Kunden
-    ohne Firma datenbankunabhängig (SQLite/PostgreSQL) am Anfang stehen.
+    Sortiert nach `matchkey` - also nach genau der Zeichenkette, die im
+    Dropdown steht (siehe #1171). Der Matchkey ist eine gespeicherte,
+    DB-generierte Spalte, damit entfällt die frühere Coalesce-Sortierung über
+    `firma`/`name`.
     """
-    return Adresse.objects.filter(adressen_type='KUNDE').order_by(
-        Coalesce('firma', Value('')), 'name'
-    )
+    return Adresse.objects.filter(adressen_type='KUNDE').order_by('matchkey')
 
 
 @login_required
@@ -2944,7 +2944,7 @@ def timeentry_create(request):
                 company=company,
                 domain='ORDER',
                 activity_type='TIMEENTRY_CREATED',
-                title=f'Zeiterfassung erstellt: {timeentry.service_date} - {timeentry.customer.name}',
+                title=f'Zeiterfassung erstellt: {timeentry.service_date} - {timeentry.customer.matchkey}',
                 target_url=f'/auftragsverwaltung/timeentries/{timeentry.pk}/',
                 actor=request.user
             )
@@ -3048,7 +3048,7 @@ def timeentry_update(request, pk):
                 company=timeentry.company,
                 domain='ORDER',
                 activity_type='TIMEENTRY_UPDATED',
-                title=f'Zeiterfassung aktualisiert: {timeentry.service_date} - {timeentry.customer.name}',
+                title=f'Zeiterfassung aktualisiert: {timeentry.service_date} - {timeentry.customer.matchkey}',
                 target_url=f'/auftragsverwaltung/timeentries/{timeentry.pk}/',
                 actor=request.user
             )

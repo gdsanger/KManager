@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 
 from django.db import models
+from django.db.models.functions import Concat
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
@@ -31,6 +32,9 @@ KONTAKT_TYPES = [
     ('TELEFAX', 'Telefax'),
     ('EMAIL', 'E-Mail'),
 ]
+
+# firma (100) + name (100) + " ()" = 203; 210 lässt etwas Luft.
+MATCHKEY_MAX_LENGTH = 210
 
 # Create your models here.
 class Adresse(models.Model):
@@ -86,6 +90,32 @@ class Adresse(models.Model):
         help_text="E-Mail-Adresse für den Rechnungsversand"
     )
 
+    # Zentrales Anzeige-Attribut für Adressen, Kunden und Lieferanten.
+    # Als generierte, gespeicherte Datenbankspalte umgesetzt, damit der Wert
+    # unabhängig vom Schreibpfad (ORM-save, bulk_create, bulk update, Import,
+    # Admin, Roh-SQL) immer konsistent ist und auf DB-Ebene sortiert, gefiltert
+    # und durchsucht werden kann. Nicht editierbar und nicht übersteuerbar.
+    matchkey = models.GeneratedField(
+        expression=models.Case(
+            models.When(
+                models.Q(firma__isnull=False) & ~models.Q(firma=''),
+                then=Concat(
+                    models.F('firma'),
+                    models.Value(' ('),
+                    models.F('name'),
+                    models.Value(')'),
+                ),
+            ),
+            default=models.F('name'),
+            output_field=models.CharField(max_length=MATCHKEY_MAX_LENGTH),
+        ),
+        output_field=models.CharField(max_length=MATCHKEY_MAX_LENGTH),
+        db_persist=True,
+        db_index=True,
+        verbose_name="Matchkey",
+        help_text="Ergibt sich automatisch aus Firma und Name: „Firma (Name)“ bzw. „Name“.",
+    )
+
     class Meta:
         constraints = [
             # Unique constraint for debitor_number when not null
@@ -96,15 +126,37 @@ class Adresse(models.Model):
                 violation_error_message='Diese Debitorennummer ist bereits vergeben.'
             )
         ]
+        indexes = [
+            models.Index(fields=['adressen_type', 'matchkey'], name='core_adresse_type_mk_idx'),
+        ]
+
+    @staticmethod
+    def build_matchkey(firma, name):
+        """
+        Python-Pendant zum generierten `matchkey`-Ausdruck.
+
+        Einzige Formatierungsstelle für den Anzeigenamen; die DB-Spalte
+        `matchkey` bildet exakt dieselbe Regel ab (Test:
+        `core.test_adresse_matchkey`). Es wird bewusst nicht gestrippt, damit
+        Python- und SQL-Ergebnis auch bei Whitespace identisch sind.
+        """
+        if firma:
+            return f"{firma} ({name or ''})"
+        return name or ''
 
     def full_name(self):
-        if self.firma:
-            return f"{self.firma} - ({self.name})"
-        return self.name
+        """Anzeigename (= Matchkey): „Firma (Name)“ bzw. „Name“."""
+        return self.build_matchkey(self.firma, self.name)
+
+    def full_address(self):
+        """Vollständige einzeilige Adresse inkl. Straße/PLZ/Ort/Land."""
+        return f"{self.full_name()}, {self.strasse}, {self.plz} {self.ort}, {self.land}"
 
     def __str__(self):
-        return f"{self.full_name()}, {self.strasse}, {self.plz} {self.ort}, {self.land}"
-    
+        # Bewusst der Matchkey (nicht die volle Adresszeile): davon leben alle
+        # ModelChoiceField-Dropdowns. Die Adresszeile liefert `full_address()`.
+        return self.full_name()
+
     def clean(self):
         """Validate and normalize address data"""
         super().clean()

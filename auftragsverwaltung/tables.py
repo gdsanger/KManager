@@ -34,7 +34,7 @@ class SalesDocumentTable(tables.Table):
     
     customer = tables.Column(
         verbose_name='Kunde',
-        accessor='customer.name',
+        accessor='customer.matchkey',
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
@@ -154,7 +154,7 @@ class ContractTable(tables.Table):
     
     customer = tables.Column(
         verbose_name='Kunde',
-        accessor='customer.name',
+        accessor='customer.matchkey',
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
@@ -429,7 +429,7 @@ class TimeEntryTable(tables.Table):
     
     customer = tables.Column(
         verbose_name='Kunde',
-        accessor='customer.name',
+        accessor='customer.matchkey',
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
