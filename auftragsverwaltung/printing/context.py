@@ -112,7 +112,15 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
         }
     
     def _build_customer_context(self, customer) -> dict:
-        """Build customer address block context."""
+        """
+        Build customer address block context.
+
+        Bewusste Abgrenzung zum Matchkey (`Adresse.matchkey`): hier wird die
+        **postalische Anschrift** für das PDF gebaut (Firma und Anrede/Name als
+        eigene Zeilen), kein Anzeigename. Diese Stelle darf NICHT auf den
+        Matchkey umgestellt werden — sonst stünde „Firma (Name)“ im Adressfeld
+        des Briefs.
+        """
         address_lines = []
 
         # Company name or personal name

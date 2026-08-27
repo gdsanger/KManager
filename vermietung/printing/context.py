@@ -173,7 +173,13 @@ class UebergabeprotokollContextBuilder(IContextBuilder):
         }
     
     def _build_mieter_context(self, mieter) -> dict:
-        """Build tenant (Kunde) address block context."""
+        """
+        Build tenant (Kunde) address block context.
+
+        Bewusste Abgrenzung zum Matchkey (`Adresse.matchkey`): hier entsteht die
+        **postalische Anschrift** fürs PDF, kein Anzeigename. Nicht auf den
+        Matchkey umstellen.
+        """
         if not mieter:
             return None
         
