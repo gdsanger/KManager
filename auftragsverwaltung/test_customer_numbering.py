@@ -1,381 +1,293 @@
 """
-Tests for Customer (Debitor) numbering functionality
+Tests für die Vergabe der Personenkonten (Debitoren/Kreditoren).
+
+Seit dem DATEV-Buchungsstapel-Export (#1178) sind Personenkonten rein
+numerisch, ohne Präfix und ohne Jahresbestandteil: Debitoren ab 10000,
+Kreditoren ab 70000. Das frühere Format `DEB26-00001` ist entfallen.
 """
-from django.test import TestCase
-from django.db import IntegrityError, transaction
-from django.core.exceptions import ValidationError
-from django.conf import settings
-from datetime import date
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from core.models import Adresse
-from auftragsverwaltung.models import NumberRange
-from auftragsverwaltung.services.number_range import get_next_customer_number
 import unittest
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.test import TestCase
+
+from auftragsverwaltung.models import NumberRange
+from auftragsverwaltung.services.number_range import (
+    get_next_customer_number,
+    get_next_supplier_number,
+)
+from core.models import Adresse
+
+CUSTOMER_START = 10000
+SUPPLIER_START = 70000
 
 
-class CustomerNumberRangeModelTestCase(TestCase):
-    """Test CUSTOMER NumberRange model"""
+def _reset_range(target, start_seq):
+    """Nummernkreis auf den Zustand direkt nach der Migration zurücksetzen."""
+    nr = NumberRange.objects.get(target=target)
+    nr.current_year = 0
+    nr.current_seq = 0
+    nr.start_seq = start_seq
+    nr.format = '{seq}'
+    nr.reset_policy = 'NEVER'
+    nr.save()
+    return nr
 
-    def test_create_customer_number_range(self):
-        """Test creating a customer number range"""
-        # Delete the default one first
-        NumberRange.objects.filter(target='CUSTOMER').delete()
 
-        nr = NumberRange.objects.create(
-            target='CUSTOMER',
-            reset_policy='YEARLY',
-            format='DEB{yy}-{seq:05d}'
-        )
+class PersonalAccountNumberRangeModelTestCase(TestCase):
+    """Nummernkreise für Personenkonten"""
 
-        self.assertIsNotNone(nr.pk)
-        self.assertIsNone(nr.company)
-        self.assertEqual(nr.target, 'CUSTOMER')
-        self.assertIsNone(nr.document_type)
-        self.assertEqual(nr.reset_policy, 'YEARLY')
-        self.assertEqual(nr.current_year, 0)
-        self.assertEqual(nr.current_seq, 0)
-        self.assertEqual(nr.format, 'DEB{yy}-{seq:05d}')
+    def test_customer_and_supplier_ranges_exist_after_migration(self):
+        """Die Datenmigration legt beide globalen Nummernkreise an"""
+        for target, start in (('CUSTOMER', CUSTOMER_START), ('SUPPLIER', SUPPLIER_START)):
+            nr = NumberRange.objects.get(target=target)
+            self.assertIsNone(nr.company)
+            self.assertEqual(nr.format, '{seq}')
+            self.assertEqual(nr.reset_policy, 'NEVER')
+            self.assertEqual(nr.start_seq, start)
 
     def test_str_representation_customer(self):
-        """Test __str__ method for customer NumberRange"""
-        # Use the default NumberRange created by migration
         nr = NumberRange.objects.get(target='CUSTOMER')
+        self.assertEqual(str(nr), "Kunden-Nummernkreis (global, NEVER)")
 
-        expected = "Kunden-Nummernkreis (global, YEARLY)"
-        self.assertEqual(str(nr), expected)
+    def test_str_representation_supplier(self):
+        nr = NumberRange.objects.get(target='SUPPLIER')
+        self.assertEqual(str(nr), "Lieferanten-Nummernkreis (global, NEVER)")
 
     def test_unique_constraint_customer_global(self):
-        """Test that only one CUSTOMER NumberRange is allowed globally"""
-        # Default NumberRange already exists from migration
-        # Try to create another CUSTOMER NumberRange
         with self.assertRaises(IntegrityError):
-            NumberRange.objects.create(
-                target='CUSTOMER',
-                reset_policy='NEVER'
-            )
+            NumberRange.objects.create(target='CUSTOMER', reset_policy='NEVER')
 
-    def test_customer_number_range_cannot_have_company(self):
-        """Test that CUSTOMER NumberRange cannot have a company"""
+    def test_unique_constraint_supplier_global(self):
+        with self.assertRaises(IntegrityError):
+            NumberRange.objects.create(target='SUPPLIER', reset_policy='NEVER')
+
+    def test_supplier_number_range_cannot_have_company(self):
         from core.models import Mandant
 
         company = Mandant.objects.create(
-            name="Test Company",
-            adresse="Test Street",
-            plz="12345",
-            ort="Test City"
+            name="Test Company", adresse="Test Street", plz="12345", ort="Test City",
         )
-
-        # Delete default and try to create CUSTOMER NumberRange with company
-        NumberRange.objects.filter(target='CUSTOMER').delete()
+        NumberRange.objects.filter(target='SUPPLIER').delete()
         with self.assertRaises(IntegrityError):
             NumberRange.objects.create(
-                company=company,
-                target='CUSTOMER',
-                reset_policy='YEARLY'
+                company=company, target='SUPPLIER', reset_policy='NEVER',
             )
 
-    def test_customer_number_range_cannot_have_document_type(self):
-        """Test that CUSTOMER NumberRange should not have a document_type"""
-        from auftragsverwaltung.models import DocumentType
 
-        doc_type = DocumentType.objects.create(
-            key="customer_test",
-            name="Customer Test",
-            prefix="T"
-        )
-
-        # Delete default and create CUSTOMER NumberRange with document_type (allowed but not used)
-        NumberRange.objects.filter(target='CUSTOMER').delete()
-        nr = NumberRange.objects.create(
-            target='CUSTOMER',
-            document_type=doc_type,
-            reset_policy='YEARLY'
-        )
-
-        # This is allowed but document_type is not used
-        self.assertIsNotNone(nr.pk)
-        self.assertEqual(nr.document_type, doc_type)
-
-
-class CustomerNumberRangeServiceTestCase(TestCase):
-    """Test customer number generation service"""
+class PersonalAccountServiceTestCase(TestCase):
+    """Nummernvergabe über den Service"""
 
     def setUp(self):
-        """Reset the default NumberRange sequence for consistent test results"""
+        _reset_range('CUSTOMER', CUSTOMER_START)
+        _reset_range('SUPPLIER', SUPPLIER_START)
+
+    def test_customer_numbers_start_at_range_start(self):
+        self.assertEqual(get_next_customer_number(), '10000')
+        self.assertEqual(get_next_customer_number(), '10001')
+
+    def test_supplier_numbers_start_at_range_start(self):
+        self.assertEqual(get_next_supplier_number(), '70000')
+        self.assertEqual(get_next_supplier_number(), '70001')
+
+    def test_numbers_are_purely_numeric(self):
+        """DATEV verlangt rein numerische Personenkonten"""
+        self.assertTrue(get_next_customer_number().isdigit())
+        self.assertTrue(get_next_supplier_number().isdigit())
+
+    def test_no_yearly_component_and_no_reset(self):
+        """
+        Ein Debitorenkonto gehört dauerhaft zu einem Kunden: Auch über einen
+        Jahreswechsel hinweg wird fortlaufend weitergezählt, und dieselbe
+        Sequenz darf nicht ein zweites Mal vergeben werden.
+        """
+        first = get_next_customer_number()
+
         nr = NumberRange.objects.get(target='CUSTOMER')
-        nr.current_year = 0
-        nr.current_seq = 0
-        nr.format = 'DEB{yy}-{seq:05d}'
+        nr.current_year = nr.current_year + 1  # Jahreswechsel simulieren
+        nr.save()
+
+        second = get_next_customer_number()
+        self.assertEqual(int(second), int(first) + 1)
+
+    def test_yearly_reset_policy_is_rejected(self):
+        """Ein jährlicher Reset würde Konten doppelt vergeben"""
+        nr = NumberRange.objects.get(target='CUSTOMER')
         nr.reset_policy = 'YEARLY'
         nr.save()
 
-    def test_get_next_customer_number(self):
-        """Test getting next customer number"""
-        number = get_next_customer_number(date(2026, 4, 3))
-        self.assertEqual(number, "DEB26-00001")
-
-        number = get_next_customer_number(date(2026, 4, 3))
-        self.assertEqual(number, "DEB26-00002")
-
-    def test_get_next_customer_number_default_date(self):
-        """Test getting next customer number with default date (today)"""
-        number = get_next_customer_number()
-        self.assertIsNotNone(number)
-        self.assertIn("DEB", number)
-
-    def test_get_next_customer_number_yearly_reset(self):
-        """Test yearly reset policy for customer numbers"""
-        # Generate numbers in 2026
-        number1 = get_next_customer_number(date(2026, 12, 31))
-        self.assertEqual(number1, "DEB26-00001")
-
-        # Generate number in 2027 - should reset sequence
-        number2 = get_next_customer_number(date(2027, 1, 1))
-        self.assertEqual(number2, "DEB27-00001")
-
-    def test_get_next_customer_number_never_reset(self):
-        """Test NEVER reset policy for customer numbers"""
-        # Update to NEVER reset policy
-        nr = NumberRange.objects.get(target='CUSTOMER')
-        nr.reset_policy = 'NEVER'
-        nr.save()
-
-        # Generate numbers in 2026
-        number1 = get_next_customer_number(date(2026, 12, 31))
-        self.assertEqual(number1, "DEB26-00001")
-
-        number2 = get_next_customer_number(date(2026, 12, 31))
-        self.assertEqual(number2, "DEB26-00002")
-
-        # Generate number in 2027 - should NOT reset, sequence continues
-        number3 = get_next_customer_number(date(2027, 1, 1))
-        self.assertEqual(number3, "DEB27-00003")
-
-    def test_get_next_customer_number_missing_number_range(self):
-        """Test error when NumberRange does not exist"""
-        # Delete the NumberRange
-        NumberRange.objects.get(target='CUSTOMER').delete()
-
-        # Try to get next number
         with self.assertRaises(ValueError) as cm:
             get_next_customer_number()
+        self.assertIn('nicht jährlich zurücksetzen', str(cm.exception))
 
+    def test_start_seq_is_respected_when_advanced(self):
+        """Ein bereits fortgeschrittener Zähler gewinnt gegen den Startwert"""
+        nr = NumberRange.objects.get(target='CUSTOMER')
+        nr.current_seq = 12345
+        nr.save()
+
+        self.assertEqual(get_next_customer_number(), '12346')
+
+    def test_missing_customer_number_range(self):
+        NumberRange.objects.get(target='CUSTOMER').delete()
+        with self.assertRaises(ValueError) as cm:
+            get_next_customer_number()
         self.assertIn('Kein Nummernkreis für Kunden konfiguriert', str(cm.exception))
 
-    def test_custom_format(self):
-        """Test custom format string"""
-        # Update format
-        nr = NumberRange.objects.get(target='CUSTOMER')
-        nr.format = 'K-{yy}{seq:04d}'
-        nr.save()
-
-        number = get_next_customer_number(date(2026, 4, 3))
-        self.assertEqual(number, "K-260001")
+    def test_missing_supplier_number_range(self):
+        NumberRange.objects.get(target='SUPPLIER').delete()
+        with self.assertRaises(ValueError) as cm:
+            get_next_supplier_number()
+        self.assertIn('Kein Nummernkreis für Lieferanten konfiguriert', str(cm.exception))
 
 
-class CustomerAutoNumberingTestCase(TestCase):
-    """Test automatic customer number assignment"""
+class PersonalAccountAutoNumberingTestCase(TestCase):
+    """Automatische Vergabe beim Anlegen einer Adresse"""
 
     def setUp(self):
-        """Reset the default NumberRange sequence for consistent test results"""
-        nr = NumberRange.objects.get(target='CUSTOMER')
-        nr.current_year = 26
-        nr.current_seq = 0
-        nr.format = 'DEB{yy}-{seq:05d}'
-        nr.reset_policy = 'YEARLY'
-        nr.save()
+        _reset_range('CUSTOMER', CUSTOMER_START)
+        _reset_range('SUPPLIER', SUPPLIER_START)
 
-    def test_auto_assign_debitor_number_on_create(self):
-        """Test that debitor_number is auto-assigned when creating customer without number"""
-        kunde = Adresse.objects.create(
-            adressen_type='KUNDE',
-            name='Test Kunde',
-            strasse='Test Str. 1',
-            plz='12345',
-            ort='Test Stadt',
-            land='Deutschland'
-        )
-
-        # Debitor number should be auto-assigned
-        self.assertIsNotNone(kunde.debitor_number)
-        self.assertEqual(kunde.debitor_number, 'DEB26-00001')
-
-    def test_manual_debitor_number_preserved(self):
-        """Test that manually set debitor_number is preserved"""
-        kunde = Adresse.objects.create(
-            adressen_type='KUNDE',
-            name='Test Kunde',
+    def _create(self, adressen_type, name, **kwargs):
+        return Adresse.objects.create(
+            adressen_type=adressen_type,
+            name=name,
             strasse='Test Str. 1',
             plz='12345',
             ort='Test Stadt',
             land='Deutschland',
-            debitor_number='MANUAL-001'
+            **kwargs,
         )
 
-        # Manual number should be preserved
-        self.assertEqual(kunde.debitor_number, 'MANUAL-001')
+    def test_customer_gets_debitor_account(self):
+        kunde = self._create('KUNDE', 'Test Kunde')
+        self.assertEqual(kunde.debitor_number, '10000')
 
-    def test_no_auto_assign_for_non_customer(self):
-        """Test that debitor_number is NOT auto-assigned for non-customers"""
-        adresse = Adresse.objects.create(
-            adressen_type='Adresse',  # Not a customer
-            name='Test Adresse',
-            strasse='Test Str. 1',
-            plz='12345',
-            ort='Test Stadt',
-            land='Deutschland'
-        )
+    def test_supplier_gets_creditor_account(self):
+        lieferant = self._create('LIEFERANT', 'Test Lieferant')
+        self.assertEqual(lieferant.debitor_number, '70000')
 
-        # Debitor number should be None
+    def test_customer_and_supplier_ranges_do_not_overlap(self):
+        kunde = self._create('KUNDE', 'Kunde')
+        lieferant = self._create('LIEFERANT', 'Lieferant')
+
+        self.assertLess(int(kunde.debitor_number), SUPPLIER_START)
+        self.assertGreaterEqual(int(lieferant.debitor_number), SUPPLIER_START)
+
+    def test_manual_account_preserved(self):
+        kunde = self._create('KUNDE', 'Test Kunde', debitor_number='10500')
+        self.assertEqual(kunde.debitor_number, '10500')
+
+    def test_no_auto_assign_for_other_address_types(self):
+        adresse = self._create('Adresse', 'Test Adresse')
         self.assertIsNone(adresse.debitor_number)
 
     def test_no_auto_assign_on_update(self):
-        """Test that debitor_number is NOT auto-assigned when updating customer"""
-        kunde = Adresse.objects.create(
-            adressen_type='KUNDE',
-            name='Test Kunde',
-            strasse='Test Str. 1',
-            plz='12345',
-            ort='Test Stadt',
-            land='Deutschland'
-        )
+        kunde = self._create('KUNDE', 'Test Kunde')
+        original = kunde.debitor_number
 
-        original_number = kunde.debitor_number
-        self.assertEqual(original_number, 'DEB26-00001')
-
-        # Update customer
         kunde.name = 'Updated Name'
         kunde.save()
 
-        # Number should remain unchanged
         kunde.refresh_from_db()
-        self.assertEqual(kunde.debitor_number, original_number)
+        self.assertEqual(kunde.debitor_number, original)
 
-    def test_multiple_customers_get_sequential_numbers(self):
-        """Test that multiple customers get sequential debitor numbers"""
-        kunde1 = Adresse.objects.create(
-            adressen_type='KUNDE',
-            name='Kunde 1',
-            strasse='Str. 1',
-            plz='12345',
-            ort='Stadt',
-            land='Deutschland'
-        )
+    def test_multiple_customers_get_sequential_accounts(self):
+        numbers = [self._create('KUNDE', f'Kunde {i}').debitor_number for i in range(3)]
+        self.assertEqual(numbers, ['10000', '10001', '10002'])
 
-        kunde2 = Adresse.objects.create(
-            adressen_type='KUNDE',
-            name='Kunde 2',
-            strasse='Str. 2',
-            plz='12345',
-            ort='Stadt',
-            land='Deutschland'
-        )
-
-        kunde3 = Adresse.objects.create(
-            adressen_type='KUNDE',
-            name='Kunde 3',
-            strasse='Str. 3',
-            plz='12345',
-            ort='Stadt',
-            land='Deutschland'
-        )
-
-        self.assertEqual(kunde1.debitor_number, 'DEB26-00001')
-        self.assertEqual(kunde2.debitor_number, 'DEB26-00002')
-        self.assertEqual(kunde3.debitor_number, 'DEB26-00003')
+    def test_multiple_suppliers_get_sequential_accounts(self):
+        numbers = [
+            self._create('LIEFERANT', f'Lieferant {i}').debitor_number for i in range(3)
+        ]
+        self.assertEqual(numbers, ['70000', '70001', '70002'])
 
     def test_error_when_number_range_missing(self):
-        """Test that ValidationError is raised when NumberRange is missing"""
-        # Delete the NumberRange
         NumberRange.objects.get(target='CUSTOMER').delete()
-
-        # Try to create customer
         with self.assertRaises(ValidationError) as cm:
-            Adresse.objects.create(
-                adressen_type='KUNDE',
-                name='Test Kunde',
-                strasse='Test Str. 1',
-                plz='12345',
-                ort='Test Stadt',
-                land='Deutschland'
-            )
-
+            self._create('KUNDE', 'Test Kunde')
         self.assertIn('debitor_number', cm.exception.message_dict)
-        self.assertIn('Kein Nummernkreis für Kunden konfiguriert', str(cm.exception))
 
-    def test_unique_debitor_number_constraint(self):
-        """Test that debitor_number must be unique"""
-        # Create first customer with auto-assigned number
-        kunde1 = Adresse.objects.create(
-            adressen_type='KUNDE',
-            name='Kunde 1',
-            strasse='Str. 1',
-            plz='12345',
-            ort='Stadt',
-            land='Deutschland'
-        )
-
-        # Try to create second customer with same manual number
+    def test_unique_account_constraint(self):
+        kunde1 = self._create('KUNDE', 'Kunde 1')
         with self.assertRaises(IntegrityError):
-            Adresse.objects.create(
-                adressen_type='KUNDE',
-                name='Kunde 2',
-                strasse='Str. 2',
-                plz='12345',
-                ort='Stadt',
-                land='Deutschland',
-                debitor_number=kunde1.debitor_number  # Duplicate number
-            )
+            self._create('KUNDE', 'Kunde 2', debitor_number=kunde1.debitor_number)
 
-    def test_null_debitor_numbers_allowed(self):
-        """Test that multiple addresses can have NULL debitor_number"""
-        # Create multiple non-customers with NULL debitor_number
-        adresse1 = Adresse.objects.create(
-            adressen_type='Adresse',
-            name='Adresse 1',
+    def test_null_accounts_allowed_for_plain_addresses(self):
+        a1 = self._create('Adresse', 'Adresse 1')
+        a2 = self._create('Adresse', 'Adresse 2')
+        self.assertIsNone(a1.debitor_number)
+        self.assertIsNone(a2.debitor_number)
+
+
+class PersonalAccountValidationTestCase(TestCase):
+    """Validierung der Personenkonten (numerisch, im richtigen Bereich)"""
+
+    def _adresse(self, adressen_type, number):
+        return Adresse(
+            adressen_type=adressen_type,
+            name='Test',
             strasse='Str. 1',
             plz='12345',
             ort='Stadt',
-            land='Deutschland'
+            land='Deutschland',
+            debitor_number=number,
         )
 
-        adresse2 = Adresse.objects.create(
-            adressen_type='Adresse',
-            name='Adresse 2',
-            strasse='Str. 2',
-            plz='12345',
-            ort='Stadt',
-            land='Deutschland'
-        )
+    def test_non_numeric_account_rejected(self):
+        with self.assertRaises(ValidationError) as cm:
+            self._adresse('KUNDE', 'DEB26-00001').clean()
+        self.assertIn('numerisch', str(cm.exception))
 
-        # Both should have NULL debitor_number (allowed)
-        self.assertIsNone(adresse1.debitor_number)
-        self.assertIsNone(adresse2.debitor_number)
+    def test_debitor_below_range_rejected(self):
+        with self.assertRaises(ValidationError) as cm:
+            self._adresse('KUNDE', '9999').clean()
+        self.assertIn('Debitorenkonto', str(cm.exception))
+
+    def test_debitor_in_creditor_range_rejected(self):
+        with self.assertRaises(ValidationError):
+            self._adresse('KUNDE', '70000').clean()
+
+    def test_creditor_in_debitor_range_rejected(self):
+        with self.assertRaises(ValidationError) as cm:
+            self._adresse('LIEFERANT', '10000').clean()
+        self.assertIn('Kreditorenkonto', str(cm.exception))
+
+    def test_valid_accounts_accepted(self):
+        self._adresse('KUNDE', '10000').clean()
+        self._adresse('KUNDE', '69999').clean()
+        self._adresse('LIEFERANT', '70000').clean()
+        self._adresse('LIEFERANT', '99999').clean()
+
+    def test_ranges_come_from_settings(self):
+        """Die Bereichsgrenzen sind konfigurierbar, nicht hart kodiert"""
+        self.assertEqual(
+            Adresse.personal_account_range('KUNDE'),
+            tuple(settings.DEBITOR_ACCOUNT_RANGE),
+        )
+        self.assertEqual(
+            Adresse.personal_account_range('LIEFERANT'),
+            tuple(settings.CREDITOR_ACCOUNT_RANGE),
+        )
+        self.assertIsNone(Adresse.personal_account_range('Adresse'))
 
 
 @unittest.skipIf(
     'sqlite' in settings.DATABASES['default']['ENGINE'],
     "SQLite has table-level locking, race condition tests designed for PostgreSQL"
 )
-class CustomerNumberConcurrencyTestCase(TestCase):
-    """Test race-safe customer number generation under concurrent access"""
+class PersonalAccountConcurrencyTestCase(TestCase):
+    """Race-sichere Vergabe unter gleichzeitigem Zugriff"""
 
     def setUp(self):
-        """Reset the default NumberRange sequence for consistent test results"""
-        nr = NumberRange.objects.get(target='CUSTOMER')
-        nr.current_year = 26
-        nr.current_seq = 0
-        nr.format = 'DEB{yy}-{seq:05d}'
-        nr.reset_policy = 'YEARLY'
-        nr.save()
+        _reset_range('CUSTOMER', CUSTOMER_START)
 
     def test_concurrent_customer_creation(self):
-        """Test that concurrent customer creation produces unique sequential numbers"""
         from django.db import connection
 
         def create_customer(index):
-            """Create a customer in a separate thread/connection"""
-            # Each thread needs its own connection
             connection.close()
             kunde = Adresse.objects.create(
                 adressen_type='KUNDE',
@@ -383,22 +295,16 @@ class CustomerNumberConcurrencyTestCase(TestCase):
                 strasse=f'Str. {index}',
                 plz='12345',
                 ort='Stadt',
-                land='Deutschland'
+                land='Deutschland',
             )
             return kunde.debitor_number
 
-        # Create 10 customers concurrently
         num_customers = 10
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(create_customer, i) for i in range(num_customers)]
             numbers = [future.result() for future in as_completed(futures)]
 
-        # All numbers should be unique
         self.assertEqual(len(numbers), len(set(numbers)), "Duplicate numbers found!")
-
-        # All numbers should follow the pattern and be sequential
-        expected_numbers = {f'DEB26-{i:05d}' for i in range(1, num_customers + 1)}
-        self.assertEqual(set(numbers), expected_numbers)
-
-        # Verify all customers were created
+        expected = {str(CUSTOMER_START + i) for i in range(num_customers)}
+        self.assertEqual(set(numbers), expected)
         self.assertEqual(Adresse.objects.filter(adressen_type='KUNDE').count(), num_customers)

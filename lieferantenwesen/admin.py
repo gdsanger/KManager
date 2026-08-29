@@ -30,9 +30,12 @@ class InvoiceInAdmin(admin.ModelAdmin):
         "currency",
         "status",
         "due_date",
+        "export_status",
     ]
-    list_filter = ["status", "currency"]
-    search_fields = ["invoice_no", "supplier__name", "payment_reference"]
+    list_filter = ["status", "currency", "export_status"]
+    search_fields = [
+        "invoice_no", "supplier__name", "payment_reference", "export_batch_id",
+    ]
     ordering = ["-invoice_date"]
     readonly_fields = [
         "created_at",
@@ -43,6 +46,10 @@ class InvoiceInAdmin(admin.ModelAdmin):
         "approved_by",
         "rejected_at",
         "rejected_by",
+        # Export-Tracking wird ausschließlich vom Export-Service gesetzt.
+        "export_status",
+        "exported_at",
+        "export_batch_id",
     ]
     inlines = [InvoiceInLineInline]
 

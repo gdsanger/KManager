@@ -73,7 +73,31 @@
                             <div class="form-text">{{ form.umsatzsteuer_satz.help_text }}</div>
                             {% endif %}
                         </div>
-                        
+
+                        <h5 class="mb-3 mt-4"><i class="bi bi-calculator"></i> Kontierung (DATEV)</h5>
+
+                        <div class="mb-3">
+                            <label for="{{ form.aufwandskonto.id_for_label }}" class="form-label">{{ form.aufwandskonto.label }}</label>
+                            {{ form.aufwandskonto }}
+                            {% if form.aufwandskonto.errors %}
+                            <div class="text-danger small">{{ form.aufwandskonto.errors }}</div>
+                            {% endif %}
+                            {% if form.aufwandskonto.help_text %}
+                            <div class="form-text">{{ form.aufwandskonto.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.erloeskonto.id_for_label }}" class="form-label">{{ form.erloeskonto.label }}</label>
+                            {{ form.erloeskonto }}
+                            {% if form.erloeskonto.errors %}
+                            <div class="text-danger small">{{ form.erloeskonto.errors }}</div>
+                            {% endif %}
+                            {% if form.erloeskonto.help_text %}
+                            <div class="form-text">{{ form.erloeskonto.help_text }}</div>
+                            {% endif %}
+                        </div>
+
                         <div class="d-flex justify-content-between mt-4">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-save"></i> Speichern

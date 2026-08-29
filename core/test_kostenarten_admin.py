@@ -30,16 +30,21 @@ class KostenartAdminTestCase(TestCase):
         """Test that admin list display includes correct fields"""
         self.assertEqual(
             self.admin.list_display,
-            ('name', 'parent', 'is_hauptkostenart')
+            (
+                'name', 'parent', 'is_hauptkostenart',
+                'umsatzsteuer_satz', 'aufwandskonto', 'erloeskonto',
+            )
         )
-    
+
     def test_admin_list_filter(self):
-        """Test that admin can filter by parent"""
-        self.assertEqual(self.admin.list_filter, ('parent',))
-    
+        """Test that admin can filter by parent and tax rate"""
+        self.assertEqual(self.admin.list_filter, ('parent', 'umsatzsteuer_satz'))
+
     def test_admin_search_fields(self):
-        """Test that admin can search by name"""
-        self.assertEqual(self.admin.search_fields, ('name',))
+        """Test that admin can search by name and bookkeeping accounts"""
+        self.assertEqual(
+            self.admin.search_fields, ('name', 'aufwandskonto', 'erloeskonto')
+        )
     
     def test_get_queryset_only_shows_hauptkostenarten(self):
         """Test that admin queryset only shows main cost types"""

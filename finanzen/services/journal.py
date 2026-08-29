@@ -20,6 +20,7 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 
 from finanzen.models import CompanyAccountingSettings, OutgoingInvoiceJournalEntry
+from finanzen.services.accounts import REVENUE, resolve_account
 
 
 TWO_PLACES = Decimal('0.01')
@@ -218,15 +219,61 @@ def _customer_snapshot(document):
     return customer_name[:200], (customer.debitor_number or '')
 
 
-def _revenue_account_snapshot(company):
-    """Erlöskonten des Mandanten als Snapshot übernehmen (optional gepflegt)."""
-    settings = CompanyAccountingSettings.objects.filter(company=company).first()
-    if settings is None:
-        return {field: '' for field in REVENUE_ACCOUNT_FIELDS.values()}
-    return {
-        field: getattr(settings, field, '') or ''
-        for field in REVENUE_ACCOUNT_FIELDS.values()
-    }
+def _revenue_account_snapshot(document):
+    """
+    Erlöskonten je Steuersatz als Snapshot ermitteln.
+
+    Die Regel selbst steht in ``finanzen.services.accounts``: Erlöskonto der
+    Unterkostenart, sonst der Hauptkostenart, sonst das Konto des Mandanten
+    zum Steuersatz. Sie wird hier je Steuersatz-Topf angewendet, damit der
+    Export später ausschließlich aus dem Journal lesen kann.
+
+    Ein fehlendes Konto ist hier **kein** Fehler – das würde die Finalisierung
+    von Belegen blockieren. Fehlende Konten meldet der Export in seiner
+    Fehlerliste, bevor eine Datei entsteht.
+
+    Raises:
+        JournalEntryError: wenn zwei Positionen desselben Steuersatzes auf
+            unterschiedliche Erlöskonten zeigen. Das Journal hält je Steuersatz
+            genau ein Konto; eine stille Auswahl wäre eine Falschbuchung.
+    """
+    settings = CompanyAccountingSettings.objects.filter(company=document.company).first()
+
+    # Erlöskonto-Übersteuerung je Steuersatz aus den Kostenarten der Positionen
+    overrides = {}
+    for line in document.lines.select_related(
+        'tax_rate', 'kostenart1', 'kostenart2', 'kostenart2__parent'
+    ).all():
+        if not line.is_included_in_totals():
+            continue
+        account = resolve_account(
+            REVENUE,
+            cost_type_sub=line.kostenart2,
+            cost_type_main=line.kostenart1,
+        )
+        if not account:
+            continue
+
+        net_field = _tax_field_for_rate(line.tax_rate)
+        existing = overrides.get(net_field)
+        if existing is not None and existing != account:
+            percent = net_field.removeprefix('net_')
+            raise JournalEntryError(
+                f'Beleg {document.number}: Für den Steuersatz {percent} % zeigen die '
+                f'Kostenarten der Positionen auf unterschiedliche Erlöskonten '
+                f'({existing} und {account}). Das Rechnungsausgangsjournal führt je '
+                'Steuersatz genau ein Erlöskonto – bitte die Kostenarten vereinheitlichen '
+                'oder die Positionen auf getrennte Belege aufteilen.'
+            )
+        overrides[net_field] = account
+
+    snapshot = {}
+    for net_field, settings_field in REVENUE_ACCOUNT_FIELDS.items():
+        account = overrides.get(net_field)
+        if not account and settings is not None:
+            account = getattr(settings, settings_field, '') or ''
+        snapshot[settings_field] = account or ''
+    return snapshot
 
 
 def create_journal_entry(document):
@@ -296,7 +343,7 @@ def create_journal_entry(document):
                 gross_amount=gross_amount,
                 export_status='OPEN',
                 **signed_nets,
-                **_revenue_account_snapshot(document.company),
+                **_revenue_account_snapshot(document),
             )
     except IntegrityError as exc:
         raise JournalEntryError(
