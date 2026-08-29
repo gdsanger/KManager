@@ -775,9 +775,22 @@ $(document).ready(function() {
     // Initial calculation
     calculatePreview();
     
+    // Article currently selected in the "Position hinzufügen" modal. Sending its
+    // id lets the backend copy Steuersatz, Einheit & Co. from the article master
+    // data instead of the modal rebuilding that logic client-side.
+    let selectedArticleId = null;
+    // Whether the user changed the tax rate select after picking an article.
+    let taxRateTouched = false;
+
+    $('#newLineTaxRate').on('change', function() {
+        taxRateTouched = true;
+    });
+
     // Add line button
     $('#addLineButton').on('click', function() {
         $('#addLineModal').modal('show');
+        selectedArticleId = null;
+        taxRateTouched = false;
         $('#articleSearchInput').val('');
         $('#articleSearchResults').empty();
         $('#newLineShortText1').val('');
@@ -815,11 +828,18 @@ $(document).ready(function() {
                                 .data('item', item)
                                 .on('click', function() {
                                     const selectedItem = $(this).data('item');
+                                    selectedArticleId = selectedItem.id;
                                     $('#newLineShortText1').val(selectedItem.short_text_1);
                                     $('#newLineLongText').val(selectedItem.long_text || '');
                                     $('#newLineQuantity').val('1.0000');
                                     $('#newLineUnitPrice').val(selectedItem.net_price);
+                                    $('#newLineUnit').val(selectedItem.unit_id || '');
+                                    // Shown as a preview only. As long as the user does not
+                                    // change it, the rate is left to the server so that
+                                    // TaxDeterminationService can honour the contract's
+                                    // customer (Reverse Charge, Export).
                                     $('#newLineTaxRate').val(selectedItem.tax_rate_id);
+                                    taxRateTouched = false;
                                     $('#newLineDiscountable').prop('checked', selectedItem.is_discountable);
                                     if (selectedItem.cost_type_1_id) {
                                         $('#newLineCostType1').val(selectedItem.cost_type_1_id);
@@ -882,6 +902,26 @@ $(document).ready(function() {
             return;
         }
 
+        const payload = {
+            short_text_1: shortText1,
+            long_text: longText,
+            quantity: quantity,
+            unit_id: unitId,
+            unit_price_net: unitPrice,
+            is_discountable: isDiscountable,
+            cost_type_1_id: costType1Id,
+            cost_type_2_id: costType2Id
+        };
+
+        if (selectedArticleId) {
+            payload.item_id = selectedArticleId;
+        }
+        // Only send the tax rate when it was not simply taken over from the
+        // article; otherwise the server determines it from article + customer.
+        if (!selectedArticleId || taxRateTouched) {
+            payload.tax_rate_id = taxRateId;
+        }
+
         $.ajax({
             url: '{% url "auftragsverwaltung:ajax_contract_add_line" contract.pk %}',
             method: 'POST',
@@ -889,17 +929,7 @@ $(document).ready(function() {
                 'X-CSRFToken': '{{ csrf_token }}'
             },
             contentType: 'application/json',
-            data: JSON.stringify({
-                short_text_1: shortText1,
-                long_text: longText,
-                quantity: quantity,
-                unit_id: unitId,
-                unit_price_net: unitPrice,
-                tax_rate_id: taxRateId,
-                is_discountable: isDiscountable,
-                cost_type_1_id: costType1Id,
-                cost_type_2_id: costType2Id
-            }),
+            data: JSON.stringify(payload),
             success: function(response) {
                 if (response.success) {
                     location.reload();  // Reload to show new line
