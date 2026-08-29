@@ -4,6 +4,7 @@ Forms for core mailing functionality and user profile management
 import os
 from django import forms
 from django.conf import settings
+from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
 from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart, Unit, Projekt, Adresse
@@ -205,7 +206,7 @@ class ItemForm(forms.ModelForm):
         fields = [
             'article_no', 'short_text_1', 'short_text_2', 'long_text',
             'net_price', 'purchase_price', 'tax_rate', 'cost_type_1', 'cost_type_2',
-            'item_group', 'item_type', 'is_discountable', 'is_active'
+            'item_group', 'unit', 'item_type', 'is_discountable', 'is_active'
         ]
         widgets = {
             'article_no': forms.TextInput(attrs={'class': 'form-control'}),
@@ -218,6 +219,7 @@ class ItemForm(forms.ModelForm):
             'cost_type_1': forms.Select(attrs={'class': 'form-select'}),
             'cost_type_2': forms.Select(attrs={'class': 'form-select'}),
             'item_group': forms.Select(attrs={'class': 'form-select'}),
+            'unit': forms.Select(attrs={'class': 'form-select'}),
             'item_type': forms.Select(attrs={'class': 'form-select'}),
             'is_discountable': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -233,6 +235,7 @@ class ItemForm(forms.ModelForm):
             'cost_type_1': 'Kostenart 1 (Hauptkostenart) *',
             'cost_type_2': 'Kostenart 2 (Unterkostenart)',
             'item_group': 'Warengruppe',
+            'unit': 'Mengeneinheit',
             'item_type': 'Artikeltyp *',
             'is_discountable': 'Rabattfähig',
             'is_active': 'Aktiv',
@@ -243,6 +246,7 @@ class ItemForm(forms.ModelForm):
             'short_text_2': 'Optionaler zweiter Kurztext',
             'long_text': 'Detaillierte Beschreibung',
             'item_group': 'Optional: Zuordnung zu einer Warengruppe',
+            'unit': 'Optional: wird bei der Artikelauswahl in die Position übernommen',
             'cost_type_1': 'Wählen Sie eine Hauptkostenart',
             'cost_type_2': 'Optional: Unterkostenart der gewählten Hauptkostenart',
         }
@@ -252,6 +256,14 @@ class ItemForm(forms.ModelForm):
         
         # Filter cost_type_1 to only show Hauptkostenarten (parent=None)
         self.fields['cost_type_1'].queryset = Kostenart.objects.filter(parent__isnull=True)
+
+        # Only active units are offered. An already assigned unit stays selectable
+        # even if it was deactivated later, otherwise saving an untouched form
+        # would fail validation on a value the user never chose.
+        unit_filter = models.Q(is_active=True)
+        if self.instance and self.instance.pk and self.instance.unit_id:
+            unit_filter |= models.Q(pk=self.instance.unit_id)
+        self.fields['unit'].queryset = Unit.objects.filter(unit_filter).order_by('code')
         
         # Filter cost_type_2 based on selected cost_type_1
         if self.instance and self.instance.pk and self.instance.cost_type_1:

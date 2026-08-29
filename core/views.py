@@ -405,7 +405,7 @@ def item_management(request):
         
         # Base queryset for items
         queryset = Item.objects.select_related(
-            'item_group', 'cost_type_1', 'cost_type_2'
+            'item_group', 'cost_type_1', 'cost_type_2', 'unit'
         )
         
         # Get group filter from URL
@@ -437,7 +437,7 @@ def item_management(request):
         if selected_id:
             try:
                 selected_item = Item.objects.select_related(
-                    'item_group', 'cost_type_1', 'cost_type_2'
+                    'item_group', 'cost_type_1', 'cost_type_2', 'unit'
                 ).get(pk=selected_id)
             except (Item.DoesNotExist, ValueError):
                 pass
@@ -537,7 +537,7 @@ def item_create_new(request):
     ).prefetch_related('children').order_by('code')
     
     queryset = Item.objects.select_related(
-        'item_group', 'cost_type_1', 'cost_type_2'
+        'item_group', 'cost_type_1', 'cost_type_2', 'unit'
     )
     
     # Apply filters from URL

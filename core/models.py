@@ -1056,7 +1056,17 @@ class Item(models.Model):
         verbose_name="Warengruppe",
         help_text="Optional: Zuordnung zu einer Unterwarengruppe (SUB)"
     )
-    
+    unit = models.ForeignKey(
+        'core.Unit',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='items',
+        verbose_name="Mengeneinheit",
+        help_text="Optional: Standard-Mengeneinheit, die bei der Artikelauswahl "
+                  "in die Belegposition übernommen wird"
+    )
+
     # Classification
     item_type = models.CharField(
         max_length=20,

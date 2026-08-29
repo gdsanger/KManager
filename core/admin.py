@@ -496,8 +496,8 @@ class ReportDocumentAdmin(admin.ModelAdmin):
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
     """Admin interface for Item (Article Master Data) with CRUD functionality"""
-    list_display = ('article_no', 'short_text_1', 'item_type', 'item_group', 'net_price', 'tax_rate', 'is_discountable', 'is_active')
-    list_filter = ('item_type', 'is_active', 'is_discountable', 'tax_rate', 'item_group', 'item_group__parent')
+    list_display = ('article_no', 'short_text_1', 'item_type', 'item_group', 'unit', 'net_price', 'tax_rate', 'is_discountable', 'is_active')
+    list_filter = ('item_type', 'is_active', 'is_discountable', 'tax_rate', 'unit', 'item_group', 'item_group__parent')
     search_fields = ('article_no', 'short_text_1', 'short_text_2', 'long_text')
     ordering = ('article_no',)
     
@@ -509,8 +509,9 @@ class ItemAdmin(admin.ModelAdmin):
             'fields': ('short_text_1', 'short_text_2', 'long_text')
         }),
         ('Klassifizierung', {
-            'fields': ('item_group',),
-            'description': 'Optional: Zuordnung zu einer Unterwarengruppe (SUB)'
+            'fields': ('item_group', 'unit'),
+            'description': 'Optional: Zuordnung zu einer Unterwarengruppe (SUB) und '
+                           'Standard-Mengeneinheit des Artikels'
         }),
         ('Preise', {
             'fields': ('net_price', 'purchase_price', 'tax_rate')
