@@ -36,6 +36,19 @@ VERMIETUNG_STATUS_MAPPING = {
     'BEZAHLT': 'PAID',
 }
 
+# Status des DATEV-Buchungsstapel-Exports. Bewusst identisch zu
+# finanzen.OutgoingInvoiceJournalEntry.EXPORT_STATUS_CHOICES, damit Ein- und
+# Ausgangsseite im Export gleich behandelt werden können.
+EXPORT_STATUS_CHOICES = [
+    ('OPEN', 'Offen'),
+    ('EXPORTED', 'Exportiert'),
+    ('ERROR', 'Fehler'),
+]
+
+# Status, ab denen eine Eingangsrechnung buchungsreif ist. Nicht freigegebene
+# Rechnungen gehören nicht in den Buchungsstapel.
+EXPORTABLE_STATUSES = ('APPROVED', 'PAID')
+
 
 # ---------------------------------------------------------------------------
 # InvoiceIn model
@@ -196,6 +209,28 @@ class InvoiceIn(models.Model):
         blank=True, default="", verbose_name="Freigabe-Kommentar"
     )
 
+    # --- DATEV-Export-Tracking ---
+    export_status = models.CharField(
+        max_length=20,
+        choices=EXPORT_STATUS_CHOICES,
+        default="OPEN",
+        verbose_name="Export-Status",
+        help_text="Status des DATEV-Buchungsstapel-Exports",
+    )
+    exported_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Exportiert am",
+        help_text="Zeitpunkt des letzten erfolgreichen Exports",
+    )
+    export_batch_id = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Export-Batch-ID",
+        help_text="ID der Export-Charge des letzten Exports",
+    )
+
     # --- Audit fields ---
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
     created_by = models.ForeignKey(
@@ -242,6 +277,11 @@ class InvoiceIn(models.Model):
         verbose_name = "Eingangsrechnung"
         verbose_name_plural = "Eingangsrechnungen"
         ordering = ["-invoice_date", "-created_at"]
+        indexes = [
+            # Deckt die Auswahl des Buchungsstapels ab (Zeitraum + Freigabe).
+            models.Index(fields=["invoice_date", "status"]),
+            models.Index(fields=["export_status"]),
+        ]
 
     def __str__(self):
         return f"{self.invoice_no} – {self.supplier} – {self.invoice_date}"
