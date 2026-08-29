@@ -362,11 +362,16 @@ class OutgoingInvoiceJournalTable(tables.Table):
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
+    document_kind = tables.Column(
+        verbose_name='Art',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+
     customer_name = tables.Column(
         verbose_name='Kunde',
         attrs={'td': {'class': 'text-nowrap'}}
     )
-    
+
     amounts = tables.Column(
         verbose_name='Netto/Brutto',
         empty_values=(),
@@ -385,10 +390,19 @@ class OutgoingInvoiceJournalTable(tables.Table):
         return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
     
     def render_amounts(self, record):
-        """Render net and gross amounts."""
+        """Render net and gross amounts (negative for credit notes)."""
         total_net = record.net_0 + record.net_7 + record.net_19
         return f'{total_net:.2f} € / {record.gross_amount:.2f} €'
-    
+
+    def render_document_kind(self, value, record):
+        """Render document_kind with colored badge."""
+        badge_class = 'bg-warning' if record.document_kind == 'CREDIT_NOTE' else 'bg-primary'
+        return format_html(
+            '<span class="badge {}">{}</span>',
+            badge_class,
+            record.get_document_kind_display()
+        )
+
     def render_export_status(self, value, record):
         """Render export_status with colored badge."""
         status_classes = {
@@ -406,6 +420,7 @@ class OutgoingInvoiceJournalTable(tables.Table):
         fields = (
             'company',
             'document_number',
+            'document_kind',
             'document_date',
             'customer_name',
             'amounts',

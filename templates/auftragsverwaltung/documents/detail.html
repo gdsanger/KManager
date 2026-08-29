@@ -21,11 +21,15 @@ Neues {{ document_type.name }}
         <i class="bi bi-save"></i> Speichern
     </button>
 
-    {% if document_type.is_invoice %}
-    <!-- Invoice-specific actions -->
-    <button type="button" class="btn btn-success" id="finalizeButton" title="Rechnung finalisieren (Nummer vergeben)">
+    {% if document_type.is_invoice or document_type.is_correction %}
+    <!-- Echtdruck: Rechnungen und Gutschriften (journalrelevante Belege) -->
+    <button type="button" class="btn btn-success" id="finalizeButton" title="{{ document_type.name }} finalisieren (Nummer vergeben, Journaleintrag erzeugen)">
         <i class="bi bi-check-circle"></i> Echtdruck
     </button>
+    {% endif %}
+
+    {% if document_type.is_invoice %}
+    <!-- Invoice-specific actions -->
     <button type="button" class="btn btn-info" id="sendEmailButton" title="Rechnung per E-Mail versenden">
         <i class="bi bi-envelope"></i> Per Mail senden
     </button>
@@ -2398,16 +2402,16 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    {% if document.pk and document_type.is_invoice %}
+    {% if document.pk and document_type.is_invoice or document.pk and document_type.is_correction %}
     // ============================================================================
-    // Invoice-specific Actions (Echtdruck, Email Send, Print)
+    // Echtdruck for journal-relevant documents (invoices and credit notes)
     // ============================================================================
 
-    // Finalize Invoice (Echtdruck)
+    // Finalize Document (Echtdruck)
     const finalizeButton = document.getElementById('finalizeButton');
     if (finalizeButton) {
         finalizeButton.addEventListener('click', function() {
-            if (!confirm('Rechnung finalisieren und PDF herunterladen?\n\nDies vergibt eine eindeutige Rechnungsnummer (falls noch keine vorhanden) und setzt den Status auf "Versendet".')) {
+            if (!confirm('{{ document_type.name }} finalisieren und PDF herunterladen?\n\nDies vergibt eine eindeutige Belegnummer (falls noch keine vorhanden), setzt den Status auf "Versendet" und erzeugt den Eintrag im Rechnungsausgangsjournal.')) {
                 return;
             }
 
@@ -2439,6 +2443,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 1000);
         });
     }
+    {% endif %}
+
+    {% if document.pk and document_type.is_invoice %}
+    // ============================================================================
+    // Invoice-specific Actions (Email Send, Print)
+    // ============================================================================
 
     // Send Invoice via Email
     const sendEmailButton = document.getElementById('sendEmailButton');

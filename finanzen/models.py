@@ -91,11 +91,18 @@ class OutgoingInvoiceJournalEntry(models.Model):
     
     Tax Logic:
     - Supports only 0%, 7%, 19% tax rates
-    - Tax splitting must happen before journal entry creation
-    - Other tax rates should be blocked or flagged as error (out of scope)
-    
+    - Tax splitting happens in finanzen.services.journal before creation
+    - Other tax rates are blocked with an error (no silent misbooking)
+
+    Creation:
+    - Entries are created by finanzen.services.journal.create_journal_entry(),
+      called from auftragsverwaltung.services.invoice_finalization within the
+      same transaction as number assignment and status change.
+    - Credit notes are stored with document_kind='CREDIT_NOTE' and negative
+      amounts, so that a sum over the journal yields the period's revenue.
+    - See docs/RECHNUNGSAUSGANGSJOURNAL.md
+
     Out of Scope (NOT part of this implementation):
-    - Journal entry creation logic
     - DATEV export files (CSV/XML)
     - Payment reconciliation / open item management
     - Dunning (Mahnwesen)
