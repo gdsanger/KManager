@@ -371,3 +371,105 @@ class SnapshotStabilityTest(JournalServiceTestBase):
         self.assertEqual(entry.document_date, date(2026, 2, 6))
         self.assertEqual(entry.net_19, Decimal('100.00'))
         self.assertEqual(entry.gross_amount, Decimal('119.00'))
+
+
+class RevenueAccountResolutionTest(JournalServiceTestBase):
+    """
+    Erlöskonto-Snapshot nach der zentralen Auflösungsregel.
+
+    Die Ausgangsseite des DATEV-Exports liest ausschließlich das Journal.
+    Eine an der Kostenart hinterlegte Übersteuerung muss deshalb schon bei der
+    Finalisierung im Snapshot landen.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from core.models import Kostenart
+
+        self.haupt = Kostenart.objects.create(name="Vermietung", erloeskonto="8501")
+        self.unter = Kostenart.objects.create(name="Nebenkosten", parent=self.haupt)
+
+    def _line_with_cost_type(self, document, tax_rate, kostenart1=None, kostenart2=None,
+                             unit_price_net='100.00'):
+        line = self._add_line(document, tax_rate, unit_price_net=unit_price_net)
+        line.kostenart1 = kostenart1
+        line.kostenart2 = kostenart2
+        line.save(update_fields=['kostenart1', 'kostenart2'])
+        return line
+
+    def test_cost_type_overrides_tax_rate_account(self):
+        document = self._create_document()
+        self._line_with_cost_type(document, self.tax_19, kostenart1=self.haupt)
+        document = self._recalculate(document)
+
+        entry, _ = create_journal_entry(document)
+
+        self.assertEqual(entry.revenue_account_19, '8501')
+        # Nicht betroffene Steuersätze behalten das Konto des Mandanten
+        self.assertEqual(entry.revenue_account_7, '8100')
+
+    def test_sub_cost_type_wins(self):
+        self.unter.erloeskonto = '8590'
+        self.unter.save()
+
+        document = self._create_document()
+        self._line_with_cost_type(
+            document, self.tax_19, kostenart1=self.haupt, kostenart2=self.unter,
+        )
+        document = self._recalculate(document)
+
+        entry, _ = create_journal_entry(document)
+        self.assertEqual(entry.revenue_account_19, '8590')
+
+    def test_falls_back_to_company_account_without_cost_type_account(self):
+        self.haupt.erloeskonto = ''
+        self.haupt.save()
+
+        document = self._create_document()
+        self._line_with_cost_type(document, self.tax_19, kostenart1=self.haupt)
+        document = self._recalculate(document)
+
+        entry, _ = create_journal_entry(document)
+        self.assertEqual(entry.revenue_account_19, '8400')
+
+    def test_override_is_applied_per_tax_rate(self):
+        document = self._create_document()
+        self._line_with_cost_type(document, self.tax_19, kostenart1=self.haupt)
+        self._line_with_cost_type(document, self.tax_7)
+        document = self._recalculate(document)
+
+        entry, _ = create_journal_entry(document)
+        self.assertEqual(entry.revenue_account_19, '8501')
+        self.assertEqual(entry.revenue_account_7, '8100')
+
+    def test_conflicting_accounts_within_one_tax_rate_are_rejected(self):
+        """
+        Das Journal führt je Steuersatz genau ein Erlöskonto – eine stille
+        Auswahl zwischen zwei Konten wäre eine Falschbuchung.
+        """
+        from core.models import Kostenart
+
+        andere = Kostenart.objects.create(name="Sonstiges", erloeskonto="8502")
+
+        document = self._create_document()
+        self._line_with_cost_type(document, self.tax_19, kostenart1=self.haupt)
+        self._line_with_cost_type(document, self.tax_19, kostenart1=andere)
+        document = self._recalculate(document)
+
+        with self.assertRaises(JournalEntryError) as cm:
+            create_journal_entry(document)
+        self.assertIn('unterschiedliche Erlöskonten', str(cm.exception))
+        self.assertEqual(OutgoingInvoiceJournalEntry.objects.count(), 0)
+
+    def test_snapshot_does_not_follow_later_cost_type_changes(self):
+        document = self._create_document()
+        self._line_with_cost_type(document, self.tax_19, kostenart1=self.haupt)
+        document = self._recalculate(document)
+
+        entry, _ = create_journal_entry(document)
+
+        self.haupt.erloeskonto = '8999'
+        self.haupt.save()
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.revenue_account_19, '8501')
