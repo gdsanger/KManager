@@ -403,6 +403,20 @@
 <!-- Totals section -->
 <div class="totals-section">
     <table class="totals-table">
+        {% if totals.discount_total > 0 %}
+        <tr>
+            <td class="label">Zwischensumme:</td>
+            <td class="amount">{{ totals.net_subtotal|floatformat:2 }} €</td>
+        </tr>
+        <tr>
+            <td class="label">abzgl. Rabatt:</td>
+            <td class="amount">− {{ totals.discount_total|floatformat:2 }} €</td>
+        </tr>
+        <tr>
+            <td class="label">Nettobetrag:</td>
+            <td class="amount">{{ totals.net_total|floatformat:2 }} €</td>
+        </tr>
+        {% endif %}
         {% if totals.net_19 > 0 %}
         <tr>
             <td class="label">Nettobetrag (19% MwSt.):</td>

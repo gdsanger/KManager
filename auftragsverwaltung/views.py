@@ -34,6 +34,25 @@ from finanzen.models import OutgoingInvoiceJournalEntry
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+# Discount bounds and the user-facing messages for the line endpoints. A discount
+# is a percentage, so only 0..100 is meaningful - values outside that range are
+# rejected with a readable message instead of being silently clamped to 0.
+MIN_DISCOUNT_PERCENT = DocumentCalculationService.MIN_DISCOUNT_PERCENT
+MAX_DISCOUNT_PERCENT = DocumentCalculationService.MAX_DISCOUNT_PERCENT
+DISCOUNT_RANGE_ERROR = 'Rabatt muss zwischen 0 und 100 Prozent liegen.'
+NOT_DISCOUNTABLE_ERROR = 'Diese Position ist nicht rabattfähig - ein Rabatt ist hier nicht zulässig.'
+
+
+class LineInputError(ValueError):
+    """
+    Validation error of a line endpoint whose message is meant for the user.
+
+    Plain ValueErrors are answered with a generic message (they may carry
+    internal detail); a LineInputError message is passed through verbatim so the
+    inline save status can explain what is wrong.
+    """
+    pass
+
 
 def normalize_foreign_key_id(value):
     """
@@ -916,6 +935,12 @@ def ajax_add_line(request, doc_key, pk):
             logger.warning("Ungültiger Rabatt in add/update line request.", exc_info=True)
             return JsonResponse({'success': False, 'error': 'Ungültiger Rabatt.'}, status=400)
 
+        if not (MIN_DISCOUNT_PERCENT <= discount_value <= MAX_DISCOUNT_PERCENT):
+            return JsonResponse({'success': False, 'error': DISCOUNT_RANGE_ERROR}, status=400)
+
+        if discount_value > MIN_DISCOUNT_PERCENT and not is_discountable:
+            return JsonResponse({'success': False, 'error': NOT_DISCOUNTABLE_ERROR}, status=400)
+
         with transaction.atomic():
             # Get next position number
             max_position = document.lines.aggregate(max_pos=Max('position_no'))['max_pos'] or 0
@@ -945,8 +970,12 @@ def ajax_add_line(request, doc_key, pk):
                 kostenart2_id=normalize_foreign_key_id(kostenart2_id),
             )
 
-            # Recalculate document totals
+            # Recalculate document totals. The service works on freshly loaded
+            # line objects, so the local instance has to be reloaded before its
+            # sums are reported back - otherwise the response would carry the
+            # 0.00 placeholders the line was created with.
             DocumentCalculationService.recalculate(document, persist=True)
+            line.refresh_from_db()
     except Http404:
         raise
     except Exception as e:
@@ -982,6 +1011,8 @@ def ajax_add_line(request, doc_key, pk):
             'total_net': str(document.total_net),
             'total_tax': str(document.total_tax),
             'total_gross': str(document.total_gross),
+            'total_discount': str(document.total_discount),
+            'total_net_before_discount': str(document.total_net_before_discount),
         }
     })
 
@@ -1143,12 +1174,15 @@ def ajax_update_line(request, doc_key, pk, line_id):
                 recognized_keys.add('discount')
                 discount_value = data['discount']
                 try:
-                    line.discount = (
+                    new_discount = (
                         normalize_decimal_input(discount_value)
                         if discount_value not in (None, '') else Decimal('0.00')
                     )
                 except (ValueError, TypeError) as e:
-                    raise ValueError(f'Ungültiger Rabatt: {e}')
+                    raise LineInputError('Ungültiger Rabatt. Bitte einen Prozentwert zwischen 0 und 100 eingeben.')
+                if not (MIN_DISCOUNT_PERCENT <= new_discount <= MAX_DISCOUNT_PERCENT):
+                    raise LineInputError(DISCOUNT_RANGE_ERROR)
+                line.discount = new_discount
                 touched_fields.add('discount')
             if 'kostenart1_id' in data:
                 recognized_keys.add('kostenart1_id')
@@ -1204,6 +1238,17 @@ def ajax_update_line(request, doc_key, pk, line_id):
                     line.kostenart2 = new_item.cost_type_2
                     touched_fields.add('kostenart2')
 
+            # Server-side safeguard for non-discountable lines: the UI disables the
+            # discount input, but a request must never be able to smuggle one in.
+            # An explicitly sent discount is rejected; a discount that only became
+            # invalid because an assigned article is not discountable is cleared,
+            # so the stored value can never contradict the calculated amount.
+            if not line.is_discountable and line.discount and line.discount > MIN_DISCOUNT_PERCENT:
+                if 'discount' in data:
+                    raise LineInputError(NOT_DISCOUNTABLE_ERROR)
+                line.discount = Decimal('0.00')
+                touched_fields.add('discount')
+
             # Recalculate line totals using the service before saving
             line_net, line_tax, line_gross = DocumentCalculationService.calculate_line_totals(line)
             line.line_net = line_net
@@ -1219,6 +1264,11 @@ def ajax_update_line(request, doc_key, pk, line_id):
             DocumentCalculationService.recalculate(document, persist=True)
     except Http404:
         raise
+    except LineInputError as e:
+        # Message is written for the user - pass it through so the inline save
+        # status can name the actual problem (e.g. a discount outside 0..100).
+        logger.warning(f"Validation error updating line {line_id} in document {pk}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except ValueError as e:
         logger.warning(f"Validation error updating line {line_id} in document {pk}: {e}")
         return JsonResponse({'success': False, 'error': 'Invalid input.'}, status=400)
@@ -1255,6 +1305,8 @@ def ajax_update_line(request, doc_key, pk, line_id):
             'total_net': str(document.total_net),
             'total_tax': str(document.total_tax),
             'total_gross': str(document.total_gross),
+            'total_discount': str(document.total_discount),
+            'total_net_before_discount': str(document.total_net_before_discount),
         }
     })
 
@@ -1283,6 +1335,8 @@ def ajax_delete_line(request, doc_key, pk, line_id):
                 'total_net': str(document.total_net),
                 'total_tax': str(document.total_tax),
                 'total_gross': str(document.total_gross),
+                'total_discount': str(document.total_discount),
+                'total_net_before_discount': str(document.total_net_before_discount),
             }
         })
     except Exception as e:

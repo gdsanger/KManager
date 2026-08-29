@@ -205,7 +205,10 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
                     'short_text_2': line.short_text_2 or '',
                     'long_text': line.long_text or '',
                     'unit_price_net': line.unit_price_net,
-                    'discount_percent': line.discount,
+                    # Effective percentage: a non-discountable line prints no
+                    # discount, so the printed percentage always matches the
+                    # printed amount.
+                    'discount_percent': line.effective_discount_percent(),
                     'net': line.line_net,
                     'tax_rate': {
                         'name': line.tax_rate.name if line.tax_rate else '',
@@ -254,6 +257,10 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
             'tax_total': document.total_tax,
             'net_total': document.total_net,
             'gross_total': document.total_gross,
+            # Discount block: only rendered when a discount actually exists.
+            # net_subtotal is the net sum before the discount was deducted.
+            'discount_total': document.total_discount,
+            'net_subtotal': document.total_net_before_discount,
         }
     
     def _build_tax_notes(self, document) -> dict:

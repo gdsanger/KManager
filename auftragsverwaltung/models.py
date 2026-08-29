@@ -1,5 +1,6 @@
 from django.db import models, transaction
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import User
 from decimal import Decimal
 from datetime import date, timedelta
@@ -418,7 +419,14 @@ class SalesDocument(models.Model):
         verbose_name="Bruttobetrag",
         help_text="Gesamtbetrag brutto"
     )
-    
+    total_discount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Rabattbetrag",
+        help_text="Summe aller Positionsrabatte (bereits in total_net abgezogen)"
+    )
+
     # Meta fields
     notes_internal = models.TextField(
         blank=True,
@@ -490,6 +498,11 @@ class SalesDocument(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    @property
+    def total_net_before_discount(self):
+        """Zwischensumme netto vor Abzug der Positionsrabatte."""
+        return (self.total_net or Decimal('0.00')) + (self.total_discount or Decimal('0.00'))
+
     def clone_as(self, target_document_type):
         """
         Create a copy of this SalesDocument using the provided target document type.
@@ -531,6 +544,7 @@ class SalesDocument(models.Model):
                 total_net=self.total_net,
                 total_tax=self.total_tax,
                 total_gross=self.total_gross,
+                total_discount=self.total_discount,
             )
             
             for line in self.lines.select_related('item', 'tax_rate', 'kostenart1', 'kostenart2', 'unit').order_by('position_no'):
@@ -783,6 +797,10 @@ class SalesDocumentLine(models.Model):
         max_digits=5,
         decimal_places=2,
         default=Decimal('0.00'),
+        validators=[
+            MinValueValidator(Decimal('0.00')),
+            MaxValueValidator(Decimal('100.00')),
+        ],
         verbose_name="Rabatt (%)",
         help_text="Rabatt in Prozent (z.B. 10.00 für 10% Rabatt)"
     )
@@ -851,9 +869,18 @@ class SalesDocumentLine(models.Model):
         Business rules:
         1. Default is_selected based on line_type if not explicitly set
         2. For NORMAL lines, is_selected should be True (auto-corrected)
+        3. discount must be a percentage between 0 and 100
         """
         super().clean()
-        
+
+        # Validation: discount is a percentage - anything outside 0..100 is
+        # rejected instead of being silently coerced to 0.
+        if self.discount is not None:
+            if self.discount < Decimal('0.00') or self.discount > Decimal('100.00'):
+                raise ValidationError({
+                    'discount': 'Rabatt muss zwischen 0 und 100 Prozent liegen.'
+                })
+
         # Set default is_selected based on line_type during creation
         # Note: This runs during validation, so we check if pk is None to detect creation
         if self.pk is None:
@@ -888,6 +915,19 @@ class SalesDocumentLine(models.Model):
             return True
         # OPTIONAL and ALTERNATIVE
         return self.is_selected
+
+    def effective_discount_percent(self):
+        """
+        Discount percentage that actually applies to this line
+
+        Returns 0 for lines that are not discountable, so display (PDF, UI) and
+        calculation can never drift apart.
+
+        Returns:
+            Decimal: effective discount percentage (0..100)
+        """
+        from auftragsverwaltung.services.document_calculation import DocumentCalculationService
+        return DocumentCalculationService.effective_discount_percent(self)
 
 
 class Contract(models.Model):

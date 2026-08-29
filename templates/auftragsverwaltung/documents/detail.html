@@ -606,7 +606,9 @@ Neues {{ document_type.name }}
                                                        step="0.01"
                                                        min="0"
                                                        max="100"
-                                                       placeholder="%">
+                                                       placeholder="%"
+                                                       {% if not line.is_discountable %}disabled
+                                                       title="Position ist nicht rabattfähig"{% endif %}>
                                             </div>
                                         </div>
                                         <!-- Row 2: long_text preview + edit button -->
@@ -757,6 +759,15 @@ Neues {{ document_type.name }}
             <div class="document-totals">
                 <h5 class="mb-3"><i class="bi bi-calculator"></i> Summen</h5>
                 
+                <!-- Rabattblock: nur sichtbar, wenn tatsächlich ein Rabatt anfällt -->
+                <div class="totals-row" id="totalsSubtotalRow"{% if not document or document.total_discount <= 0 %} hidden{% endif %}>
+                    <span>Zwischensumme:</span>
+                    <span id="totalSubtotal">{% if document %}{{ document.total_net_before_discount|floatformat:2 }}{% else %}0,00{% endif %} €</span>
+                </div>
+                <div class="totals-row" id="totalsDiscountRow"{% if not document or document.total_discount <= 0 %} hidden{% endif %}>
+                    <span>abzgl. Rabatt:</span>
+                    <span id="totalDiscount">− {% if document %}{{ document.total_discount|floatformat:2 }}{% else %}0,00{% endif %} €</span>
+                </div>
                 <div class="totals-row">
                     <span>Netto:</span>
                     <span id="totalNet">{% if document %}{{ document.total_net|floatformat:2 }}{% else %}0,00{% endif %} €</span>
@@ -2230,12 +2241,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const shortText1Input = lineItem.querySelector('.line-short-text-1');
         const unitPriceInput = lineItem.querySelector('.line-unit-price');
         const longTextPreview = lineItem.querySelector('.long-text-preview');
+        const discountInput = lineItem.querySelector('.line-discount');
 
         if (shortText1Input && line.short_text_1 !== undefined) {
             shortText1Input.value = line.short_text_1 || '';
         }
         if (unitPriceInput && line.unit_price_net !== undefined) {
             unitPriceInput.value = line.unit_price_net;
+        }
+        if (discountInput && line.discount !== undefined) {
+            discountInput.value = line.discount;
+        }
+        // Rabattfähigkeit kommt vom Artikel - das Feld wird gesperrt, sobald der
+        // Server die Position als nicht rabattfähig zurückmeldet.
+        if (discountInput && line.is_discountable !== undefined) {
+            discountInput.disabled = !line.is_discountable;
+            discountInput.title = line.is_discountable ? '' : 'Position ist nicht rabattfähig';
         }
         if (longTextPreview && line.long_text !== undefined) {
             longTextPreview.textContent = stripHtmlTags(line.long_text || '');
@@ -2390,10 +2411,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalNetEl = document.getElementById('totalNet');
         const totalTaxEl = document.getElementById('totalTax');
         const totalGrossEl = document.getElementById('totalGross');
-        
+
         if (totalNetEl) totalNetEl.textContent = parseFloat(totals.total_net).toFixed(2) + ' €';
         if (totalTaxEl) totalTaxEl.textContent = parseFloat(totals.total_tax).toFixed(2) + ' €';
         if (totalGrossEl) totalGrossEl.textContent = parseFloat(totals.total_gross).toFixed(2) + ' €';
+
+        // Zwischensumme/Rabatt nur zeigen, solange ein Rabatt vorhanden ist -
+        // ohne Rabatt bleibt der Summenblock exakt wie bisher.
+        const discount = parseFloat(totals.total_discount || 0) || 0;
+        const subtotal = parseFloat(totals.total_net_before_discount || totals.total_net) || 0;
+        const subtotalRow = document.getElementById('totalsSubtotalRow');
+        const discountRow = document.getElementById('totalsDiscountRow');
+        const totalSubtotalEl = document.getElementById('totalSubtotal');
+        const totalDiscountEl = document.getElementById('totalDiscount');
+
+        if (totalSubtotalEl) totalSubtotalEl.textContent = subtotal.toFixed(2) + ' €';
+        if (totalDiscountEl) totalDiscountEl.textContent = '− ' + discount.toFixed(2) + ' €';
+        if (subtotalRow) subtotalRow.hidden = discount <= 0;
+        if (discountRow) discountRow.hidden = discount <= 0;
     }
     
     // Initialize Bootstrap tooltips
