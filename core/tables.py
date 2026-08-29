@@ -40,7 +40,15 @@ class ItemTable(tables.Table):
         accessor='item_group.name',
         order_by='item_group__name'
     )
-    
+
+    unit = tables.Column(
+        verbose_name='Einheit',
+        accessor='unit.code',
+        order_by='unit__code',
+        default='—',
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+
     actions = tables.Column(
         verbose_name='Aktionen',
         orderable=False,
@@ -100,6 +108,7 @@ class ItemTable(tables.Table):
             'article_no',
             'short_text_1',
             'item_type',
+            'unit',
             'net_price',
             'item_group',
             'is_active',
