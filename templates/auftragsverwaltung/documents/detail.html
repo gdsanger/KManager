@@ -1106,6 +1106,24 @@ document.addEventListener('DOMContentLoaded', function() {
         return flushLineSave(lineId);
     }
 
+    // Drops fields from a line's pending (and last-failed) payload without
+    // sending them. Needed when the user picks an article: the backend derives
+    // those fields from the item, so a half-typed Kurztext still queued from the
+    // article search must not travel along and override the article's value.
+    function discardPendingLineFields(lineId, keys) {
+        const entry = getLineSaveEntry(lineId);
+        keys.forEach(function(key) {
+            delete entry.pending[key];
+            if (entry.lastFailedPayload) {
+                delete entry.lastFailedPayload[key];
+            }
+        });
+        if (entry.lastFailedPayload && !Object.keys(entry.lastFailedPayload).length) {
+            entry.lastFailedPayload = null;
+        }
+        refreshUnsavedIndicator();
+    }
+
     // Flushes every line with unsaved edits right away, retrying any line
     // that previously failed; must be awaited before Add/Delete/Artikel/Submit
     // so a still-pending debounce can't be dropped by the ensuing
@@ -2078,7 +2096,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Constants for timing
     const SEARCH_DEBOUNCE_MS = 300; // Delay before triggering search after typing stops
     const SUGGESTIONS_HIDE_DELAY_MS = 200; // Delay to allow click events to register on suggestion items
-    const KOSTENART2_LOAD_TIMEOUT_MS = 500; // Timeout to wait for kostenart2 options to load after article selection
     
     // Utility function to strip HTML tags
     function stripHtmlTags(html) {
@@ -2180,75 +2197,102 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Fields that ajax_update_line derives from the item itself when an article
+    // is assigned. They must not be sent along: any value present in the payload
+    // counts as "explicitly provided" on the server and suppresses the takeover -
+    // which is exactly why the tax rate used to stay at its old value (#1177).
+    const ITEM_DERIVED_LINE_FIELDS = [
+        'short_text_1', 'short_text_2', 'long_text', 'description', 'unit_price_net',
+        'tax_rate_id', 'unit_id', 'is_discountable', 'kostenart1_id', 'kostenart2_id'
+    ];
+
+    // Reflects the line values returned by the backend in the visible inputs.
+    // The backend is authoritative for everything the client cannot compute
+    // itself - above all the tax rate, which TaxDeterminationService derives from
+    // the customer (reverse charge, export) and not just from the article.
+    function applyLineFromServer(lineId, line) {
+        const lineItem = document.querySelector(`.line-item[data-line-id="${lineId}"]`);
+        if (!lineItem || !line) return;
+
+        function setSelectValue(select, value) {
+            if (!select) return;
+            const target = (value === null || value === undefined) ? '' : String(value);
+            const hasOption = Array.from(select.options).some(opt => opt.value === target);
+            if (hasOption) {
+                select.value = target;
+            }
+        }
+
+        const shortText1Input = lineItem.querySelector('.line-short-text-1');
+        const unitPriceInput = lineItem.querySelector('.line-unit-price');
+        const longTextPreview = lineItem.querySelector('.long-text-preview');
+
+        if (shortText1Input && line.short_text_1 !== undefined) {
+            shortText1Input.value = line.short_text_1 || '';
+        }
+        if (unitPriceInput && line.unit_price_net !== undefined) {
+            unitPriceInput.value = line.unit_price_net;
+        }
+        if (longTextPreview && line.long_text !== undefined) {
+            longTextPreview.textContent = stripHtmlTags(line.long_text || '');
+        }
+
+        setSelectValue(lineItem.querySelector('.line-tax-rate'), line.tax_rate_id);
+        setSelectValue(lineItem.querySelector('.line-unit'), line.unit_id);
+
+        const lineData = lineDataStore.get(parseInt(lineId));
+        if (lineData && line.long_text !== undefined) {
+            lineData.long_text = line.long_text || '';
+        }
+    }
+
     // Fill line from article data
     function fillLineFromArticle(lineId, article) {
         const lineItem = document.querySelector(`.line-item[data-line-id="${lineId}"]`);
         if (!lineItem) return;
-        
-        // Update fields
+
+        // Optimistic preview of the values the article carries; the backend
+        // response overwrites all of them again via applyLineFromServer().
         const shortText1Input = lineItem.querySelector('.line-short-text-1');
-        const shortText2Input = lineItem.querySelector('.line-short-text-2');
-        const longTextPreview = lineItem.querySelector('.line-long-text-preview');
+        const longTextPreview = lineItem.querySelector('.long-text-preview');
         const unitPriceInput = lineItem.querySelector('.line-unit-price');
-        const kostenart1Select = lineItem.querySelector('.line-kostenart1');
-        const kostenart2Select = lineItem.querySelector('.line-kostenart2');
-        
+
         if (shortText1Input) shortText1Input.value = article.short_text_1 || '';
-        if (shortText2Input) shortText2Input.value = article.short_text_2 || '';
         if (longTextPreview) {
             const plainText = stripHtmlTags(article.long_text || '');
             longTextPreview.textContent = plainText;
         }
         if (unitPriceInput) unitPriceInput.value = article.net_price || 0;
-        
+
         // Update data store with article's long_text HTML
         const lineData = lineDataStore.get(parseInt(lineId));
         if (lineData) {
             lineData.long_text = article.long_text || '';
         }
-        
-        if (kostenart1Select && article.cost_type_1_id) {
-            kostenart1Select.value = article.cost_type_1_id;
-            // Trigger change to update kostenart2
-            kostenart1Select.dispatchEvent(new Event('change'));
-        }
-        
-        if (kostenart2Select && article.cost_type_2_id) {
-            // Wait for kostenart2 options to load via AJAX, then set value
-            // Check periodically if options are loaded, with timeout
-            const checkInterval = 50; // Check every 50ms
-            const maxAttempts = KOSTENART2_LOAD_TIMEOUT_MS / checkInterval;
-            let attempts = 0;
-            
-            const checkAndSet = setInterval(function() {
-                attempts++;
-                // Check if options are available (more than just the default "-- Keine --" option)
-                if (kostenart2Select.options.length > 1) {
-                    kostenart2Select.value = article.cost_type_2_id;
-                    clearInterval(checkAndSet);
-                } else if (attempts >= maxAttempts) {
-                    // Timeout reached, stop checking
-                    clearInterval(checkAndSet);
-                }
-            }, checkInterval);
-        }
-        
+
+        // Kostenart 1/2 have no inputs in the position row - the backend takes
+        // them over from the article and they are shown after a reload.
+
         // Hide suggestions
         const suggestionsDiv = document.getElementById(`suggestions-${lineId}`);
         if (suggestionsDiv) {
             suggestionsDiv.style.display = 'none';
         }
         
-        // Update the line via AJAX (goes through the queue so it can't race a
-        // save already pending for this line)
-        saveLineFieldsNow(lineId, {
-            short_text_1: article.short_text_1 || '',
-            short_text_2: article.short_text_2 || '',
-            long_text: article.long_text || '',
-            unit_price_net: article.net_price || 0,
-            kostenart1_id: article.cost_type_1_id || null,
-            kostenart2_id: article.cost_type_2_id || null
-        });
+        // Anything still queued for the fields the item provides would win over
+        // the article on the server - drop it before sending.
+        discardPendingLineFields(lineId, ITEM_DERIVED_LINE_FIELDS);
+
+        // Only item_id is sent (through the queue, so it can't race a save
+        // already pending for this line). ajax_update_line then copies texts,
+        // price, Mengeneinheit, Rabattfähigkeit, Kostenarten and - via
+        // TaxDeterminationService - the Steuersatz from the article.
+        saveLineFieldsNow(lineId, { item_id: article.id })
+            .then(function(result) {
+                if (result && result.success) {
+                    applyLineFromServer(lineId, result.line);
+                }
+            });
     }
 
     {% if document.pk %}

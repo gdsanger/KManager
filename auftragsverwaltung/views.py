@@ -683,7 +683,7 @@ def ajax_search_articles(request):
                 Q(long_text__icontains=query),
                 is_active=True
             )
-            .select_related('tax_rate', 'cost_type_1', 'cost_type_2', 'item_group')
+            .select_related('tax_rate', 'cost_type_1', 'cost_type_2', 'item_group', 'unit')
             .order_by('article_no')[:20]
         )
 
@@ -701,6 +701,8 @@ def ajax_search_articles(request):
                 'tax_rate_code': article.tax_rate.code,
                 'tax_rate': str(article.tax_rate.rate),
                 'is_discountable': article.is_discountable,
+                'unit_id': article.unit.pk if article.unit else None,
+                'unit_code': article.unit.code if article.unit else '',
                 'cost_type_1_id': article.cost_type_1.pk if article.cost_type_1 else None,
                 'cost_type_2_id': article.cost_type_2.pk if article.cost_type_2 else None,
             })
@@ -766,10 +768,15 @@ def ajax_add_line(request, doc_key, pk):
         - quantity: Quantity (German or English decimal format)
         - description: Description (required for manual lines)
         - unit_price_net: Unit price (required for manual lines; German or English decimal format)
-        - tax_rate_id: Tax rate ID (required)
+        - tax_rate_id: Tax rate ID (required for manual lines)
         - line_type: Line type (NORMAL, OPTIONAL, ALTERNATIVE)
+        - unit_id: Unit ID (optional; defaults to the item's Mengeneinheit)
         - kostenart1_id: Kostenart 1 ID (optional)
         - kostenart2_id: Kostenart 2 ID (optional)
+
+    With item_id set, texts, price, Mengeneinheit, Rabattfähigkeit and
+    Kostenarten come from the article and the tax rate from
+    TaxDeterminationService (article + customer) unless explicitly provided.
 
     Returns:
         JSON: {success, line_id, line_data} on success.
@@ -796,6 +803,7 @@ def ajax_add_line(request, doc_key, pk):
     tax_rate_id = data.get('tax_rate_id')
     kostenart1_id = data.get('kostenart1_id')
     kostenart2_id = data.get('kostenart2_id')
+    unit_id = data.get('unit_id')
 
     try:
         quantity = normalize_decimal_input(data.get('quantity', '1.0'))
@@ -839,6 +847,11 @@ def ajax_add_line(request, doc_key, pk):
                 kostenart1_id = item.cost_type_1.pk
             if not kostenart2_id and item.cost_type_2:
                 kostenart2_id = item.cost_type_2.pk
+
+            # Use item's unit if not provided. An item without a unit leaves the
+            # caller's value (or None) untouched.
+            if not unit_id and item.unit_id:
+                unit_id = item.unit_id
         else:
             # Manual line without item
             item = None
@@ -892,8 +905,7 @@ def ajax_add_line(request, doc_key, pk):
             logger.warning("Ungültiger Netto-Stückpreis in add/update line request.", exc_info=True)
             return JsonResponse({'success': False, 'error': 'Ungültiger Netto-Stückpreis.'}, status=400)
 
-        # Get unit and discount if provided
-        unit_id = data.get('unit_id')
+        # Get discount if provided
         discount = data.get('discount')
 
         try:
@@ -954,8 +966,10 @@ def ajax_add_line(request, doc_key, pk):
             'description': line.description,
             'quantity': str(line.quantity),
             'unit_id': line.unit.pk if line.unit else None,
+            'unit_code': line.unit.code if line.unit else '',
             'unit_price_net': str(line.unit_price_net),
             'discount': str(line.discount),
+            'is_discountable': line.is_discountable,
             'tax_rate': str(line.tax_rate.rate),
             'tax_rate_id': line.tax_rate.pk,
             'line_net': str(line.line_net),
@@ -991,7 +1005,15 @@ def ajax_update_line(request, doc_key, pk, line_id):
         - discount: Discount percentage
         - kostenart1_id: New kostenart1 ID
         - kostenart2_id: New kostenart2 ID
-    
+
+    Assigning a different item_id copies short texts, long text, description,
+    unit price, Mengeneinheit, Rabattfähigkeit, Kostenarten and the tax rate
+    (via TaxDeterminationService, which also honours the customer) from the
+    article. Every one of those fields is only taken over when the request did
+    not carry it explicitly - an explicitly sent value always wins. The
+    Mengeneinheit is additionally only taken over when the article carries one,
+    so an article without a unit never clears the unit of the line.
+
     Returns:
         JSON: {success, line_data, totals} on success.
         Validation errors (invalid decimal, unknown tax_rate_id/item_id, empty or
@@ -1167,6 +1189,11 @@ def ajax_update_line(request, doc_key, pk, line_id):
                         item_tax_rate=new_item.tax_rate
                     )
                     touched_fields.add('tax_rate')
+                if 'unit_id' not in data and 'unit' not in data and new_item.unit_id:
+                    # An item without a unit must not clear the unit already on the
+                    # line - only an item that actually carries one overrides it.
+                    line.unit_id = new_item.unit_id
+                    touched_fields.add('unit')
                 if 'is_discountable' not in data:
                     line.is_discountable = new_item.is_discountable
                     touched_fields.add('is_discountable')
@@ -1210,10 +1237,13 @@ def ajax_update_line(request, doc_key, pk, line_id):
             'long_text': line.long_text,
             'quantity': str(line.quantity),
             'unit_id': line.unit.pk if line.unit else None,
+            'unit_code': line.unit.code if line.unit else '',
             'unit_symbol': line.unit.symbol if line.unit else '',
             'unit_price_net': str(line.unit_price_net),
             'discount': str(line.discount),
+            'is_discountable': line.is_discountable,
             'tax_rate_id': line.tax_rate.pk if line.tax_rate else None,
+            'tax_rate_code': line.tax_rate.code if line.tax_rate else '',
             'description': line.description,
             'line_net': str(line.line_net),
             'line_tax': str(line.line_tax),
@@ -1726,17 +1756,28 @@ def ajax_contract_add_line(request, pk):
             if not unit_price_net:
                 unit_price_net = item.net_price  # Already a Decimal from the model
 
-            # Use item's tax rate if not provided
+            # Derive the tax rate the same way document lines do: the customer of
+            # the contract can override the article's rate (Reverse Charge, Export).
             if not tax_rate_id and item.tax_rate:
-                tax_rate_id = item.tax_rate.pk
+                tax_rate_id = TaxDeterminationService.determine_tax_rate(
+                    customer=contract.customer,
+                    item_tax_rate=item.tax_rate
+                ).pk
+
+            # Use item's unit if not provided
+            if not unit_id and item.unit_id:
+                unit_id = item.unit_id
 
             # Use item's cost types if not provided
-            if not cost_type_1_id and item.kostenart1:
-                cost_type_1_id = item.kostenart1.pk
-            if not cost_type_2_id and item.kostenart2:
-                cost_type_2_id = item.kostenart2.pk
+            if not cost_type_1_id and item.cost_type_1:
+                cost_type_1_id = item.cost_type_1.pk
+            if not cost_type_2_id and item.cost_type_2:
+                cost_type_2_id = item.cost_type_2.pk
 
-            is_discountable = item.is_discountable
+            # The article's Rabattfähigkeit only applies when the caller did not
+            # state one explicitly.
+            if 'is_discountable' not in data:
+                is_discountable = item.is_discountable
         else:
             # Manual line - ensure required fields are present.
             # Backward compatibility: legacy callers may still send only `description`.
