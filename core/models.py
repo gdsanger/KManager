@@ -76,12 +76,20 @@ class Adresse(models.Model):
         verbose_name="Unternehmer",
         help_text="Ist dies ein Unternehmer/Geschäftskunde?"
     )
+    # Trägt beide Personenkonten: Debitor (KUNDE) und Kreditor (LIEFERANT).
+    # Bewusst ein Feld statt zweier Parallelfelder – eine Adresse ist entweder
+    # Kunde oder Lieferant, und ein zweites Feld hätte eine zweite
+    # Nummernschicht mit eigener Eindeutigkeitsproblematik bedeutet.
     debitor_number = models.CharField(
         max_length=32,
         blank=True,
         null=True,
-        verbose_name="Debitorennummer",
-        help_text="Debitorennummer für die Buchhaltung (optional)"
+        verbose_name="Debitoren-/Kreditorenkonto",
+        help_text=(
+            "Personenkonto für die Buchhaltung: Debitorenkonto bei Kunden, "
+            "Kreditorenkonto bei Lieferanten. Wird bei der Neuanlage "
+            "automatisch vergeben."
+        )
     )
     invoice_email = models.EmailField(
         blank=True,
@@ -160,7 +168,7 @@ class Adresse(models.Model):
     def clean(self):
         """Validate and normalize address data"""
         super().clean()
-        
+
         # Normalize and validate country_code
         if self.country_code:
             self.country_code = self.country_code.strip().upper()
@@ -168,13 +176,74 @@ class Adresse(models.Model):
                 raise ValidationError({
                     'country_code': 'Ländercode muss genau 2 Zeichen lang sein (z.B. DE, AT, FR).'
                 })
-        
+
         # Normalize vat_id
         if self.vat_id:
             self.vat_id = self.vat_id.strip().upper()
+
+        # Personenkonto validieren
+        if self.debitor_number:
+            self.debitor_number = self.debitor_number.strip()
+            self.validate_personal_account(self.debitor_number, self.adressen_type)
+
+    @staticmethod
+    def personal_account_range(adressen_type):
+        """
+        Zulässigen Kontenbereich für einen Adresstyp liefern.
+
+        Die Grenzen kommen aus den Django-Settings (DEBITOR_ACCOUNT_RANGE /
+        CREDITOR_ACCOUNT_RANGE) und sind damit für abweichende Kontenrahmen
+        anpassbar, statt im Code zu stehen.
+
+        Returns:
+            tuple(int, int) oder None, wenn der Typ kein Personenkonto führt.
+        """
+        from django.conf import settings
+
+        if adressen_type == 'KUNDE':
+            return tuple(settings.DEBITOR_ACCOUNT_RANGE)
+        if adressen_type == 'LIEFERANT':
+            return tuple(settings.CREDITOR_ACCOUNT_RANGE)
+        return None
+
+    @classmethod
+    def validate_personal_account(cls, value, adressen_type):
+        """
+        Personenkonto auf DATEV-Tauglichkeit prüfen.
+
+        DATEV erwartet rein numerische Personenkonten; zusätzlich muss die
+        Nummer im Bereich des jeweiligen Typs liegen, damit Debitoren und
+        Kreditoren im Buchungsstapel unterscheidbar bleiben.
+
+        Raises:
+            ValidationError: bei nicht-numerischen oder bereichsfremden Werten
+        """
+        if not value:
+            return
+
+        if not value.isdigit():
+            raise ValidationError({
+                'debitor_number': (
+                    'Das Personenkonto muss rein numerisch sein '
+                    '(DATEV-Anforderung).'
+                )
+            })
+
+        bounds = cls.personal_account_range(adressen_type)
+        if bounds is None:
+            return
+
+        low, high = bounds
+        if not (low <= int(value) <= high):
+            label = 'Debitorenkonto' if adressen_type == 'KUNDE' else 'Kreditorenkonto'
+            raise ValidationError({
+                'debitor_number': (
+                    f'Das {label} muss zwischen {low} und {high} liegen.'
+                )
+            })
     
     def save(self, *args, **kwargs):
-        """Override save to normalize fields and auto-assign debitor_number for customers"""
+        """Normalize fields and auto-assign the personal account (Debitor/Kreditor)"""
         # Normalize country_code
         if self.country_code:
             self.country_code = self.country_code.strip().upper()
@@ -183,16 +252,29 @@ class Adresse(models.Model):
         if self.vat_id:
             self.vat_id = self.vat_id.strip().upper()
 
-        # Auto-assign debitor_number only for customers (KUNDE) if not already set and this is a new instance
-        if self.adressen_type == 'KUNDE' and not self.debitor_number and not self.pk:
-            from auftragsverwaltung.services.number_range import get_next_customer_number
-            try:
-                self.debitor_number = get_next_customer_number()
-            except ValueError as e:
-                # Re-raise as ValidationError for better user feedback
-                raise ValidationError({
-                    'debitor_number': str(e)
-                })
+        if self.debitor_number:
+            self.debitor_number = self.debitor_number.strip()
+
+        # Personenkonto bei Neuanlage automatisch vergeben: Kunden bekommen ein
+        # Debitoren-, Lieferanten ein Kreditorenkonto. Bereits gesetzte Nummern
+        # bleiben unangetastet (Migration/Import).
+        if not self.debitor_number and not self.pk:
+            from auftragsverwaltung.services.number_range import (
+                get_next_customer_number,
+                get_next_supplier_number,
+            )
+            assign = {
+                'KUNDE': get_next_customer_number,
+                'LIEFERANT': get_next_supplier_number,
+            }.get(self.adressen_type)
+            if assign is not None:
+                try:
+                    self.debitor_number = assign()
+                except ValueError as e:
+                    # Re-raise as ValidationError for better user feedback
+                    raise ValidationError({
+                        'debitor_number': str(e)
+                    })
 
         super().save(*args, **kwargs)
 
@@ -576,17 +658,23 @@ class TaxRate(models.Model):
 
 class Kostenart(models.Model):
     """Kostenarten (Cost Types) with hierarchical structure
-    
+
     Can be either:
     - Hauptkostenart (parent=None) - Main cost type
     - Unterkostenart (parent=Kostenart) - Sub cost type
+
+    Kontierung (DATEV):
+    Die Kostenart trägt die Sachkonten für den Buchungsstapel-Export. Beide
+    Konten sind auf Haupt- und Unterkostenart pflegbar; die Unterkostenart
+    gewinnt, die Hauptkostenart dient als Fallback. Die Auflösungsregel ist
+    ausschließlich in ``finanzen.services.accounts`` implementiert.
     """
     UMSATZSTEUER_SAETZE = [
         ('0', '0% Umsatzsteuer (steuerfrei)'),
         ('7', '7% Umsatzsteuer (ermäßigt)'),
         ('19', '19% Umsatzsteuer (regulär)'),
     ]
-    
+
     name = models.CharField(max_length=200, verbose_name="Name")
     parent = models.ForeignKey(
         'self',
@@ -601,6 +689,28 @@ class Kostenart(models.Model):
         choices=UMSATZSTEUER_SAETZE,
         default='19',
         verbose_name="Umsatzsteuer-Satz"
+    )
+    # Sachkonten als String, damit führende Nullen erhalten bleiben
+    # (analog zu finanzen.CompanyAccountingSettings).
+    aufwandskonto = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name="Aufwandskonto",
+        help_text=(
+            "Sachkonto für Eingangsrechnungen dieser Kostenart. "
+            "Leer lassen, um das Konto der Hauptkostenart zu verwenden."
+        )
+    )
+    erloeskonto = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name="Erlöskonto",
+        help_text=(
+            "Optionales Erlöskonto. Ist es gesetzt, übersteuert es das "
+            "Erlöskonto aus dem Steuersatz."
+        )
     )
 
     class Meta:
@@ -618,13 +728,24 @@ class Kostenart(models.Model):
         return self.parent is None
 
     def clean(self):
-        """Validate that cost type hierarchy is only one level deep"""
+        """Validate hierarchy depth and normalize the bookkeeping accounts"""
         super().clean()
         if self.parent and self.parent.parent:
             raise ValidationError({
                 'parent': 'Kostenarten können nur eine Hierarchieebene haben. '
                          'Eine Unterkostenart kann nicht einer anderen Unterkostenart zugeordnet werden.'
             })
+
+        # Sachkonten normalisieren und auf Ziffern prüfen. Führende Nullen
+        # bleiben erhalten, deshalb String und keine Zahl.
+        errors = {}
+        for field in ('aufwandskonto', 'erloeskonto'):
+            value = (getattr(self, field) or '').strip()
+            setattr(self, field, value)
+            if value and not value.isdigit():
+                errors[field] = 'Ein Sachkonto darf nur aus Ziffern bestehen.'
+        if errors:
+            raise ValidationError(errors)
 
 
 class AIProvider(models.Model):

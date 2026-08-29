@@ -173,7 +173,9 @@ class AdresseKundeForm(forms.ModelForm):
             'vat_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. DE123456789'}),
             'is_eu': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'is_business': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'debitor_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'debitor_number': forms.TextInput(attrs={
+                'class': 'form-control', 'inputmode': 'numeric', 'placeholder': 'z. B. 10000',
+            }),
         }
         labels = {
             'firma': 'Firma (optional)',
@@ -192,7 +194,7 @@ class AdresseKundeForm(forms.ModelForm):
             'vat_id': 'USt-IdNr. (optional)',
             'is_eu': 'EU-Kunde',
             'is_business': 'Unternehmer/Geschäftskunde',
-            'debitor_number': 'Debitorennummer (optional)',
+            'debitor_number': 'Debitorenkonto',
         }
         help_texts = {
             'invoice_email': 'E-Mail-Adresse für den automatischen Rechnungsversand',
@@ -200,7 +202,10 @@ class AdresseKundeForm(forms.ModelForm):
             'vat_id': 'Umsatzsteuer-Identifikationsnummer',
             'is_eu': 'Kennzeichnet EU-Kunden für Reverse Charge',
             'is_business': 'Unterscheidung zwischen Geschäfts- und Privatkunden',
-            'debitor_number': 'Nummer für die Buchhaltung',
+            'debitor_number': (
+                'Personenkonto für die Buchhaltung. Wird bei der Neuanlage '
+                'automatisch vergeben (numerisch, ab 10000).'
+            ),
         }
     
     def __init__(self, *args, **kwargs):
@@ -1476,21 +1481,37 @@ class KostenartForm(forms.ModelForm):
     
     class Meta:
         model = Kostenart
-        fields = ['name', 'parent', 'umsatzsteuer_satz']
+        fields = ['name', 'parent', 'umsatzsteuer_satz', 'aufwandskonto', 'erloeskonto']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'parent': forms.Select(attrs={'class': 'form-select'}),
             'umsatzsteuer_satz': forms.Select(attrs={'class': 'form-select'}),
+            'aufwandskonto': forms.TextInput(attrs={
+                'class': 'form-control', 'inputmode': 'numeric', 'placeholder': 'z. B. 4930',
+            }),
+            'erloeskonto': forms.TextInput(attrs={
+                'class': 'form-control', 'inputmode': 'numeric', 'placeholder': 'z. B. 8400',
+            }),
         }
         labels = {
             'name': 'Name *',
             'parent': 'Hauptkostenart',
             'umsatzsteuer_satz': 'Umsatzsteuer-Satz',
+            'aufwandskonto': 'Aufwandskonto',
+            'erloeskonto': 'Erlöskonto',
         }
         help_texts = {
             'name': 'Name der Kostenart',
             'parent': 'Leer lassen für Hauptkostenart, oder Hauptkostenart auswählen für Unterkostenart',
             'umsatzsteuer_satz': 'Umsatzsteuer-Satz für diese Kostenart',
+            'aufwandskonto': (
+                'Sachkonto für Eingangsrechnungen. Leer lassen, um das Konto '
+                'der Hauptkostenart zu verwenden.'
+            ),
+            'erloeskonto': (
+                'Optional. Ist es gesetzt, übersteuert es das Erlöskonto aus '
+                'dem Steuersatz.'
+            ),
         }
     
     def __init__(self, *args, **kwargs):

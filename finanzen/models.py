@@ -2,18 +2,30 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 
+# Platzhalter für die Pflichtfelder des EXTF-Kopfsatzes. Der Anwender hat
+# fachlich keine Berater-/Mandantennummer, solange nicht an einen
+# Steuerberater übermittelt wird – technisch verlangt das Format sie aber.
+DEFAULT_CONSULTANT_NUMBER = '1001'
+DEFAULT_CLIENT_NUMBER = '1'
+
+# Standard-Sachkontenlänge (SKR-Kontenrahmen mit vierstelligen Sachkonten und
+# fünfstelligen Personenkonten).
+DEFAULT_ACCOUNT_LENGTH = 4
+
 
 class CompanyAccountingSettings(models.Model):
     """
     Accounting Settings per Company/Mandant (Buchhaltungs-Einstellungen pro Mandant)
-    
+
     Purpose:
     - DATEV consultant and client numbers for export
     - Tax number for accounting
     - Revenue accounts (Erlöskonten) per tax rate (0%, 7%, 19%)
-    
+    - Kopfsatz-Angaben des EXTF-Buchungsstapels (Sachkontenlänge,
+      Wirtschaftsjahresbeginn) sowie Gegenkonten der Zahlungsseite
+
     Scope: OneToOne with core.Mandant (exactly one per company)
-    
+
     Note: All fields are stored as strings to preserve leading zeros and DATEV formats
     """
     company = models.OneToOneField(
@@ -23,19 +35,30 @@ class CompanyAccountingSettings(models.Model):
         verbose_name="Mandant",
         help_text="Mandant für diese Buchhaltungseinstellungen"
     )
-    
+
     # DATEV Configuration
     datev_consultant_number = models.CharField(
         max_length=20,
         blank=True,
+        default=DEFAULT_CONSULTANT_NUMBER,
         verbose_name="DATEV Beraternummer",
-        help_text="DATEV Beraternummer (mit führenden Nullen)"
+        help_text=(
+            "Pflichtfeld des EXTF-Kopfsatzes. Solange nicht an einen "
+            "Steuerberater übermittelt wird, genügt der Platzhalter "
+            f"{DEFAULT_CONSULTANT_NUMBER}; für die Übermittlung die echte "
+            "Beraternummer eintragen (mit führenden Nullen)."
+        )
     )
     datev_client_number = models.CharField(
         max_length=20,
         blank=True,
+        default=DEFAULT_CLIENT_NUMBER,
         verbose_name="DATEV Mandantennummer",
-        help_text="DATEV Mandantennummer (mit führenden Nullen)"
+        help_text=(
+            "Pflichtfeld des EXTF-Kopfsatzes. Platzhalter "
+            f"{DEFAULT_CLIENT_NUMBER} genügt, solange nicht an einen "
+            "Steuerberater übermittelt wird (mit führenden Nullen)."
+        )
     )
     tax_number = models.CharField(
         max_length=50,
@@ -43,7 +66,7 @@ class CompanyAccountingSettings(models.Model):
         verbose_name="Steuernummer",
         help_text="Steuernummer des Mandanten"
     )
-    
+
     # Revenue Accounts per Tax Rate (Erlöskonten je Steuersatz)
     revenue_account_0 = models.CharField(
         max_length=20,
@@ -63,13 +86,100 @@ class CompanyAccountingSettings(models.Model):
         verbose_name="Erlöskonto 19%",
         help_text="Erlöskonto für Steuersatz 19% (mit führenden Nullen)"
     )
-    
+
+    # Gegenkonten der Zahlungsseite. GIS exportiert selbst keine
+    # Zahlungsbuchungen (die entstehen im Fibu-System aus dessen
+    # Bankanbindung); die Konten werden hier gepflegt, damit sie beim
+    # Einrichten des Fibu-Systems und für spätere Auswertungen bekannt sind.
+    bank_account = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name="Gegenkonto Bank",
+        help_text="Sachkonto der Bank (mit führenden Nullen)"
+    )
+    cash_account = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name="Gegenkonto Kasse",
+        help_text="Sachkonto der Kasse (mit führenden Nullen)"
+    )
+    clearing_account = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name="Verrechnungskonto",
+        help_text="Sachkonto für Verrechnungen (mit führenden Nullen)"
+    )
+
+    # Kopfsatz-Angaben des EXTF-Buchungsstapels
+    account_length = models.PositiveSmallIntegerField(
+        default=DEFAULT_ACCOUNT_LENGTH,
+        verbose_name="Sachkontenlänge",
+        help_text=(
+            "Stellenanzahl der Sachkonten im Kontenrahmen (Standard 4). "
+            "Personenkonten sind eine Stelle länger."
+        )
+    )
+    fiscal_year_start = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Wirtschaftsjahresbeginn",
+        help_text=(
+            "Erster Tag des Wirtschaftsjahres. Leer lassen für den "
+            "1. Januar des Exportjahres (Kalenderwirtschaftsjahr)."
+        )
+    )
+
     class Meta:
         verbose_name = "Buchhaltungseinstellungen"
         verbose_name_plural = "Buchhaltungseinstellungen"
-    
+
     def __str__(self):
         return f"Buchhaltungseinstellungen für {self.company.name}"
+
+    def clean(self):
+        """Sachkonten normalisieren und Sachkontenlänge plausibilisieren"""
+        super().clean()
+
+        errors = {}
+        account_fields = (
+            'revenue_account_0', 'revenue_account_7', 'revenue_account_19',
+            'bank_account', 'cash_account', 'clearing_account',
+        )
+        for field in account_fields:
+            value = (getattr(self, field) or '').strip()
+            setattr(self, field, value)
+            if value and not value.isdigit():
+                errors[field] = 'Ein Sachkonto darf nur aus Ziffern bestehen.'
+
+        # DATEV erlaubt Sachkontenlängen von 4 bis 8 Stellen.
+        if self.account_length is not None and not (4 <= self.account_length <= 8):
+            errors['account_length'] = 'Die Sachkontenlänge muss zwischen 4 und 8 liegen.'
+
+        if errors:
+            raise ValidationError(errors)
+
+    def effective_fiscal_year_start(self, year):
+        """
+        Wirtschaftsjahresbeginn für ein Kalenderjahr ermitteln.
+
+        Ist kein abweichendes Wirtschaftsjahr gepflegt, gilt der 1. Januar
+        des übergebenen Jahres. Andernfalls wird der gepflegte Tag/Monat auf
+        das übergebene Jahr übertragen.
+
+        Args:
+            year: int – Jahr des Exportzeitraums
+
+        Returns:
+            datetime.date
+        """
+        from datetime import date
+
+        if self.fiscal_year_start is None:
+            return date(year, 1, 1)
+        return date(year, self.fiscal_year_start.month, self.fiscal_year_start.day)
 
 
 class OutgoingInvoiceJournalEntry(models.Model):

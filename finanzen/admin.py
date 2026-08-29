@@ -18,11 +18,36 @@ class CompanyAccountingSettingsAdmin(admin.ModelAdmin):
             'fields': ('company',)
         }),
         ('DATEV Konfiguration', {
-            'fields': ('datev_consultant_number', 'datev_client_number', 'tax_number')
+            'fields': ('datev_consultant_number', 'datev_client_number', 'tax_number'),
+            'description': (
+                'Berater- und Mandantennummer sind Pflichtfelder des '
+                'EXTF-Kopfsatzes. Solange der Buchungsstapel nicht an einen '
+                'Steuerberater übermittelt wird, genügen die vorbelegten '
+                'Platzhalter; für die Übermittlung die echten Werte eintragen.'
+            )
+        }),
+        ('Buchungsstapel (EXTF-Kopfsatz)', {
+            'fields': ('account_length', 'fiscal_year_start'),
+            'description': (
+                'Sachkontenlänge und Wirtschaftsjahresbeginn gehen in den '
+                'Kopfsatz jeder Exportdatei ein.'
+            )
         }),
         ('Erlöskonten je Steuersatz', {
             'fields': ('revenue_account_0', 'revenue_account_7', 'revenue_account_19'),
-            'description': 'Erlöskonten für die jeweiligen Steuersätze (0%, 7%, 19%)'
+            'description': (
+                'Erlöskonten für die jeweiligen Steuersätze (0%, 7%, 19%). '
+                'Ein an der Kostenart hinterlegtes Erlöskonto übersteuert diese Konten.'
+            )
+        }),
+        ('Gegenkonten Zahlungsseite', {
+            'fields': ('bank_account', 'cash_account', 'clearing_account'),
+            'description': (
+                'GIS exportiert keine Zahlungsbuchungen – der Ausgleich der '
+                'offenen Posten passiert im Fibu-System. Die Konten werden hier '
+                'für die Einrichtung des Zielsystems gepflegt.'
+            ),
+            'classes': ('collapse',)
         }),
     )
     

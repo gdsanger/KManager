@@ -212,16 +212,34 @@ class UnterkostenartInline(admin.TabularInline):
     model = Kostenart
     fk_name = 'parent'
     extra = 1
+    fields = ['name', 'umsatzsteuer_satz', 'aufwandskonto', 'erloeskonto']
     verbose_name = "Unterkostenart"
     verbose_name_plural = "Unterkostenarten"
 
 
 @admin.register(Kostenart)
 class KostenartAdmin(admin.ModelAdmin):
-    list_display = ('name', 'parent', 'is_hauptkostenart')
-    list_filter = ('parent',)
-    search_fields = ('name',)
+    list_display = (
+        'name', 'parent', 'is_hauptkostenart',
+        'umsatzsteuer_satz', 'aufwandskonto', 'erloeskonto',
+    )
+    list_filter = ('parent', 'umsatzsteuer_satz')
+    search_fields = ('name', 'aufwandskonto', 'erloeskonto')
     inlines = [UnterkostenartInline]
+
+    fieldsets = (
+        ('Kostenart', {
+            'fields': ('name', 'parent', 'umsatzsteuer_satz')
+        }),
+        ('Kontierung (DATEV)', {
+            'fields': ('aufwandskonto', 'erloeskonto'),
+            'description': (
+                'Konten der Unterkostenart gewinnen; die Hauptkostenart dient '
+                'als Fallback. Ein hier gepflegtes Erlöskonto übersteuert das '
+                'Erlöskonto aus dem Steuersatz.'
+            )
+        }),
+    )
     
     def get_queryset(self, request):
         """Only show Hauptkostenarten (top-level) in main list"""
