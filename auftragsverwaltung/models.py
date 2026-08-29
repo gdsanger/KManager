@@ -116,13 +116,26 @@ class NumberRange(models.Model):
     - R26-00001 (Invoice from 2026)
     - A26-00001 (Quote from 2026)
     - V26-00001 (Contract from 2026)
+    - 10000 (Debitor, CUSTOMER target)
+    - 70000 (Kreditor, SUPPLIER target)
+
+    Personenkonten (CUSTOMER/SUPPLIER):
+    Debitoren- und Kreditorenkonten sind rein numerisch und dauerhaft an einen
+    Geschäftspartner gebunden. Sie werden deshalb ohne Präfix und ohne
+    Jahresbestandteil vergeben (`format='{seq}'`) und dürfen nicht jährlich
+    zurücksetzen (`reset_policy='NEVER'`). Der erste zu vergebende Wert kommt
+    aus `start_seq` (10000 für Debitoren, 70000 für Kreditoren).
     """
     TARGET_CHOICES = [
         ('DOCUMENT', 'Dokument'),
         ('CONTRACT', 'Vertrag'),
         ('ITEM', 'Artikel'),
         ('CUSTOMER', 'Kunde'),
+        ('SUPPLIER', 'Lieferant'),
     ]
+
+    # Targets ohne Mandantenbezug (genau ein globaler Nummernkreis).
+    GLOBAL_TARGETS = ['ITEM', 'CUSTOMER', 'SUPPLIER']
     
     RESET_POLICY_CHOICES = [
         ('YEARLY', 'Yearly Reset'),
@@ -172,12 +185,20 @@ class NumberRange(models.Model):
         verbose_name="Aktuelles Jahr (YY)",
         help_text="Zweistellige Jahreszahl der zuletzt vergebenen Nummer"
     )
+    start_seq = models.IntegerField(
+        default=0,
+        verbose_name="Startwert",
+        help_text=(
+            "Erster zu vergebender Sequenzwert. Bei 0 beginnt die Vergabe "
+            "wie bisher bei 1; für Personenkonten z. B. 10000 bzw. 70000."
+        )
+    )
     current_seq = models.IntegerField(
         default=0,
         verbose_name="Aktuelle Sequenz",
         help_text="Zuletzt vergebene Sequenznummer"
     )
-    
+
     class Meta:
         verbose_name = "Nummernkreis"
         verbose_name_plural = "Nummernkreise"
@@ -215,31 +236,40 @@ class NumberRange(models.Model):
                 name='unique_numberrange_customer_global',
                 violation_error_message='Es kann nur einen globalen Kunden-Nummernkreis geben.'
             ),
+            # Unique constraint for SUPPLIER target: exactly one global SUPPLIER NumberRange
+            models.UniqueConstraint(
+                fields=['target'],
+                condition=models.Q(target='SUPPLIER'),
+                name='unique_numberrange_supplier_global',
+                violation_error_message='Es kann nur einen globalen Lieferanten-Nummernkreis geben.'
+            ),
             # Check constraint: DOCUMENT target requires document_type
             models.CheckConstraint(
-                check=models.Q(target='DOCUMENT', document_type__isnull=False) | models.Q(target='CONTRACT') | models.Q(target='ITEM') | models.Q(target='CUSTOMER'),
+                check=models.Q(target='DOCUMENT', document_type__isnull=False) | models.Q(target='CONTRACT') | models.Q(target='ITEM') | models.Q(target='CUSTOMER') | models.Q(target='SUPPLIER'),
                 name='numberrange_document_requires_doctype',
                 violation_error_message='Dokumenttyp ist erforderlich für DOCUMENT-Nummernkreis.'
             ),
             # Check constraint: DOCUMENT and CONTRACT targets require company
             models.CheckConstraint(
-                check=models.Q(target='ITEM') | models.Q(target='CUSTOMER') | models.Q(company__isnull=False),
+                check=models.Q(target='ITEM') | models.Q(target='CUSTOMER') | models.Q(target='SUPPLIER') | models.Q(company__isnull=False),
                 name='numberrange_company_required_for_non_item',
                 violation_error_message='Mandant ist erforderlich für DOCUMENT und CONTRACT Nummernkreise.'
             ),
-            # Check constraint: ITEM and CUSTOMER targets must not have company
+            # Check constraint: global targets must not have a company
             models.CheckConstraint(
-                check=~models.Q(target__in=['ITEM', 'CUSTOMER'], company__isnull=False),
+                check=~models.Q(target__in=['ITEM', 'CUSTOMER', 'SUPPLIER'], company__isnull=False),
                 name='numberrange_item_no_company',
-                violation_error_message='Artikel- und Kunden-Nummernkreise dürfen keinen Mandanten haben (global).'
+                violation_error_message='Artikel-, Kunden- und Lieferanten-Nummernkreise dürfen keinen Mandanten haben (global).'
             )
         ]
-    
+
     def __str__(self):
         if self.target == 'ITEM':
             return f"Artikel-Nummernkreis (global, {self.reset_policy})"
         if self.target == 'CUSTOMER':
             return f"Kunden-Nummernkreis (global, {self.reset_policy})"
+        if self.target == 'SUPPLIER':
+            return f"Lieferanten-Nummernkreis (global, {self.reset_policy})"
         if self.target == 'CONTRACT':
             return f"{self.company.name} - Vertrag ({self.reset_policy})"
         return f"{self.company.name} - {self.document_type.name if self.document_type else 'N/A'} ({self.reset_policy})"

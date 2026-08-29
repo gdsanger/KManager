@@ -2,10 +2,50 @@
 Number Range Service
 
 Provides race-safe number generation for documents and contracts with yearly reset policy.
+
+Personenkonten (Debitoren/Kreditoren) laufen über dieselbe Mechanik, werden
+aber rein numerisch und ohne Jahresbestandteil vergeben – siehe
+:func:`get_next_customer_number` und :func:`get_next_supplier_number`.
 """
 from django.db import transaction
 from datetime import date
 from auftragsverwaltung.models import NumberRange
+
+
+def _advance_sequence(number_range, yy):
+    """
+    Nächsten Sequenzwert eines Nummernkreises ermitteln und persistieren.
+
+    Kapselt die Reset-Policy und den optionalen Startwert an einer Stelle,
+    damit alle Nummernkreise (Beleg, Vertrag, Artikel, Personenkonten) sich
+    identisch verhalten.
+
+    Args:
+        number_range: bereits per select_for_update() gesperrte NumberRange
+        yy: zweistellige Jahreszahl des Vergabedatums
+
+    Returns:
+        int: der vergebene Sequenzwert
+    """
+    if number_range.reset_policy == 'YEARLY' and number_range.current_year != yy:
+        # Year has changed with YEARLY policy, reset sequence
+        number_range.current_year = yy
+        number_range.current_seq = 0
+    elif number_range.reset_policy == 'NEVER' and number_range.current_year != yy:
+        # Year has changed with NEVER policy, update year but don't reset sequence
+        number_range.current_year = yy
+
+    # start_seq bestimmt den ersten zu vergebenden Wert. Ein bereits weiter
+    # fortgeschrittener current_seq gewinnt, damit ein nachträglich gesenkter
+    # Startwert keine Nummern doppelt vergibt.
+    start_seq = number_range.start_seq or 0
+    if number_range.current_seq < start_seq - 1:
+        number_range.current_seq = start_seq - 1
+
+    number_range.current_seq += 1
+    number_range.save()
+
+    return number_range.current_seq
 
 
 def get_next_number(company, document_type, date_obj=None):
@@ -55,26 +95,13 @@ def get_next_number(company, document_type, date_obj=None):
             }
         )
 
-        # Check if we need to reset the sequence based on policy
-        if number_range.reset_policy == 'YEARLY' and number_range.current_year != yy:
-            # Year has changed with YEARLY policy, reset sequence
-            number_range.current_year = yy
-            number_range.current_seq = 0
-        elif number_range.reset_policy == 'NEVER' and number_range.current_year != yy:
-            # Year has changed with NEVER policy, update year but don't reset sequence
-            number_range.current_year = yy
-
-        # Increment sequence
-        number_range.current_seq += 1
-
-        # Save the updated number range
-        number_range.save()
+        seq = _advance_sequence(number_range, yy)
 
         # Generate the formatted number
         formatted_number = number_range.format.format(
             prefix=document_type.prefix,
             yy=f"{yy:02d}",
-            seq=number_range.current_seq
+            seq=seq
         )
 
         return formatted_number
@@ -127,27 +154,14 @@ def get_next_contract_number(company, date_obj=None):
                 'Bitte legen Sie einen Nummernkreis mit Ziel "CONTRACT" an.'
             )
 
-        # Check if we need to reset the sequence based on policy
-        if number_range.reset_policy == 'YEARLY' and number_range.current_year != yy:
-            # Year has changed with YEARLY policy, reset sequence
-            number_range.current_year = yy
-            number_range.current_seq = 0
-        elif number_range.reset_policy == 'NEVER' and number_range.current_year != yy:
-            # Year has changed with NEVER policy, update year but don't reset sequence
-            number_range.current_year = yy
-
-        # Increment sequence
-        number_range.current_seq += 1
-
-        # Save the updated number range
-        number_range.save()
+        seq = _advance_sequence(number_range, yy)
 
         # Generate the formatted number with 'V' prefix for contracts
         # Use format from NumberRange, with 'V' as default prefix
         formatted_number = number_range.format.format(
             prefix='V',  # Default prefix for contracts
             yy=f"{yy:02d}",
-            seq=number_range.current_seq
+            seq=seq
         )
 
         return formatted_number
@@ -196,96 +210,117 @@ def get_next_item_number(date_obj=None):
                 'Bitte legen Sie einen Nummernkreis mit Ziel "ITEM" an.'
             )
 
-        # Check if we need to reset the sequence based on policy
-        if number_range.reset_policy == 'YEARLY' and number_range.current_year != yy:
-            # Year has changed with YEARLY policy, reset sequence
-            number_range.current_year = yy
-            number_range.current_seq = 0
-        elif number_range.reset_policy == 'NEVER' and number_range.current_year != yy:
-            # Year has changed with NEVER policy, update year but don't reset sequence
-            number_range.current_year = yy
-
-        # Increment sequence
-        number_range.current_seq += 1
-
-        # Save the updated number range
-        number_range.save()
+        seq = _advance_sequence(number_range, yy)
 
         # Generate the formatted number with 'ART' prefix for items
         # Use format from NumberRange, with 'ART' as default prefix
         formatted_number = number_range.format.format(
             prefix='ART',  # Default prefix for items
             yy=f"{yy:02d}",
-            seq=number_range.current_seq
+            seq=seq
         )
 
         return formatted_number
+
+
+PERSONAL_ACCOUNT_FORMAT = '{seq}'
+
+
+def _next_personal_account(target, label, config_hint):
+    """
+    Nächstes Personenkonto (Debitor/Kreditor) vergeben.
+
+    Personenkonten sind rein numerisch und dauerhaft an einen
+    Geschäftspartner gebunden. Anders als Beleg- oder Vertragsnummern tragen
+    sie deshalb weder Präfix noch Jahresbestandteil, und der Nummernkreis darf
+    nicht jährlich zurücksetzen – ein Reset würde im Folgejahr dieselben Konten
+    ein zweites Mal vergeben.
+
+    Args:
+        target: 'CUSTOMER' oder 'SUPPLIER'
+        label: Bezeichnung für Fehlermeldungen (z. B. "Kunden")
+        config_hint: Hinweistext zur Einrichtung des Nummernkreises
+
+    Returns:
+        str: rein numerisches Personenkonto (z. B. "10000")
+
+    Raises:
+        ValueError: Wenn kein passender Nummernkreis konfiguriert ist oder
+            dieser jährlich zurücksetzt.
+    """
+    with transaction.atomic():
+        try:
+            number_range = NumberRange.objects.select_for_update().get(target=target)
+        except NumberRange.DoesNotExist:
+            raise ValueError(
+                f'Kein Nummernkreis für {label} konfiguriert. {config_hint}'
+            )
+
+        if number_range.reset_policy != 'NEVER':
+            raise ValueError(
+                f'Der Nummernkreis für {label} darf nicht jährlich zurücksetzen: '
+                'Ein Personenkonto gehört dauerhaft zu einem Geschäftspartner. '
+                'Bitte Reset-Policy auf "NEVER" stellen.'
+            )
+
+        # current_year wird für Personenkonten nicht ausgewertet; der Aufruf
+        # hält den Wert lediglich konsistent mit dem Rest des Modells.
+        seq = _advance_sequence(number_range, number_range.current_year)
+
+        return PERSONAL_ACCOUNT_FORMAT.format(seq=seq)
 
 
 def get_next_customer_number(date_obj=None):
     """
-    Get next number for a customer (global, company-independent).
+    Nächstes Debitorenkonto vergeben (global, mandantenunabhängig).
 
-    This function is atomic and race-safe using database transactions and row-level locking.
-    Raises ValueError if no CUSTOMER NumberRange is configured.
+    Race-sicher über ``select_for_update()``.
 
     Args:
-        date_obj: datetime.date or datetime.datetime (defaults to today)
+        date_obj: wird nicht mehr ausgewertet. Das Argument bleibt aus
+            Kompatibilitätsgründen erhalten: Debitorenkonten sind bewusst
+            jahresunabhängig.
 
     Returns:
-        str: Formatted number string (e.g., "DEB26-00001")
+        str: rein numerisches Debitorenkonto (z. B. "10000")
 
     Raises:
-        ValueError: If no CUSTOMER NumberRange exists
+        ValueError: Wenn kein CUSTOMER-Nummernkreis existiert oder dieser
+            jährlich zurücksetzt.
 
     Example:
-        >>> from datetime import date
-        >>> number = get_next_customer_number(date(2026, 1, 15))
-        >>> print(number)  # "DEB26-00001"
+        >>> get_next_customer_number()  # "10000"
     """
-    if date_obj is None:
-        date_obj = date.today()
+    return _next_personal_account(
+        'CUSTOMER',
+        'Kunden',
+        'Bitte legen Sie einen Nummernkreis mit Ziel "CUSTOMER" an '
+        '(Startwert 10000, Reset-Policy "NEVER").',
+    )
 
-    # Extract datetime.date from datetime.datetime if needed
-    if hasattr(date_obj, 'date'):
-        date_obj = date_obj.date()
 
-    # Get two-digit year
-    yy = date_obj.year % 100
+def get_next_supplier_number(date_obj=None):
+    """
+    Nächstes Kreditorenkonto vergeben (global, mandantenunabhängig).
 
-    with transaction.atomic():
-        # Try to get existing customer number range with row-level lock
-        try:
-            number_range = NumberRange.objects.select_for_update().get(
-                target='CUSTOMER'
-            )
-        except NumberRange.DoesNotExist:
-            raise ValueError(
-                'Kein Nummernkreis für Kunden konfiguriert. '
-                'Bitte legen Sie einen Nummernkreis mit Ziel "CUSTOMER" an.'
-            )
+    Race-sicher über ``select_for_update()``.
 
-        # Check if we need to reset the sequence based on policy
-        if number_range.reset_policy == 'YEARLY' and number_range.current_year != yy:
-            # Year has changed with YEARLY policy, reset sequence
-            number_range.current_year = yy
-            number_range.current_seq = 0
-        elif number_range.reset_policy == 'NEVER' and number_range.current_year != yy:
-            # Year has changed with NEVER policy, update year but don't reset sequence
-            number_range.current_year = yy
+    Args:
+        date_obj: wird nicht ausgewertet (siehe get_next_customer_number).
 
-        # Increment sequence
-        number_range.current_seq += 1
+    Returns:
+        str: rein numerisches Kreditorenkonto (z. B. "70000")
 
-        # Save the updated number range
-        number_range.save()
+    Raises:
+        ValueError: Wenn kein SUPPLIER-Nummernkreis existiert oder dieser
+            jährlich zurücksetzt.
 
-        # Generate the formatted number with 'DEB' prefix for customers
-        # Use format from NumberRange, with 'DEB' as default prefix
-        formatted_number = number_range.format.format(
-            prefix='DEB',  # Default prefix for customers (Debitor)
-            yy=f"{yy:02d}",
-            seq=number_range.current_seq
-        )
-
-        return formatted_number
+    Example:
+        >>> get_next_supplier_number()  # "70000"
+    """
+    return _next_personal_account(
+        'SUPPLIER',
+        'Lieferanten',
+        'Bitte legen Sie einen Nummernkreis mit Ziel "SUPPLIER" an '
+        '(Startwert 70000, Reset-Policy "NEVER").',
+    )

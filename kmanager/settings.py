@@ -204,6 +204,19 @@ AGIRA_TOKEN = os.getenv('AGIRA_TOKEN', '')
 # Application Base URL for email templates and notifications
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 
+# Personenkonten (Debitoren/Kreditoren) für den DATEV-Buchungsstapel-Export.
+# Fünfstellig, passend zu vierstelligen Sachkonten des Kontenrahmens.
+# Bewusst konfigurierbar: Wer einen anderen Kontenrahmen nutzt, verschiebt die
+# Bereiche hier statt im Code.
+DEBITOR_ACCOUNT_RANGE = (
+    int(os.getenv('DEBITOR_ACCOUNT_MIN', '10000')),
+    int(os.getenv('DEBITOR_ACCOUNT_MAX', '69999')),
+)
+CREDITOR_ACCOUNT_RANGE = (
+    int(os.getenv('CREDITOR_ACCOUNT_MIN', '70000')),
+    int(os.getenv('CREDITOR_ACCOUNT_MAX', '99999')),
+)
+
 # Logging configuration
 # Create logs directory in BASE_DIR
 LOGS_DIR = BASE_DIR / 'logs'
