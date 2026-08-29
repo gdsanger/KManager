@@ -2284,22 +2284,43 @@ def journal_list(request):
     
     # Apply filters
     filter_set = OutgoingInvoiceJournalFilter(request.GET, queryset=queryset)
-    
+
     # Create table with filtered data
     table = OutgoingInvoiceJournalTable(filter_set.qs)
-    
+
     # Set default ordering to -document_number (descending)
     table.order_by = request.GET.get('sort', '-document_number')
-    
+
     # Configure pagination (25 per page)
     RequestConfig(request, paginate={'per_page': 25}).configure(table)
-    
+
+    # Totals over the whole filtered result set (not just the current page)
+    totals = filter_set.qs.aggregate(
+        net_0=Sum('net_0'),
+        net_7=Sum('net_7'),
+        net_19=Sum('net_19'),
+        tax_amount=Sum('tax_amount'),
+        gross_amount=Sum('gross_amount'),
+    )
+    zero = Decimal('0.00')
+    total_net = (
+        (totals['net_0'] or zero) + (totals['net_7'] or zero) + (totals['net_19'] or zero)
+    )
+
     # Prepare context
     context = {
         'table': table,
         'filter': filter_set,
+        'totals': {
+            'net_0': totals['net_0'] or zero,
+            'net_7': totals['net_7'] or zero,
+            'net_19': totals['net_19'] or zero,
+            'net': total_net,
+            'tax': totals['tax_amount'] or zero,
+            'gross': totals['gross_amount'] or zero,
+        },
     }
-    
+
     return render(request, 'auftragsverwaltung/journal/list.html', context)
 
 

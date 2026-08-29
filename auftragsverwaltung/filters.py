@@ -248,7 +248,16 @@ class TextTemplateFilter(django_filters.FilterSet):
 
 class OutgoingInvoiceJournalFilter(django_filters.FilterSet):
     """Filter for OutgoingInvoiceJournalEntry list view."""
-    
+
+    q = django_filters.CharFilter(
+        method='search_filter',
+        label='Suche',
+        widget=django_filters.widgets.forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Belegnummer, Kunde, Debitor...'
+        })
+    )
+
     customer_name = django_filters.CharFilter(
         lookup_expr='icontains',
         label='Kunde',
@@ -257,7 +266,36 @@ class OutgoingInvoiceJournalFilter(django_filters.FilterSet):
             'placeholder': 'Kundenname...'
         })
     )
-    
+
+    document_date_from = django_filters.DateFilter(
+        field_name='document_date',
+        lookup_expr='gte',
+        label='Belegdatum von',
+        widget=django_filters.widgets.forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+
+    document_date_to = django_filters.DateFilter(
+        field_name='document_date',
+        lookup_expr='lte',
+        label='Belegdatum bis',
+        widget=django_filters.widgets.forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+
+    document_kind = django_filters.ChoiceFilter(
+        choices=[('', 'Alle Belegarten')] + OutgoingInvoiceJournalEntry.DOCUMENT_KIND_CHOICES,
+        label='Belegart',
+        empty_label=None,
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+
     export_status = django_filters.ChoiceFilter(
         choices=[('', 'Alle Status')] + OutgoingInvoiceJournalEntry.EXPORT_STATUS_CHOICES,
         label='Status',
@@ -283,10 +321,28 @@ class OutgoingInvoiceJournalFilter(django_filters.FilterSet):
         from core.models import Mandant
         # Set company queryset with ordering by name
         self.filters['company'].queryset = Mandant.objects.all().order_by('name')
-    
+
+    def search_filter(self, queryset, name, value):
+        """Free text search across document number, customer and debtor number."""
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(document_number__icontains=value) |
+            Q(customer_name__icontains=value) |
+            Q(debtor_number__icontains=value)
+        )
+
     class Meta:
         model = OutgoingInvoiceJournalEntry
-        fields = ['customer_name', 'export_status', 'company']
+        fields = [
+            'q',
+            'customer_name',
+            'document_date_from',
+            'document_date_to',
+            'document_kind',
+            'export_status',
+            'company',
+        ]
 
 
 class TimeEntryFilter(django_filters.FilterSet):

@@ -15,21 +15,21 @@
     <div class="col-md-12">
         <form method="get" action="">
             <div class="row g-2">
+                <!-- Free Text Search -->
+                <div class="col-md-3">
+                    {{ filter.form.q }}
+                </div>
+
                 <!-- Customer Filter -->
                 <div class="col-md-3">
                     {{ filter.form.customer_name }}
                 </div>
-                
-                <!-- Status Filter -->
-                <div class="col-md-3">
-                    {{ filter.form.export_status }}
-                </div>
-                
+
                 <!-- Company Filter -->
                 <div class="col-md-3">
                     {{ filter.form.company }}
                 </div>
-                
+
                 <!-- Filter Actions -->
                 <div class="col-md-3">
                     <div class="btn-group w-100" role="group">
@@ -42,6 +42,29 @@
                         </a>
                         {% endif %}
                     </div>
+                </div>
+            </div>
+            <div class="row g-2 mt-1">
+                <!-- Document Date Range -->
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Belegdatum von</label>
+                    {{ filter.form.document_date_from }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Belegdatum bis</label>
+                    {{ filter.form.document_date_to }}
+                </div>
+
+                <!-- Document Kind Filter -->
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Belegart</label>
+                    {{ filter.form.document_kind }}
+                </div>
+
+                <!-- Export Status Filter -->
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Export-Status</label>
+                    {{ filter.form.export_status }}
                 </div>
             </div>
         </form>
@@ -59,6 +82,44 @@
 <div class="table-responsive">
     {% render_table table %}
 </div>
+
+<!-- Totals over the filtered result set -->
+{% if table.paginator.count %}
+<div class="card mt-3">
+    <div class="card-body">
+        <h6 class="card-title">Summen (gefilterte Auswahl)</h6>
+        <div class="row text-end">
+            <div class="col-6 col-md-2">
+                <div class="text-muted small">Netto 0 %</div>
+                <div>{{ totals.net_0|floatformat:2 }} €</div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="text-muted small">Netto 7 %</div>
+                <div>{{ totals.net_7|floatformat:2 }} €</div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="text-muted small">Netto 19 %</div>
+                <div>{{ totals.net_19|floatformat:2 }} €</div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="text-muted small">Netto gesamt</div>
+                <div>{{ totals.net|floatformat:2 }} €</div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="text-muted small">Steuer</div>
+                <div>{{ totals.tax|floatformat:2 }} €</div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="text-muted small">Brutto</div>
+                <div><strong>{{ totals.gross|floatformat:2 }} €</strong></div>
+            </div>
+        </div>
+        <p class="text-muted small mb-0 mt-2">
+            Gutschriften sind mit negativem Vorzeichen enthalten.
+        </p>
+    </div>
+</div>
+{% endif %}
 
 <!-- Help Text -->
 {% if table.paginator.count == 0 %}
