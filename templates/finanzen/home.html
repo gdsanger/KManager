@@ -1,0 +1,88 @@
+{% extends "finanzen/base.html" %}
+
+{% block title %}Finanzen - Domus{% endblock %}
+{% block page_title %}Finanzen{% endblock %}
+
+{% block page_actions %}
+    <a href="{% url 'finanzen:datev_export' %}" class="btn btn-primary">
+        <i class="bi bi-box-arrow-up"></i> DATEV-Export
+    </a>
+{% endblock %}
+
+{% block main_content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card bg-dark h-100">
+            <div class="card-body">
+                <h6 class="text-muted mb-2">Noch nicht exportiert</h6>
+                <div class="display-6">{{ open_journal_count }}</div>
+                <div class="form-text">Einträge im Rechnungsausgangsjournal</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card bg-dark h-100">
+            <div class="card-body">
+                <h6 class="mb-2"><i class="bi bi-box-arrow-up"></i> DATEV-Buchungsstapel</h6>
+                <p class="mb-2">
+                    Ausgangs- und Eingangsbelege eines Zeitraums als
+                    DATEV-Buchungsstapel (EXTF) exportieren. Die eigentliche
+                    Buchhaltung – UStVA, EÜR, AfA, Kontenblätter – übernimmt das
+                    Fibu-System oder der Steuerberater.
+                </p>
+                <a href="{% url 'finanzen:datev_export' %}" class="btn btn-outline-light btn-sm">
+                    Zum Export
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card bg-dark">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-journal-text"></i> Rechnungsausgangsjournal (letzte Einträge)</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Belegdatum</th>
+                        <th>Belegnummer</th>
+                        <th>Belegart</th>
+                        <th>Kunde</th>
+                        <th class="text-end">Brutto</th>
+                        <th>Export</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in recent_entries %}
+                    <tr>
+                        <td>{{ entry.document_date|date:"d.m.Y" }}</td>
+                        <td>{{ entry.document_number }}</td>
+                        <td>{{ entry.get_document_kind_display }}</td>
+                        <td>{{ entry.customer_name }}</td>
+                        <td class="text-end">{{ entry.gross_amount|floatformat:2 }} €</td>
+                        <td>
+                            {% if entry.export_status == 'EXPORTED' %}
+                                <span class="badge bg-success">Exportiert</span>
+                            {% elif entry.export_status == 'ERROR' %}
+                                <span class="badge bg-danger">Fehler</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Offen</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            Noch keine Journaleinträge vorhanden.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

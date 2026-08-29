@@ -1,0 +1,205 @@
+{% extends "finanzen/base.html" %}
+
+{% block title %}DATEV-Export - Finanzen - Domus{% endblock %}
+{% block page_title %}DATEV-Buchungsstapel{% endblock %}
+
+{% block page_actions %}
+    <a href="{% url 'finanzen:home' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Zurück
+    </a>
+{% endblock %}
+
+{% block main_content %}
+<div class="card bg-dark mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-calendar-range"></i> Zeitraum</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{% url 'finanzen:datev_export' %}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="{{ form.company.id_for_label }}" class="form-label">{{ form.company.label }}</label>
+                    {{ form.company }}
+                    {% if form.company.errors %}<div class="text-danger small">{{ form.company.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-2">
+                    <label for="{{ form.period_type.id_for_label }}" class="form-label">{{ form.period_type.label }}</label>
+                    {{ form.period_type }}
+                </div>
+                <div class="col-md-2">
+                    <label for="{{ form.year.id_for_label }}" class="form-label">{{ form.year.label }}</label>
+                    {{ form.year }}
+                </div>
+                <div class="col-md-2">
+                    <label for="{{ form.month.id_for_label }}" class="form-label">{{ form.month.label }}</label>
+                    {{ form.month }}
+                    {% if form.month.errors %}<div class="text-danger small">{{ form.month.errors }}</div>{% endif %}
+                </div>
+                <div class="col-md-2">
+                    <label for="{{ form.quarter.id_for_label }}" class="form-label">{{ form.quarter.label }}</label>
+                    {{ form.quarter }}
+                    {% if form.quarter.errors %}<div class="text-danger small">{{ form.quarter.errors }}</div>{% endif %}
+                </div>
+            </div>
+
+            <div class="form-check mt-3">
+                {{ form.include_exported }}
+                <label class="form-check-label" for="{{ form.include_exported.id_for_label }}">
+                    {{ form.include_exported.label }}
+                </label>
+                <div class="form-text">{{ form.include_exported.help_text }}</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary mt-3">
+                <i class="bi bi-search"></i> Vorschau erzeugen
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if preview %}
+    {% if preview.problems %}
+    <div class="card border-danger mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                {{ preview.problems|length }} Beleg(e) ohne auflösbares Konto
+            </h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-3">
+                Solange diese Belege nicht kontierbar sind, wird keine Datei erzeugt.
+                Ein stillschweigend kleinerer Buchungsstapel wäre der teurere Fehler.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Seite</th>
+                            <th>Beleg</th>
+                            <th>Datum</th>
+                            <th>Problem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for problem in preview.problems %}
+                        <tr>
+                            <td>
+                                {% if problem.source == 'AUSGANG' %}
+                                    <span class="badge bg-info">Ausgang</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Eingang</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ problem.reference }}</td>
+                            <td>{{ problem.document_date|date:"d.m.Y" }}</td>
+                            <td>{{ problem.message }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card bg-dark">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-list-check"></i> Vorschau {{ period_label }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Buchungssätze</div>
+                        <div class="fs-4">{{ preview.booking_count }}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Ausgangsbelege</div>
+                        <div class="fs-4">{{ preview.journal_entries|length }}</div>
+                        <div class="form-text">{{ preview.outgoing_total|floatformat:2 }} € brutto</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Eingangsbelege</div>
+                        <div class="fs-4">{{ preview.incoming_invoices|length }}</div>
+                        <div class="form-text">{{ preview.incoming_total|floatformat:2 }} € brutto</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Soll / Haben</div>
+                        <div class="fs-6">{{ preview.total_debit|floatformat:2 }} € S</div>
+                        <div class="fs-6">{{ preview.total_credit|floatformat:2 }} € H</div>
+                    </div>
+                </div>
+            </div>
+
+            {% if preview.skipped_exported %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                {{ preview.skipped_exported }} bereits exportierte Beleg(e) wurden übersprungen.
+                Für einen bewussten Wiederholungsexport oben die Option aktivieren.
+            </div>
+            {% endif %}
+
+            <div class="table-responsive mb-3">
+                <table class="table table-dark table-striped table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Belegdatum</th>
+                            <th>Belegfeld 1</th>
+                            <th>Konto</th>
+                            <th>Gegenkonto</th>
+                            <th>S/H</th>
+                            <th class="text-end">Umsatz</th>
+                            <th>Buchungstext</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for booking in preview.bookings %}
+                        <tr>
+                            <td>{{ booking.document_date|date:"d.m.Y" }}</td>
+                            <td>{{ booking.document_field_1 }}</td>
+                            <td>{{ booking.account }}</td>
+                            <td>{{ booking.contra_account }}</td>
+                            <td>{{ booking.debit_credit }}</td>
+                            <td class="text-end">{{ booking.amount|floatformat:2 }} €</td>
+                            <td>{{ booking.text }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                Keine Buchungssätze für diesen Zeitraum.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <form method="post" action="{% url 'finanzen:datev_export_download' %}">
+                {% csrf_token %}
+                <input type="hidden" name="company" value="{{ form.company.value }}">
+                <input type="hidden" name="period_type" value="{{ form.period_type.value }}">
+                <input type="hidden" name="year" value="{{ form.year.value }}">
+                <input type="hidden" name="month" value="{{ form.month.value|default_if_none:'' }}">
+                <input type="hidden" name="quarter" value="{{ form.quarter.value|default_if_none:'' }}">
+                {% if form.include_exported.value %}
+                <input type="hidden" name="include_exported" value="on">
+                {% endif %}
+                <button type="submit" class="btn btn-success"
+                        {% if preview.problems or not preview.bookings %}disabled{% endif %}>
+                    <i class="bi bi-download"></i> EXTF-Datei herunterladen
+                </button>
+                <span class="form-text ms-2">
+                    Der Download kennzeichnet die enthaltenen Belege als exportiert.
+                </span>
+            </form>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
