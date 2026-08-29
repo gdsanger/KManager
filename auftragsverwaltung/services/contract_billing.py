@@ -30,6 +30,7 @@ from auftragsverwaltung.models import (
 from auftragsverwaltung.services.document_calculation import DocumentCalculationService
 from auftragsverwaltung.services.number_range import get_next_number
 from core.services.activity_stream import ActivityStreamService
+from finanzen.services.journal import create_journal_entry, get_document_kind
 
 
 class ContractBillingService:
@@ -246,6 +247,13 @@ class ContractBillingService:
         except Exception as e:
             # If number assignment fails, raise exception to trigger FAILED ContractRun
             raise ValueError(f'Fehler bei Nummernvergabe: {str(e)}')
+
+        # Auto-finalisierte Belege gehören sofort ins Rechnungsausgangsjournal.
+        # Entwürfe bekommen ihren Eintrag erst beim Echtdruck bzw. Versand.
+        # Schlägt das fehl, wird der gesamte Lauf als FAILED verbucht – ein
+        # finalisierter Beleg ohne Journaleintrag darf nicht entstehen.
+        if document.status == 'SENT' and get_document_kind(document) is not None:
+            create_journal_entry(document)
 
         # Create ContractRun with appropriate message
         if contract.auto_finalize:
