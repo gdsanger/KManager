@@ -21,7 +21,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from core.models import Adresse
+from core.models import Adresse, Kostenart
+from lieferantenwesen.forms import InvoiceInForm
 from lieferantenwesen.models import INVOICE_IN_STATUS, InvoiceIn, InvoiceInLine
 
 
@@ -732,3 +733,287 @@ class InvoicePdfViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Kein PDF hinterlegt")
         self.assertNotContains(response, "<iframe")
+
+
+class InvoiceCostTypeFormTest(TestCase):
+    """Cost types (Kostenart 1/2) must survive the create and edit forms."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="costuser", password="costpass", is_staff=True
+        )
+        self.client.login(username="costuser", password="costpass")
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Kostenart Lieferant",
+            strasse="Kostenstr. 1",
+            plz="44444",
+            ort="Kostenstadt",
+            land="DE",
+        )
+        self.main_a = Kostenart.objects.create(name="Instandhaltung")
+        self.sub_a = Kostenart.objects.create(name="Heizung", parent=self.main_a)
+        self.main_b = Kostenart.objects.create(name="Verwaltung")
+        self.sub_b = Kostenart.objects.create(name="Porto", parent=self.main_b)
+        self.main_without_children = Kostenart.objects.create(name="Sonstiges")
+
+    def _post_data(self, **overrides):
+        data = {
+            "invoice_no": "RE-KA-001",
+            "invoice_date": "2026-03-01",
+            "supplier": str(self.supplier.pk),
+            "currency": "EUR",
+            "net_amount": "100.00",
+            "tax_amount": "19.00",
+            "gross_amount": "119.00",
+            "payment_terms_text": "",
+            "due_date": "",
+            "payment_reference": "",
+            "iban_from_invoice": "",
+            "cost_type_main": str(self.main_a.pk),
+            "cost_type_sub": str(self.sub_a.pk),
+            "order": "",
+            "status": "DRAFT",
+            "approval_comment": "",
+            "payment_date": "",
+            "lines-TOTAL_FORMS": "0",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "0",
+            "lines-MAX_NUM_FORMS": "1000",
+        }
+        data.update(overrides)
+        return data
+
+    def _make_invoice(self, **kwargs):
+        defaults = dict(
+            invoice_no="RE-KA-EDIT",
+            invoice_date=date(2026, 3, 5),
+            supplier=self.supplier,
+            status="DRAFT",
+        )
+        defaults.update(kwargs)
+        return InvoiceIn.objects.create(**defaults)
+
+    # --- Saving -----------------------------------------------------------
+
+    def test_create_saves_cost_types(self):
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"), self._post_data()
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice = InvoiceIn.objects.get(invoice_no="RE-KA-001")
+        self.assertEqual(invoice.cost_type_main, self.main_a)
+        self.assertEqual(invoice.cost_type_sub, self.sub_a)
+
+    def test_detail_page_shows_saved_cost_types(self):
+        self.client.post(
+            reverse("lieferantenwesen:invoice_create"), self._post_data()
+        )
+        invoice = InvoiceIn.objects.get(invoice_no="RE-KA-001")
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_detail", kwargs={"pk": invoice.pk})
+        )
+        self.assertContains(response, "Instandhaltung")
+        self.assertContains(response, "Heizung")
+
+    def test_edit_saves_changed_cost_types(self):
+        invoice = self._make_invoice(
+            cost_type_main=self.main_a, cost_type_sub=self.sub_a
+        )
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+            self._post_data(
+                invoice_no=invoice.invoice_no,
+                cost_type_main=str(self.main_b.pk),
+                cost_type_sub=str(self.sub_b.pk),
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.cost_type_main, self.main_b)
+        self.assertEqual(invoice.cost_type_sub, self.sub_b)
+
+    def test_edit_form_renders_payment_date(self):
+        invoice = self._make_invoice(payment_date=date(2026, 3, 20))
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk})
+        )
+        self.assertContains(response, 'name="payment_date"')
+        self.assertContains(response, "2026-03-20")
+
+    def test_edit_keeps_existing_payment_date(self):
+        """A round trip through the rendered form must not clear payment_date."""
+        invoice = self._make_invoice(
+            status="PAID", payment_date=date(2026, 3, 20)
+        )
+        form = InvoiceInForm(instance=invoice)
+        data = self._post_data(
+            invoice_no=invoice.invoice_no,
+            status="PAID",
+            payment_date=form["payment_date"].value().isoformat(),
+            cost_type_main="",
+            cost_type_sub="",
+        )
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}), data
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.payment_date, date(2026, 3, 20))
+
+    def test_paid_invoice_without_payment_date_shows_visible_error(self):
+        invoice = self._make_invoice()
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+            self._post_data(
+                invoice_no=invoice.invoice_no, status="PAID", payment_date=""
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "muss ein Zahlungsdatum angegeben werden")
+
+    # --- Dependency between Kostenart 1 and Kostenart 2 -------------------
+
+    def test_mismatched_combination_is_rejected_with_visible_error(self):
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"),
+            self._post_data(
+                cost_type_main=str(self.main_a.pk),
+                cost_type_sub=str(self.sub_b.pk),
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(InvoiceIn.objects.filter(invoice_no="RE-KA-001").exists())
+        self.assertContains(response, "Die Eingangsrechnung konnte nicht gespeichert werden")
+        self.assertContains(
+            response, "Die Unterkostenart muss zur gewählten Hauptkostenart gehören."
+        )
+
+    def test_sub_queryset_is_empty_without_main_cost_type(self):
+        form = InvoiceInForm()
+        self.assertEqual(list(form.fields["cost_type_sub"].queryset), [])
+        self.assertEqual(
+            form.fields["cost_type_sub"].widget.attrs.get("disabled"), "disabled"
+        )
+
+    def test_sub_queryset_is_limited_to_children_of_main(self):
+        invoice = self._make_invoice(
+            cost_type_main=self.main_a, cost_type_sub=self.sub_a
+        )
+        form = InvoiceInForm(instance=invoice)
+        self.assertEqual(list(form.fields["cost_type_sub"].queryset), [self.sub_a])
+        self.assertNotIn("disabled", form.fields["cost_type_sub"].widget.attrs)
+
+    def test_sub_selection_accepted_when_main_changed_in_same_request(self):
+        """The bound form derives the allowed children from the POST data."""
+        invoice = self._make_invoice(
+            cost_type_main=self.main_a, cost_type_sub=self.sub_a
+        )
+        form = InvoiceInForm(
+            self._post_data(
+                invoice_no=invoice.invoice_no,
+                cost_type_main=str(self.main_b.pk),
+                cost_type_sub=str(self.sub_b.pk),
+            ),
+            instance=invoice,
+        )
+        self.assertTrue(form.is_valid(), form.errors.as_text())
+
+    def test_sub_queryset_ignores_invalid_main_id(self):
+        form = InvoiceInForm(self._post_data(cost_type_main="abc", cost_type_sub=""))
+        self.assertEqual(list(form.fields["cost_type_sub"].queryset), [])
+
+    # --- Line cost types --------------------------------------------------
+
+    def test_line_cost_types_can_be_saved(self):
+        data = self._post_data(
+            **{
+                "lines-TOTAL_FORMS": "1",
+                "lines-INITIAL_FORMS": "0",
+                "lines-0-position_no": "1",
+                "lines-0-description": "Heizungswartung",
+                "lines-0-quantity": "1",
+                "lines-0-unit": "Stk",
+                "lines-0-unit_price": "100.00",
+                "lines-0-net_amount": "100.00",
+                "lines-0-tax_rate": "19.00",
+                "lines-0-cost_type_main_line": str(self.main_b.pk),
+                "lines-0-cost_type_sub_line": str(self.sub_b.pk),
+            }
+        )
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"), data
+        )
+        self.assertEqual(response.status_code, 302)
+        line = InvoiceInLine.objects.get(invoice__invoice_no="RE-KA-001")
+        self.assertEqual(line.cost_type_main_line, self.main_b)
+        self.assertEqual(line.cost_type_sub_line, self.sub_b)
+
+    def test_line_with_mismatched_cost_types_is_rejected(self):
+        data = self._post_data(
+            **{
+                "lines-TOTAL_FORMS": "1",
+                "lines-INITIAL_FORMS": "0",
+                "lines-0-position_no": "1",
+                "lines-0-description": "Heizungswartung",
+                "lines-0-net_amount": "100.00",
+                "lines-0-tax_rate": "19.00",
+                "lines-0-cost_type_main_line": str(self.main_a.pk),
+                "lines-0-cost_type_sub_line": str(self.sub_b.pk),
+            }
+        )
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"), data
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(InvoiceIn.objects.filter(invoice_no="RE-KA-001").exists())
+        self.assertContains(
+            response, "Kostenart 2 muss zur gewählten Kostenart 1 der Position gehören."
+        )
+
+    def test_form_template_contains_add_line_template_and_script(self):
+        response = self.client.get(reverse("lieferantenwesen:invoice_create"))
+        self.assertContains(response, 'id="empty-line-template"')
+        self.assertContains(response, "id_lines-TOTAL_FORMS")
+        self.assertContains(response, "ajax/get-kostenart2-options/")
+
+
+class Kostenart2AjaxEndpointTest(TestCase):
+    """The existing endpoint is reused for the incoming invoice form."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="ajaxuser", password="ajaxpass", is_staff=True
+        )
+        self.client.login(username="ajaxuser", password="ajaxpass")
+        self.main = Kostenart.objects.create(name="Instandhaltung")
+        self.sub = Kostenart.objects.create(name="Heizung", parent=self.main)
+        self.childless = Kostenart.objects.create(name="Sonstiges")
+
+    def test_returns_children_for_main_cost_type(self):
+        response = self.client.get(
+            reverse("auftragsverwaltung:ajax_get_kostenart2_options"),
+            {"kostenart1_id": self.main.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["kostenarten"],
+            [{"id": self.sub.pk, "name": "Heizung"}],
+        )
+
+    def test_returns_empty_list_for_main_cost_type_without_children(self):
+        response = self.client.get(
+            reverse("auftragsverwaltung:ajax_get_kostenart2_options"),
+            {"kostenart1_id": self.childless.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["kostenarten"], [])
+
+    def test_returns_empty_list_without_parameter(self):
+        response = self.client.get(
+            reverse("auftragsverwaltung:ajax_get_kostenart2_options")
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["kostenarten"], [])
