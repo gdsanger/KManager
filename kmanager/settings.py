@@ -204,6 +204,14 @@ AGIRA_TOKEN = os.getenv('AGIRA_TOKEN', '')
 # Application Base URL for email templates and notifications
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 
+# KI-Normalisierung der Tätigkeitsbeschreibungen im Projekt-Abrechnungslauf.
+# Aus (`False`) übernimmt die Rechnungsposition den Originaltext der
+# Zeiterfassung, ohne dass ein KI-Aufruf stattfindet - für Testsysteme und
+# Betrieb ohne KI-Zugang. Siehe docs/KI_TAETIGKEITSBESCHREIBUNGEN.md
+AI_TIME_ENTRY_NORMALIZATION_ENABLED = (
+    os.getenv('AI_TIME_ENTRY_NORMALIZATION_ENABLED', 'True') == 'True'
+)
+
 # Personenkonten (Debitoren/Kreditoren) für den DATEV-Buchungsstapel-Export.
 # Fünfstellig, passend zu vierstelligen Sachkonten des Kontenrahmens.
 # Bewusst konfigurierbar: Wer einen anderen Kontenrahmen nutzt, verschiebt die
