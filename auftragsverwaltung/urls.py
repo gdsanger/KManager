@@ -73,6 +73,10 @@ urlpatterns = [
     path('buchhaltung/datev-export/', views.datev_export, name='datev_export'),
     path('buchhaltung/datev-export/download/', views.datev_export_download, name='datev_export_download'),
 
+    # Buchhaltungseinstellungen je Mandant
+    path('buchhaltung/einstellungen/', views.accounting_settings_list, name='accounting_settings_list'),
+    path('buchhaltung/einstellungen/<int:mandant_pk>/', views.accounting_settings_edit, name='accounting_settings_edit'),
+
     # TimeEntry (Zeiterfassung) views
     path('timeentries/', views.timeentry_list, name='timeentry_list'),
     path('timeentries/create/', views.timeentry_create, name='timeentry_create'),

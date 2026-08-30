@@ -1,0 +1,13 @@
+{% comment %}
+Ein Formularfeld der Buchhaltungseinstellungen mit Label, Fehlern und dem
+help_text aus dem Modell. Als Partial, damit die Feldausgabe in allen vier
+Abschnitten identisch bleibt.
+{% endcomment %}
+<label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+{{ field }}
+{% if field.errors %}
+    <div class="invalid-feedback d-block">{{ field.errors|striptags }}</div>
+{% endif %}
+{% if field.help_text %}
+    <div class="form-text">{{ field.help_text }}</div>
+{% endif %}

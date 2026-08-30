@@ -1,0 +1,61 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+
+{% block title %}Buchhaltungseinstellungen - Buchhaltung - Domus{% endblock %}
+{% block page_title %}Buchhaltungseinstellungen{% endblock %}
+
+{% block content %}
+<div class="card bg-dark">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-gear"></i> Mandanten</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">
+            Beraternummer, Mandantennummer und Sachkontenlänge gehen in den Kopfsatz
+            jeder DATEV-Exportdatei ein, die Erlöskonten steuern die Kontierung der
+            Ausgangsseite.
+        </p>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Mandant</th>
+                        <th>Beraternummer</th>
+                        <th>Mandantennummer</th>
+                        <th>Status</th>
+                        <th class="text-end">Aktion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mandant in mandanten %}
+                    <tr>
+                        <td>{{ mandant.name }}</td>
+                        <td>{{ mandant.accounting_settings.datev_consultant_number|default:"-" }}</td>
+                        <td>{{ mandant.accounting_settings.datev_client_number|default:"-" }}</td>
+                        <td>
+                            {% if mandant.accounting_settings %}
+                                <span class="badge bg-success">gepflegt</span>
+                            {% else %}
+                                <span class="badge bg-secondary">noch nicht angelegt</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'auftragsverwaltung:accounting_settings_edit' mandant.pk %}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i> Bearbeiten
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            Es sind keine Mandanten angelegt.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -5,6 +5,8 @@ from django import forms
 
 from core.models import Mandant
 
+from .models import CompanyAccountingSettings
+
 
 PERIOD_CHOICES = [
     ('MONTH', 'Monat'),
@@ -140,3 +142,49 @@ class DatevExportForm(forms.Form):
         if period_type == 'QUARTER':
             return f'Q{self.cleaned_data["quarter"]}/{year}'
         return f'{dict(MONTH_CHOICES)[self.cleaned_data["month"]]} {year}'
+
+
+class CompanyAccountingSettingsForm(forms.ModelForm):
+    """
+    Buchhaltungseinstellungen eines Mandanten pflegen.
+
+    `company` ist bewusst kein Formularfeld: Der Mandant steht in der URL und
+    ist über die OneToOne-Beziehung eindeutig – ein Auswahlfeld könnte den
+    Datensatz sonst versehentlich einem anderen Mandanten zuordnen.
+
+    Die Plausibilisierung (Sachkonten nur Ziffern, Sachkontenlänge 4–8) liegt
+    in `CompanyAccountingSettings.clean()` und greift über die
+    ModelForm-Validierung, sodass Fehler am jeweiligen Feld erscheinen.
+    """
+
+    class Meta:
+        model = CompanyAccountingSettings
+        fields = [
+            'datev_consultant_number',
+            'datev_client_number',
+            'tax_number',
+            'account_length',
+            'fiscal_year_start',
+            'revenue_account_0',
+            'revenue_account_7',
+            'revenue_account_19',
+            'bank_account',
+            'cash_account',
+            'clearing_account',
+        ]
+        widgets = {
+            'datev_consultant_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'datev_client_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'tax_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'account_length': forms.NumberInput(attrs={'class': 'form-control', 'min': 4, 'max': 8}),
+            'fiscal_year_start': forms.DateInput(
+                attrs={'class': 'form-control', 'type': 'date'},
+                format='%Y-%m-%d',
+            ),
+            'revenue_account_0': forms.TextInput(attrs={'class': 'form-control'}),
+            'revenue_account_7': forms.TextInput(attrs={'class': 'form-control'}),
+            'revenue_account_19': forms.TextInput(attrs={'class': 'form-control'}),
+            'bank_account': forms.TextInput(attrs={'class': 'form-control'}),
+            'cash_account': forms.TextInput(attrs={'class': 'form-control'}),
+            'clearing_account': forms.TextInput(attrs={'class': 'form-control'}),
+        }
