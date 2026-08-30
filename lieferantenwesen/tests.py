@@ -1018,6 +1018,39 @@ class InvoicePdfViewTest(TestCase):
         self.assertContains(response, "Kein PDF hinterlegt")
         self.assertNotContains(response, "<iframe")
 
+    def test_edit_page_shows_pdf_preview(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        edit_url = reverse(
+            "lieferantenwesen:invoice_edit", kwargs={"pk": self.invoice_with_pdf.pk}
+        )
+        pdf_url = reverse(
+            "lieferantenwesen:invoice_pdf", kwargs={"pk": self.invoice_with_pdf.pk}
+        )
+        response = self.client.get(edit_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'src="{pdf_url}"')
+        self.assertContains(response, "In neuem Tab öffnen")
+
+    def test_edit_page_shows_placeholder_without_pdf(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        edit_url = reverse(
+            "lieferantenwesen:invoice_edit", kwargs={"pk": self.invoice_without_pdf.pk}
+        )
+        response = self.client.get(edit_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Kein PDF hinterlegt")
+        self.assertNotContains(response, "<iframe")
+        # Layout bleibt zweispaltig, damit die Breite nicht springt.
+        self.assertContains(response, "col-lg-7")
+
+    def test_create_page_has_no_pdf_preview(self):
+        self.client.login(username="pdfstaff", password="pdfpass")
+        response = self.client.get(reverse("lieferantenwesen:invoice_create"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Kein PDF hinterlegt")
+        self.assertNotContains(response, "invoice-pdf-card")
+        self.assertContains(response, "col-lg-9")
+
 
 class InvoiceCostTypeFormTest(TestCase):
     """Cost types (Kostenart 1/2) must survive the create and edit forms."""
