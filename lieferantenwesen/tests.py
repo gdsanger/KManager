@@ -20,6 +20,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import Adresse, Kostenart, Mandant
 from lieferantenwesen.forms import InvoiceInForm
@@ -376,9 +377,10 @@ class InvoiceExtractionServiceTest(TestCase):
             ort="Extractstadt",
             land="DE",
         )
-        self.invoice = InvoiceIn.objects.create(
-            invoice_no="TBD",
-            invoice_date=date(2026, 3, 1),
+        # Wie beim PDF-Upload: noch ungespeicherte Instanz ohne Kopfdaten,
+        # damit die Belegerkennung Rechnungsnummer und -datum setzen kann.
+        self.invoice = InvoiceIn(
+            invoice_no="",
             supplier=self.supplier,
             status="DRAFT",
         )
@@ -495,6 +497,287 @@ class InvoiceExtractionServiceTest(TestCase):
 
             # Should stay in DRAFT status
             self.assertEqual(result.status, "DRAFT")
+
+    def test_extraction_sets_invoice_date_from_belegdatum(self):
+        """Das erkannte Belegdatum landet im Rechnungsdatum."""
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceExtractionService
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = InvoiceDataDTO(
+                belegnummer="RE-DATE-001",
+                belegdatum="2026-07-12",
+                faelligkeit="2026-08-11",
+            )
+
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            self.assertEqual(result.invoice_date, date(2026, 7, 12))
+            self.assertEqual(result.due_date, date(2026, 8, 11))
+
+    def test_extraction_does_not_overwrite_existing_invoice_date(self):
+        """Ein bereits gepflegtes Rechnungsdatum bleibt unangetastet."""
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceExtractionService
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        self.invoice.invoice_date = date(2026, 1, 5)
+        self.invoice.invoice_no = "MANUELL-1"
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = InvoiceDataDTO(
+                belegnummer="RE-KI-001",
+                belegdatum="2026-07-12",
+            )
+
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            self.assertEqual(result.invoice_date, date(2026, 1, 5))
+            self.assertEqual(result.invoice_no, "MANUELL-1")
+
+    def test_extraction_maps_service_period(self):
+        """Der Leistungszeitraum aus dem Beleg wird übernommen."""
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceExtractionService
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = InvoiceDataDTO(
+                belegdatum="2026-07-12",
+                leistungszeitraum_von="2026-06-01",
+                leistungszeitraum_bis="2026-06-30",
+            )
+
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            self.assertEqual(result.service_period_from, date(2026, 6, 1))
+            self.assertEqual(result.service_period_to, date(2026, 6, 30))
+
+    def test_extraction_ignores_unparsable_dates(self):
+        """Unlesbare Datumsangaben werden verworfen, nicht durchgereicht."""
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceExtractionService
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = InvoiceDataDTO(
+                belegdatum="12.07.2026",
+            )
+
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            self.assertIsNone(result.invoice_date)
+
+    def test_populate_handles_missing_dto(self):
+        """Liefert die KI nichts Auswertbares, bleibt der Beleg ein Entwurf."""
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceExtractionService
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = None
+
+            service = InvoiceExtractionService()
+            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+
+            self.assertEqual(result.status, "DRAFT")
+            self.assertIsNone(result.invoice_date)
+
+
+class InvoiceCreateFromPdfTest(TestCase):
+    """create_from_pdf(): Rechnungsdatum aus dem Beleg statt Erfassungsdatum."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="pdfuser", password="pdfpass", is_staff=True
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="PDF Lieferant",
+            strasse="PDFstr. 1",
+            plz="66666",
+            ort="PDFstadt",
+            land="DE",
+        )
+
+    def _pdf(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(
+            "rechnung.pdf", b"%PDF-1.4 fake", content_type="application/pdf"
+        )
+
+    def _create(self, dto):
+        """create_from_pdf() mit gemockter KI ausführen – kein echter Anbieter."""
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceInService
+
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            if isinstance(dto, Exception):
+                mock_instance.extract_invoice_data.side_effect = dto
+            else:
+                mock_instance.extract_invoice_data.return_value = dto
+            return InvoiceInService().create_from_pdf(self._pdf(), user=self.user)
+
+    def test_recognized_invoice_date_is_used(self):
+        """Das im Beleg ausgewiesene Datum ersetzt das Erfassungsdatum."""
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        invoice = self._create(
+            InvoiceDataDTO(
+                belegnummer="RE-2026-4711",
+                belegdatum="2026-07-12",
+                faelligkeit="2026-08-11",
+                lieferant_name="PDF Lieferant",
+            )
+        )
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.invoice_date, date(2026, 7, 12))
+        self.assertEqual(invoice.due_date, date(2026, 8, 11))
+        self.assertEqual(invoice.invoice_no, "RE-2026-4711")
+        self.assertNotEqual(invoice.invoice_date, timezone.localdate())
+
+    def test_missing_invoice_date_falls_back_to_today_and_is_flagged(self):
+        """Ohne erkanntes Belegdatum: heute – aber sichtbar markiert."""
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        invoice = self._create(InvoiceDataDTO(belegnummer="RE-OHNE-DATUM"))
+
+        self.assertEqual(invoice.invoice_date, timezone.localdate())
+        self.assertTrue(invoice.invoice_date_fallback)
+
+    def test_unavailable_ai_creates_draft_with_flagged_fallback_date(self):
+        """Ist die KI nicht verfügbar, entsteht ein Entwurf mit Hinweis."""
+        from core.services.base import ServiceNotConfigured
+
+        invoice = self._create(ServiceNotConfigured("AI provider not configured"))
+
+        self.assertEqual(invoice.status, "DRAFT")
+        self.assertEqual(invoice.invoice_date, timezone.localdate())
+        self.assertTrue(invoice.invoice_date_fallback)
+        self.assertIsNotNone(invoice.pk)
+
+    def test_recognized_date_is_not_flagged_as_fallback(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        invoice = self._create(InvoiceDataDTO(belegdatum="2026-07-12"))
+
+        self.assertFalse(invoice.invoice_date_fallback)
+
+    def test_service_period_is_stored(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        invoice = self._create(
+            InvoiceDataDTO(
+                belegdatum="2026-07-12",
+                leistungszeitraum_von="2026-06-01",
+                leistungszeitraum_bis="2026-06-30",
+            )
+        )
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.service_period_from, date(2026, 6, 1))
+        self.assertEqual(invoice.service_period_to, date(2026, 6, 30))
+
+    def test_upload_view_warns_about_fallback_date(self):
+        """Der Anwender wird nach dem Upload auf das Ersatzdatum hingewiesen."""
+        from unittest.mock import patch, MagicMock
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        self.client.force_login(self.user)
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = InvoiceDataDTO(
+                belegnummer="RE-OHNE-DATUM"
+            )
+            response = self.client.post(
+                reverse("lieferantenwesen:invoice_upload_pdf"),
+                {"pdf_file": self._pdf()},
+                follow=True,
+            )
+
+        texts = [str(m) for m in response.context["messages"]]
+        self.assertTrue(
+            any("Rechnungsdatum konnte nicht" in t for t in texts),
+            f"Kein Hinweis auf das Ersatzdatum in {texts}",
+        )
+
+    def test_upload_view_does_not_warn_when_date_recognized(self):
+        from unittest.mock import patch, MagicMock
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        self.client.force_login(self.user)
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = InvoiceDataDTO(
+                belegnummer="RE-MIT-DATUM", belegdatum="2026-07-12"
+            )
+            response = self.client.post(
+                reverse("lieferantenwesen:invoice_upload_pdf"),
+                {"pdf_file": self._pdf()},
+                follow=True,
+            )
+
+        texts = [str(m) for m in response.context["messages"]]
+        self.assertFalse(any("Rechnungsdatum konnte nicht" in t for t in texts))
+
+    def test_invoice_appears_in_datev_period_of_recognized_date(self):
+        """Der Beleg fällt in den Buchungsstapel seines Rechnungsdatums."""
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+        from finanzen.models import CompanyAccountingSettings
+        from finanzen.services import datev_export
+
+        company = Mandant.objects.create(
+            name="DATEV Mandant", adresse="Str. 1", plz="12345", ort="Stadt"
+        )
+        CompanyAccountingSettings.objects.create(
+            company=company,
+            datev_consultant_number="1001",
+            datev_client_number="1",
+            revenue_account_0="8000",
+            revenue_account_7="8300",
+            revenue_account_19="8400",
+        )
+        kostenart = Kostenart.objects.create(name="Bürobedarf", aufwandskonto="4930")
+
+        invoice = self._create(
+            InvoiceDataDTO(
+                belegnummer="RE-DATEV-1",
+                belegdatum="2026-07-12",
+                nettobetrag="100.00",
+                umsatzsteuer="19.00",
+                bruttobetrag="119.00",
+            )
+        )
+        invoice.company = company
+        invoice.cost_type_main = kostenart
+        invoice.status = "APPROVED"
+        invoice.save()
+
+        july = datev_export.build_preview(company, date(2026, 7, 1), date(2026, 7, 31))
+        self.assertIn(invoice.pk, [i.pk for i in july.incoming_invoices])
+
+        august = datev_export.build_preview(company, date(2026, 8, 1), date(2026, 8, 31))
+        self.assertNotIn(invoice.pk, [i.pk for i in august.incoming_invoices])
 
 
 class InvoiceDeleteTest(TestCase):

@@ -6,12 +6,17 @@ Services for the Lieferantenwesen module.
 - InvoiceExtractionService: Thin wrapper around core AI extraction service.
 """
 import logging
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 from typing import Optional
 
 from django.contrib.auth.models import User
 from django.utils import timezone
+
+from core.services.ai.invoice_extraction import (
+    InvoiceExtractionService as CoreExtractor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,49 +78,65 @@ class InvoiceExtractionService:
     Falls back gracefully if the AI provider is not configured.
     """
 
-    def extract_and_populate(self, invoice_in, pdf_path: str, user: Optional[User] = None):
+    #: DTO-Feld → Modellfeld für alle Datumsangaben aus der Belegerkennung.
+    DATE_FIELD_MAP = (
+        ("belegdatum", "invoice_date"),
+        ("faelligkeit", "due_date"),
+        ("leistungszeitraum_von", "service_period_from"),
+        ("leistungszeitraum_bis", "service_period_to"),
+    )
+
+    def extract(self, pdf_path: str, user: Optional[User] = None):
         """
-        Run AI extraction on *pdf_path* and fill fields on *invoice_in*.
+        Run the core AI extraction on *pdf_path*.
+
+        Returns the InvoiceDataDTO, or None if the AI provider is not
+        configured, the call failed, or nothing could be parsed.
+        """
+        try:
+            return CoreExtractor().extract_invoice_data(pdf_path, user=user)
+        except Exception as exc:
+            logger.warning("AI extraction unavailable or failed: %s", exc)
+            return None
+
+    def populate(self, invoice_in, dto):
+        """
+        Fill empty fields on *invoice_in* from *dto*.
+
+        Bereits gepflegte Werte werden nie überschrieben – die Erkennung
+        ergänzt nur, was noch leer ist.
 
         The invoice status is advanced:
-          DRAFT → EXTRACTED (AI ran)  or stays DRAFT (AI unavailable)
+          DRAFT → EXTRACTED (AI ran)  or stays DRAFT (no usable DTO)
           Then → IN_REVIEW after supplier matching.
 
         Returns the updated invoice_in (unsaved – caller must call .save()).
         """
-        from core.services.ai.invoice_extraction import InvoiceExtractionService as CoreExtractor
-        from core.services.base import ServiceNotConfigured
-
-        try:
-            extractor = CoreExtractor()
-            dto = extractor.extract_invoice_data(pdf_path, user=user)
-        except (ServiceNotConfigured, Exception) as exc:
-            logger.warning("AI extraction unavailable or failed: %s", exc)
+        if dto is None:
             invoice_in.status = "DRAFT"
             return invoice_in
 
         # Apply extracted fields
         if dto.belegnummer:
             # Map invoice number to invoice_no field (primary)
-            if not invoice_in.invoice_no or invoice_in.invoice_no == "TBD":
+            if not invoice_in.invoice_no:
                 invoice_in.invoice_no = dto.belegnummer
             # Also keep in payment_reference for compatibility
             if not invoice_in.payment_reference:
                 invoice_in.payment_reference = dto.belegnummer
 
-        if dto.belegdatum and not invoice_in.invoice_date:
+        for dto_field, model_field in self.DATE_FIELD_MAP:
+            value = getattr(dto, dto_field, None)
+            if not value or getattr(invoice_in, model_field, None):
+                continue
             try:
-                from datetime import date
-                invoice_in.invoice_date = date.fromisoformat(dto.belegdatum)
+                setattr(invoice_in, model_field, date.fromisoformat(value))
             except (ValueError, TypeError):
-                pass
-
-        if dto.faelligkeit and not invoice_in.due_date:
-            try:
-                from datetime import date
-                invoice_in.due_date = date.fromisoformat(dto.faelligkeit)
-            except (ValueError, TypeError):
-                pass
+                logger.warning(
+                    "Ignoriere unlesbares Datum aus der Belegerkennung: %s=%r",
+                    dto_field,
+                    value,
+                )
 
         # Payment terms
         if dto.zahlungsbedingungen and not invoice_in.payment_terms_text:
@@ -155,6 +176,14 @@ class InvoiceExtractionService:
 
         invoice_in.status = "IN_REVIEW"
         return invoice_in
+
+    def extract_and_populate(self, invoice_in, pdf_path: str, user: Optional[User] = None):
+        """
+        Run AI extraction on *pdf_path* and fill fields on *invoice_in*.
+
+        Returns the updated invoice_in (unsaved – caller must call .save()).
+        """
+        return self.populate(invoice_in, self.extract(pdf_path, user=user))
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +244,18 @@ class InvoiceInService:
         """
         Persist the uploaded PDF file, create an InvoiceIn draft, run AI
         extraction, and return the saved instance.
+
+        Die Belegerkennung läuft **vor** dem ersten Speichern auf einer noch
+        ungespeicherten Instanz. Nur so ist ``invoice_date`` beim Befüllen
+        leer und das im Beleg ausgewiesene Belegdatum wird übernommen – ein
+        vorab gesetztes Erfassungsdatum würde von ``populate()`` als bereits
+        gepflegter Wert behandelt und das erkannte Datum verwerfen.
+
+        Konnte kein Belegdatum erkannt werden, fällt ``invoice_date`` auf
+        heute zurück (Pflichtfeld). Das Attribut ``invoice_date_fallback``
+        der zurückgegebenen Instanz zeigt an, ob das passiert ist, damit die
+        View den Anwender zur Prüfung auffordern kann – ein falsches
+        Rechnungsdatum landet sonst still im falschen DATEV-Buchungsstapel.
         """
         import os
         import tempfile
@@ -241,19 +282,19 @@ class InvoiceInService:
         companies = Mandant.objects.all()[:2]
         default_company = companies[0] if len(companies) == 1 else None
 
+        # Noch nicht gespeichert: invoice_date bleibt bewusst leer, damit die
+        # Belegerkennung das Rechnungsdatum setzen kann.
         invoice = InvoiceIn(
-            invoice_no="TBD",
-            invoice_date=timezone.now().date(),
+            invoice_no="",
             supplier=default_supplier,
             company=default_company,
             status="DRAFT",
             created_by=user,
         )
-        invoice.pdf_file = pdf_file
-        invoice.save()
 
         # Run AI extraction on a temp copy of the file
         dto = None
+        tmp_path = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                 for chunk in pdf_file.chunks() if hasattr(pdf_file, "chunks") else [pdf_file.read()]:
@@ -261,26 +302,38 @@ class InvoiceInService:
                 tmp_path = tmp.name
 
             extractor = InvoiceExtractionService()
-
-            # Get the DTO before populating to access line items
-            from core.services.ai.invoice_extraction import InvoiceExtractionService as CoreExtractor
-            core_extractor = CoreExtractor()
-            dto = core_extractor.extract_invoice_data(tmp_path, user=user)
-
-            # Now populate the invoice fields
-            invoice = extractor.extract_and_populate(invoice, tmp_path, user=user)
-            invoice.updated_by = user
-            invoice.save()
-
-            # Create line items if present in DTO
-            if dto:
-                self._create_lines_from_dto(invoice, dto)
+            # Einmal extrahieren – der DTO wird sowohl für die Kopfdaten als
+            # auch für die Positionen gebraucht.
+            dto = extractor.extract(tmp_path, user=user)
+            invoice = extractor.populate(invoice, dto)
         except Exception as exc:
-            logger.warning("PDF extraction failed for invoice %s: %s", invoice.pk, exc)
+            logger.warning("PDF extraction failed for uploaded invoice: %s", exc)
         finally:
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+
+        # invoice_date ist Pflichtfeld: ohne erkanntes Belegdatum bleibt nur
+        # das Erfassungsdatum – der Anwender muss darauf hingewiesen werden.
+        invoice.invoice_date_fallback = not invoice.invoice_date
+        if invoice.invoice_date_fallback:
+            invoice.invoice_date = timezone.localdate()
+            logger.warning(
+                "Kein Rechnungsdatum aus PDF %r erkannt – Rückfall auf %s. "
+                "Der Beleg muss geprüft werden, sonst landet er im falschen "
+                "Buchungsstapel.",
+                getattr(pdf_file, "name", "?"),
+                invoice.invoice_date,
+            )
+
+        invoice.pdf_file = pdf_file
+        invoice.updated_by = user
+        invoice.save()
+
+        # Create line items if present in DTO
+        if dto:
+            self._create_lines_from_dto(invoice, dto)
 
         return invoice
