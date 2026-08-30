@@ -219,7 +219,7 @@ class InvoiceInService:
         import os
         import tempfile
 
-        from core.models import Adresse
+        from core.models import Adresse, Mandant
         from lieferantenwesen.models import InvoiceIn
 
         # We need a placeholder supplier for the initial save – the extraction
@@ -235,10 +235,17 @@ class InvoiceInService:
                 land="DE",
             )
 
+        # Gibt es genau einen Mandanten, ist die Zuordnung eindeutig. Sonst
+        # bleibt sie offen und muss im Bearbeitungsformular gepflegt werden –
+        # raten wäre eine unbemerkte Falschbuchung im Buchungsstapel.
+        companies = Mandant.objects.all()[:2]
+        default_company = companies[0] if len(companies) == 1 else None
+
         invoice = InvoiceIn(
             invoice_no="TBD",
             invoice_date=timezone.now().date(),
             supplier=default_supplier,
+            company=default_company,
             status="DRAFT",
             created_by=user,
         )

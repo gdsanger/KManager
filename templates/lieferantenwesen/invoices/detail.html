@@ -65,6 +65,19 @@
             </div>
             <div class="card-body">
                 <div class="row mb-2">
+                    <div class="col-md-4 text-muted">Mandant</div>
+                    <div class="col-md-8">
+                        {% if invoice.company %}
+                        {{ invoice.company.name }}
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Ohne Mandant</span>
+                        <small class="text-muted d-block">
+                            Ohne Mandant erscheint die Rechnung im DATEV-Export in der Fehlerliste.
+                        </small>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-2">
                     <div class="col-md-4 text-muted">Rechnungsnummer</div>
                     <div class="col-md-8"><strong>{{ invoice.invoice_no }}</strong></div>
                 </div>

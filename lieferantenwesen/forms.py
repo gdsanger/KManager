@@ -2,7 +2,7 @@
 from django import forms
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 
-from core.models import Adresse, Kostenart
+from core.models import Adresse, Kostenart, Mandant
 from .models import InvoiceIn, InvoiceInLine
 
 
@@ -81,6 +81,7 @@ class InvoiceInForm(ModelErrorFallbackMixin, CostTypeDependencyMixin, forms.Mode
     class Meta:
         model = InvoiceIn
         fields = [
+            "company",
             "invoice_no",
             "invoice_date",
             "supplier",
@@ -100,6 +101,7 @@ class InvoiceInForm(ModelErrorFallbackMixin, CostTypeDependencyMixin, forms.Mode
             "payment_date",
         ]
         widgets = {
+            "company": forms.Select(attrs={"class": "form-select"}),
             "invoice_no": forms.TextInput(attrs={"class": "form-control"}),
             "invoice_date": forms.DateInput(
                 attrs={"class": "form-control", "type": "date"}, format="%Y-%m-%d"
@@ -142,6 +144,17 @@ class InvoiceInForm(ModelErrorFallbackMixin, CostTypeDependencyMixin, forms.Mode
         # Limit supplier choices to LIEFERANT type
         self.fields["supplier"].queryset = Adresse.objects.filter(adressen_type="LIEFERANT")
         self._bind_cost_type_fields("cost_type_main", "cost_type_sub")
+        # Der Mandant entscheidet, in welchem Buchungsstapel der Aufwand
+        # landet – deshalb Pflichtfeld, obwohl das Modell (noch) NULL zulässt.
+        company_field = self.fields["company"]
+        company_field.required = True
+        company_field.queryset = Mandant.objects.order_by("name")
+        company_field.empty_label = "– bitte wählen –"
+        if not self.is_bound and not self.initial.get("company") and not self.instance.company_id:
+            # Bei genau einem Mandanten gibt es nichts zu entscheiden.
+            only = company_field.queryset.first()
+            if only and company_field.queryset.count() == 1:
+                company_field.initial = only.pk
 
 
 class InvoiceInLineForm(ModelErrorFallbackMixin, CostTypeDependencyMixin, forms.ModelForm):

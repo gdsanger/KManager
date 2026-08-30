@@ -36,6 +36,14 @@
                 <div class="card-header"><h5 class="mb-0">Kopfdaten</h5></div>
                 <div class="card-body">
                     <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.company.id_for_label }}">{{ form.company.label }} <span class="text-danger">*</span></label>
+                            {{ form.company }}
+                            <div class="form-text">Bestimmt, in welchem DATEV-Buchungsstapel der Aufwand erscheint.</div>
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.company %}
+                        </div>
+                    </div>
+                    <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label" for="{{ form.invoice_no.id_for_label }}">{{ form.invoice_no.label }} <span class="text-danger">*</span></label>
                             {{ form.invoice_no }}
