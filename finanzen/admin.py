@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from .models import CompanyAccountingSettings, OutgoingInvoiceJournalEntry
 
 
@@ -60,9 +60,9 @@ class CompanyAccountingSettingsAdmin(admin.ModelAdmin):
 class OutgoingInvoiceJournalEntryAdmin(admin.ModelAdmin):
     """
     Admin interface for Outgoing Invoice Journal Entries
-    
-    Read-only view of immutable journal entries.
-    Journal entries should not be modified after creation (snapshot principle).
+
+    Journaleinträge sind Snapshots: Anlegen und Bearbeiten bleiben gesperrt,
+    Löschen ist als Korrekturweg erlaubt (nur hier im Admin, nicht im Frontend).
     """
     list_display = [
         'document_number',
@@ -133,21 +133,71 @@ class OutgoingInvoiceJournalEntryAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         """
-        Disable manual creation through admin.
-        Journal entries should be created programmatically.
+        Anlegen bleibt bewusst gesperrt.
+
+        Ein Journaleintrag ist der Snapshot eines finalisierten Belegs und
+        entsteht ausschließlich programmatisch über
+        `finanzen.services.journal.create_journal_entry()`. Ein von Hand
+        erfasster Eintrag hätte keinen Beleg als Quelle.
         """
         return False
-    
-    def has_delete_permission(self, request, obj=None):
-        """
-        Disable deletion to maintain immutability.
-        Journal entries are permanent accounting records.
-        """
-        return False
-    
+
     def has_change_permission(self, request, obj=None):
         """
-        Disable editing to maintain immutability.
-        Journal entries are snapshot-based and should not be modified.
+        Bearbeiten bleibt bewusst gesperrt.
+
+        Ein Journaleintrag ist ein Snapshot. Korrigiert wird er, indem er
+        gelöscht und aus dem Beleg neu erzeugt wird – nicht, indem einzelne
+        Werte nachträglich editiert werden. Ein editierbarer Snapshot wäre
+        kein Snapshot mehr.
         """
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        """
+        Löschen ist erlaubt – ausschließlich hier im Admin-Backend.
+
+        Beim Aufbau und in der Erprobung entstehen Einträge aus Testbelegen
+        oder aus Belegen, die vor einer Korrektur an Kontierung oder
+        Steuersätzen finalisiert wurden. Löschen ist dabei kein Datenverlust,
+        sondern ein Korrekturweg:
+
+        - Das referenzierte `SalesDocument` bleibt unberührt (der FK steht auf
+          PROTECT und schützt den Beleg, nicht den Journaleintrag).
+        - Der Eintrag lässt sich idempotent neu erzeugen – über eine erneute
+          Finalisierung des Belegs oder über
+          `python manage.py backfill_journal_entries`.
+
+        Bereits exportierte Einträge werden nicht blockiert, aber beim Löschen
+        mit einer Warnung versehen (siehe `_warn_if_exported`).
+        """
+        return True
+
+    def _warn_if_exported(self, request, entry):
+        """
+        Warnen, wenn ein bereits exportierter Eintrag gelöscht wird.
+
+        Der Eintrag ist dann Teil eines DATEV-Buchungsstapels, der bereits im
+        Fibu-System liegt – das Löschen hier zieht ihn dort nicht zurück.
+        """
+        if entry.export_status != 'EXPORTED':
+            return
+
+        messages.warning(
+            request,
+            f'Journaleintrag {entry.document_number} war bereits exportiert '
+            f'(Export-Batch {entry.export_batch_id or "unbekannt"}) und ist Teil '
+            f'eines DATEV-Buchungsstapels im Fibu-System. Das Löschen hier '
+            f'entfernt die Buchung dort nicht – bitte im Fibu-System nachziehen.'
+        )
+
+    def delete_model(self, request, obj):
+        """Einzellöschung: exportierte Einträge vorab melden."""
+        self._warn_if_exported(request, obj)
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        """Massenaktion: exportierte Einträge vorab melden."""
+        for entry in queryset.filter(export_status='EXPORTED'):
+            self._warn_if_exported(request, entry)
+        super().delete_queryset(request, queryset)

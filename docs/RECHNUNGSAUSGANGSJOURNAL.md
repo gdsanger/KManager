@@ -1,7 +1,10 @@
 # Rechnungsausgangsjournal
 
 Das Rechnungsausgangsjournal (`finanzen.OutgoingInvoiceJournalEntry`) ist der
-unveränderliche Nachweis aller ausgehenden Rechnungen und Gutschriften. Es ist
+Nachweis aller ausgehenden Rechnungen und Gutschriften. Ein einmal erzeugter
+Eintrag wird nicht mehr nachgeführt oder editiert (Snapshot-Prinzip); als
+Korrekturweg lässt er sich im Admin-Backend löschen und neu erzeugen (siehe
+[Korrigieren und Löschen](#korrigieren-und-löschen)). Es ist
 auf der Einnahmenseite die **alleinige Basis für den DATEV-Export**: Der Export
 liest ausschließlich das Journal, nie `SalesDocument` direkt. Nur so bleiben
 exportierte Werte Snapshots und ändern sich nicht nachträglich mit dem Beleg.
@@ -79,9 +82,52 @@ nicht `DRAFT` ist. Stornierte Belege (`CANCELLED`) werden ohne
 `--include-cancelled` übersprungen. Das Command ist wiederholbar und legt keine
 Dubletten an; fachlich fehlerhafte Belege werden gemeldet und übersprungen.
 
+## Korrigieren und Löschen
+
+Im Django-Admin (`/admin/finanzen/outgoinginvoicejournalentry/`) gilt bewusst
+eine **Asymmetrie**:
+
+| Vorgang     | Admin | Begründung |
+|-------------|-------|------------|
+| Anlegen     | nein  | Einträge entstehen nur aus einem finalisierten Beleg |
+| Bearbeiten  | nein  | Ein editierbarer Snapshot wäre kein Snapshot mehr |
+| Löschen     | **ja**| Korrekturweg statt Eingriff direkt in der Datenbank |
+
+Ein falscher Eintrag wird also nicht feldweise repariert, sondern **verworfen
+und neu erzeugt**. Das ist kein Datenverlust:
+
+- Der FK `OutgoingInvoiceJournalEntry.document` steht auf `PROTECT` – er
+  schützt das `SalesDocument` vor dem Löschen, nicht den Journaleintrag. Der
+  Beleg bleibt beim Löschen des Eintrags unverändert bestehen.
+- `create_journal_entry()` ist idempotent und legt zu einem Beleg genau einen
+  Eintrag an – eine Wiederherstellung erzeugt keine Dublette.
+
+**Korrekturweg:**
+
+```bash
+# 1. Eintrag im Admin löschen (einzeln oder über die Massenaktion)
+# 2. Ursache am Beleg beheben (Kontierung, Steuersatz, Positionen …)
+# 3. Eintrag neu erzeugen – erst prüfen, dann schreiben:
+python manage.py backfill_journal_entries --dry-run
+python manage.py backfill_journal_entries
+```
+
+Alternativ genügt eine **erneute Finalisierung** des Belegs (Echtdruck oder
+E-Mail-Versand): `finalize_document()` ruft `create_journal_entry()` bei jedem
+Aufruf auf und legt den fehlenden Eintrag wieder an.
+
+**Bereits exportierte Einträge:** Ist `export_status == 'EXPORTED'`, ist der
+Eintrag Teil eines DATEV-Buchungsstapels, der bereits im Fibu-System liegt.
+Das Löschen wird deshalb nicht verhindert, aber der Admin gibt eine Warnung mit
+Belegnummer und `export_batch_id` aus – sowohl beim Einzellöschen als auch bei
+der Massenaktion. Die Buchung im Fibu-System muss dort separat korrigiert
+werden; das Löschen hier zieht sie nicht zurück.
+
 ## Anzeige
 
 Die Liste unter `auftragsverwaltung:journal_list` ist schreibgeschützt und
 bietet Volltextsuche (Belegnummer, Kunde, Debitor), Filter nach Kunde,
 Belegdatum, Belegart, Export-Status und Mandant sowie Summen über die gesamte
-gefilterte Auswahl (nicht nur die aktuelle Seite).
+gefilterte Auswahl (nicht nur die aktuelle Seite). Eine Löschaktion gibt es im
+Frontend bewusst **nicht** – Löschen ist ausschließlich dem Admin-Backend
+vorbehalten.

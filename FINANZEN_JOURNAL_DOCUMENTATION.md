@@ -2,13 +2,13 @@
 
 ## Übersicht
 
-Die Finanzen-App implementiert ein **unveränderliches Rechnungsausgangsjournal** für Rechnungen und Gutschriften, das als rechtssichere Buchhaltungsbasis dient und DATEV-kompatibel strukturiert ist.
+Die Finanzen-App implementiert ein **snapshot-basiertes Rechnungsausgangsjournal** für Rechnungen und Gutschriften, das als rechtssichere Buchhaltungsbasis dient und DATEV-kompatibel strukturiert ist. Ein erzeugter Eintrag wird nie mehr verändert; korrigiert wird er, indem er im Admin gelöscht und neu erzeugt wird (siehe [Korrigieren und Löschen](#korrigieren-und-löschen)).
 
 ## Zielsetzung
 
-- **Rechtssichere Buchhaltungsbasis**: Immutable Journal-Einträge für finalisierte Belege
+- **Rechtssichere Buchhaltungsbasis**: Journal-Einträge für finalisierte Belege
 - **DATEV-Kompatibilität**: Struktur orientiert sich an DATEV-Anforderungen
-- **Snapshot-basiert**: Keine rückwirkenden Änderungen möglich
+- **Snapshot-basiert**: Keine rückwirkenden Änderungen an einem bestehenden Eintrag
 - **Export-Vorbereitung**: Tracking für späteren DATEV-Export
 
 ## Modelle
@@ -48,9 +48,9 @@ settings = CompanyAccountingSettings.objects.get(company=mandant)
 
 ### 2. OutgoingInvoiceJournalEntry
 
-**Zweck**: Unveränderlicher Journal-Eintrag für einen finalisierten Beleg (Rechnung oder Gutschrift)
+**Zweck**: Journal-Eintrag für einen finalisierten Beleg (Rechnung oder Gutschrift)
 
-**Snapshot-Prinzip**: Alle relevanten Daten werden zum Zeitpunkt der Erzeugung kopiert und danach nicht mehr verändert.
+**Snapshot-Prinzip**: Alle relevanten Daten werden zum Zeitpunkt der Erzeugung kopiert und danach nicht mehr verändert. Ein fehlerhafter Eintrag wird nicht editiert, sondern gelöscht und neu erzeugt.
 
 **Felder**:
 
@@ -167,12 +167,40 @@ Das Journal unterstützt **nur** die Steuersätze:
   - Erlöskonten je Steuersatz
 
 ### OutgoingInvoiceJournalEntryAdmin
+- **Erstellbar**: **NEIN** (nur programmatisch aus einem finalisierten Beleg)
 - **Bearbeitbar**: **NEIN** (read-only, Snapshot-Prinzip)
-- **Löschbar**: **NEIN** (permanenter Buchhaltungsbeleg)
-- **Erstellbar**: **NEIN** (nur programmatisch)
+- **Löschbar**: **JA** (Korrekturweg, siehe unten)
+- **Massenaktion**: „Ausgewählte Rechnungsausgangsjournal-Einträge löschen"
 - **Filter**: Company, Belegart, Export-Status, Datum
 - **Suche**: Belegnummer, Kundenname, Debitorennummer, Batch-ID
 - **Sortierung**: Nach Erstellungsdatum (neueste zuerst)
+
+---
+
+## Korrigieren und Löschen
+
+Die Asymmetrie „löschen ja, bearbeiten nein" ist **gewollt**: Ein Journal-Eintrag ist ein Snapshot des Belegs. Würde man einzelne Werte nachträglich editieren, wäre er kein Snapshot mehr und die Herkunft der Zahlen nicht mehr nachvollziehbar. Ein falscher Eintrag wird deshalb komplett verworfen und aus dem Beleg neu erzeugt.
+
+Löschen ist technisch unkritisch:
+
+- Der FK `OutgoingInvoiceJournalEntry.document` steht auf `PROTECT` – er schützt das `SalesDocument` vor dem Löschen, **nicht** den Journal-Eintrag. Der Beleg bleibt beim Löschen des Eintrags unverändert bestehen.
+- `finanzen.services.journal.create_journal_entry()` ist idempotent (Unique-Constraint `(company, document)` plus Vorabprüfung) – eine Wiederherstellung erzeugt keine Dublette.
+
+**Korrekturweg**:
+
+```bash
+# 1. Eintrag im Admin löschen (einzeln oder über die Massenaktion)
+# 2. Ursache am Beleg beheben (Kontierung, Steuersatz, Positionen …)
+# 3. Eintrag neu erzeugen – erst prüfen, dann schreiben:
+python manage.py backfill_journal_entries --dry-run
+python manage.py backfill_journal_entries
+```
+
+Alternativ genügt eine **erneute Finalisierung** des Belegs (Echtdruck oder E-Mail-Versand): `auftragsverwaltung.services.invoice_finalization.finalize_document()` ruft `create_journal_entry()` bei jedem Aufruf auf.
+
+**Bereits exportierte Einträge**: Ist `export_status == 'EXPORTED'`, gehört der Eintrag zu einem DATEV-Buchungsstapel, der bereits im Fibu-System liegt. Das Löschen wird nicht verhindert, der Admin gibt aber eine Warnung mit Belegnummer und `export_batch_id` aus – beim Einzellöschen wie bei der Massenaktion. Die Buchung im Fibu-System muss dort separat korrigiert werden.
+
+**Nur im Admin-Backend**: Die Journal-Ansichten im Frontend (`auftragsverwaltung:journal_list` / `journal_detail`) bleiben rein lesend und bieten bewusst keine Löschaktion.
 
 ---
 
@@ -218,6 +246,7 @@ Diese Funktionalitäten werden in zukünftigen Issues implementiert.
 
 **Migration**: `finanzen.0001_initial`
 
-**Tests**: Umfassende Test-Suite mit 9 Testfällen in `finanzen/tests.py`:
-- CompanyAccountingSettings: Erstellung, OneToOne-Beziehung, Zugriff über Mandant
-- OutgoingInvoiceJournalEntry: Erstellung, Constraints, Validierung, Snapshot-Prinzip, Export-Tracking
+**Tests**:
+- `finanzen/tests.py` – CompanyAccountingSettings: Erstellung, OneToOne-Beziehung, Zugriff über Mandant; OutgoingInvoiceJournalEntry: Erstellung, Constraints, Validierung, Snapshot-Prinzip, Export-Tracking
+- `finanzen/test_journal_service.py` – Erzeugungslogik, Steuersplitting, Idempotenz
+- `finanzen/test_journal_admin.py` – Admin-Rechte (Löschen erlaubt, Anlegen/Bearbeiten gesperrt), Export-Warnung, Wiederherstellung nach dem Löschen
