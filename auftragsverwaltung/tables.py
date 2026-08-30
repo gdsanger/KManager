@@ -38,17 +38,24 @@ class SalesDocumentTable(tables.Table):
         attrs={'td': {'class': 'text-nowrap'}}
     )
     
+    projekt = tables.Column(
+        verbose_name='Projekt',
+        accessor='projekt.titel',
+        default='',
+        attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 160px;'}}
+    )
+
     subject = tables.Column(
         verbose_name='Betreff',
         attrs={'td': {'class': 'text-truncate', 'style': 'max-width: 200px;'}}
     )
-    
+
     issue_date = tables.DateColumn(
         verbose_name='Belegdatum',
         format='d.m.Y',
         attrs={'td': {'class': 'text-nowrap'}}
     )
-    
+
     due_date = tables.DateColumn(
         verbose_name='Fälligkeit',
         format='d.m.Y',
@@ -80,12 +87,19 @@ class SalesDocumentTable(tables.Table):
         })
         return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
     
+    def render_projekt(self, value, record):
+        """Render the project as a link - shown only for documents with a project."""
+        if not record.projekt_id:
+            return ''
+        url = reverse('projekt_detail', kwargs={'pk': record.projekt_id})
+        return format_html('<a href="{}" class="text-decoration-none">{}</a>', url, value)
+
     def render_total_gross(self, value):
         """Render total_gross with currency."""
         if value is None:
             return '—'
         return f'{value:.2f} €'
-    
+
     def render_status(self, value, record):
         """Render status with colored badge."""
         status_classes = {
@@ -124,6 +138,7 @@ class SalesDocumentTable(tables.Table):
             'number',
             'company',
             'customer',
+            'projekt',
             'subject',
             'issue_date',
             'due_date',

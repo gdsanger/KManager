@@ -28,6 +28,15 @@ class SalesDocumentFilter(django_filters.FilterSet):
         })
     )
     
+    projekt = django_filters.ModelChoiceFilter(
+        queryset=None,  # Will be set in __init__
+        label='Projekt',
+        empty_label='Alle Projekte',
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+
     status = django_filters.ChoiceFilter(
         choices=[('', 'Alle Status')] + SalesDocument.STATUS_CHOICES,
         label='Status',
@@ -36,7 +45,7 @@ class SalesDocumentFilter(django_filters.FilterSet):
             'class': 'form-select'
         })
     )
-    
+
     number = django_filters.CharFilter(
         lookup_expr='icontains',
         label='Nummer',
@@ -99,13 +108,15 @@ class SalesDocumentFilter(django_filters.FilterSet):
         """Initialize filter and set up customer queryset."""
         super().__init__(*args, **kwargs)
         # Import here to avoid circular imports
-        from core.models import Adresse
+        from core.models import Adresse, Projekt
         # Set customer queryset ordered by matchkey (= displayed label)
         self.filters['customer'].queryset = Adresse.objects.all().order_by('matchkey')
-    
+        self.filters['projekt'].queryset = Projekt.objects.all().order_by('titel')
+
     class Meta:
         model = SalesDocument
-        fields = ['q', 'customer', 'status', 'number', 'subject', 'issue_date_from', 'issue_date_to']
+        fields = ['q', 'customer', 'projekt', 'status', 'number', 'subject',
+                  'issue_date_from', 'issue_date_to']
 
 
 class ContractFilter(django_filters.FilterSet):
