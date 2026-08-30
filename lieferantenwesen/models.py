@@ -58,6 +58,18 @@ class InvoiceIn(models.Model):
     """Incoming invoice (Eingangsrechnung) with approval workflow."""
 
     # --- Header data ---
+    company = models.ForeignKey(
+        "core.Mandant",
+        on_delete=models.PROTECT,
+        related_name="incoming_invoices",
+        null=True,
+        blank=True,
+        verbose_name="Mandant",
+        help_text=(
+            "Mandant, zu dem der Aufwand gehört. Steuert die Auswahl im "
+            "DATEV-Buchungsstapel."
+        ),
+    )
     invoice_no = models.CharField(
         max_length=100, verbose_name="Rechnungsnummer"
     )
@@ -281,10 +293,34 @@ class InvoiceIn(models.Model):
             # Deckt die Auswahl des Buchungsstapels ab (Zeitraum + Freigabe).
             models.Index(fields=["invoice_date", "status"]),
             models.Index(fields=["export_status"]),
+            # Der Buchungsstapel wird immer je Mandant erzeugt.
+            models.Index(fields=["company"]),
         ]
 
     def __str__(self):
         return f"{self.invoice_no} – {self.supplier} – {self.invoice_date}"
+
+    def save(self, *args, **kwargs):
+        """Mandanten aus Auftrag bzw. Mietobjekt ableiten, wenn er fehlt."""
+        self._inherit_company()
+        super().save(*args, **kwargs)
+
+    def _inherit_company(self):
+        """
+        Fehlenden Mandanten aus der fachlichen Zuordnung übernehmen.
+
+        Reihenfolge: Auftrag vor Mietobjekt – der Auftrag ist die konkretere
+        Zuordnung. Ein bereits gesetzter Mandant wird **nie** überschrieben:
+        Eine manuelle Zuordnung ist eine bewusste Entscheidung, und ein still
+        umgehängter Aufwand wäre ein Buchungsfehler, den niemand bemerkt.
+        (Gleiches Vorgehen wie bei ``vermietung.Vertrag``.)
+        """
+        if self.company_id:
+            return
+        if self.order_id and self.order.company_id:
+            self.company_id = self.order.company_id
+        elif self.rental_object_id and self.rental_object.mandant_id:
+            self.company_id = self.rental_object.mandant_id
 
     def clean(self):
         super().clean()
