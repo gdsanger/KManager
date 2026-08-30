@@ -31,8 +31,8 @@ from .printing import SalesDocumentInvoiceContextBuilder
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit, Projekt
 from core.services.activity_stream import ActivityStreamService
 from core.printing import PdfRenderService, get_static_base_url
-from finanzen.forms import DatevExportForm
-from finanzen.models import OutgoingInvoiceJournalEntry
+from finanzen.forms import CompanyAccountingSettingsForm, DatevExportForm
+from finanzen.models import CompanyAccountingSettings, OutgoingInvoiceJournalEntry
 from finanzen.services.datev_export import (
     DatevExportError,
     build_filename,
@@ -2526,6 +2526,65 @@ def datev_export_download(request):
     response = HttpResponse(content, content_type='text/csv; charset=windows-1252')
     response['Content-Disposition'] = f'attachment; filename="{build_filename(preview)}"'
     return response
+
+
+# ===============================================================================
+# Buchhaltungseinstellungen je Mandant
+#
+# Beraternummer, Mandantennummer und Sachkontenlänge gehen in den EXTF-Kopfsatz
+# jeder Exportdatei ein, die Erlöskonten steuern die Kontierung der Ausgangsseite.
+# Wer den Export bedient, soll diese Werte pflegen können, ohne ins Django-Admin
+# zu wechseln. Ein Löschen ist nicht vorgesehen – ohne Einstellungen ist kein
+# Buchungsstapel erzeugbar.
+# ===============================================================================
+
+@login_required
+def accounting_settings_list(request):
+    """
+    Mandanten mit dem Pflegestand ihrer Buchhaltungseinstellungen auflisten.
+
+    Angezeigt werden alle Mandanten, auch die ohne Datensatz – erst darüber
+    ist erkennbar, wo noch etwas fehlt.
+    """
+    mandanten = Mandant.objects.select_related('accounting_settings').order_by('name')
+
+    return render(request, 'auftragsverwaltung/buchhaltung/accounting_settings_list.html', {
+        'mandanten': mandanten,
+    })
+
+
+@login_required
+def accounting_settings_edit(request, mandant_pk):
+    """
+    Buchhaltungseinstellungen eines Mandanten anzeigen und speichern.
+
+    Der Datensatz wird beim ersten Aufruf angelegt (`get_or_create`), damit das
+    Formular immer auf einer echten Instanz arbeitet. Durch die
+    OneToOne-Beziehung bleibt es auch bei mehrfachem Aufruf bei genau einem
+    Datensatz je Mandant.
+
+    Args:
+        mandant_pk: Primärschlüssel des Mandanten
+    """
+    mandant = get_object_or_404(Mandant, pk=mandant_pk)
+    settings_obj, _created = CompanyAccountingSettings.objects.get_or_create(company=mandant)
+
+    if request.method == 'POST':
+        form = CompanyAccountingSettingsForm(request.POST, instance=settings_obj)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f'Buchhaltungseinstellungen für {mandant.name} wurden gespeichert.',
+            )
+            return redirect('auftragsverwaltung:accounting_settings_list')
+    else:
+        form = CompanyAccountingSettingsForm(instance=settings_obj)
+
+    return render(request, 'auftragsverwaltung/buchhaltung/accounting_settings_form.html', {
+        'form': form,
+        'mandant': mandant,
+    })
 
 
 @login_required

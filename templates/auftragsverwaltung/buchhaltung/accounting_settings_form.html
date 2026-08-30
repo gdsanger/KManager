@@ -1,0 +1,115 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+
+{% block title %}{{ mandant.name }} - Buchhaltungseinstellungen - Domus{% endblock %}
+{% block page_title %}Buchhaltungseinstellungen: {{ mandant.name }}{% endblock %}
+
+{% block page_actions %}
+    <a href="{% url 'auftragsverwaltung:accounting_settings_list' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Zurück
+    </a>
+{% endblock %}
+
+{% block content %}
+<form method="post">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="card bg-dark mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-building"></i> DATEV-Konfiguration</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                Berater- und Mandantennummer sind Pflichtfelder des EXTF-Kopfsatzes.
+                Solange der Buchungsstapel nicht an einen Steuerberater übermittelt
+                wird, genügen die vorbelegten Platzhalter.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.datev_consultant_number %}
+                </div>
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.datev_client_number %}
+                </div>
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.tax_number %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Buchungsstapel (EXTF-Kopfsatz)</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.account_length %}
+                </div>
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.fiscal_year_start %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-cash-coin"></i> Erlöskonten je Steuersatz</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                Ein an der Kostenart hinterlegtes Erlöskonto übersteuert diese Konten.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.revenue_account_0 %}
+                </div>
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.revenue_account_7 %}
+                </div>
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.revenue_account_19 %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-bank"></i> Gegenkonten Zahlungsseite</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                Zahlungsbuchungen werden nicht exportiert – der Ausgleich der offenen
+                Posten passiert im Fibu-System. Die Konten werden hier für die
+                Einrichtung des Zielsystems gepflegt.
+            </p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.bank_account %}
+                </div>
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.cash_account %}
+                </div>
+                <div class="col-md-4">
+                    {% include "auftragsverwaltung/buchhaltung/partials/settings_field.html" with field=form.clearing_account %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> Speichern
+        </button>
+        <a href="{% url 'auftragsverwaltung:accounting_settings_list' %}" class="btn btn-outline-secondary">
+            Abbrechen
+        </a>
+    </div>
+</form>
+{% endblock %}
