@@ -81,27 +81,65 @@ line amount before tax is calculated:
    line_subtotal = round(quantity × unit_price_net, 2 decimal places, HALF_UP)
    line_discount = round(line_subtotal × discount% ÷ 100, 2 decimal places, HALF_UP)
    line_net      = line_subtotal − line_discount
-   line_tax      = round(line_net × tax_rate.rate, 2 decimal places, HALF_UP)
+   line_tax      = round(line_net × tax_rate.rate, 2 decimal places, HALF_UP)  ← provisorisch
    line_gross    = line_net + line_tax
    ```
    The discount amount is rounded *before* it is deducted, so
    `line_subtotal = line_net + line_discount` holds cent-exactly.
 
-2. **Document-Level Aggregation** (only included lines):
+   `line_tax` aus diesem Schritt ist die Steuer einer *einzeln betrachteten*
+   Position (z. B. beim Inline-Speichern einer Zeile). Für den Beleg ist sie
+   nicht maßgeblich — siehe Schritt 2.
+
+2. **Steuer je Steuersatz** (nur einbezogene Positionen):
+   ```
+   für jeden Steuersatz r:
+       netto(r) = sum(line_net der Positionen mit Satz r)
+       steuer(r) = round(netto(r) × r, 2 decimal places, HALF_UP)
+   ```
+   Gruppiert wird nach dem **Steuersatz-Wert**, nicht nach dem `TaxRate`-Datensatz:
+   zwei Sätze mit je 19 % bilden eine Gruppe.
+
+   Die Rundungsdifferenz `steuer(r) − sum(line_tax der Gruppe)` wird auf **genau
+   eine** Position der Gruppe gelegt: die betragsstärkste (größtes `line_net`),
+   bei Gleichstand die mit der kleinsten `position_no`. Beide Kriterien stammen
+   ausschließlich aus gespeicherten Daten, die Zuweisung ist damit reproduzierbar.
+   Dasselbe Verfahren nutzt `finanzen.services.datev_export._split_tax()`.
+
+3. **Document-Level Aggregation** (only included lines):
    ```
    total_net      = sum(all line_net values)
-   total_tax      = sum(all line_tax values)
-   total_gross    = sum(all line_gross values)
+   total_tax      = sum(steuer(r) über alle Steuersätze)
+   total_gross    = total_net + total_tax
    total_discount = sum(all line discount amounts)
    ```
    `SalesDocument.total_net_before_discount` (= `total_net + total_discount`) is
    the Zwischensumme shown in the UI and on the PDF whenever a discount exists.
 
+### Warum die Steuer nicht positionsweise gerundet wird
+
+Sieben Positionen à 12,50 € netto zu 19 % ergeben positionsweise gerundet
+7 × 2,38 € = 16,66 €, auf die Nettosumme gerechnet aber 87,50 € × 19 % = 16,63 €.
+Die halben Cent addieren sich nach oben, statt sich in der Summe aufzuheben —
+der Beleg wies dann eine Steuer aus, die ein nachrechnender Kunde nicht
+reproduzieren konnte. Deshalb gilt: **Netto positionsweise, Steuer je Steuersatz
+auf die Nettosumme** (Issue #1195).
+
+### Invarianten
+
+Nach `recalculate()` gilt für jeden Beleg cent-genau:
+
+- `round(netto(r) × r, 2) == sum(line_tax der einbezogenen Positionen mit Satz r)`
+- `sum(line_tax) == total_tax` und `sum(line_gross) == total_gross`
+- `total_gross == total_net + total_tax`
+- Bei Belegen mit nur einem Steuersatz ist `total_tax / total_net` exakt dieser
+  Satz — wichtig für `finanzen.services.journal._amounts_from_totals()`.
+
 ### Key Features
 
 - **Deterministic**: Same inputs always produce same outputs
 - **Decimal Precision**: Uses only `Decimal` arithmetic (no floats)
-- **Rounding**: HALF_UP rounding to 2 decimal places at line level
+- **Rounding**: HALF_UP rounding to 2 decimal places; net per line, tax per tax rate
 - **UI-Independent**: Can be called from UI, background jobs, or tasks
 - **No Model Side Effects**: No calculation logic in `Model.save()`
 
@@ -126,14 +164,35 @@ The admin interface for `SalesDocument` includes a bulk action to recalculate to
 ### Management Command: `recalculate_document_totals`
 
 Recalculates line sums and document totals for all (or one Mandant's) sales
-documents — needed after the discount became part of the calculation, because
-documents saved before that still carry sums without any discount deducted.
+documents. Nötig für Bestandsbelege, die vor einer Änderung der Rechenregeln
+gespeichert wurden — zuerst beim Positionsrabatt, dann bei der Umstellung der
+Steuerberechnung auf die Nettosumme je Steuersatz (#1195).
 
 ```bash
 python manage.py recalculate_document_totals --dry-run   # nur Bericht
 python manage.py recalculate_document_totals             # schreibt
 python manage.py recalculate_document_totals --company 1 # nur ein Mandant
+python manage.py recalculate_document_totals \
+    --date-from 2025-01-01 --date-to 2025-12-31          # nur ein Zeitraum
 ```
+
+Der Trockenlauf listet je betroffenem Beleg die alte und die neue Summe auf und
+schreibt nichts.
+
+#### Journaleinträge nach einer Korrektur
+
+Das Command fasst **keine** Journaleinträge an: ein
+`OutgoingInvoiceJournalEntry` ist ein unveränderlicher Snapshot des
+finalisierten Belegs. Ändern sich die Summen eines bereits finalisierten Belegs,
+ist der zugehörige Journaleintrag im Django-Admin (Finanzen →
+Rechnungsausgangsjournal) zu löschen und anschließend neu zu erzeugen:
+
+```bash
+python manage.py backfill_journal_entries
+```
+
+Bereits nach DATEV exportierte Einträge sollten nur nach Rücksprache mit der
+Buchhaltung ersetzt werden — dort ist der alte Wert bereits gebucht.
 
 ## Testing
 

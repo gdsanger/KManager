@@ -52,7 +52,10 @@ den Umsatz der Periode.
   dem Hinweis ab, den Beleg neu zu berechnen.
 - Belege **ohne Positionen** (Altbestand) werden aus den Belegsummen abgeleitet;
   der Steuersatz ergibt sich aus `total_tax / total_net` und muss exakt einem
-  unterstützten Satz entsprechen.
+  unterstützten Satz entsprechen. Seit #1195 rechnet der
+  `DocumentCalculationService` die Steuer je Steuersatz auf die Nettosumme, ein
+  neu berechneter Beleg trifft diesen Satz also exakt und scheitert nicht mehr
+  an reiner Rundungsdrift (früher z. B. 38,03 / 200,00 = 19,02 %).
 - Unterstützt sind ausschließlich **0 %, 7 % und 19 %**. Jeder andere Steuersatz
   führt zu `UnsupportedTaxRateError` (Unterklasse von `ValueError`) mit
   verständlicher Meldung – kein stiller Falscheintrag.
@@ -115,6 +118,14 @@ python manage.py backfill_journal_entries
 Alternativ genügt eine **erneute Finalisierung** des Belegs (Echtdruck oder
 E-Mail-Versand): `finalize_document()` ruft `create_journal_entry()` bei jedem
 Aufruf auf und legt den fehlenden Eintrag wieder an.
+
+**Nach einem Durchrechnen der Bestandsbelege:**
+`python manage.py recalculate_document_totals` fasst Journaleinträge bewusst
+nicht an. Ändern sich dabei die Summen eines bereits finalisierten Belegs, ist
+genau der obige Korrekturweg zu gehen: Eintrag im Admin löschen, dann
+`backfill_journal_entries`. Solange das nicht geschehen ist, trägt der
+Journaleintrag noch den alten Steuerbetrag – der Beleg selbst ist dann bereits
+korrigiert.
 
 **Bereits exportierte Einträge:** Ist `export_status == 'EXPORTED'`, ist der
 Eintrag Teil eines DATEV-Buchungsstapels, der bereits im Fibu-System liegt.
