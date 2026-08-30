@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q, Sum, Max
@@ -11,6 +12,7 @@ from decimal import Decimal
 from django_tables2 import RequestConfig
 import json
 import logging
+import uuid
 from django.utils import timezone
 from django.utils.html import strip_tags
 
@@ -29,7 +31,15 @@ from .printing import SalesDocumentInvoiceContextBuilder
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit, Projekt
 from core.services.activity_stream import ActivityStreamService
 from core.printing import PdfRenderService, get_static_base_url
+from finanzen.forms import DatevExportForm
 from finanzen.models import OutgoingInvoiceJournalEntry
+from finanzen.services.datev_export import (
+    DatevExportError,
+    build_filename,
+    build_preview,
+    mark_exported,
+    render_extf,
+)
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -2403,6 +2413,119 @@ def journal_detail(request, pk):
     }
     
     return render(request, 'auftragsverwaltung/journal/detail.html', context)
+
+
+# ===============================================================================
+# DATEV-Buchungsstapel-Export
+#
+# Zeitraum wählen, Vorschau mit Anzahl und Summen prüfen, Fehlerliste abarbeiten,
+# Datei herunterladen. Der Download ist bewusst ein eigener POST-Schritt – erst
+# dabei werden die Belege als exportiert gekennzeichnet. Die fachliche Logik
+# (Formular und Service) bleibt im Finanzen-Modul, hier liegt nur die Bedienung.
+# ===============================================================================
+
+def _build(request):
+    """
+    Formular auswerten und Vorschau erzeugen.
+
+    Returns:
+        tuple(form, preview, error): preview/error sind None, solange das
+        Formular nicht abgeschickt bzw. nicht gültig ist.
+    """
+    if not request.GET and request.method != 'POST':
+        return DatevExportForm(), None, None
+
+    data = request.POST if request.method == 'POST' else request.GET
+    form = DatevExportForm(data)
+    if not form.is_valid():
+        return form, None, None
+
+    date_from, date_to = form.period()
+    try:
+        preview = build_preview(
+            form.cleaned_data['company'],
+            date_from,
+            date_to,
+            include_exported=form.cleaned_data['include_exported'],
+        )
+    except DatevExportError as exc:
+        return form, None, str(exc)
+
+    return form, preview, None
+
+
+@login_required
+def datev_export(request):
+    """
+    Vorschau des Buchungsstapels.
+
+    Zeigt Anzahl und Summen der Buchungssätze sowie – vor jedem Download –
+    die Fehlerliste der Belege ohne auflösbares Konto.
+    """
+    form, preview, error = _build(request)
+    if error:
+        messages.error(request, error)
+
+    return render(request, 'auftragsverwaltung/buchhaltung/datev_export.html', {
+        'form': form,
+        'preview': preview,
+        'period_label': form.period_label() if preview else '',
+    })
+
+
+@login_required
+def datev_export_download(request):
+    """
+    Buchungsstapel erzeugen, herunterladen und die Belege als exportiert
+    kennzeichnen.
+
+    Bewusst nur per POST: Der Download verändert den Export-Status und darf
+    daher nicht über einen Link auslösbar sein.
+    """
+    if request.method != 'POST':
+        return redirect('auftragsverwaltung:datev_export')
+
+    form, preview, error = _build(request)
+    if error or preview is None:
+        messages.error(
+            request,
+            error or 'Bitte den Zeitraum korrekt auswählen.',
+        )
+        return render(request, 'auftragsverwaltung/buchhaltung/datev_export.html', {
+            'form': form, 'preview': None, 'period_label': '',
+        })
+
+    try:
+        content = render_extf(preview)
+    except DatevExportError as exc:
+        messages.error(request, str(exc))
+        return render(request, 'auftragsverwaltung/buchhaltung/datev_export.html', {
+            'form': form,
+            'preview': preview,
+            'period_label': form.period_label(),
+        })
+
+    if not preview.bookings:
+        messages.warning(
+            request,
+            'Für den gewählten Zeitraum gibt es keine Buchungssätze.',
+        )
+        return render(request, 'auftragsverwaltung/buchhaltung/datev_export.html', {
+            'form': form,
+            'preview': preview,
+            'period_label': form.period_label(),
+        })
+
+    batch_id = f'{timezone.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:8]}'
+    mark_exported(preview, batch_id)
+    logger.info(
+        'DATEV-Buchungsstapel %s erzeugt: %s Buchungssätze, Zeitraum %s bis %s',
+        batch_id, len(preview.bookings), preview.date_from, preview.date_to,
+    )
+
+    response = HttpResponse(content, content_type='text/csv; charset=windows-1252')
+    response['Content-Disposition'] = f'attachment; filename="{build_filename(preview)}"'
+    return response
 
 
 @login_required

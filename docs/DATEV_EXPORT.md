@@ -166,7 +166,8 @@ zeigt dieselbe Nummer und ändert sich für Bestandskunden entsprechend mit.
 
 ### UI
 
-`Finanzen → DATEV-Export` (`/finanzen/datev-export/`):
+`Auftragsverwaltung → Buchhaltung → DATEV-Export`
+(`/auftragsverwaltung/buchhaltung/datev-export/`):
 
 1. Mandant und Zeitraum wählen (Monat, Quartal oder Jahr).
 2. Vorschau erzeugen: Anzahl der Buchungssätze, Summen je Seite, Soll/Haben.

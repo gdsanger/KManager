@@ -1,8 +1,9 @@
 """
-Tests für die Finanzen-UI des DATEV-Exports.
+Tests für die UI des DATEV-Exports.
 
 Prüft Zeitraumauswahl, Vorschau, Fehlerliste vor dem Export und den Download
-inklusive Statuspflege.
+inklusive Statuspflege. Die Bedienoberfläche liegt in der Auftragsverwaltung
+unter „Buchhaltung"; Formular und Service bleiben im Finanzen-Modul.
 """
 from datetime import date
 from decimal import Decimal
@@ -111,7 +112,7 @@ class DatevExportViewTestCase(DatevExportViewTestBase):
 
     def test_login_required(self):
         self.client.logout()
-        response = self.client.get(reverse('finanzen:datev_export'))
+        response = self.client.get(reverse('auftragsverwaltung:datev_export'))
         self.assertEqual(response.status_code, 302)
 
     def test_home_renders(self):
@@ -119,13 +120,13 @@ class DatevExportViewTestCase(DatevExportViewTestBase):
         self.assertEqual(response.status_code, 200)
 
     def test_empty_form_shows_no_preview(self):
-        response = self.client.get(reverse('finanzen:datev_export'))
+        response = self.client.get(reverse('auftragsverwaltung:datev_export'))
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.context['preview'])
 
     def test_preview_shows_bookings(self):
         self._journal_entry()
-        response = self.client.get(reverse('finanzen:datev_export'), self._params())
+        response = self.client.get(reverse('auftragsverwaltung:datev_export'), self._params())
 
         preview = response.context['preview']
         self.assertEqual(preview.booking_count, 1)
@@ -133,7 +134,7 @@ class DatevExportViewTestCase(DatevExportViewTestBase):
 
     def test_preview_lists_problems(self):
         self._journal_entry(debtor='')
-        response = self.client.get(reverse('finanzen:datev_export'), self._params())
+        response = self.client.get(reverse('auftragsverwaltung:datev_export'), self._params())
 
         preview = response.context['preview']
         self.assertEqual(len(preview.problems), 1)
@@ -142,7 +143,7 @@ class DatevExportViewTestCase(DatevExportViewTestBase):
     def test_download_returns_file_and_marks_exported(self):
         entry = self._journal_entry()
         response = self.client.post(
-            reverse('finanzen:datev_export_download'), self._params(),
+            reverse('auftragsverwaltung:datev_export_download'), self._params(),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -157,7 +158,7 @@ class DatevExportViewTestCase(DatevExportViewTestBase):
     def test_download_is_blocked_while_problems_remain(self):
         entry = self._journal_entry(debtor='')
         response = self.client.post(
-            reverse('finanzen:datev_export_download'), self._params(),
+            reverse('auftragsverwaltung:datev_export_download'), self._params(),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -166,19 +167,19 @@ class DatevExportViewTestCase(DatevExportViewTestBase):
         self.assertEqual(entry.export_status, 'OPEN')
 
     def test_download_rejects_get(self):
-        response = self.client.get(reverse('finanzen:datev_export_download'))
+        response = self.client.get(reverse('auftragsverwaltung:datev_export_download'))
         self.assertEqual(response.status_code, 302)
 
     def test_empty_period_does_not_mark_anything(self):
         response = self.client.post(
-            reverse('finanzen:datev_export_download'), self._params(month=6),
+            reverse('auftragsverwaltung:datev_export_download'), self._params(month=6),
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('Content-Disposition', response)
 
     def test_period_across_year_boundary_reports_error(self):
         response = self.client.get(
-            reverse('finanzen:datev_export'), self._params(period_type='YEAR'),
+            reverse('auftragsverwaltung:datev_export'), self._params(period_type='YEAR'),
         )
         # Ein Jahresexport bleibt innerhalb eines Jahres und ist damit gültig.
         self.assertIsNotNone(response.context['preview'])
