@@ -10,8 +10,9 @@ from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase
 
-#: Alle Base-Templates. lieferantenwesen/base.html erbt von base.html und
-#: bekommt app.js dadurch mit.
+#: Alle Base-Templates. lieferantenwesen/base.html erbt von
+#: auftragsverwaltung/auftragsverwaltung_base.html und bekommt app.js
+#: dadurch mit.
 ALL_BASES = [
     "base.html",
     "core/core_base.html",
@@ -25,6 +26,7 @@ SIDEBAR_BASES = [
     "core/core_base.html",
     "vermietung/vermietung_base.html",
     "auftragsverwaltung/auftragsverwaltung_base.html",
+    "lieferantenwesen/base.html",
 ]
 
 #: Marker aus den früheren Inline-Skripten. Tauchen sie im gerenderten HTML
