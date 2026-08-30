@@ -2,11 +2,11 @@
 Signal handlers for Aktivitaet model to send email notifications.
 """
 from django.db import models
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.urls import reverse
 from core.mailing.service import send_mail, MailServiceError
-from .models import Aktivitaet
+from .models import Aktivitaet, Dokument
 import logging
 
 logger = logging.getLogger(__name__)
@@ -283,3 +283,21 @@ def handle_cc_users_changed(sender, instance, action, pk_set, **kwargs):
             logger.warning(f"Failed to send CC notification for activity #{instance.pk}: {str(e)}")
         except Exception as e:
             logger.error(f"Unexpected error sending CC notification for activity #{instance.pk}: {str(e)}")
+
+
+@receiver(post_delete, sender=Dokument)
+def delete_dokument_file(sender, instance, **kwargs):
+    """
+    Remove the stored file when a Dokument row is deleted.
+
+    Dokument.delete() already cleans up the file, but cascading deletes
+    (e.g. deleting a Verkaufsbeleg with attachments) bypass Model.delete()
+    and would otherwise leave orphaned files behind.
+    """
+    try:
+        instance.remove_file_from_storage()
+    except Exception as e:  # pragma: no cover - defensive, must not break delete
+        logger.error(
+            f"Failed to remove file for Dokument {instance.pk} "
+            f"({instance.storage_path}): {e}"
+        )

@@ -612,14 +612,18 @@ class DokumentAdminForm(forms.ModelForm):
             cleaned_data.get('vertrag'),
             cleaned_data.get('mietobjekt'),
             cleaned_data.get('adresse'),
-            cleaned_data.get('uebergabeprotokoll')
+            cleaned_data.get('uebergabeprotokoll'),
+            cleaned_data.get('eingangsrechnung'),
+            cleaned_data.get('invoice_in'),
+            cleaned_data.get('salesdocument'),
         ]
         set_entities = [e for e in target_entities if e is not None]
         
         if len(set_entities) == 0:
             raise forms.ValidationError(
                 'Das Dokument muss genau einem Zielobjekt zugeordnet werden '
-                '(Vertrag, Mietobjekt, Adresse oder Übergabeprotokoll).'
+                '(Vertrag, Mietobjekt, Adresse, Übergabeprotokoll, '
+                'Eingangsrechnung oder Verkaufsbeleg).'
             )
         
         if len(set_entities) > 1:
@@ -641,6 +645,9 @@ class DokumentAdminForm(forms.ModelForm):
             instance.mietobjekt = self.cleaned_data.get('mietobjekt')
             instance.adresse = self.cleaned_data.get('adresse')
             instance.uebergabeprotokoll = self.cleaned_data.get('uebergabeprotokoll')
+            instance.eingangsrechnung = self.cleaned_data.get('eingangsrechnung')
+            instance.invoice_in = self.cleaned_data.get('invoice_in')
+            instance.salesdocument = self.cleaned_data.get('salesdocument')
             
             # Now get entity type and ID
             entity_type = instance.get_entity_type()
@@ -683,9 +690,10 @@ class DokumentAdmin(admin.ModelAdmin):
         'vertrag__vertragsnummer',
         'mietobjekt__name',
         'adresse__name',
-        'uebergabeprotokoll__vertrag__vertragsnummer'
+        'uebergabeprotokoll__vertrag__vertragsnummer',
+        'salesdocument__number'
     )
-    list_filter = ('mime_type', 'uploaded_at')
+    list_filter = ('mime_type', 'uploaded_at', 'salesdocument__status')
     readonly_fields = ('uploaded_at', 'storage_path', 'file_size', 'mime_type', 'original_filename')
     date_hierarchy = 'uploaded_at'
     
@@ -697,7 +705,10 @@ class DokumentAdmin(admin.ModelAdmin):
             'fields': ('original_filename', 'storage_path', 'file_size', 'mime_type')
         }),
         ('Zielobjekt', {
-            'fields': ('vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll'),
+            'fields': (
+                'vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll',
+                'eingangsrechnung', 'invoice_in', 'salesdocument',
+            ),
             'description': 'Wählen Sie genau ein Zielobjekt aus, dem dieses Dokument zugeordnet werden soll.'
         }),
         ('Zusätzliche Informationen', {
@@ -708,7 +719,10 @@ class DokumentAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queries by prefetching related objects."""
         queryset = super().get_queryset(request)
-        return queryset.select_related('vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll', 'uploaded_by')
+        return queryset.select_related(
+            'vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll',
+            'eingangsrechnung', 'invoice_in', 'salesdocument', 'uploaded_by'
+        )
     
     def save_model(self, request, obj, form, change):
         """Set uploaded_by to current user if not set."""
@@ -734,6 +748,12 @@ class DokumentAdmin(admin.ModelAdmin):
             return str(obj.adresse)
         elif obj.uebergabeprotokoll:
             return str(obj.uebergabeprotokoll)
+        elif obj.eingangsrechnung:
+            return str(obj.eingangsrechnung)
+        elif obj.invoice_in:
+            return str(obj.invoice_in)
+        elif obj.salesdocument:
+            return str(obj.salesdocument)
         return '-'
     get_entity_name.short_description = 'Zugeordnet zu'
     

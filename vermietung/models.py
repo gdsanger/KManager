@@ -1328,6 +1328,7 @@ DOKUMENT_ENTITY_TYPES = [
     ('mietobjekt', 'Mietobjekt'),
     ('adresse', 'Adresse'),
     ('uebergabeprotokoll', 'Übergabeprotokoll'),
+    ('salesdocument', 'Verkaufsbeleg'),
 ]
 
 # Allowed MIME types for documents
@@ -1409,6 +1410,7 @@ class Dokument(models.Model):
     - MietObjekt (rental object)
     - Adresse (address)
     - Uebergabeprotokoll (handover protocol)
+    - SalesDocument (Verkaufsbeleg)
     """
     # Original filename
     original_filename = models.CharField(
@@ -1514,6 +1516,17 @@ class Dokument(models.Model):
         related_name='dokumente_vermietung',
         verbose_name="Eingangsrechnung (global)"
     )
+
+    # FK to sales documents (Verkaufsbelege) - e.g. scanned original of a
+    # document that was entered retrospectively from a legacy system
+    salesdocument = models.ForeignKey(
+        'auftragsverwaltung.SalesDocument',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='dokumente',
+        verbose_name="Verkaufsbeleg"
+    )
     
     class Meta:
         verbose_name = "Dokument"
@@ -1539,18 +1552,22 @@ class Dokument(models.Model):
             self.uebergabeprotokoll_id,
             self.eingangsrechnung_id,
             self.invoice_in_id,
+            self.salesdocument_id,
         ]
         set_entities = [e for e in target_entities if e is not None]
 
         if len(set_entities) == 0:
             raise ValidationError(
                 'Das Dokument muss genau einem Zielobjekt zugeordnet werden '
-                '(Vertrag, Mietobjekt, Adresse, Übergabeprotokoll oder Eingangsrechnung).'
+                '(Vertrag, Mietobjekt, Adresse, Übergabeprotokoll, '
+                'Eingangsrechnung oder Verkaufsbeleg).'
             )
 
         if len(set_entities) > 1:
             raise ValidationError(
-                'Das Dokument kann nur einem einzigen Zielobjekt zugeordnet werden.'
+                'Das Dokument kann nur einem einzigen Zielobjekt zugeordnet werden '
+                '(Vertrag, Mietobjekt, Adresse, Übergabeprotokoll, '
+                'Eingangsrechnung oder Verkaufsbeleg).'
             )
     
     def save(self, *args, **kwargs):
@@ -1572,6 +1589,8 @@ class Dokument(models.Model):
             return 'eingangsrechnung'
         elif self.invoice_in_id:
             return 'invoice_in'
+        elif self.salesdocument_id:
+            return 'salesdocument'
         return None
 
     def get_entity_id(self):
@@ -1588,6 +1607,8 @@ class Dokument(models.Model):
             return self.eingangsrechnung_id
         elif self.invoice_in_id:
             return self.invoice_in_id
+        elif self.salesdocument_id:
+            return self.salesdocument_id
         return None
 
     def get_entity_display(self):
@@ -1604,33 +1625,47 @@ class Dokument(models.Model):
             return f"Eingangsrechnung: {self.eingangsrechnung}"
         elif self.invoice_in:
             return f"Eingangsrechnung: {self.invoice_in}"
+        elif self.salesdocument:
+            return f"Verkaufsbeleg: {self.salesdocument.number}"
         return "Unbekannt"
     
     def get_absolute_path(self):
         """Get the absolute filesystem path to the document."""
         return Path(settings.VERMIETUNG_DOCUMENTS_ROOT) / self.storage_path
     
+    def remove_file_from_storage(self):
+        """
+        Remove the document's file from the filesystem and clean up
+        directories that became empty.
+
+        Kept separate from delete() so that cascading deletes (e.g. when the
+        linked Verkaufsbeleg is removed) can trigger the same cleanup via the
+        post_delete signal - Django's collector does not call Model.delete().
+        Safe to call more than once for the same document.
+        """
+        file_path = self.get_absolute_path()
+        if not file_path.exists():
+            return
+
+        file_path.unlink()
+
+        # Try to remove empty parent directories
+        try:
+            parent = file_path.parent
+            doc_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
+            # Only clean up directories within document root
+            while parent != doc_root and parent.is_relative_to(doc_root):
+                if not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
+                else:
+                    break
+        except (OSError, RuntimeError, ValueError):
+            pass  # Ignore errors when cleaning up directories
+
     def delete(self, *args, **kwargs):
         """Override delete to also remove the file from filesystem."""
-        # Delete the file from filesystem
-        file_path = self.get_absolute_path()
-        if file_path.exists():
-            file_path.unlink()
-            
-            # Try to remove empty parent directories
-            try:
-                parent = file_path.parent
-                doc_root = Path(settings.VERMIETUNG_DOCUMENTS_ROOT)
-                # Only clean up directories within document root
-                while parent != doc_root and parent.is_relative_to(doc_root):
-                    if not any(parent.iterdir()):
-                        parent.rmdir()
-                        parent = parent.parent
-                    else:
-                        break
-            except (OSError, RuntimeError, ValueError):
-                pass  # Ignore errors when cleaning up directories
-        
+        self.remove_file_from_storage()
         super().delete(*args, **kwargs)
     
     @staticmethod

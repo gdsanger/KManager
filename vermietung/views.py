@@ -2302,14 +2302,18 @@ def dokument_upload(request, entity_type, entity_id):
     
     Args:
         request: HTTP request
-        entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll)
+        entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll,
+                     eingangsrechnung, salesdocument)
         entity_id: ID of the entity
     
     Returns:
         Redirects back to entity detail page with success/error message
     """
     # Validate entity type
-    valid_entity_types = ['vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll', 'eingangsrechnung']
+    valid_entity_types = [
+        'vertrag', 'mietobjekt', 'adresse', 'uebergabeprotokoll',
+        'eingangsrechnung', 'salesdocument',
+    ]
     if entity_type not in valid_entity_types:
         messages.error(request, f'Ungültiger Entity-Typ: {entity_type}')
         return redirect('vermietung:home')
@@ -2318,6 +2322,9 @@ def dokument_upload(request, entity_type, entity_id):
     entity = None
     entity_name = ''
     redirect_url = ''
+    # URL kwargs for the redirect back to the entity - most detail views only
+    # need the pk, auftragsverwaltung:document_detail additionally needs doc_key
+    redirect_kwargs = {'pk': entity_id}
     
     if entity_type == 'vertrag':
         entity = get_object_or_404(Vertrag, pk=entity_id)
@@ -2339,6 +2346,13 @@ def dokument_upload(request, entity_type, entity_id):
         entity = get_object_or_404(Eingangsrechnung, pk=entity_id)
         entity_name = f'Eingangsrechnung {entity.belegnummer}'
         redirect_url = 'vermietung:eingangsrechnung_detail'
+    elif entity_type == 'salesdocument':
+        entity = get_object_or_404(
+            SalesDocument.objects.select_related('document_type'), pk=entity_id
+        )
+        entity_name = f'Verkaufsbeleg {entity.number}'
+        redirect_url = 'auftragsverwaltung:document_detail'
+        redirect_kwargs = {'doc_key': entity.document_type.key, 'pk': entity_id}
     
     if request.method == 'POST':
         form = DokumentUploadForm(
@@ -2356,7 +2370,7 @@ def dokument_upload(request, entity_type, entity_id):
                     request,
                     f'Dokument "{dokument.original_filename}" wurde erfolgreich hochgeladen.'
                 )
-                return redirect(redirect_url, pk=entity_id)
+                return redirect(redirect_url, **redirect_kwargs)
             except ValidationError as e:
                 # Handle validation errors from file validators with user-friendly messages
                 error_message = str(e)
@@ -2375,7 +2389,7 @@ def dokument_upload(request, entity_type, entity_id):
                     messages.error(request, f'{field_label}: {error}')
     
     # Redirect back to detail page (GET or failed POST)
-    return redirect(redirect_url, pk=entity_id)
+    return redirect(redirect_url, **redirect_kwargs)
 
 
 @vermietung_required
@@ -2398,15 +2412,45 @@ def dokument_delete(request, dokument_id):
     entity_type = dokument.get_entity_type()
     entity_id = dokument.get_entity_id()
     
+    # Fallback: entity type without its own detail route
     redirect_url = 'vermietung:home'
+    redirect_kwargs = {}
     if entity_type == 'vertrag':
         redirect_url = 'vermietung:vertrag_detail'
+        redirect_kwargs = {'pk': entity_id}
     elif entity_type == 'mietobjekt':
         redirect_url = 'vermietung:mietobjekt_detail'
+        redirect_kwargs = {'pk': entity_id}
     elif entity_type == 'adresse':
         redirect_url = 'vermietung:kunde_detail'
+        redirect_kwargs = {'pk': entity_id}
     elif entity_type == 'uebergabeprotokoll':
         redirect_url = 'vermietung:uebergabeprotokoll_detail'
+        redirect_kwargs = {'pk': entity_id}
+    elif entity_type == 'invoice_in':
+        redirect_url = 'lieferantenwesen:invoice_detail'
+        redirect_kwargs = {'pk': entity_id}
+    elif entity_type == 'eingangsrechnung':
+        redirect_url = 'vermietung:eingangsrechnung_detail'
+        redirect_kwargs = {'pk': entity_id}
+    elif entity_type == 'salesdocument':
+        redirect_url = 'auftragsverwaltung:document_detail'
+        redirect_kwargs = {
+            'doc_key': dokument.salesdocument.document_type.key,
+            'pk': entity_id,
+        }
+        # Attachments of a finalised Verkaufsbeleg must stay in place - the
+        # whole point is to preserve the original document. Removing them
+        # remains possible via the Django admin.
+        if dokument.salesdocument.status != 'DRAFT':
+            messages.error(
+                request,
+                f'Der Anhang "{dokument.original_filename}" kann nicht gelöscht werden, '
+                f'weil der Beleg {dokument.salesdocument.number} nicht mehr im Entwurf ist. '
+                f'Anhänge finalisierter Belege bleiben erhalten und können nur über '
+                f'das Admin-Backend entfernt werden.'
+            )
+            return redirect(redirect_url, **redirect_kwargs)
     
     dokument_name = dokument.original_filename
     
@@ -2416,7 +2460,7 @@ def dokument_delete(request, dokument_id):
     except Exception as e:
         messages.error(request, f'Fehler beim Löschen des Dokuments: {str(e)}')
     
-    return redirect(redirect_url, pk=entity_id)
+    return redirect(redirect_url, **redirect_kwargs)
 
 # MietObjekt Image Views
 
