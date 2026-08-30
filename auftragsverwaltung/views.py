@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Q, Sum, Max
 from django.http import Http404, JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods, require_POST
@@ -24,6 +24,7 @@ from .services import (
     TaxDeterminationService,
     PaymentTermTextService,
     get_next_number,
+    reserve_manual_number,
     ContractBillingService,
 )
 from .utils import sanitize_html
@@ -355,6 +356,124 @@ def document_detail(request, doc_key, pk):
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
 
 
+def find_number_conflict(company, document_type, doc_key, number, exclude_pk=None):
+    """
+    Prüfen, ob eine Belegnummer bei diesem Mandanten/Dokumenttyp schon vergeben ist.
+
+    Die Unique-Constraint 'unique_salesdocument_number_per_company_doctype'
+    würde eine Dublette als IntegrityError (und damit als Serverfehler) beenden.
+    Diese Vorabprüfung erlaubt stattdessen eine verständliche Meldung am Feld.
+
+    Args:
+        company: Mandant instance
+        document_type: DocumentType instance
+        doc_key: Dokumenttyp-Key für den Link auf den vorhandenen Beleg
+        number: die zu prüfende Nummer
+        exclude_pk: PK des eigenen Belegs (beim Bearbeiten)
+
+    Returns:
+        dict für den Template-Kontext (Nummer, Link, Betreff) oder None, wenn
+        die Nummer noch frei ist.
+    """
+    queryset = SalesDocument.objects.filter(
+        company=company,
+        document_type=document_type,
+        number=number,
+    )
+    if exclude_pk is not None:
+        queryset = queryset.exclude(pk=exclude_pk)
+
+    existing = queryset.first()
+    if existing is None:
+        return None
+
+    return {
+        'number': number,
+        'subject': existing.subject,
+        'url': reverse(
+            'auftragsverwaltung:document_detail',
+            kwargs={'doc_key': doc_key, 'pk': existing.pk},
+        ),
+    }
+
+
+def validate_manual_number(company, document_type, doc_key, number, exclude_pk=None):
+    """
+    Eine manuell vorgegebene Belegnummer prüfen (Länge und Eindeutigkeit).
+
+    Returns:
+        dict für den Template-Kontext oder None, wenn die Nummer verwendbar ist.
+    """
+    max_length = SalesDocument._meta.get_field('number').max_length
+    if len(number) > max_length:
+        return {
+            'number': number,
+            'too_long': True,
+            'max_length': max_length,
+            'subject': '',
+            'url': None,
+        }
+
+    return find_number_conflict(company, document_type, doc_key, number, exclude_pk=exclude_pk)
+
+
+def render_document_form(request, document, document_type, doc_key, company,
+                         is_create, lines=None, number_error=None):
+    """
+    Das Belegformular (erneut) rendern - z. B. nach einer abgelehnten Nummer.
+
+    Das übergebene ``document`` darf ungespeichert sein; das Template wertet
+    ``document.pk`` aus und blendet alles aus, was einen gespeicherten Beleg
+    voraussetzt. So bleiben die eingegebenen Werte erhalten.
+
+    Args:
+        document: SalesDocument (ggf. ungespeichert) oder None
+        document_type: DocumentType instance
+        doc_key: Dokumenttyp-Key
+        company: Mandant instance
+        is_create: True im Anlage-Modus (steuert Formular-Action und Buttons)
+        lines: Positionen des Belegs (im Anlage-Modus leer)
+        number_error: Kontext einer bereits vergebenen Nummer (siehe
+            :func:`find_number_conflict`)
+
+    Returns:
+        HttpResponse
+    """
+    context = {
+        'document': document,
+        'lines': lines if lines is not None else [],
+        'document_type': document_type,
+        'doc_key': doc_key,
+        'company': company,
+        'companies': Mandant.objects.all().order_by('name'),
+        'customers': Adresse.objects.filter(adressen_type='KUNDE').order_by('name'),
+        'payment_terms': PaymentTerm.objects.all().order_by('name'),
+        'tax_rates': TaxRate.objects.filter(is_active=True).order_by('code'),
+        'kostenarten1': Kostenart.objects.filter(parent__isnull=True).order_by('name'),
+        'units': Unit.objects.all().order_by('name'),
+        'header_templates': TextTemplate.objects.filter(
+            company=company,
+            is_active=True,
+            type__in=['HEADER', 'BOTH'],
+        ).order_by('sort_order', 'title'),
+        'footer_templates': TextTemplate.objects.filter(
+            company=company,
+            is_active=True,
+            type__in=['FOOTER', 'BOTH'],
+        ).order_by('sort_order', 'title'),
+        'status_choices': SalesDocument.STATUS_CHOICES,
+        'copy_document_types': DocumentType.objects.filter(
+            key__in=['quote', 'order', 'delivery', 'invoice'],
+            is_active=True,
+        ).order_by('name'),
+        'number_error': number_error,
+    }
+    if is_create:
+        context['is_create'] = True
+
+    return render(request, 'auftragsverwaltung/documents/detail.html', context)
+
+
 @login_required
 def document_create(request, doc_key):
     """
@@ -428,12 +547,39 @@ def document_create(request, doc_key):
                 document.issue_date
             )
         
-        # Generate document number
-        document.number = get_next_number(company, document_type)
-        
+        # Belegnummer: manuell vorgegeben (Nacherfassung von Altbelegen) oder
+        # automatisch aus dem Nummernkreis. Die automatische Vergabe richtet
+        # sich nach dem Belegdatum, damit ein nacherfasster Beleg die
+        # Jahreszahl seines Belegdatums trägt - nicht die des Erfassungstags.
+        manual_number = request.POST.get('number', '').strip()
+        if manual_number:
+            document.number = manual_number
+            number_error = validate_manual_number(company, document_type, doc_key, manual_number)
+            if number_error:
+                return render_document_form(
+                    request, document, document_type, doc_key, company,
+                    is_create=True, number_error=number_error,
+                )
+        else:
+            document.number = get_next_number(company, document_type, document.issue_date)
+
         # Save document
-        document.save()
-        
+        try:
+            with transaction.atomic():
+                document.save()
+                if manual_number:
+                    # Nummernkreis nachziehen, damit die Nummer nicht später
+                    # ein zweites Mal automatisch vergeben wird.
+                    reserve_manual_number(company, document_type, manual_number)
+        except IntegrityError:
+            # Race: die Nummer wurde zwischen Prüfung und Speichern vergeben.
+            conflict = find_number_conflict(company, document_type, doc_key, document.number)
+            return render_document_form(
+                request, document, document_type, doc_key, company,
+                is_create=True,
+                number_error=conflict or {'number': document.number, 'subject': '', 'url': None},
+            )
+
         # Log activity
         ActivityStreamService.add(
             company=company,
@@ -449,51 +595,10 @@ def document_create(request, doc_key):
         # Redirect to detail view
         return redirect('auftragsverwaltung:document_detail', doc_key=doc_key, pk=document.pk)
     
-    # GET: Show empty form
-    customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
-    payment_terms = PaymentTerm.objects.all().order_by('name')
-    companies = Mandant.objects.all().order_by('name')
-    tax_rates = TaxRate.objects.filter(is_active=True).order_by('code')
-    kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
-    units = Unit.objects.all().order_by('name')  # All available units
-    copy_document_types = DocumentType.objects.filter(
-        key__in=['quote', 'order', 'delivery', 'invoice'],
-        is_active=True
-    ).order_by('name')
-    
-    # Get available text templates for this company
-    header_templates = TextTemplate.objects.filter(
-        company=company,
-        is_active=True,
-        type__in=['HEADER', 'BOTH']
-    ).order_by('sort_order', 'title')
-    
-    footer_templates = TextTemplate.objects.filter(
-        company=company,
-        is_active=True,
-        type__in=['FOOTER', 'BOTH']
-    ).order_by('sort_order', 'title')
-    
-    context = {
-        'document': None,  # Explicitly set to None for create mode
-        'lines': [],  # No lines in create mode
-        'document_type': document_type,
-        'doc_key': doc_key,
-        'company': company,
-        'companies': companies,
-        'customers': customers,
-        'payment_terms': payment_terms,
-        'tax_rates': tax_rates,
-        'kostenarten1': kostenarten1,
-        'units': units,
-        'is_create': True,
-        'header_templates': header_templates,
-        'footer_templates': footer_templates,
-        'status_choices': SalesDocument.STATUS_CHOICES,  # Add STATUS_CHOICES for create mode
-        'copy_document_types': copy_document_types,
-    }
-    
-    return render(request, 'auftragsverwaltung/documents/detail.html', context)
+    # GET: Show empty form (document=None -> Anlage-Modus ohne Positionen)
+    return render_document_form(
+        request, None, document_type, doc_key, company, is_create=True
+    )
 
 
 @login_required
@@ -514,7 +619,11 @@ def document_update(request, doc_key, pk):
     # Verify document belongs to the correct type
     if document.document_type != document_type:
         return redirect('auftragsverwaltung:document_list', doc_key=doc_key)
-    
+
+    # Der gespeicherte Status entscheidet über die Nummer: Ab SENT steht sie als
+    # Snapshot im Rechnungsausgangsjournal und darf nicht mehr auseinanderlaufen.
+    was_draft = document.status == 'DRAFT'
+
     # Update fields from form
     document.subject = request.POST.get('subject', '')
     document.reference_number = request.POST.get('reference_number', '')
@@ -567,10 +676,49 @@ def document_update(request, doc_key, pk):
         document.payment_term = None
         document.due_date = None
         document.payment_term_text = ''
-    
+
+    # Belegnummer nur im Entwurf und nur bei tatsächlicher Änderung übernehmen.
+    # In jedem anderen Fall bleibt die gespeicherte Nummer unangetastet - auch
+    # dann, wenn das Formular etwas anderes schickt.
+    submitted_number = request.POST.get('number', '').strip()
+    manual_number = None
+    if was_draft and submitted_number and submitted_number != document.number:
+        number_error = validate_manual_number(
+            document.company, document_type, doc_key, submitted_number, exclude_pk=document.pk
+        )
+        if number_error:
+            document.number = submitted_number
+            return render_document_form(
+                request, document, document_type, doc_key, document.company,
+                is_create=False,
+                lines=document.lines.select_related(
+                    'item', 'tax_rate', 'kostenart1', 'kostenart2', 'unit'
+                ).order_by('position_no'),
+                number_error=number_error,
+            )
+        manual_number = submitted_number
+        document.number = submitted_number
+
     # Save document
-    document.save()
-    
+    try:
+        with transaction.atomic():
+            document.save()
+            if manual_number:
+                # Nummernkreis nachziehen (siehe document_create)
+                reserve_manual_number(document.company, document_type, manual_number)
+    except IntegrityError:
+        conflict = find_number_conflict(
+            document.company, document_type, doc_key, document.number, exclude_pk=document.pk
+        )
+        return render_document_form(
+            request, document, document_type, doc_key, document.company,
+            is_create=False,
+            lines=document.lines.select_related(
+                'item', 'tax_rate', 'kostenart1', 'kostenart2', 'unit'
+            ).order_by('position_no'),
+            number_error=conflict or {'number': document.number, 'subject': '', 'url': None},
+        )
+
     # Recalculate totals
     DocumentCalculationService.recalculate(document, persist=True)
     

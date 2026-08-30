@@ -424,10 +424,34 @@ Neues {{ document_type.name }}
                         <input type="text" class="form-control" value="{{ document_type.name }}" readonly>
                     </div>
                     
-                    <!-- Document Number (read-only for existing) -->
+                    <!-- Document Number: im Entwurf frei vergebbar (Nacherfassung
+                         von Altbelegen), ab Status "Versendet" fixiert -->
                     <div class="col-md-3">
-                        <label class="form-label">Nummer</label>
-                        <input type="text" class="form-control" value="{% if document %}{{ document.number }}{% else %}(wird generiert){% endif %}" readonly>
+                        <label class="form-label" for="numberInput">Nummer</label>
+                        {% if is_create or document.status == 'DRAFT' %}
+                        <input type="text" class="form-control{% if number_error %} is-invalid{% endif %}"
+                               id="numberInput" name="number" maxlength="32"
+                               value="{% if document %}{{ document.number }}{% endif %}"
+                               placeholder="automatisch" aria-describedby="numberHelp">
+                        {% if number_error %}
+                        <div class="invalid-feedback d-block">
+                            {% if number_error.too_long %}
+                            Die Nummer darf höchstens {{ number_error.max_length }} Zeichen lang sein.
+                            {% else %}
+                            Die Nummer „{{ number_error.number }}“ ist bereits vergeben:
+                            {% if number_error.url %}
+                            <a href="{{ number_error.url }}">vorhandenen Beleg öffnen</a>{% if number_error.subject %} ({{ number_error.subject }}){% endif %}.
+                            {% endif %}
+                            Bitte eine andere Nummer eingeben.
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text" id="numberHelp">
+                            Leer lassen für automatische Vergabe aus dem Nummernkreis.
+                        </div>
+                        {% else %}
+                        <input type="text" class="form-control" id="numberInput" value="{{ document.number }}" readonly>
+                        {% endif %}
                     </div>
                     
                     <!-- Subject (required, prominent) -->
