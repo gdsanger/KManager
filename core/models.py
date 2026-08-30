@@ -6,6 +6,7 @@ from pathlib import Path
 from django.db import models
 from django.db.models.functions import Concat
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
 from django.conf import settings
@@ -1538,6 +1539,62 @@ class Projekt(models.Model):
         verbose_name="Aktualisiert am"
     )
 
+    # ------------------------------------------------------------------
+    # Abrechnungskonditionen
+    #
+    # Leistungszeit und Anfahrtszeit werden getrennt abgerechnet, daher je ein
+    # eigener Artikel und ein eigener Stundensatz. Alle Angaben sind optional:
+    # interne Projekte ohne Kundenbezug brauchen sie nicht. Die Vollständigkeit
+    # prüft erst der spätere Abrechnungslauf.
+    # ------------------------------------------------------------------
+    billing_item = models.ForeignKey(
+        'core.Item',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='projekte_leistung',
+        verbose_name="Abrechnungsartikel (Leistung)",
+        help_text="Artikel für die Abrechnung der Leistungszeit. Liefert Kurztexte, "
+                  "Einheit, Steuersatz und Rabattfähigkeit der Rechnungsposition."
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Stundensatz (netto)",
+        help_text="Gilt für dieses Projekt und übersteuert den Preis aus dem Artikel."
+    )
+    travel_item = models.ForeignKey(
+        'core.Item',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='projekte_anfahrt',
+        verbose_name="Abrechnungsartikel (Anfahrt)",
+        help_text="Artikel für die Abrechnung der Anfahrtszeit."
+    )
+    travel_hourly_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Stundensatz Anfahrt (netto)",
+        help_text="Gilt für dieses Projekt und übersteuert den Preis aus dem Anfahrtsartikel."
+    )
+    discount_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[
+            MinValueValidator(Decimal('0.00')),
+            MaxValueValidator(Decimal('100.00')),
+        ],
+        verbose_name="Rabatt (%)",
+        help_text="Rabatt in Prozent (z.B. 10.00 für 10% Rabatt), wird in die "
+                  "Rechnungspositionen übernommen"
+    )
+
     class Meta:
         verbose_name = "Projekt"
         verbose_name_plural = "Projekte"
@@ -1545,6 +1602,26 @@ class Projekt(models.Model):
 
     def __str__(self):
         return self.titel
+
+    def clean(self):
+        """
+        Validate the billing conditions.
+
+        Ein halb gepflegtes Projekt (Artikel ohne Satz oder Satz ohne Artikel)
+        ist bewusst erlaubt — solange nicht abgerechnet wird, ist das kein
+        Fehler. Geprüft wird nur, dass die Stundensätze nicht negativ sind;
+        die Rabattgrenzen decken die Feld-Validatoren ab.
+        """
+        super().clean()
+
+        errors = {}
+        if self.hourly_rate is not None and self.hourly_rate < 0:
+            errors['hourly_rate'] = 'Der Stundensatz darf nicht negativ sein.'
+        if self.travel_hourly_rate is not None and self.travel_hourly_rate < 0:
+            errors['travel_hourly_rate'] = 'Der Stundensatz für die Anfahrt darf nicht negativ sein.'
+
+        if errors:
+            raise ValidationError(errors)
 
     def get_storage_root(self):
         """Return the absolute filesystem path for this project's files."""
