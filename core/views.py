@@ -983,7 +983,57 @@ def projekt_detail(request, pk):
         'upload_form': upload_form,
         'ordner_form': ordner_form,
         **get_projekt_stunden_context(projekt),
+        **get_projekt_belege_context(projekt),
     })
+
+
+def get_projekt_belege_context(projekt):
+    """
+    Verkaufsbelege eines Projekts samt Fakturasummen.
+
+    Fakturiert und in Entwurf werden bewusst getrennt ausgewiesen: Ein Entwurf
+    ist kein Umsatz, eine gemeinsame Summe würde die Projektauswertung
+    systematisch zu hoch erscheinen lassen. Gutschriften (Korrekturbelege)
+    gehen mit negativem Vorzeichen in die jeweilige Summe ein.
+
+    Die Belege werden einmal geladen und in Python summiert - so löst weder die
+    Tabelle noch die Kennzahlenzeile eine Abfrage je Zeile aus.
+
+    Returns:
+        dict mit ``belege`` sowie Anzahl und Nettosumme je Bucket.
+    """
+    belege = list(
+        projekt.sales_documents.select_related('document_type', 'company')
+        .order_by('-issue_date', '-id')
+    )
+
+    fakturiert_netto = Decimal('0.00')
+    fakturiert_anzahl = 0
+    entwurf_netto = Decimal('0.00')
+    entwurf_anzahl = 0
+
+    for beleg in belege:
+        netto = beleg.total_net or Decimal('0.00')
+        if beleg.document_type.is_correction:
+            netto = -netto
+
+        if beleg.status == 'DRAFT':
+            # Noch nicht finalisiert - unabhängig von der Belegart
+            entwurf_netto += netto
+            entwurf_anzahl += 1
+        elif beleg.document_type.is_invoice or beleg.document_type.is_correction:
+            # Nur Rechnungen und Gutschriften sind fakturierter Umsatz;
+            # ein angenommenes Angebot ist noch keine Faktura.
+            fakturiert_netto += netto
+            fakturiert_anzahl += 1
+
+    return {
+        'belege': belege,
+        'belege_fakturiert_netto': fakturiert_netto,
+        'belege_fakturiert_anzahl': fakturiert_anzahl,
+        'belege_entwurf_netto': entwurf_netto,
+        'belege_entwurf_anzahl': entwurf_anzahl,
+    }
 
 
 def get_projekt_stunden_context(projekt):
@@ -1196,6 +1246,7 @@ def projekt_delete(request, pk):
 
     projekt = get_object_or_404(Projekt, pk=pk)
     time_entry_count = projekt.time_entries.count()
+    beleg_count = projekt.sales_documents.count()
 
     if request.method == 'POST':
         # Zeiterfassungen sind über PROTECT gesichert - erst die Zuordnung lösen
@@ -1204,6 +1255,16 @@ def projekt_delete(request, pk):
                 request,
                 f'Projekt „{projekt.titel}" kann nicht gelöscht werden: Es sind noch '
                 f'{time_entry_count} Zeiterfassung(en) zugeordnet.'
+            )
+            return redirect('projekt_detail', pk=projekt.pk)
+
+        # Verkaufsbelege ebenfalls über PROTECT gesichert: Die Zuordnung eines
+        # kaufmännischen Belegs darf nicht stillschweigend verloren gehen.
+        if beleg_count:
+            messages.error(
+                request,
+                f'Projekt „{projekt.titel}" kann nicht gelöscht werden: Es sind noch '
+                f'{beleg_count} Verkaufsbeleg(e) zugeordnet.'
             )
             return redirect('projekt_detail', pk=projekt.pk)
 
@@ -1222,6 +1283,7 @@ def projekt_delete(request, pk):
     return render(request, 'core/projekt_confirm_delete.html', {
         'projekt': projekt,
         'time_entry_count': time_entry_count,
+        'beleg_count': beleg_count,
     })
 
 

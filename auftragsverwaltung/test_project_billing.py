@@ -126,6 +126,11 @@ class ProjectBillingSuccessTestCase(ProjectBillingTestBase):
         self.assertEqual(self.document.company, self.company)
         self.assertEqual(self.document.customer, self.customer)
 
+    def test_document_is_linked_to_the_project(self):
+        """Die Rechnung trägt das abgerechnete Projekt am Belegkopf (#1194)."""
+        self.assertEqual(self.document.projekt, self.projekt)
+        self.assertIn(self.document, self.projekt.sales_documents.all())
+
     def test_document_carries_period(self):
         """Betreff und Leistungszeitraum nennen Projekt und Zeitraum."""
         self.assertEqual(self.document.issue_date, date(2026, 8, 31))
