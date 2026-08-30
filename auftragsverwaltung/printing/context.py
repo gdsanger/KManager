@@ -221,10 +221,18 @@ class SalesDocumentInvoiceContextBuilder(IContextBuilder):
         return lines
     
     def _build_totals_context(self, document) -> dict:
-        """Build totals context with tax splits."""
+        """
+        Build totals context with tax splits.
+
+        The blocks per tax rate are the sums of the stored line amounts. Since
+        DocumentCalculationService calculates the tax per tax rate on the summed
+        net and puts the rounding difference on a single line of that rate,
+        summing the lines here reproduces exactly that per-rate amount - i.e.
+        `round(net_19 * 0.19, 2) == tax_19` holds on the printed document.
+        """
         # Calculate tax splits (0%, 7%, 19%)
         lines = document.lines.select_related('tax_rate').order_by('position_no')
-        
+
         net_0 = Decimal('0.00')
         net_7 = Decimal('0.00')
         net_19 = Decimal('0.00')

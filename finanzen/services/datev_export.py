@@ -63,8 +63,9 @@ ZERO = Decimal('0.00')
 CENT = Decimal('0.01')
 
 # Zulässige Abweichung zwischen rechnerischer und ausgewiesener Steuer.
-# Deckt Rundungsdifferenzen aus der positionsweisen Steuerberechnung ab;
-# alles darüber ist ein struktureller Fehler und blockiert den Export.
+# Deckt Rundungsdifferenzen ab, die beim Aufteilen der Belegsteuer auf die
+# Steuersatz-Töpfe entstehen können; alles darüber ist ein struktureller Fehler
+# und blockiert den Export.
 TAX_TOLERANCE = Decimal('1.00')
 
 # --- Formatkonstanten -------------------------------------------------------
