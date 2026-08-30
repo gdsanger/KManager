@@ -2,7 +2,8 @@
 Tests for Kostenarten views in UserUI.
 """
 
-from django.test import TestCase, Client
+from django.template.loader import render_to_string
+from django.test import TestCase, Client, RequestFactory
 from django.contrib.auth.models import User, Group
 from django.urls import reverse
 from core.models import Kostenart
@@ -178,3 +179,69 @@ class KostenartenViewsTestCase(TestCase):
         self.assertEqual(self.unterkostenart1.parent, self.hauptkostenart2)
         # Check that parent was deleted
         self.assertFalse(Kostenart.objects.filter(pk=self.hauptkostenart1.pk).exists())
+
+
+class KostenartenKontenAnzeigeTests(TestCase):
+    """Aufwands- und Erlöskonto werden in der Kostenarten-Liste angezeigt."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='kontenuser', password='test123')
+        group, _ = Group.objects.get_or_create(name='Vermietung')
+        self.user.groups.add(group)
+
+        self.hauptkostenart = Kostenart.objects.create(
+            name='Instandhaltung',
+            umsatzsteuer_satz='19',
+            aufwandskonto='4260',
+            erloeskonto='8400',
+        )
+        # Ohne gepflegte Konten -> muss als Lücke erkennbar sein
+        self.unterkostenart = Kostenart.objects.create(
+            name='Sanitaer',
+            parent=self.hauptkostenart,
+            umsatzsteuer_satz='19',
+        )
+
+        self.client = Client()
+        self.client.login(username='kontenuser', password='test123')
+
+    def test_list_zeigt_konten_der_kostenarten(self):
+        response = self.client.get(reverse('vermietung:kostenarten_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Aufwandskonto')
+        self.assertContains(response, 'Erlöskonto')
+        self.assertContains(response, '4260')
+        self.assertContains(response, '8400')
+
+    def test_list_zeigt_platzhalter_fuer_ungepflegte_konten(self):
+        """Die Unterkostenart ohne Konten wird mit Platzhalter dargestellt."""
+        response = self.client.get(reverse('vermietung:kostenarten_list'))
+        html = response.content.decode()
+        self.assertIn('Aufwandskonto: –', html)
+        self.assertIn('Erlöskonto: –', html)
+
+    def test_list_detail_panel_zeigt_konten(self):
+        response = self.client.get(
+            reverse('vermietung:kostenarten_list') + f'?selected={self.hauptkostenart.pk}'
+        )
+        self.assertContains(response, '4260')
+        self.assertContains(response, '8400')
+
+
+class KostenartenSidebarLinkTests(TestCase):
+    """Die Kostenarten sind über die Buchhaltung der Auftragsverwaltung erreichbar."""
+
+    def _render_auftragsverwaltung_base(self, path):
+        request = RequestFactory().get(path)
+        request.user = User(username='tester')
+        return render_to_string('auftragsverwaltung/auftragsverwaltung_base.html', request=request)
+
+    def test_buchhaltung_menue_enthaelt_kostenarten_link(self):
+        html = self._render_auftragsverwaltung_base('/auftragsverwaltung/buchhaltung/rechnungsausgangsjournal/')
+        self.assertIn(reverse('vermietung:kostenarten_list'), html)
+        self.assertIn('Kostenarten', html)
+
+    def test_buchhaltung_menue_ist_auf_kostenarten_seite_aufgeklappt(self):
+        html = self._render_auftragsverwaltung_base('/vermietung/kostenarten/')
+        self.assertIn('aria-expanded="true"', html)
+        self.assertIn('show" id="buchhaltungMenu"', html)
