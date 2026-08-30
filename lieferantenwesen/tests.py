@@ -21,7 +21,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from core.models import Adresse, Kostenart
+from core.models import Adresse, Kostenart, Mandant
 from lieferantenwesen.forms import InvoiceInForm
 from lieferantenwesen.models import INVOICE_IN_STATUS, InvoiceIn, InvoiceInLine
 
@@ -321,13 +321,14 @@ class InvoiceListStatusDisplayTest(TestCase):
         rows = self._parse_rows(response)
         row_by_no = {row[0]: row for row in rows}
 
-        # Column order: no, supplier, date, due, gross, approved?, paid?, status, order, actions
-        self.assertEqual(row_by_no["APP-001"][5], "Ja")
-        self.assertEqual(row_by_no["APP-001"][6], "Nein")
-        self.assertEqual(row_by_no["PAID-001"][5], "Nein")
-        self.assertEqual(row_by_no["PAID-001"][6], "Ja")
-        self.assertEqual(row_by_no["DR-001"][5], "Nein")
+        # Column order: no, company, supplier, date, due, gross, approved?,
+        # paid?, status, order, actions
+        self.assertEqual(row_by_no["APP-001"][6], "Ja")
+        self.assertEqual(row_by_no["APP-001"][7], "Nein")
+        self.assertEqual(row_by_no["PAID-001"][6], "Nein")
+        self.assertEqual(row_by_no["PAID-001"][7], "Ja")
         self.assertEqual(row_by_no["DR-001"][6], "Nein")
+        self.assertEqual(row_by_no["DR-001"][7], "Nein")
 
 
 class SupplierMatchServiceTest(TestCase):
@@ -752,6 +753,9 @@ class InvoiceCostTypeFormTest(TestCase):
             ort="Kostenstadt",
             land="DE",
         )
+        self.company = Mandant.objects.create(
+            name="Kostenart GmbH", adresse="Str. 1", plz="44444", ort="Kostenstadt",
+        )
         self.main_a = Kostenart.objects.create(name="Instandhaltung")
         self.sub_a = Kostenart.objects.create(name="Heizung", parent=self.main_a)
         self.main_b = Kostenart.objects.create(name="Verwaltung")
@@ -760,6 +764,7 @@ class InvoiceCostTypeFormTest(TestCase):
 
     def _post_data(self, **overrides):
         data = {
+            "company": str(self.company.pk),
             "invoice_no": "RE-KA-001",
             "invoice_date": "2026-03-01",
             "supplier": str(self.supplier.pk),
@@ -1017,3 +1022,246 @@ class Kostenart2AjaxEndpointTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["kostenarten"], [])
+
+
+class InvoiceCompanyAssignmentTest(TestCase):
+    """Der Mandant entscheidet, in welchem DATEV-Buchungsstapel der Aufwand landet."""
+
+    def setUp(self):
+        self.company = Mandant.objects.create(
+            name="Mandant A GmbH", adresse="Astr. 1", plz="11111", ort="A-Stadt",
+        )
+        self.other_company = Mandant.objects.create(
+            name="Mandant B GmbH", adresse="Bstr. 1", plz="22222", ort="B-Stadt",
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Mandanten Lieferant",
+            strasse="Lieferstr. 1",
+            plz="33333",
+            ort="Lieferstadt",
+            land="DE",
+        )
+
+    def _make_invoice(self, **kwargs):
+        defaults = dict(
+            invoice_no="RE-MND-001",
+            invoice_date=date(2026, 5, 1),
+            supplier=self.supplier,
+        )
+        defaults.update(kwargs)
+        return InvoiceIn.objects.create(**defaults)
+
+    def _sales_document(self, company):
+        from auftragsverwaltung.models import DocumentType, SalesDocument
+
+        return SalesDocument.objects.create(
+            company=company,
+            document_type=DocumentType.objects.get(key="invoice"),
+            number=f"AU-{company.pk}",
+            status="DRAFT",
+            issue_date=date(2026, 5, 1),
+        )
+
+    def _rental_object(self, mandant):
+        from vermietung.models import MietObjekt
+
+        standort = Adresse.objects.create(
+            adressen_type="STANDORT",
+            name=f"Standort {mandant.name}",
+            strasse="Standortstr. 1",
+            plz="33333",
+            ort="Standortstadt",
+        )
+        return MietObjekt.objects.create(
+            name=f"Objekt {mandant.name}",
+            type="RAUM",
+            standort=standort,
+            mandant=mandant,
+        )
+
+    # --- Ableitung ---------------------------------------------------------
+
+    def test_company_is_inherited_from_order(self):
+        invoice = self._make_invoice(order=self._sales_document(self.company))
+        self.assertEqual(invoice.company, self.company)
+
+    def test_company_is_inherited_from_rental_object(self):
+        invoice = self._make_invoice(rental_object=self._rental_object(self.company))
+        self.assertEqual(invoice.company, self.company)
+
+    def test_order_wins_over_rental_object(self):
+        invoice = self._make_invoice(
+            order=self._sales_document(self.company),
+            rental_object=self._rental_object(self.other_company),
+        )
+        self.assertEqual(invoice.company, self.company)
+
+    def test_existing_company_is_never_overwritten(self):
+        invoice = self._make_invoice(
+            company=self.other_company, order=self._sales_document(self.company),
+        )
+        self.assertEqual(invoice.company, self.other_company)
+
+        invoice.rental_object = self._rental_object(self.company)
+        invoice.save()
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.company, self.other_company)
+
+    def test_company_stays_empty_without_a_derivation_source(self):
+        """Bei mehreren Mandanten wird nicht geraten."""
+        self.assertIsNone(self._make_invoice().company)
+
+    # --- Formular ----------------------------------------------------------
+
+    def test_company_is_required_in_the_form(self):
+        form = InvoiceInForm(
+            {
+                "invoice_no": "RE-MND-002",
+                "invoice_date": "2026-05-01",
+                "supplier": str(self.supplier.pk),
+                "currency": "EUR",
+                "status": "DRAFT",
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("company", form.errors)
+
+    def test_single_company_is_preselected(self):
+        self.other_company.delete()
+        form = InvoiceInForm()
+        self.assertEqual(form.fields["company"].initial, self.company.pk)
+
+    def test_multiple_companies_are_not_preselected(self):
+        form = InvoiceInForm()
+        self.assertIsNone(form.fields["company"].initial)
+
+    def test_existing_company_is_kept_when_editing(self):
+        invoice = self._make_invoice(company=self.other_company)
+        form = InvoiceInForm(instance=invoice)
+        self.assertEqual(form["company"].value(), self.other_company.pk)
+
+
+class InvoiceCompanyFrontendTest(TestCase):
+    """Mandant in Liste, Filter und Detailseite"""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="mnduser", password="mndpass", is_staff=True
+        )
+        self.client.login(username="mnduser", password="mndpass")
+        self.company = Mandant.objects.create(
+            name="Sichtbar GmbH", adresse="Sichtstr. 1", plz="11111", ort="Sichtstadt",
+        )
+        self.other_company = Mandant.objects.create(
+            name="Andere GmbH", adresse="Anderstr. 1", plz="22222", ort="Anderstadt",
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Frontend Lieferant",
+            strasse="Frontstr. 1",
+            plz="33333",
+            ort="Frontstadt",
+            land="DE",
+        )
+        self.own = InvoiceIn.objects.create(
+            invoice_no="FE-A", invoice_date=date(2026, 6, 1),
+            supplier=self.supplier, company=self.company,
+        )
+        self.foreign = InvoiceIn.objects.create(
+            invoice_no="FE-B", invoice_date=date(2026, 6, 2),
+            supplier=self.supplier, company=self.other_company,
+        )
+        self.orphan = InvoiceIn.objects.create(
+            invoice_no="FE-NONE", invoice_date=date(2026, 6, 3),
+            supplier=self.supplier,
+        )
+
+    def _numbers(self, response):
+        return [inv.invoice_no for inv in response.context["page_obj"]]
+
+    def test_list_shows_the_company(self):
+        response = self.client.get(reverse("lieferantenwesen:invoice_list"))
+        self.assertContains(response, "Sichtbar GmbH")
+
+    def test_list_can_be_filtered_by_company(self):
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_list"), {"company": str(self.company.pk)}
+        )
+        self.assertEqual(self._numbers(response), ["FE-A"])
+
+    def test_list_can_show_invoices_without_company(self):
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_list"), {"company": "NONE"}
+        )
+        self.assertEqual(self._numbers(response), ["FE-NONE"])
+
+    def test_invalid_company_filter_is_ignored(self):
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_list"), {"company": "abc"}
+        )
+        self.assertEqual(len(self._numbers(response)), 3)
+        self.assertEqual(response.context["company_filter"], "")
+
+    def test_detail_shows_the_company(self):
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_detail", kwargs={"pk": self.own.pk})
+        )
+        self.assertContains(response, "Sichtbar GmbH")
+
+    def test_detail_marks_a_missing_company(self):
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_detail", kwargs={"pk": self.orphan.pk})
+        )
+        self.assertContains(response, "Ohne Mandant")
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class InvoicePdfUploadCompanyTest(TestCase):
+    """Auch der PDF-Upload führt zu einer Rechnung mit Mandant."""
+
+    MINIMAL_PDF = b"%PDF-1.4\n%%EOF"
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="uploaduser", password="uploadpass", is_staff=True
+        )
+        self.client.login(username="uploaduser", password="uploadpass")
+        self.company = Mandant.objects.create(
+            name="Upload GmbH", adresse="Uploadstr. 1", plz="11111", ort="Uploadstadt",
+        )
+
+    def _upload(self):
+        return self.client.post(
+            reverse("lieferantenwesen:invoice_upload_pdf"),
+            {
+                "pdf_file": SimpleUploadedFile(
+                    "upload.pdf", self.MINIMAL_PDF, content_type="application/pdf"
+                )
+            },
+            follow=True,
+        )
+
+    def test_single_company_is_assigned_on_upload(self):
+        self._upload()
+        invoice = InvoiceIn.objects.latest("pk")
+        self.assertEqual(invoice.company, self.company)
+
+    def test_ambiguous_company_stays_open_and_is_flagged(self):
+        Mandant.objects.create(
+            name="Zweite GmbH", adresse="Zweitstr. 1", plz="22222", ort="Zweitstadt",
+        )
+        response = self._upload()
+
+        invoice = InvoiceIn.objects.latest("pk")
+        self.assertIsNone(invoice.company)
+        self.assertContains(response, "kein Mandant zugeordnet")
+        # Der Mandant lässt sich im Bearbeitungsformular nachpflegen.
+        self.assertContains(response, 'name="company"')

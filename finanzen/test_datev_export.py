@@ -88,6 +88,7 @@ class DatevExportTestBase(TestCase):
         defaults = {
             'invoice_no': invoice_no,
             'invoice_date': invoice_date or date(2026, 1, 10),
+            'company': self.company,
             'supplier': self.supplier,
             'status': status,
             'net_amount': Decimal(net),
@@ -293,6 +294,97 @@ class IncomingSideTestCase(DatevExportTestBase):
         )
         preview = self._preview()
         self.assertEqual(preview.bookings[0].account, "4670")
+
+
+class IncomingCompanyScopeTestCase(DatevExportTestBase):
+    """Eingangsrechnungen gehören in den Stapel genau eines Mandanten"""
+
+    def setUp(self):
+        super().setUp()
+        self.other_company = Mandant.objects.create(
+            name="Zweiter Mandant GmbH", adresse="Str. 9", plz="54321", ort="Ort",
+        )
+        CompanyAccountingSettings.objects.create(
+            company=self.other_company,
+            datev_consultant_number="1001",
+            datev_client_number="2",
+            revenue_account_0="8000",
+            revenue_account_7="8300",
+            revenue_account_19="8400",
+        )
+
+    def _other_preview(self, **kwargs):
+        return service.build_preview(
+            self.other_company, date(2026, 1, 1), date(2026, 1, 31), **kwargs
+        )
+
+    def test_invoice_of_other_company_is_not_in_the_stack(self):
+        self._incoming_invoice(company=self.company)
+
+        preview = self._other_preview()
+        self.assertEqual(preview.booking_count, 0)
+        self.assertEqual(preview.incoming_invoices, [])
+        self.assertEqual(preview.problems, [])
+
+    def test_own_invoice_stays_in_the_own_stack(self):
+        self._incoming_invoice(company=self.company)
+
+        preview = self._preview()
+        self.assertEqual(preview.booking_count, 1)
+        self.assertEqual(preview.bookings[0].document_field_1, 'ER-1')
+
+    def test_re_export_does_not_leak_into_the_other_company(self):
+        """Auch der bewusste Wiederholungsexport bleibt mandantenrein."""
+        self._incoming_invoice(company=self.company)
+        service.mark_exported(self._preview(), 'BATCH-1')
+
+        repeat = self._other_preview(include_exported=True)
+        self.assertEqual(repeat.booking_count, 0)
+        self.assertEqual(repeat.skipped_exported, 0)
+
+    def test_export_of_one_company_leaves_the_other_stack_complete(self):
+        """Der Export von Mandant B darf Belege von A nicht verbrauchen."""
+        invoice = self._incoming_invoice(company=self.company)
+
+        service.mark_exported(self._other_preview(), 'BATCH-B')
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.export_status, 'OPEN')
+        self.assertEqual(self._preview().booking_count, 1)
+
+    def test_invoice_without_company_is_reported_instead_of_exported(self):
+        self._incoming_invoice(company=None)
+
+        preview = self._preview()
+        self.assertEqual(preview.booking_count, 0)
+        self.assertEqual(len(preview.problems), 1)
+        self.assertEqual(preview.problems[0].source, 'EINGANG')
+        self.assertIn('kein Mandant zugeordnet', preview.problems[0].message)
+
+    def test_invoice_without_company_blocks_the_download(self):
+        self._incoming_invoice(company=None)
+
+        preview = self._preview()
+        with self.assertRaises(service.DatevExportError):
+            service.render_extf(preview)
+
+    def test_invoice_without_company_is_reported_for_every_company(self):
+        """Der Beleg ist offen, egal welcher Stapel gerade erzeugt wird."""
+        self._incoming_invoice(company=None)
+        self.assertEqual(len(self._other_preview().problems), 1)
+
+    def test_draft_without_company_is_not_reported(self):
+        """Nur buchungsreife Belege gehören in die Fehlerliste."""
+        self._incoming_invoice(company=None, status='DRAFT')
+        self.assertEqual(self._preview().problems, [])
+
+    def test_invoice_without_company_outside_the_period_is_not_reported(self):
+        self._incoming_invoice(company=None, invoice_date=date(2026, 2, 10))
+        self.assertEqual(self._preview().problems, [])
+
+    def test_already_exported_invoice_without_company_stays_reported(self):
+        """Ein versehentlich exportierter Beleg ohne Mandant bleibt offen."""
+        self._incoming_invoice(company=None, export_status='EXPORTED')
+        self.assertEqual(len(self._preview().problems), 1)
 
 
 class ExportStatusTestCase(DatevExportTestBase):

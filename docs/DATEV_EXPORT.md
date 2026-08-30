@@ -62,6 +62,25 @@ Hat die Rechnung Positionen, wird je Kombination aus Aufwandskonto und
 Steuersatz ein Buchungssatz gebildet. Positionssummen müssen zur Kopfsumme
 passen, sonst wird der Beleg gemeldet statt still falsch gebucht.
 
+### Mandantenbezug
+
+Ein Buchungsstapel gehört immer zu genau **einem** Mandanten – dessen Berater-
+und Mandantennummer stehen im Kopfsatz. Beide Seiten werden deshalb auf den
+gewählten Mandanten gefiltert: die Ausgangsseite über
+`OutgoingInvoiceJournalEntry.company`, die Eingangsseite über
+`InvoiceIn.company`.
+
+`InvoiceIn.company` wird beim Erfassen gepflegt; bei genau einem Mandanten ist
+das Feld vorbelegt. Fehlt der Mandant, leitet `InvoiceIn.save()` ihn aus
+`order.company` und ersatzweise aus `rental_object.mandant` ab. Ein bereits
+gesetzter Mandant wird dabei **nie** überschrieben.
+
+Eine buchungsreife Eingangsrechnung **ohne** Mandant wird nicht exportiert und
+auch nicht still übergangen: Sie steht in der Fehlerliste („Der Rechnung ist
+kein Mandant zugeordnet.") und blockiert den Download, bis der Mandant
+nachgepflegt ist. Auffinden lassen sich solche Belege über den Filter
+„Ohne Mandant" in der Eingangsrechnungsliste.
+
 ## Kontierung über die Kostenarten
 
 Die Auflösungsregel ist an genau **einer** Stelle implementiert:
@@ -171,9 +190,9 @@ zeigt dieselbe Nummer und ändert sich für Bestandskunden entsprechend mit.
 
 1. Mandant und Zeitraum wählen (Monat, Quartal oder Jahr).
 2. Vorschau erzeugen: Anzahl der Buchungssätze, Summen je Seite, Soll/Haben.
-3. **Fehlerliste** prüfen. Solange Belege ohne auflösbares Konto vorhanden
-   sind, ist der Download gesperrt – ein stillschweigend kleinerer Stapel
-   wäre der teurere Fehler.
+3. **Fehlerliste** prüfen. Solange Belege ohne auflösbares Konto oder
+   Eingangsrechnungen ohne Mandanten vorhanden sind, ist der Download gesperrt
+   – ein stillschweigend kleinerer Stapel wäre der teurere Fehler.
 4. EXTF-Datei herunterladen. Der Download kennzeichnet die enthaltenen Belege
    als exportiert.
 
