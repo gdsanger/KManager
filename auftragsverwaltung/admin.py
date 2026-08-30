@@ -547,8 +547,8 @@ class TimeEntryAdmin(admin.ModelAdmin):
         ('Zeiterfassung', {
             'fields': ('service_date', 'duration_minutes', 'description')
         }),
-        ('Flags', {
-            'fields': ('is_travel_cost', 'is_billed', 'billed_at')
+        ('Abrechnung', {
+            'fields': ('is_travel_cost', 'is_billed', 'billed_at', 'invoice_line')
         }),
         ('Metadaten', {
             'fields': ('created_at', 'updated_at'),
