@@ -6,6 +6,10 @@ Project Billing Service
 Fachlicher Ablauf (typischerweise am Monatsende):
 - Auswahl aller unabgerechneten Zeiterfassungen des Projekts im gewählten Zeitraum
 - Eine Rechnung je Projekt mit Leistungszeitraum und einer Position je Zeiterfassung
+- Die Tätigkeitsbeschreibungen werden vor dem Erzeugen der Positionen per KI in
+  eine für die Rechnung übliche Form gebracht (siehe
+  ``core.services.ai.time_entry_normalization``); die Zeiterfassung selbst
+  bleibt unverändert
 - Leistungs- und Anfahrtszeit werden getrennt abgerechnet (eigener Artikel,
   eigener Stundensatz aus dem Projekt)
 - Jede Zeiterfassung wird einzeln auf 15 Minuten aufgerundet, nicht die Summe
@@ -37,6 +41,7 @@ from auftragsverwaltung.services.item_snapshot import apply_item_snapshot
 from auftragsverwaltung.services.number_range import get_next_number
 from core.models import PaymentTerm
 from core.services.activity_stream import ActivityStreamService
+from core.services.ai.time_entry_normalization import TimeEntryNormalizationService
 
 #: Abrechnungstakt: jede Zeiterfassung wird einzeln auf volle 15 Minuten
 #: aufgerundet (0,25 / 0,50 / 0,75 / 1,00 h ...).
@@ -44,6 +49,15 @@ BILLING_INTERVAL_MINUTES = 15
 
 #: Nachkommastellen des Mengenfeldes von ``SalesDocumentLine.quantity``.
 QUANTITY_QUANTIZE = Decimal('0.0001')
+
+#: Hinweis für die Oberfläche, wenn die KI-Normalisierung nicht durchlief.
+#: Der Lauf selbst ist dann trotzdem erfolgreich - die Positionen tragen den
+#: Originaltext der Zeiterfassung.
+NORMALIZATION_WARNING = (
+    'Die Tätigkeitsbeschreibungen konnten nicht automatisch für die Rechnung '
+    'aufbereitet werden. Die Positionen enthalten den Originaltext der '
+    'Zeiterfassung - bitte die Langtexte im Entwurf prüfen.'
+)
 
 
 class ProjectBillingError(Exception):
@@ -299,7 +313,10 @@ class ProjectBillingService:
             actor: auslösender Benutzer (für den Activity Stream), optional
 
         Returns:
-            SalesDocument: der erzeugte Rechnungsentwurf (Status ``DRAFT``)
+            SalesDocument: der erzeugte Rechnungsentwurf (Status ``DRAFT``).
+                Am Objekt hängt ``normalization_warning``: ``None``, wenn die
+                Langtexte aufbereitet werden konnten, sonst der anzuzeigende
+                Warntext (:data:`NORMALIZATION_WARNING`).
 
         Raises:
             ProjectBillingError: wenn Konditionen fehlen oder keine offenen
@@ -322,11 +339,21 @@ class ProjectBillingService:
             if errors:
                 raise ProjectBillingError(errors)
 
+            # Alle Beschreibungen in einem Zug aufbereiten - ein Aufruf je Block
+            # statt einer je Position. Fällt die KI aus, kommen hier die
+            # Originaltexte zurück und der Lauf geht normal weiter.
+            normalization = TimeEntryNormalizationService().normalize(
+                [entry.description for entry in entries], user=actor
+            )
+            long_texts = normalization.texts
+
             document = cls._create_document(projekt, date_from, date_to)
             billed_at = timezone.now()
 
             for position_no, entry in enumerate(entries, start=1):
-                line = cls._create_line(document, projekt, entry, position_no)
+                line = cls._create_line(
+                    document, projekt, entry, position_no, long_texts[position_no - 1]
+                )
                 entry.is_billed = True
                 entry.billed_at = billed_at
                 entry.invoice_line = line
@@ -350,6 +377,9 @@ class ProjectBillingService:
             )
 
         document.refresh_from_db()
+        # Transientes Feld: die Oberfläche zeigt den Hinweis nach dem Lauf an,
+        # gespeichert wird er nicht.
+        document.normalization_warning = NORMALIZATION_WARNING if normalization.failed else None
         return document
 
     @classmethod
@@ -396,9 +426,22 @@ class ProjectBillingService:
         return document
 
     @classmethod
-    def _create_line(cls, document, projekt, entry: TimeEntry, position_no: int) -> SalesDocumentLine:
-        """Eine Rechnungsposition je Zeiterfassung."""
+    def _create_line(
+        cls,
+        document,
+        projekt,
+        entry: TimeEntry,
+        position_no: int,
+        long_text: Optional[str] = None,
+    ) -> SalesDocumentLine:
+        """
+        Eine Rechnungsposition je Zeiterfassung.
+
+        ``long_text`` ist die aufbereitete Tätigkeitsbeschreibung; ohne Angabe
+        gilt der Originaltext der Zeiterfassung.
+        """
         item, rate = cls._conditions_for(projekt, entry)
+        billing_text = long_text if long_text is not None else entry.description
 
         line = SalesDocumentLine(
             document=document,
@@ -422,8 +465,10 @@ class ProjectBillingService:
         line.short_text_2 = item.short_text_2
         line.description = ' '.join(
             part for part in (item.short_text_1, item.short_text_2) if part
-        ) or entry.description
-        line.long_text = entry.description
+        ) or billing_text
+        # Nur die Position bekommt den aufbereiteten Text - ``entry.description``
+        # bleibt als Arbeitsnachweis unverändert.
+        line.long_text = billing_text
         line.unit = item.unit
 
         line.discount = (

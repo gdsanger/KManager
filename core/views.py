@@ -1132,6 +1132,11 @@ def projekt_abrechnung(request, pk):
                 request,
                 f'Rechnungsentwurf {document.number} für Projekt „{projekt.titel}" wurde erstellt.',
             )
+            # Die KI-Aufbereitung der Langtexte ist kein Abbruchgrund - konnte
+            # sie nicht laufen, steht der Originaltext in den Positionen.
+            warning = getattr(document, 'normalization_warning', None)
+            if warning:
+                messages.warning(request, warning)
             return redirect(
                 'auftragsverwaltung:document_detail',
                 doc_key=document.document_type.key,
