@@ -7,6 +7,8 @@ Personenkonten (Debitoren/Kreditoren) laufen über dieselbe Mechanik, werden
 aber rein numerisch und ohne Jahresbestandteil vergeben – siehe
 :func:`get_next_customer_number` und :func:`get_next_supplier_number`.
 """
+import re
+
 from django.db import transaction
 from datetime import date
 from auftragsverwaltung.models import NumberRange
@@ -105,6 +107,118 @@ def get_next_number(company, document_type, date_obj=None):
         )
 
         return formatted_number
+
+
+# Tokens des Formatstrings ({prefix}, {yy}, {seq:05d}) – inklusive optionaler
+# Konvertierung (!r) und Formatspezifikation (:05d).
+_FORMAT_TOKEN_RE = re.compile(r'\{(prefix|yy|seq)(?:![rsa])?(?::[^}]*)?\}')
+
+
+def _build_number_pattern(format_string, prefix):
+    """
+    Regex zum Zerlegen einer Nummer nach dem Format eines Nummernkreises bauen.
+
+    Gegenstück zu ``format.format(...)`` in :func:`get_next_number`: Aus
+    ``'{prefix}{yy}-{seq:05d}'`` und Präfix ``'R'`` wird ``^R(?P<yy>\\d{2})-
+    (?P<seq>\\d+)$``. Literale Bestandteile werden escaped, damit z. B. ein
+    Punkt im Format nicht als Platzhalter wirkt.
+
+    Args:
+        format_string: Formatstring des Nummernkreises
+        prefix: Präfix des Dokumenttyps
+
+    Returns:
+        re.Pattern oder None, wenn das Format keinen Sequenzanteil enthält
+        (dann lässt sich aus einer Nummer keine Sequenz ableiten).
+    """
+    parts = []
+    seen_seq = False
+    position = 0
+
+    for match in _FORMAT_TOKEN_RE.finditer(format_string):
+        parts.append(re.escape(format_string[position:match.start()]))
+        token = match.group(1)
+        if token == 'prefix':
+            parts.append(re.escape(prefix or ''))
+        elif token == 'yy':
+            parts.append(r'(?P<yy>\d{2})')
+        else:
+            if seen_seq:
+                # Ein zweiter {seq}-Token wäre eine doppelte Gruppe; ein solches
+                # Format ist nicht auswertbar.
+                return None
+            seen_seq = True
+            parts.append(r'(?P<seq>\d+)')
+        position = match.end()
+
+    parts.append(re.escape(format_string[position:]))
+
+    if not seen_seq:
+        return None
+
+    return re.compile('^' + ''.join(parts) + '$')
+
+
+def reserve_manual_number(company, document_type, number):
+    """
+    Nummernkreis an eine manuell vergebene Belegnummer nachziehen.
+
+    Umkehrung von :func:`get_next_number`: Statt die nächste Nummer zu ziehen,
+    wird eine bereits von Hand vergebene Nummer so verbucht, dass die
+    automatische Vergabe sie nicht ein zweites Mal ausgibt (was an der
+    Unique-Constraint der Belegnummer scheitern würde).
+
+    Passt die Nummer nicht zum Format des Nummernkreises (freie Altnummer aus
+    einem Vorsystem) oder gehört sie zu einem anderen Jahr, bleibt der
+    Nummernkreis unverändert – eine solche Nummer kann die automatische Vergabe
+    ohnehin nicht treffen. ``current_seq`` wird dabei nie gesenkt.
+
+    Args:
+        company: Mandant instance
+        document_type: DocumentType instance
+        number: die manuell vergebene Nummer (z. B. "R26-00042")
+
+    Returns:
+        bool: True, wenn ``current_seq`` hochgezogen wurde
+    """
+    number = (number or '').strip()
+    if not number:
+        return False
+
+    with transaction.atomic():
+        try:
+            number_range = NumberRange.objects.select_for_update().get(
+                company=company,
+                target='DOCUMENT',
+                document_type=document_type,
+            )
+        except NumberRange.DoesNotExist:
+            # Ohne Nummernkreis gibt es nichts nachzuziehen; er wird beim ersten
+            # automatischen Zug angelegt.
+            return False
+
+        pattern = _build_number_pattern(number_range.format, document_type.prefix)
+        if pattern is None:
+            return False
+
+        match = pattern.match(number)
+        if match is None:
+            # Freie Altnummer außerhalb des Formats.
+            return False
+
+        groups = match.groupdict()
+        if 'yy' in groups and int(groups['yy']) != number_range.current_year:
+            # Anderes Jahr: Der laufende Nummernkreis kann diese Nummer nicht
+            # erzeugen, solange er auf seinem Jahr steht.
+            return False
+
+        seq = int(groups['seq'])
+        if seq < number_range.current_seq:
+            return False
+
+        number_range.current_seq = seq
+        number_range.save(update_fields=['current_seq'])
+        return True
 
 
 def get_next_contract_number(company, date_obj=None):

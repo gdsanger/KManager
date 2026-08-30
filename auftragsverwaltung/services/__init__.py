@@ -1,4 +1,4 @@
-from .number_range import get_next_number
+from .number_range import get_next_number, reserve_manual_number
 from .document_calculation import DocumentCalculationService, LineAmounts, TotalsResult
 from .item_snapshot import apply_item_snapshot
 from .tax_determination import TaxDeterminationService
@@ -7,6 +7,7 @@ from .contract_billing import ContractBillingService
 
 __all__ = [
     'get_next_number',
+    'reserve_manual_number',
     'DocumentCalculationService',
     'LineAmounts',
     'TotalsResult',
