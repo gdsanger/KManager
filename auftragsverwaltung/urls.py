@@ -68,7 +68,11 @@ urlpatterns = [
     # Outgoing Invoice Journal (Read-Only)
     path('buchhaltung/rechnungsausgangsjournal/', views.journal_list, name='journal_list'),
     path('buchhaltung/rechnungsausgangsjournal/<int:pk>/', views.journal_detail, name='journal_detail'),
-    
+
+    # DATEV-Buchungsstapel-Export
+    path('buchhaltung/datev-export/', views.datev_export, name='datev_export'),
+    path('buchhaltung/datev-export/download/', views.datev_export_download, name='datev_export_download'),
+
     # TimeEntry (Zeiterfassung) views
     path('timeentries/', views.timeentry_list, name='timeentry_list'),
     path('timeentries/create/', views.timeentry_create, name='timeentry_create'),
