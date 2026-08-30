@@ -85,6 +85,7 @@ class SalesDocumentAdmin(admin.ModelAdmin):
         'company',
         'document_type',
         'status',
+        'projekt',
         'subject',
         'reference_number',
         'header_text',
@@ -101,6 +102,7 @@ class SalesDocumentAdmin(admin.ModelAdmin):
         'company',
         'document_type',
         'status',
+        'projekt',
         'issue_date'
     )
     search_fields = (
@@ -111,7 +113,8 @@ class SalesDocumentAdmin(admin.ModelAdmin):
         'notes_internal',
         'subject',
         'reference_number',
-        'notes_public'
+        'notes_public',
+        'projekt__titel'
     )
     ordering = ('-issue_date', '-id')
     date_hierarchy = 'issue_date'
@@ -125,7 +128,7 @@ class SalesDocumentAdmin(admin.ModelAdmin):
             'fields': ('issue_date', 'due_date', 'paid_at', 'performance_date_from', 'performance_date_to')
         }),
         ('Beziehungen', {
-            'fields': ('payment_term', 'source_document')
+            'fields': ('payment_term', 'source_document', 'projekt')
         }),
         ('Beträge', {
             'fields': ('total_net', 'total_tax', 'total_gross'),

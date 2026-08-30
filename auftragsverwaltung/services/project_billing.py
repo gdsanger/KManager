@@ -397,6 +397,7 @@ class ProjectBillingService:
             company=projekt.company,
             document_type=document_type,
             customer=projekt.kunde,
+            projekt=projekt,
             number='',
             status='DRAFT',
             # Belegdatum ist das gewählte Bis-Datum (i. d. R. der Monatsletzte),
