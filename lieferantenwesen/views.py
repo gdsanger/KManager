@@ -67,10 +67,11 @@ def home(request):
 def invoice_list(request):
     q = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "")
+    company_filter = request.GET.get("company", "")
     overdue_only = request.GET.get("overdue", "") == "1"
     today = timezone.now().date()
 
-    qs = InvoiceIn.objects.select_related("supplier", "order").order_by(
+    qs = InvoiceIn.objects.select_related("supplier", "order", "company").order_by(
         "-invoice_date", "-created_at"
     )
     if q:
@@ -80,6 +81,14 @@ def invoice_list(request):
         )
     if status_filter:
         qs = qs.filter(status=status_filter)
+    if company_filter == "NONE":
+        # Belege ohne Mandant blockieren den DATEV-Export – sie müssen
+        # auffindbar sein, um sie nachpflegen zu können.
+        qs = qs.filter(company__isnull=True)
+    elif company_filter.isdigit():
+        qs = qs.filter(company_id=int(company_filter))
+    else:
+        company_filter = ""
     if overdue_only:
         qs = qs.filter(
             due_date__lt=today,
@@ -88,6 +97,8 @@ def invoice_list(request):
 
     paginator = Paginator(qs, 25)
     page_obj = paginator.get_page(request.GET.get("page"))
+
+    from core.models import Mandant
 
     from .models import INVOICE_IN_STATUS
 
@@ -98,9 +109,11 @@ def invoice_list(request):
             "page_obj": page_obj,
             "q": q,
             "status_filter": status_filter,
+            "company_filter": company_filter,
             "overdue_only": overdue_only,
             "today": today,
             "status_choices": INVOICE_IN_STATUS,
+            "companies": Mandant.objects.order_by("name"),
         },
     )
 
@@ -112,7 +125,7 @@ def invoice_detail(request, pk):
 
     invoice = get_object_or_404(
         InvoiceIn.objects.select_related(
-            "supplier", "cost_type_main", "cost_type_sub", "order",
+            "company", "supplier", "cost_type_main", "cost_type_sub", "order",
             "created_by", "updated_by", "approved_by", "rejected_by",
         ),
         pk=pk,
@@ -246,6 +259,13 @@ def invoice_upload_pdf(request):
                 request,
                 "PDF wurde hochgeladen und analysiert. Bitte prüfen und ergänzen Sie die Daten.",
             )
+            if invoice.company_id is None:
+                messages.warning(
+                    request,
+                    "Der Rechnung konnte kein Mandant zugeordnet werden. Bitte "
+                    "wählen Sie den Mandanten aus, bevor Sie die Rechnung "
+                    "freigeben – sonst fehlt sie im DATEV-Buchungsstapel.",
+                )
             return redirect("lieferantenwesen:invoice_edit", pk=invoice.pk)
         except Exception as exc:
             logger.exception("PDF upload failed: %s", exc)

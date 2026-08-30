@@ -25,6 +25,7 @@ class InvoiceInAdmin(admin.ModelAdmin):
     list_display = [
         "invoice_no",
         "invoice_date",
+        "company",
         "supplier",
         "gross_amount",
         "currency",
@@ -32,7 +33,7 @@ class InvoiceInAdmin(admin.ModelAdmin):
         "due_date",
         "export_status",
     ]
-    list_filter = ["status", "currency", "export_status"]
+    list_filter = ["company", "status", "currency", "export_status"]
     search_fields = [
         "invoice_no", "supplier__name", "payment_reference", "export_batch_id",
     ]

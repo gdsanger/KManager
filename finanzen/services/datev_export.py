@@ -12,6 +12,10 @@ Quellen:
 - **Ausgabenseite** ``lieferantenwesen.InvoiceIn`` (nur freigegebene bzw.
   bezahlte Rechnungen).
 
+Beide Seiten werden auf den Mandanten des Stapels gefiltert: Der Kopfsatz trägt
+dessen Berater- und Mandantennummer, ein mandantenfremder Beleg wäre dort eine
+Falschbuchung.
+
 Buchungslogik:
 - Ausgangsrechnung: Debitor (Konto) an Erlöskonto (Gegenkonto), Umsatz brutto,
   Soll/Haben-Kennzeichen ``S``.
@@ -484,9 +488,47 @@ def _incoming_bookings(invoice):
     ]
 
 
-def _collect_incoming(preview, date_from, date_to, include_exported):
-    """Buchungssätze der Eingangsseite aus freigegebenen Eingangsrechnungen."""
+def _report_incoming_without_company(preview, date_from, date_to):
+    """
+    Buchungsreife Eingangsrechnungen ohne Mandant in die Fehlerliste stellen.
+
+    Ohne Mandant gehört der Beleg in keinen Buchungsstapel – er würde sonst je
+    nach Filterung in gar keinem oder im falschen landen. Gemeldet werden nur
+    Belege im gewählten Zeitraum mit exportfähigem Status, damit die
+    Fehlerliste nicht durch Entwürfe oder fremde Perioden zuwächst.
+
+    Der Export-Status spielt hier bewusst keine Rolle: Ein Beleg ohne Mandant
+    ist auch dann noch offen, wenn er versehentlich schon einmal mitexportiert
+    wurde.
+    """
+    orphans = InvoiceIn.objects.filter(
+        company__isnull=True,
+        invoice_date__gte=date_from,
+        invoice_date__lte=date_to,
+        status__in=EXPORTABLE_STATUSES,
+    ).order_by('invoice_date', 'invoice_no')
+
+    for invoice in orphans:
+        preview.problems.append(ExportProblem(
+            'EINGANG', invoice.invoice_no, invoice.invoice_date,
+            'Der Rechnung ist kein Mandant zugeordnet. Bitte den Mandanten am '
+            'Beleg pflegen; sonst lässt sich nicht entscheiden, in welchen '
+            'Buchungsstapel der Aufwand gehört.',
+        ))
+
+
+def _collect_incoming(preview, company, date_from, date_to, include_exported):
+    """
+    Buchungssätze der Eingangsseite aus freigegebenen Eingangsrechnungen.
+
+    Es werden ausschließlich Rechnungen **dieses** Mandanten gebucht. Belege
+    ohne Mandant lassen sich keinem Buchungsstapel zuordnen und werden nicht
+    still übergangen, sondern gemeldet (siehe :func:`_report_incoming_without_company`).
+    """
+    _report_incoming_without_company(preview, date_from, date_to)
+
     invoices = InvoiceIn.objects.filter(
+        company=company,
         invoice_date__gte=date_from,
         invoice_date__lte=date_to,
         status__in=EXPORTABLE_STATUSES,
@@ -526,8 +568,8 @@ def build_preview(company, date_from, date_to, include_exported=False):
 
     Returns:
         ExportPreview – enthält Buchungssätze **und** die Fehlerliste. Belege
-        ohne auflösbares Konto stehen in ``problems`` und werden nicht still
-        übergangen.
+        ohne auflösbares Konto sowie Eingangsrechnungen ohne Mandant stehen in
+        ``problems`` und werden nicht still übergangen.
 
     Raises:
         DatevExportError: bei unbrauchbarem Zeitraum oder fehlenden
@@ -548,7 +590,7 @@ def build_preview(company, date_from, date_to, include_exported=False):
 
     preview = ExportPreview(company=company, date_from=date_from, date_to=date_to)
     _collect_outgoing(preview, company, date_from, date_to, include_exported)
-    _collect_incoming(preview, date_from, date_to, include_exported)
+    _collect_incoming(preview, company, date_from, date_to, include_exported)
     return preview
 
 
