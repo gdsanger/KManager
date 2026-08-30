@@ -4,9 +4,12 @@ import json
 
 from decimal import Decimal
 
+from datetime import date, timedelta
+
 from django.db import models
-from django.db.models import Q, Sum
+from django.db.models import Count, Max, Min, Q, Sum
 from django.db.models.functions import TruncMonth
+from django.utils.dateparse import parse_date
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
@@ -1041,7 +1044,108 @@ def get_projekt_stunden_context(projekt):
         'unbilled_hours': _hours(unbilled_minutes),
         'stunden_by_user': by_user,
         'stunden_by_month': by_month,
+        **get_projekt_offene_stunden_context(projekt),
     }
+
+
+def get_projekt_offene_stunden_context(projekt):
+    """
+    Offene (noch nicht abgerechnete) Stunden eines Projekts.
+
+    Getrennt nach Leistungs- und Anfahrtszeit, dazu das älteste und jüngste
+    Leistungsdatum - das ist die Grundlage für den Abrechnungslauf.
+    """
+    offen = projekt.time_entries.filter(is_billed=False)
+    aggregates = offen.aggregate(
+        anzahl=Count('pk'),
+        minuten=Sum('duration_minutes'),
+        leistung_minuten=Sum('duration_minutes', filter=Q(is_travel_cost=False)),
+        anfahrt_minuten=Sum('duration_minutes', filter=Q(is_travel_cost=True)),
+        aeltestes=Min('service_date'),
+        juengstes=Max('service_date'),
+    )
+
+    def _hours(minutes):
+        return (Decimal(minutes) / Decimal('60')) if minutes else Decimal('0')
+
+    leistung_minuten = aggregates['leistung_minuten'] or 0
+    anfahrt_minuten = aggregates['anfahrt_minuten'] or 0
+
+    return {
+        'offene_anzahl': aggregates['anzahl'] or 0,
+        'offene_minuten': aggregates['minuten'] or 0,
+        'offene_stunden': _hours(aggregates['minuten'] or 0),
+        'offene_leistung_minuten': leistung_minuten,
+        'offene_leistung_stunden': _hours(leistung_minuten),
+        'offene_anfahrt_minuten': anfahrt_minuten,
+        'offene_anfahrt_stunden': _hours(anfahrt_minuten),
+        'offene_von': aggregates['aeltestes'],
+        'offene_bis': aggregates['juengstes'],
+    }
+
+
+def get_default_billing_period(today=None):
+    """
+    Vorbelegung des Abrechnungszeitraums: der zuletzt abgeschlossene Monat.
+
+    Beim Aufruf am 03.09. also 01.08. bis 31.08.
+    """
+    if today is None:
+        today = date.today()
+    letzter_tag_vormonat = today.replace(day=1) - timedelta(days=1)
+    return letzter_tag_vormonat.replace(day=1), letzter_tag_vormonat
+
+
+@login_required
+def projekt_abrechnung(request, pk):
+    """
+    Abrechnungslauf für die offenen Stunden eines Projekts.
+
+    GET zeigt Zeitraumauswahl und Vorschau, POST erzeugt den Rechnungsentwurf.
+    Das Erstellen läuft ausschließlich über POST - es verändert Zustand.
+    """
+    from auftragsverwaltung.services.project_billing import (
+        ProjectBillingError,
+        ProjectBillingService,
+    )
+
+    projekt = get_object_or_404(
+        Projekt.objects.select_related('kunde', 'company', 'billing_item', 'travel_item'),
+        pk=pk,
+    )
+
+    default_from, default_to = get_default_billing_period()
+    source = request.POST if request.method == 'POST' else request.GET
+    date_from = parse_date(source.get('date_from', '') or '') or default_from
+    date_to = parse_date(source.get('date_to', '') or '') or default_to
+
+    if request.method == 'POST':
+        try:
+            document = ProjectBillingService.create_invoice(
+                projekt, date_from, date_to, actor=request.user
+            )
+        except ProjectBillingError as exc:
+            for error in exc.errors:
+                messages.error(request, error)
+        else:
+            messages.success(
+                request,
+                f'Rechnungsentwurf {document.number} für Projekt „{projekt.titel}" wurde erstellt.',
+            )
+            return redirect(
+                'auftragsverwaltung:document_detail',
+                doc_key=document.document_type.key,
+                pk=document.pk,
+            )
+
+    preview = ProjectBillingService.build_preview(projekt, date_from, date_to)
+
+    return render(request, 'core/projekt_abrechnung.html', {
+        'projekt': projekt,
+        'preview': preview,
+        'date_from': date_from,
+        'date_to': date_to,
+    })
 
 
 @login_required

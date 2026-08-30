@@ -1,0 +1,144 @@
+{% extends "core/core_base.html" %}
+
+{% block title %}Stunden abrechnen: {{ projekt.titel }} - Domus{% endblock %}
+
+{% block page_title %}Stunden abrechnen: {{ projekt.titel }}{% endblock %}
+
+{% block page_actions %}
+<div class="btn-toolbar gap-2">
+    <a href="{% url 'projekt_detail' projekt.pk %}" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Zurück zum Projekt
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- Zeitraumauswahl -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <i class="bi bi-calendar-range"></i> Leistungszeitraum
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label small text-muted">Von</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from"
+                           value="{{ date_from|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label small text-muted">Bis</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to"
+                           value="{{ date_to|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-repeat"></i> Vorschau aktualisieren
+                    </button>
+                </div>
+            </form>
+            <p class="text-muted small mb-0 mt-2">
+                Vorbelegt ist der zuletzt abgeschlossene Monat. Es werden alle noch nicht
+                abgerechneten Zeiterfassungen dieses Projekts im Zeitraum einbezogen.
+            </p>
+        </div>
+    </div>
+
+    {% if preview.errors %}
+    <div class="alert alert-danger">
+        <h6 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Abrechnung nicht möglich</h6>
+        <ul class="mb-0">
+            {% for error in preview.errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Vorschau -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-check"></i> Vorschau der Rechnungspositionen</span>
+            <span class="text-muted small">
+                {{ preview.lines|length }} Zeiterfassung{{ preview.lines|length|pluralize:"en" }}
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Datum</th>
+                            <th>Ausführender</th>
+                            <th class="text-center">Anfahrt</th>
+                            <th class="text-end">Dauer</th>
+                            <th class="text-end">Menge (h)</th>
+                            <th class="text-end">Satz</th>
+                            <th class="text-end">Rabatt</th>
+                            <th class="text-end">Netto</th>
+                            <th>Beschreibung</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in preview.lines %}
+                        <tr>
+                            <td class="text-nowrap">
+                                <a href="{% url 'auftragsverwaltung:timeentry_detail' pk=line.time_entry.pk %}">
+                                    {{ line.time_entry.service_date|date:"d.m.Y" }}
+                                </a>
+                            </td>
+                            <td class="text-nowrap">{{ line.time_entry.performed_by.username }}</td>
+                            <td class="text-center">
+                                {% if line.time_entry.is_travel_cost %}
+                                <span class="badge bg-primary">Ja</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Nein</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-nowrap">{{ line.time_entry.get_duration_display }}</td>
+                            <td class="text-end text-nowrap">{{ line.quantity|floatformat:2 }}</td>
+                            <td class="text-end text-nowrap">{{ line.unit_price_net|floatformat:2 }} €</td>
+                            <td class="text-end text-nowrap">{{ line.discount|floatformat:2 }} %</td>
+                            <td class="text-end text-nowrap">{{ line.line_net|floatformat:2 }} €</td>
+                            <td class="text-truncate" style="max-width: 320px;">{{ line.time_entry.description }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted">
+                                <i class="bi bi-inbox"></i> Keine offenen Stunden in diesem Zeitraum
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if preview.lines %}
+                    <tfoot>
+                        <tr class="fw-bold">
+                            <td colspan="4" class="text-end">Summe</td>
+                            <td class="text-end">{{ preview.total_quantity|floatformat:2 }}</td>
+                            <td></td>
+                            <td></td>
+                            <td class="text-end">{{ preview.total_net|floatformat:2 }} €</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+
+            <form method="post" class="mt-3">
+                {% csrf_token %}
+                <input type="hidden" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+                <input type="hidden" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+                <button type="submit" class="btn btn-primary" {% if not preview.can_bill %}disabled{% endif %}>
+                    <i class="bi bi-receipt"></i> Rechnungsentwurf erstellen
+                </button>
+                <span class="text-muted small ms-2">
+                    Es entsteht ein Entwurf; Finalisierung und Versand erfolgen anschließend wie gewohnt.
+                </span>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
