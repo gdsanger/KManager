@@ -1583,7 +1583,16 @@ class TimeEntry(models.Model):
         verbose_name="Abgerechnet am",
         help_text="Zeitpunkt der Abrechnung"
     )
-    
+    invoice_line = models.ForeignKey(
+        'auftragsverwaltung.SalesDocumentLine',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='time_entries',
+        verbose_name="Rechnungsposition",
+        help_text="Position der Rechnung, auf der diese Stunde abgerechnet wurde"
+    )
+
     # Timestamps
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -1606,6 +1615,7 @@ class TimeEntry(models.Model):
             models.Index(fields=['performed_by', 'service_date']),
             models.Index(fields=['-service_date', '-created_at']),
             models.Index(fields=['is_billed']),
+            models.Index(fields=['invoice_line']),
         ]
     
     def __str__(self):

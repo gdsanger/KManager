@@ -433,6 +433,20 @@ class TimeEntryFilter(django_filters.FilterSet):
         })
     )
     
+    unbilled_only = django_filters.BooleanFilter(
+        label='Nur unabgerechnete',
+        method='filter_unbilled_only',
+        widget=django_filters.widgets.forms.CheckboxInput(attrs={
+            'class': 'form-check-input'
+        })
+    )
+
+    def filter_unbilled_only(self, queryset, name, value):
+        """Schnellfilter für den Abrechnungslauf: nur offene Zeiterfassungen."""
+        if value:
+            return queryset.filter(is_billed=False)
+        return queryset
+
     def search_filter(self, queryset, name, value):
         """
         Full-text search across multiple fields using OR.
@@ -498,5 +512,5 @@ class TimeEntryFilter(django_filters.FilterSet):
         fields = [
             'q', 'service_date_from', 'service_date_to',
             'customer', 'order', 'projekt', 'performed_by',
-            'is_travel_cost', 'is_billed'
+            'is_travel_cost', 'is_billed', 'unbilled_only'
         ]

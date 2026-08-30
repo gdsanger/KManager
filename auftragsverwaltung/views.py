@@ -3308,7 +3308,8 @@ def timeentry_list(request):
     """
     # Base queryset with optimized select/prefetch
     queryset = TimeEntry.objects.select_related(
-        'customer', 'order', 'order__document_type', 'projekt', 'performed_by', 'company'
+        'customer', 'order', 'order__document_type', 'projekt', 'performed_by', 'company',
+        'invoice_line', 'invoice_line__document', 'invoice_line__document__document_type'
     )
 
     # Apply filters
@@ -3352,7 +3353,8 @@ def timeentry_detail(request, pk):
         pk: Primary key of the time entry
     """
     timeentry = get_object_or_404(TimeEntry.objects.select_related(
-        'customer', 'order', 'order__document_type', 'projekt', 'performed_by', 'company'
+        'customer', 'order', 'order__document_type', 'projekt', 'performed_by', 'company',
+        'invoice_line', 'invoice_line__document', 'invoice_line__document__document_type'
     ), pk=pk)
     
     context = {

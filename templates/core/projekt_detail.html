@@ -9,6 +9,9 @@
     <a href="{% url 'auftragsverwaltung:timeentry_create' %}?projekt={{ projekt.pk }}" class="btn btn-primary btn-sm">
         <i class="bi bi-clock-history"></i> Stunden erfassen
     </a>
+    <a href="{% url 'projekt_abrechnung' projekt.pk %}" class="btn btn-success btn-sm">
+        <i class="bi bi-receipt"></i> Stunden abrechnen
+    </a>
     <a href="{% url 'projekt_edit' projekt.pk %}" class="btn btn-outline-warning btn-sm">
         <i class="bi bi-pencil"></i> Bearbeiten
     </a>
@@ -306,6 +309,58 @@
         </div><!-- /col-lg-4 -->
 
     </div><!-- /row -->
+
+    <!-- Offene Stunden -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-hourglass-split"></i> Offene Stunden</span>
+                    <a href="{% url 'projekt_abrechnung' projekt.pk %}" class="btn btn-sm btn-success">
+                        <i class="bi bi-receipt"></i> Stunden abrechnen
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if offene_anzahl %}
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <div class="border rounded p-2">
+                                <div class="text-muted small">Unabgerechnete Zeiterfassungen</div>
+                                <div class="fs-5">{{ offene_anzahl }}</div>
+                                <div class="text-muted small">{{ offene_stunden|floatformat:2 }} h gesamt</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-2">
+                                <div class="text-muted small">Leistungszeit</div>
+                                <div class="fs-5">{{ offene_leistung_stunden|floatformat:2 }} h</div>
+                                <div class="text-muted small">{{ offene_leistung_minuten }} Minuten</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-2">
+                                <div class="text-muted small">Anfahrtszeit</div>
+                                <div class="fs-5">{{ offene_anfahrt_stunden|floatformat:2 }} h</div>
+                                <div class="text-muted small">{{ offene_anfahrt_minuten }} Minuten</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-2">
+                                <div class="text-muted small">Leistungsdatum</div>
+                                <div class="fs-6">{{ offene_von|date:"d.m.Y" }} – {{ offene_bis|date:"d.m.Y" }}</div>
+                                <div class="text-muted small">ältestes – jüngstes</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">
+                        <i class="bi bi-check-circle"></i> Es sind keine unabgerechneten Stunden offen.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Stunden / Zeiterfassung -->
     <div class="row mt-3">

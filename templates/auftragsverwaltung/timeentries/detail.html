@@ -105,6 +105,16 @@
                                 {% if timeentry.billed_at %}
                                 <br><small class="text-muted">am {{ timeentry.billed_at|date:"d.m.Y H:i" }}</small>
                                 {% endif %}
+                                {% if timeentry.invoice_line %}
+                                <br>
+                                <small>
+                                    Rechnung:
+                                    <a href="{% url 'auftragsverwaltung:document_detail' doc_key=timeentry.invoice_line.document.document_type.key pk=timeentry.invoice_line.document.pk %}">
+                                        {{ timeentry.invoice_line.document.number }}
+                                    </a>
+                                    (Pos. {{ timeentry.invoice_line.position_no }})
+                                </small>
+                                {% endif %}
                             {% else %}
                                 <span class="badge bg-warning">Nein</span>
                             {% endif %}

@@ -484,7 +484,14 @@ class TimeEntryTable(tables.Table):
         verbose_name='Abgerechnet',
         attrs={'td': {'class': 'text-center'}}
     )
-    
+
+    invoice = tables.Column(
+        verbose_name='Rechnung',
+        empty_values=(),
+        orderable=False,
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+
     aktionen = tables.Column(
         verbose_name='Aktionen',
         empty_values=(),
@@ -506,6 +513,22 @@ class TimeEntryTable(tables.Table):
     def render_duration(self, record):
         """Render duration in a friendly format (hours and minutes)."""
         return record.get_duration_display()
+
+    def render_invoice(self, record):
+        """Rechnung verlinken, auf der diese Stunde abgerechnet wurde."""
+        line = record.invoice_line
+        if not line:
+            return '—'
+        document = line.document
+        url = reverse('auftragsverwaltung:document_detail', kwargs={
+            'doc_key': document.document_type.key,
+            'pk': document.pk,
+        })
+        return format_html(
+            '<a href="{}" class="text-decoration-none">{}</a>',
+            url,
+            document.number or f'Beleg #{document.pk}',
+        )
 
     def render_aktionen(self, record):
         """Render action buttons."""
@@ -534,6 +557,7 @@ class TimeEntryTable(tables.Table):
             'duration',
             'is_travel_cost',
             'is_billed',
+            'invoice',
             'aktionen',
         )
         attrs = {

@@ -38,7 +38,17 @@
                 <div class="col-md-2">
                     {{ filter.form.is_billed }}
                 </div>
-                
+
+                <!-- Nur unabgerechnete -->
+                <div class="col-md-2 d-flex align-items-center">
+                    <div class="form-check">
+                        {{ filter.form.unbilled_only }}
+                        <label class="form-check-label small" for="{{ filter.form.unbilled_only.id_for_label }}">
+                            {{ filter.form.unbilled_only.label }}
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Filter Actions -->
                 <div class="col-md-2">
                     <div class="btn-group w-100" role="group">
