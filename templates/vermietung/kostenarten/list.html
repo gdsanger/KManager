@@ -36,6 +36,10 @@
                                     <a href="?selected={{ hauptkostenart.pk }}" class="text-decoration-none flex-grow-1">
                                         <i class="bi bi-folder"></i> <strong>{{ hauptkostenart.name }}</strong>
                                         <small class="text-muted">({{ hauptkostenart.get_umsatzsteuer_satz_display }})</small>
+                                        <small class="d-block text-muted">
+                                            <span class="me-3">Aufwandskonto: {{ hauptkostenart.aufwandskonto|default:"–" }}</span>
+                                            <span>Erlöskonto: {{ hauptkostenart.erloeskonto|default:"–" }}</span>
+                                        </small>
                                     </a>
                                 </div>
                                 {% if hauptkostenart.children.all %}
@@ -46,6 +50,10 @@
                                             <a href="?selected={{ unterkostenart.pk }}" class="text-decoration-none flex-grow-1">
                                                 <i class="bi bi-file-earmark"></i> {{ unterkostenart.name }}
                                                 <small class="text-muted">({{ unterkostenart.get_umsatzsteuer_satz_display }})</small>
+                                                <small class="d-block text-muted">
+                                                    <span class="me-3">Aufwandskonto: {{ unterkostenart.aufwandskonto|default:"–" }}</span>
+                                                    <span>Erlöskonto: {{ unterkostenart.erloeskonto|default:"–" }}</span>
+                                                </small>
                                             </a>
                                         </div>
                                     </li>
@@ -96,6 +104,28 @@
                         <div class="row mb-3">
                             <div class="col-md-4 text-muted">Umsatzsteuer-Satz:</div>
                             <div class="col-md-8">{{ selected_kostenart.get_umsatzsteuer_satz_display }}</div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Aufwandskonto:</div>
+                            <div class="col-md-8">
+                                {% if selected_kostenart.aufwandskonto %}
+                                    {{ selected_kostenart.aufwandskonto }}
+                                {% else %}
+                                    <span class="text-muted">– (Konto der Hauptkostenart)</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4 text-muted">Erlöskonto:</div>
+                            <div class="col-md-8">
+                                {% if selected_kostenart.erloeskonto %}
+                                    {{ selected_kostenart.erloeskonto }}
+                                {% else %}
+                                    <span class="text-muted">– (Erlöskonto aus dem Steuersatz)</span>
+                                {% endif %}
+                            </div>
                         </div>
 
                         {% if not selected_kostenart.is_hauptkostenart %}
