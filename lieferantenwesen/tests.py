@@ -8,6 +8,7 @@ Tests cover:
 - Approval workflow
 - Supplier (Adresse with LIEFERANT type) matching
 """
+import re
 import shutil
 import tempfile
 from datetime import date
@@ -173,6 +174,86 @@ class InvoiceViewAccessTest(TestCase):
         url = reverse("lieferantenwesen:invoice_upload_pdf")
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+
+
+class SidebarNavigationTest(TestCase):
+    """Lieferantenwesen-Seiten erben das Auftragsverwaltungs-Layout (Sidebar)."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="sidebaruser", password="sidebarpass", is_staff=True
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Sidebar Lieferant",
+            strasse="Sidebarstr. 1",
+            plz="33333",
+            ort="Sidebarstadt",
+            land="DE",
+        )
+        self.invoice = InvoiceIn.objects.create(
+            invoice_no="SB-001",
+            invoice_date=date(2026, 4, 1),
+            supplier=self.supplier,
+            status="DRAFT",
+        )
+        self.client.login(username="sidebaruser", password="sidebarpass")
+
+    def _urls(self):
+        return [
+            reverse("lieferantenwesen:home"),
+            reverse("lieferantenwesen:invoice_list"),
+            reverse("lieferantenwesen:invoice_detail", args=[self.invoice.pk]),
+            reverse("lieferantenwesen:invoice_edit", args=[self.invoice.pk]),
+            reverse("lieferantenwesen:invoice_create"),
+            reverse("lieferantenwesen:invoice_upload_pdf"),
+        ]
+
+    def test_all_pages_render_the_auftragsverwaltung_sidebar(self):
+        for url in self._urls():
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                content = response.content.decode()
+                self.assertIn('id="sidebarMenu"', content)
+                self.assertIn("AUFTRAGSVERWALTUNG MEN", content)
+                # Mobile-Toggle inkl. Backdrop muss vorhanden sein
+                self.assertIn('id="mobileMenuToggle"', content)
+                self.assertIn('id="sidebarBackdrop"', content)
+
+    def test_lieferantenwesen_sidebar_entry_is_active(self):
+        response = self.client.get(reverse("lieferantenwesen:invoice_list"))
+        content = response.content.decode()
+        match = re.search(
+            r'<a class="nav-link([^"]*)" href="/lieferantenwesen/"', content
+        )
+        self.assertIsNotNone(match, "Sidebar-Eintrag Lieferantenwesen nicht gefunden")
+        self.assertIn("active", match.group(1))
+
+    def test_page_title_and_actions_are_rendered_exactly_once(self):
+        response = self.client.get(reverse("lieferantenwesen:invoice_list"))
+        content = response.content.decode()
+        self.assertEqual(content.count("Eingangsrechnungen</h1>"), 1)
+        self.assertEqual(content.count('href="/lieferantenwesen/eingangsrechnungen/pdf-upload/"'), 1)
+
+    def test_flash_messages_are_rendered_exactly_once(self):
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_delete", args=[self.invoice.pk]),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertEqual(content.count('class="alert alert-success'), 1)
+
+    def test_extra_css_and_extra_js_blocks_are_included(self):
+        detail = self.client.get(
+            reverse("lieferantenwesen:invoice_detail", args=[self.invoice.pk])
+        )
+        self.assertIn(".invoice-pdf-frame", detail.content.decode())
+
+        upload = self.client.get(reverse("lieferantenwesen:invoice_upload_pdf"))
+        self.assertIn("getElementById('pdf-upload-form')", upload.content.decode())
 
 
 class ApprovalWorkflowTest(TestCase):

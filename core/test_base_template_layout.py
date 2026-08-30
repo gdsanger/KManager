@@ -13,7 +13,8 @@ from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase
 
-#: Alle Base-Templates. lieferantenwesen/base.html erbt von base.html.
+#: Alle Base-Templates. lieferantenwesen/base.html erbt von
+#: auftragsverwaltung/auftragsverwaltung_base.html (gemeinsame Sidebar).
 ALL_BASES = [
     "base.html",
     "core/core_base.html",
@@ -27,6 +28,7 @@ SIDEBAR_BASES = [
     "core/core_base.html",
     "vermietung/vermietung_base.html",
     "auftragsverwaltung/auftragsverwaltung_base.html",
+    "lieferantenwesen/base.html",
 ]
 
 SITE_CSS = Path(settings.BASE_DIR) / "static" / "css" / "site.css"
@@ -76,7 +78,7 @@ class NavbarIncludeTests(BaseTemplateRenderMixin, TestCase):
 
     def test_navbar_include_is_used_in_sources(self):
         """Kein Base-Template pflegt die Navbar noch selbst."""
-        for template_name in ALL_BASES[:-1]:  # lieferantenwesen erbt von base
+        for template_name in ALL_BASES[:-1]:  # lieferantenwesen erbt die Navbar
             with self.subTest(template=template_name):
                 source = (Path(settings.BASE_DIR) / "templates" / template_name).read_text(
                     encoding="utf-8"
