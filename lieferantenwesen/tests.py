@@ -217,7 +217,7 @@ class SidebarNavigationTest(TestCase):
                 self.assertEqual(response.status_code, 200)
                 content = response.content.decode()
                 self.assertIn('id="sidebarMenu"', content)
-                self.assertIn("AUFTRAGSVERWALTUNG MEN", content)
+                self.assertIn("AUFTRAGSVERWALTUNG MENÜ", content)
                 # Mobile-Toggle inkl. Backdrop muss vorhanden sein
                 self.assertIn('id="mobileMenuToggle"', content)
                 self.assertIn('id="sidebarBackdrop"', content)
@@ -225,8 +225,9 @@ class SidebarNavigationTest(TestCase):
     def test_lieferantenwesen_sidebar_entry_is_active(self):
         response = self.client.get(reverse("lieferantenwesen:invoice_list"))
         content = response.content.decode()
+        home_url = reverse("lieferantenwesen:home")
         match = re.search(
-            r'<a class="nav-link([^"]*)" href="/lieferantenwesen/"', content
+            r'<a class="nav-link([^"]*)" href="%s"' % re.escape(home_url), content
         )
         self.assertIsNotNone(match, "Sidebar-Eintrag Lieferantenwesen nicht gefunden")
         self.assertIn("active", match.group(1))
@@ -235,7 +236,8 @@ class SidebarNavigationTest(TestCase):
         response = self.client.get(reverse("lieferantenwesen:invoice_list"))
         content = response.content.decode()
         self.assertEqual(content.count("Eingangsrechnungen</h1>"), 1)
-        self.assertEqual(content.count('href="/lieferantenwesen/eingangsrechnungen/pdf-upload/"'), 1)
+        upload_url = reverse("lieferantenwesen:invoice_upload_pdf")
+        self.assertEqual(content.count('href="%s"' % upload_url), 1)
 
     def test_flash_messages_are_rendered_exactly_once(self):
         response = self.client.post(

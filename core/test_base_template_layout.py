@@ -78,7 +78,12 @@ class NavbarIncludeTests(BaseTemplateRenderMixin, TestCase):
 
     def test_navbar_include_is_used_in_sources(self):
         """Kein Base-Template pflegt die Navbar noch selbst."""
-        for template_name in ALL_BASES[:-1]:  # lieferantenwesen erbt die Navbar
+        # lieferantenwesen/base.html bindet die Navbar nicht selbst ein, es erbt
+        # sie von auftragsverwaltung_base.html.
+        own_navbar_bases = [
+            name for name in ALL_BASES if name != "lieferantenwesen/base.html"
+        ]
+        for template_name in own_navbar_bases:
             with self.subTest(template=template_name):
                 source = (Path(settings.BASE_DIR) / "templates" / template_name).read_text(
                     encoding="utf-8"
