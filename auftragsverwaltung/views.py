@@ -257,7 +257,7 @@ def document_list(request, doc_key):
     # Base queryset with optimized select/prefetch
     # Show documents from ALL companies (all users can work with all companies)
     queryset = SalesDocument.objects.select_related(
-        'document_type', 'company', 'customer'
+        'document_type', 'company', 'customer', 'projekt'
     ).filter(
         document_type=document_type
     )
@@ -354,9 +354,10 @@ def document_detail(request, doc_key, pk):
         'footer_templates': footer_templates,
         'status_choices': SalesDocument.STATUS_CHOICES,  # Add for template consistency
         'copy_document_types': copy_document_types,
+        'projekte': get_selectable_projekte(document.customer),
         'dokumente': dokumente,
     }
-    
+
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
 
 
@@ -421,6 +422,50 @@ def validate_manual_number(company, document_type, doc_key, number, exclude_pk=N
     return find_number_conflict(company, document_type, doc_key, number, exclude_pk=exclude_pk)
 
 
+def get_selectable_projekte(customer=None):
+    """
+    Projekte, die am Beleg auswählbar sind.
+
+    Angeboten werden Projekte ohne Kunde (interne Projekte) sowie die Projekte
+    des am Beleg gewählten Kunden. Ohne Kunde am Beleg gibt es nichts
+    einzuschränken - dann stehen alle Projekte zur Auswahl.
+
+    Args:
+        customer: Adresse-Instanz oder None
+
+    Returns:
+        QuerySet von Projekt
+    """
+    queryset = Projekt.objects.select_related('kunde').order_by('titel')
+    if customer is not None:
+        queryset = queryset.filter(Q(kunde__isnull=True) | Q(kunde=customer))
+    return queryset
+
+
+def apply_projekt_from_post(request, document):
+    """
+    Die Projektzuordnung aus dem POST übernehmen und prüfen.
+
+    Die Zuordnung ist eine reine Auswertungszuordnung und bleibt daher in jedem
+    Belegstatus änderbar. Geprüft wird nur, ob Kunde und Mandant des Belegs zum
+    Projekt passen - eine Fehlzuordnung würde jede Projektauswertung verfälschen.
+
+    Args:
+        request: HttpRequest mit dem Feld ``projekt_id``
+        document: SalesDocument (ungespeichert erlaubt); wird in-place gesetzt
+
+    Returns:
+        str | None: Fehlermeldung, wenn die Zuordnung nicht passt.
+    """
+    projekt_id = normalize_foreign_key_id(request.POST.get('projekt_id'))
+    if projekt_id:
+        document.projekt = get_object_or_404(Projekt, pk=projekt_id)
+    else:
+        document.projekt = None
+
+    return document.get_projekt_assignment_error()
+
+
 def render_document_form(request, document, document_type, doc_key, company,
                          is_create, lines=None, number_error=None):
     """
@@ -471,6 +516,9 @@ def render_document_form(request, document, document_type, doc_key, company,
             is_active=True,
         ).order_by('name'),
         'number_error': number_error,
+        'projekte': get_selectable_projekte(
+            document.customer if document is not None else None
+        ),
         'dokumente': (
             document.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
             if document is not None and document.pk else []
@@ -523,7 +571,7 @@ def document_create(request, doc_key):
         customer_id = request.POST.get('customer_id')
         if customer_id:
             document.customer = get_object_or_404(Adresse, pk=customer_id)
-        
+
         # Set issue_date (default to today if not provided)
         issue_date_str = request.POST.get('issue_date')
         if issue_date_str:
@@ -554,7 +602,17 @@ def document_create(request, doc_key):
                 document.payment_term,
                 document.issue_date
             )
-        
+
+        # Projektzuordnung (optional) - muss zu Kunde und Mandant passen. Die
+        # Prüfung steht bewusst hinter allen anderen Feldern, damit das erneut
+        # gerenderte Formular die übrigen Eingaben behält.
+        projekt_error = apply_projekt_from_post(request, document)
+        if projekt_error:
+            messages.error(request, projekt_error)
+            return render_document_form(
+                request, document, document_type, doc_key, company, is_create=True,
+            )
+
         # Belegnummer: manuell vorgegeben (Nacherfassung von Altbelegen) oder
         # automatisch aus dem Nummernkreis. Die automatische Vergabe richtet
         # sich nach dem Belegdatum, damit ein nacherfasster Beleg die
@@ -647,7 +705,7 @@ def document_update(request, doc_key, pk):
         document.customer = get_object_or_404(Adresse, pk=customer_id)
     else:
         document.customer = None
-    
+
     # Update issue_date
     issue_date_str = request.POST.get('issue_date')
     if issue_date_str:
@@ -684,6 +742,20 @@ def document_update(request, doc_key, pk):
         document.payment_term = None
         document.due_date = None
         document.payment_term_text = ''
+
+    # Projektzuordnung (optional, in jedem Belegstatus änderbar). Wie beim
+    # Anlegen steht die Prüfung hinter den übrigen Feldern, damit ein erneut
+    # gerendertes Formular die Eingaben behält.
+    projekt_error = apply_projekt_from_post(request, document)
+    if projekt_error:
+        messages.error(request, projekt_error)
+        return render_document_form(
+            request, document, document_type, doc_key, document.company,
+            is_create=False,
+            lines=document.lines.select_related(
+                'item', 'tax_rate', 'kostenart1', 'kostenart2', 'unit'
+            ).order_by('position_no'),
+        )
 
     # Belegnummer nur im Entwurf und nur bei tatsächlicher Änderung übernehmen.
     # In jedem anderen Fall bleibt die gespeicherte Nummer unangetastet - auch
