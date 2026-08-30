@@ -25,31 +25,6 @@
 </form>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-    .invoice-pdf-card {
-        position: sticky;
-        top: 80px;
-    }
-
-    .invoice-pdf-frame {
-        width: 100%;
-        height: calc(100vh - 220px);
-        min-height: 600px;
-        border: 0;
-    }
-
-    .invoice-pdf-placeholder {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 400px;
-        color: var(--bs-secondary-color);
-    }
-</style>
-{% endblock %}
-
 {% block main_content %}
 <div class="row">
     <!-- Left column: invoice data -->
@@ -312,26 +287,7 @@
 
     <!-- Right column: PDF preview -->
     <div class="col-lg-5">
-        <div class="card mb-3 invoice-pdf-card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-file-earmark-pdf"></i> Beleg</h5>
-                {% if invoice.pdf_file %}
-                <a href="{% url 'lieferantenwesen:invoice_pdf' invoice.pk %}" class="btn btn-sm btn-outline-light" target="_blank">
-                    <i class="bi bi-box-arrow-up-right"></i> In neuem Tab öffnen
-                </a>
-                {% endif %}
-            </div>
-            <div class="card-body p-0">
-                {% if invoice.pdf_file %}
-                <iframe src="{% url 'lieferantenwesen:invoice_pdf' invoice.pk %}" class="invoice-pdf-frame" title="PDF-Vorschau der Eingangsrechnung"></iframe>
-                {% else %}
-                <div class="invoice-pdf-placeholder">
-                    <i class="bi bi-file-earmark-x display-4 mb-2"></i>
-                    <p class="mb-0">Kein PDF hinterlegt</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+        {% include "lieferantenwesen/invoices/_pdf_panel.html" %}
     </div>
 </div>
 {% endblock %}

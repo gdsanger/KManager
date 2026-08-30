@@ -19,7 +19,8 @@
 <form method="post" novalidate>
     {% csrf_token %}
     <div class="row">
-        <div class="col-lg-9">
+        {# Bearbeiten: schmalere Spalte, damit rechts der Beleg Platz hat. Anlegen: volle Breite, es gibt noch kein PDF. #}
+        <div class="{% if invoice %}col-lg-7{% else %}col-lg-9{% endif %}">
 
             {% if form.errors or formset.total_error_count %}
             <div class="alert alert-danger" role="alert">
@@ -240,6 +241,13 @@
                 </button>
             </div>
         </div>
+
+        {% if invoice %}
+        <!-- Right column: PDF preview -->
+        <div class="col-lg-5">
+            {% include "lieferantenwesen/invoices/_pdf_panel.html" %}
+        </div>
+        {% endif %}
     </div>
 
     <template id="empty-line-template">
