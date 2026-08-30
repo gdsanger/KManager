@@ -259,6 +259,14 @@ def invoice_upload_pdf(request):
                 request,
                 "PDF wurde hochgeladen und analysiert. Bitte prüfen und ergänzen Sie die Daten.",
             )
+            if getattr(invoice, "invoice_date_fallback", False):
+                messages.warning(
+                    request,
+                    "Das Rechnungsdatum konnte nicht aus dem Beleg erkannt "
+                    "werden. Eingetragen ist das heutige Datum – bitte prüfen "
+                    "und korrigieren Sie es, denn das Rechnungsdatum "
+                    "entscheidet über den DATEV-Buchungsstapel.",
+                )
             if invoice.company_id is None:
                 messages.warning(
                     request,
