@@ -401,6 +401,16 @@ class SalesDocument(models.Model):
     )
     
     # Relationships
+    projekt = models.ForeignKey(
+        'core.Projekt',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_documents',
+        verbose_name="Projekt",
+        help_text="Optionale Zuordnung zu einem Projekt; steuert die Belegliste "
+                  "und die Fakturasummen auf der Projektseite."
+    )
     payment_term = models.ForeignKey(
         'core.PaymentTerm',
         on_delete=models.PROTECT,
@@ -480,6 +490,7 @@ class SalesDocument(models.Model):
             models.Index(fields=['company', 'status']),
             models.Index(fields=['-issue_date']),
             models.Index(fields=['customer']),
+            models.Index(fields=['projekt']),
         ]
         constraints = [
             # Unique constraint: number is unique per (company, document_type)
@@ -493,6 +504,39 @@ class SalesDocument(models.Model):
     def __str__(self):
         return f"{self.number} ({self.company.name})"
     
+    def get_projekt_assignment_error(self):
+        """
+        Die Projektzuordnung gegen Kunde und Mandant des Belegs prüfen.
+
+        Ein Beleg an Kunde A, der auf ein Projekt von Kunde B gebucht wird,
+        verfälscht jede Projektauswertung - dasselbe gilt für den Mandanten.
+        Ist am Projekt weder Kunde noch Mandant gepflegt (internes Projekt),
+        wird nichts geprüft.
+
+        Returns:
+            str | None: sprechende Meldung, wenn die Zuordnung nicht passt.
+        """
+        if not self.projekt_id:
+            return None
+
+        projekt = self.projekt
+
+        if self.customer_id and projekt.kunde_id and projekt.kunde_id != self.customer_id:
+            return (
+                f'Das Projekt „{projekt.titel}" ist dem Kunden '
+                f'„{projekt.kunde.matchkey}" zugeordnet und passt nicht zum '
+                f'Kunden des Belegs.'
+            )
+
+        if self.company_id and projekt.company_id and projekt.company_id != self.company_id:
+            return (
+                f'Das Projekt „{projekt.titel}" ist dem Mandanten '
+                f'„{projekt.company.name}" zugeordnet und passt nicht zum '
+                f'Mandanten des Belegs.'
+            )
+
+        return None
+
     def clean(self):
         """Validate sales document data
 
@@ -501,10 +545,16 @@ class SalesDocument(models.Model):
         2. If document_type.is_correction == True, then source_document is required
         3. If performance_date_to is set, then performance_date_from must be set
         4. If both performance dates are set, then performance_date_to >= performance_date_from
+        5. projekt.kunde/projekt.company must match customer/company (if set at the project)
         """
         super().clean()
 
         errors = {}
+
+        # Validation 5: Projektzuordnung muss zu Kunde und Mandant passen
+        projekt_error = self.get_projekt_assignment_error()
+        if projekt_error:
+            errors['projekt'] = projekt_error
 
         # Validation 1: requires_due_date => due_date required
         if self.document_type and self.document_type.requires_due_date:
