@@ -112,6 +112,12 @@ def _amounts_from_lines(document):
     Es zählen nur Positionen, die in die Belegsummen eingehen (NORMAL sowie
     ausgewählte OPTIONAL/ALTERNATIVE-Positionen).
 
+    Der Steuerbetrag ist die Summe der Positionssteuern. Weil der
+    DocumentCalculationService die Steuer je Steuersatz auf die Nettosumme
+    rechnet und die Rundungsdifferenz auf genau eine Position der jeweiligen
+    Gruppe legt, entspricht diese Summe cent-genau ``document.total_tax`` –
+    die Gegenprobe in :func:`_derive_amounts` greift also weiterhin.
+
     Returns:
         tuple(dict, Decimal) mit den Nettobeträgen je Feld und dem
         Steuerbetrag – oder None, wenn der Beleg gar keine Positionen hat.

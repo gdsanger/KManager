@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.conf import settings
 from django.urls import reverse
 from datetime import datetime, timedelta, date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from django_tables2 import RequestConfig
 import json
 import logging
@@ -1500,6 +1500,11 @@ def ajax_update_line(request, doc_key, pk, line_id):
 
             # Recalculate and persist document totals
             DocumentCalculationService.recalculate(document, persist=True)
+
+            # The recalculation works on its own line objects and may move the
+            # rounding difference of a tax rate onto another line - reload the
+            # sums so the response shows what was actually stored.
+            line.refresh_from_db(fields=['line_net', 'line_tax', 'line_gross'])
     except Http404:
         raise
     except LineInputError as e:
@@ -2391,27 +2396,40 @@ def _calculate_contract_preview_totals(contract):
     """
     Calculate preview totals for a contract based on its lines
     
+    The tax is calculated per tax rate on the summed net, exactly like
+    DocumentCalculationService does for the invoice that the billing run will
+    create - otherwise the preview would show a different tax than the resulting
+    invoice.
+
     Args:
         contract: Contract instance
-    
+
     Returns:
         dict: Preview totals (total_net, total_tax, total_gross)
     """
     lines = contract.lines.select_related('tax_rate').all()
-    
+
     total_net = Decimal('0.00')
-    total_tax = Decimal('0.00')
-    
+    nets_by_rate = {}
+
     for line in lines:
         # Calculate line total (net)
-        line_total_net = (line.quantity * line.unit_price_net).quantize(Decimal('0.01'))
-        
-        # Calculate line tax (rate is already decimal, e.g. 0.19 for 19%)
-        line_tax = (line_total_net * line.tax_rate.rate).quantize(Decimal('0.01'))
-        
+        line_total_net = (line.quantity * line.unit_price_net).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP
+        )
+
         total_net += line_total_net
-        total_tax += line_tax
-    
+        # Rate is already a decimal factor (e.g. 0.19 for 19%)
+        rate = (line.tax_rate.rate or Decimal('0')).quantize(Decimal('0.0001'))
+        nets_by_rate[rate] = nets_by_rate.get(rate, Decimal('0.00')) + line_total_net
+
+    total_tax = sum(
+        (
+            (net * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            for rate, net in nets_by_rate.items()
+        ),
+        Decimal('0.00'),
+    )
     total_gross = total_net + total_tax
     
     return {
