@@ -2,6 +2,8 @@
 Forms for core mailing functionality and user profile management
 """
 import os
+from decimal import Decimal
+
 from django import forms
 from django.conf import settings
 from django.db import models
@@ -370,13 +372,23 @@ class ProjektForm(forms.ModelForm):
 
     class Meta:
         model = Projekt
-        fields = ['titel', 'kunde', 'company', 'beschreibung', 'status']
+        fields = [
+            'titel', 'kunde', 'company', 'beschreibung', 'status',
+            'billing_item', 'hourly_rate',
+            'travel_item', 'travel_hourly_rate',
+            'discount_percent',
+        ]
         widgets = {
             'titel': forms.TextInput(attrs={'class': 'form-control'}),
             'kunde': forms.Select(attrs={'class': 'form-select'}),
             'company': forms.Select(attrs={'class': 'form-select'}),
             'beschreibung': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'status': forms.Select(attrs={'class': 'form-select'}),
+            'billing_item': forms.Select(attrs={'class': 'form-select'}),
+            'hourly_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+            'travel_item': forms.Select(attrs={'class': 'form-select'}),
+            'travel_hourly_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+            'discount_percent': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '100'}),
         }
         labels = {
             'titel': 'Titel *',
@@ -384,10 +396,18 @@ class ProjektForm(forms.ModelForm):
             'company': 'Mandant',
             'beschreibung': 'Beschreibung',
             'status': 'Status *',
+            'billing_item': 'Abrechnungsartikel (Leistung)',
+            'hourly_rate': 'Stundensatz (netto)',
+            'travel_item': 'Abrechnungsartikel (Anfahrt)',
+            'travel_hourly_rate': 'Stundensatz Anfahrt (netto)',
+            'discount_percent': 'Rabatt (%)',
         }
         help_texts = {
             'kunde': 'Optional - leer lassen für interne Projekte ohne Kundenbezug',
             'company': 'Optional - Mandant, dem das Projekt zugeordnet ist',
+            'hourly_rate': 'Übersteuert den Preis aus dem Artikel',
+            'travel_hourly_rate': 'Übersteuert den Preis aus dem Anfahrtsartikel',
+            'discount_percent': 'Rabatt in Prozent (0 bis 100), z.B. 10.00 für 10%',
         }
 
     def __init__(self, *args, **kwargs):
@@ -398,6 +418,30 @@ class ProjektForm(forms.ModelForm):
         ).order_by('matchkey')
         self.fields['kunde'].empty_label = '-- Kein Kunde (intern) --'
         self.fields['company'].empty_label = '-- Kein Mandant --'
+
+        # Abrechnungsartikel: nur aktive Artikel zur Auswahl stellen; bereits
+        # hinterlegte (evtl. inaktive) Artikel bleiben erhalten.
+        for field_name in ('billing_item', 'travel_item'):
+            field = self.fields[field_name]
+            aktive = Item.objects.filter(is_active=True)
+            current = getattr(self.instance, f'{field_name}_id', None)
+            if current:
+                aktive = Item.objects.filter(
+                    models.Q(is_active=True) | models.Q(pk=current)
+                )
+            field.queryset = aktive.order_by('article_no')
+            field.empty_label = '-- Kein Artikel --'
+
+        # Alle Abrechnungsangaben sind optional. Ein leer gelassener Rabatt
+        # bedeutet 0 %, damit bestehende Formulare ohne das Feld weiter
+        # abgeschickt werden können.
+        self.fields['discount_percent'].required = False
+
+    def clean_discount_percent(self):
+        discount = self.cleaned_data.get('discount_percent')
+        if discount is None:
+            return Decimal('0.00')
+        return discount
 
 
 class ProjektOrdnerForm(forms.Form):

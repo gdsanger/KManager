@@ -100,6 +100,69 @@
                 </div>
             </div>
 
+            <!-- Abrechnungskonditionen Card -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <i class="bi bi-cash-coin"></i> Abrechnungskonditionen
+                </div>
+                <div class="card-body">
+                    {% if projekt.kunde %}
+                        {% if not projekt.billing_item or projekt.hourly_rate is None %}
+                        <div class="alert alert-warning py-2 px-3 small mb-3" role="alert">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Für die Leistungszeit fehlen noch Artikel oder Stundensatz – das Projekt
+                            ist so noch nicht abrechenbar.
+                        </div>
+                        {% endif %}
+                    {% endif %}
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="text-muted small">Abrechnungsartikel (Leistung)</label>
+                            {% if projekt.billing_item %}
+                            <p class="mb-0">{{ projekt.billing_item.article_no }} – {{ projekt.billing_item.short_text_1 }}</p>
+                            {% else %}
+                            <p class="mb-0 text-muted">–</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Stundensatz (netto)</label>
+                            {% if projekt.hourly_rate is not None %}
+                            <p class="mb-0">{{ projekt.hourly_rate|floatformat:2 }} €</p>
+                            {% else %}
+                            <p class="mb-0 text-muted">–</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="text-muted small">Abrechnungsartikel (Anfahrt)</label>
+                            {% if projekt.travel_item %}
+                            <p class="mb-0">{{ projekt.travel_item.article_no }} – {{ projekt.travel_item.short_text_1 }}</p>
+                            {% else %}
+                            <p class="mb-0 text-muted">–</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted small">Stundensatz Anfahrt (netto)</label>
+                            {% if projekt.travel_hourly_rate is not None %}
+                            <p class="mb-0">{{ projekt.travel_hourly_rate|floatformat:2 }} €</p>
+                            {% else %}
+                            <p class="mb-0 text-muted">–</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="text-muted small">Rabatt</label>
+                            <p class="mb-0">{{ projekt.discount_percent|default_if_none:"0"|floatformat:2 }} %</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- File Browser Card -->
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">

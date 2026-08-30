@@ -948,7 +948,10 @@ def projekt_list(request):
 def projekt_detail(request, pk):
     """Detail view for a project including its files, folders and time entries."""
     projekt = get_object_or_404(
-        Projekt.objects.select_related('kunde', 'company'), pk=pk
+        Projekt.objects.select_related(
+            'kunde', 'company', 'billing_item', 'travel_item'
+        ),
+        pk=pk,
     )
 
     # Current folder from query string

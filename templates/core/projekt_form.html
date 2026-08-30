@@ -62,6 +62,67 @@
                             {% endif %}
                         </div>
 
+                        <hr class="my-4">
+
+                        <h6 class="text-uppercase text-muted small mb-3">
+                            <i class="bi bi-cash-coin"></i> Abrechnung
+                        </h6>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.billing_item.id_for_label }}" class="form-label">{{ form.billing_item.label }}</label>
+                                {{ form.billing_item }}
+                                {% if form.billing_item.errors %}
+                                    <div class="text-danger small mt-1">{{ form.billing_item.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.hourly_rate.id_for_label }}" class="form-label">{{ form.hourly_rate.label }}</label>
+                                {{ form.hourly_rate }}
+                                <div class="form-text">{{ form.hourly_rate.help_text }}</div>
+                                {% if form.hourly_rate.errors %}
+                                    <div class="text-danger small mt-1">{{ form.hourly_rate.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.travel_item.id_for_label }}" class="form-label">{{ form.travel_item.label }}</label>
+                                {{ form.travel_item }}
+                                {% if form.travel_item.errors %}
+                                    <div class="text-danger small mt-1">{{ form.travel_item.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.travel_hourly_rate.id_for_label }}" class="form-label">{{ form.travel_hourly_rate.label }}</label>
+                                {{ form.travel_hourly_rate }}
+                                <div class="form-text">{{ form.travel_hourly_rate.help_text }}</div>
+                                {% if form.travel_hourly_rate.errors %}
+                                    <div class="text-danger small mt-1">{{ form.travel_hourly_rate.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="form-text mb-3">
+                            <i class="bi bi-info-circle"></i>
+                            Kurztexte, Einheit, Steuersatz und Rabattfähigkeit der Rechnungsposition
+                            stammen aus dem gewählten Artikel. Der hier hinterlegte Stundensatz
+                            übersteuert den Preis aus dem Artikel. Leistungs- und Anfahrtszeit werden
+                            getrennt abgerechnet.
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.discount_percent.id_for_label }}" class="form-label">{{ form.discount_percent.label }}</label>
+                                {{ form.discount_percent }}
+                                <div class="form-text">{{ form.discount_percent.help_text }}</div>
+                                {% if form.discount_percent.errors %}
+                                    <div class="text-danger small mt-1">{{ form.discount_percent.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-save"></i> Speichern

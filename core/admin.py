@@ -631,15 +631,30 @@ class ProjektFileInline(admin.TabularInline):
 
 @admin.register(Projekt)
 class ProjektAdmin(admin.ModelAdmin):
-    list_display = ('titel', 'kunde', 'company', 'status', 'erstellt_am', 'erstellt_von')
+    list_display = (
+        'titel', 'kunde', 'company', 'status',
+        'billing_item', 'hourly_rate', 'travel_item', 'travel_hourly_rate',
+        'erstellt_am', 'erstellt_von',
+    )
     list_filter = ('status', 'company', 'kunde')
     search_fields = ('titel', 'beschreibung', 'kunde__name', 'kunde__firma', 'company__name')
     readonly_fields = ('erstellt_am', 'aktualisiert_am')
+    list_select_related = ('kunde', 'company', 'billing_item', 'travel_item')
     inlines = [ProjektFileInline]
 
     fieldsets = (
         ('Grunddaten', {
             'fields': ('titel', 'kunde', 'company', 'beschreibung', 'status', 'erstellt_von')
+        }),
+        ('Abrechnung', {
+            'fields': (
+                'billing_item', 'hourly_rate',
+                'travel_item', 'travel_hourly_rate',
+                'discount_percent',
+            ),
+            'description': 'Leistungs- und Anfahrtszeit werden getrennt abgerechnet. '
+                           'Kurztexte, Einheit, Steuersatz und Rabattfähigkeit stammen aus dem '
+                           'Artikel; der Stundensatz des Projekts übersteuert den Artikelpreis.',
         }),
         ('Zeitstempel', {
             'fields': ('erstellt_am', 'aktualisiert_am'),
