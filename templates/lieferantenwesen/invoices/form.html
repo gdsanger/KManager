@@ -21,35 +21,47 @@
     <div class="row">
         <div class="col-lg-9">
 
+            {% if form.errors or formset.total_error_count %}
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle"></i>
+                Die Eingangsrechnung konnte nicht gespeichert werden. Bitte prüfen Sie die markierten Felder.
+            </div>
+            {% endif %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+            {% endif %}
+
             <!-- Header -->
             <div class="card mb-3">
                 <div class="card-header"><h5 class="mb-0">Kopfdaten</h5></div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.invoice_no.label }} <span class="text-danger">*</span></label>
+                            <label class="form-label" for="{{ form.invoice_no.id_for_label }}">{{ form.invoice_no.label }} <span class="text-danger">*</span></label>
                             {{ form.invoice_no }}
-                            {% if form.invoice_no.errors %}<div class="text-danger small">{{ form.invoice_no.errors }}</div>{% endif %}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.invoice_no %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.invoice_date.label }} <span class="text-danger">*</span></label>
+                            <label class="form-label" for="{{ form.invoice_date.id_for_label }}">{{ form.invoice_date.label }} <span class="text-danger">*</span></label>
                             {{ form.invoice_date }}
-                            {% if form.invoice_date.errors %}<div class="text-danger small">{{ form.invoice_date.errors }}</div>{% endif %}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.invoice_date %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.currency.label }}</label>
+                            <label class="form-label" for="{{ form.currency.id_for_label }}">{{ form.currency.label }}</label>
                             {{ form.currency }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.currency %}
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.supplier.label }} <span class="text-danger">*</span></label>
+                            <label class="form-label" for="{{ form.supplier.id_for_label }}">{{ form.supplier.label }} <span class="text-danger">*</span></label>
                             {{ form.supplier }}
-                            {% if form.supplier.errors %}<div class="text-danger small">{{ form.supplier.errors }}</div>{% endif %}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.supplier %}
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label class="form-label">{{ form.status.label }}</label>
+                            <label class="form-label" for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
                             {{ form.status }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.status %}
                         </div>
                     </div>
                 </div>
@@ -61,16 +73,19 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.net_amount.label }}</label>
+                            <label class="form-label" for="{{ form.net_amount.id_for_label }}">{{ form.net_amount.label }}</label>
                             {{ form.net_amount }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.net_amount %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.tax_amount.label }}</label>
+                            <label class="form-label" for="{{ form.tax_amount.id_for_label }}">{{ form.tax_amount.label }}</label>
                             {{ form.tax_amount }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.tax_amount %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.gross_amount.label }}</label>
+                            <label class="form-label" for="{{ form.gross_amount.id_for_label }}">{{ form.gross_amount.label }}</label>
                             {{ form.gross_amount }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.gross_amount %}
                         </div>
                     </div>
                 </div>
@@ -82,22 +97,34 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.due_date.label }}</label>
+                            <label class="form-label" for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>
                             {{ form.due_date }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.due_date %}
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.payment_terms_text.label }}</label>
+                            <label class="form-label" for="{{ form.payment_terms_text.id_for_label }}">{{ form.payment_terms_text.label }}</label>
                             {{ form.payment_terms_text }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.payment_terms_text %}
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.payment_reference.label }}</label>
+                            <label class="form-label" for="{{ form.payment_reference.id_for_label }}">{{ form.payment_reference.label }}</label>
                             {{ form.payment_reference }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.payment_reference %}
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.iban_from_invoice.label }}</label>
+                            <label class="form-label" for="{{ form.iban_from_invoice.id_for_label }}">{{ form.iban_from_invoice.label }}</label>
                             {{ form.iban_from_invoice }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.iban_from_invoice %}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.payment_date.id_for_label }}">{{ form.payment_date.label }}</label>
+                            {{ form.payment_date }}
+                            <div class="form-text">Pflichtangabe, sobald der Status "Bezahlt" gesetzt ist.</div>
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.payment_date %}
                         </div>
                     </div>
                 </div>
@@ -109,18 +136,19 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.cost_type_main.label }}</label>
+                            <label class="form-label" for="{{ form.cost_type_main.id_for_label }}">{{ form.cost_type_main.label }}</label>
                             {{ form.cost_type_main }}
-                            {% if form.cost_type_main.errors %}<div class="text-danger small">{{ form.cost_type_main.errors }}</div>{% endif %}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.cost_type_main %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.cost_type_sub.label }}</label>
+                            <label class="form-label" for="{{ form.cost_type_sub.id_for_label }}">{{ form.cost_type_sub.label }}</label>
                             {{ form.cost_type_sub }}
-                            {% if form.cost_type_sub.errors %}<div class="text-danger small">{{ form.cost_type_sub.errors }}</div>{% endif %}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.cost_type_sub %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.order.label }}</label>
+                            <label class="form-label" for="{{ form.order.id_for_label }}">{{ form.order.label }}</label>
                             {{ form.order }}
+                            {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.order %}
                         </div>
                     </div>
                 </div>
@@ -131,6 +159,7 @@
                 <div class="card-header"><h5 class="mb-0">Freigabe-Kommentar</h5></div>
                 <div class="card-body">
                     {{ form.approval_comment }}
+                    {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.approval_comment %}
                 </div>
             </div>
 
@@ -143,6 +172,11 @@
                         <i class="bi bi-plus"></i> Position hinzufügen
                     </button>
                 </div>
+                {% if formset.non_form_errors %}
+                <div class="card-body pb-0">
+                    <div class="alert alert-danger mb-0">{{ formset.non_form_errors }}</div>
+                </div>
+                {% endif %}
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-dark table-sm mb-0" id="lines-table">
@@ -155,19 +189,23 @@
                                     <th>EP</th>
                                     <th>Netto</th>
                                     <th>MwSt%</th>
+                                    <th>Kostenart 1</th>
+                                    <th>Kostenart 2</th>
                                     <th>Entf.</th>
                                 </tr>
                             </thead>
                             <tbody id="lines-body">
                                 {% for line_form in formset %}
                                 <tr class="line-form">
-                                    <td>{{ line_form.id }}{{ line_form.position_no }}</td>
-                                    <td>{{ line_form.description }}</td>
-                                    <td>{{ line_form.quantity }}</td>
-                                    <td>{{ line_form.unit }}</td>
-                                    <td>{{ line_form.unit_price }}</td>
-                                    <td>{{ line_form.net_amount }}</td>
-                                    <td>{{ line_form.tax_rate }}</td>
+                                    <td>{{ line_form.id }}{{ line_form.position_no }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.position_no %}</td>
+                                    <td>{{ line_form.description }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.description %}</td>
+                                    <td>{{ line_form.quantity }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.quantity %}</td>
+                                    <td>{{ line_form.unit }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.unit %}</td>
+                                    <td>{{ line_form.unit_price }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.unit_price %}</td>
+                                    <td>{{ line_form.net_amount }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.net_amount %}</td>
+                                    <td>{{ line_form.tax_rate }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.tax_rate %}</td>
+                                    <td>{{ line_form.cost_type_main_line }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.cost_type_main_line %}</td>
+                                    <td>{{ line_form.cost_type_sub_line }}{% include "lieferantenwesen/invoices/partials/field_errors.html" with field=line_form.cost_type_sub_line %}</td>
                                     <td>
                                         {% if line_form.DELETE %}
                                         <div class="form-check">
@@ -176,6 +214,11 @@
                                         {% endif %}
                                     </td>
                                 </tr>
+                                {% if line_form.non_field_errors %}
+                                <tr class="line-form-errors">
+                                    <td colspan="10"><div class="text-danger small mb-0">{{ line_form.non_field_errors }}</div></td>
+                                </tr>
+                                {% endif %}
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -190,5 +233,104 @@
             </div>
         </div>
     </div>
+
+    <template id="empty-line-template">
+        <tr class="line-form">
+            <td>{{ formset.empty_form.id }}{{ formset.empty_form.position_no }}</td>
+            <td>{{ formset.empty_form.description }}</td>
+            <td>{{ formset.empty_form.quantity }}</td>
+            <td>{{ formset.empty_form.unit }}</td>
+            <td>{{ formset.empty_form.unit_price }}</td>
+            <td>{{ formset.empty_form.net_amount }}</td>
+            <td>{{ formset.empty_form.tax_rate }}</td>
+            <td>{{ formset.empty_form.cost_type_main_line }}</td>
+            <td>{{ formset.empty_form.cost_type_sub_line }}</td>
+            <td>
+                {% if formset.empty_form.DELETE %}
+                <div class="form-check">
+                    {{ formset.empty_form.DELETE }}
+                </div>
+                {% endif %}
+            </td>
+        </tr>
+    </template>
 </form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    var OPTIONS_URL = '{% url "auftragsverwaltung:ajax_get_kostenart2_options" %}';
+    var EMPTY_LABEL = '---------';
+
+    /**
+     * Refill the "Kostenart 2" select belonging to the given "Kostenart 1"
+     * select. The previous selection is always dropped, because it can no
+     * longer belong to the newly chosen main cost type.
+     */
+    function refreshSubOptions(mainSelect) {
+        var subSelect = document.getElementById(mainSelect.dataset.costTypeTarget);
+        if (!subSelect) {
+            return;
+        }
+        var label = subSelect.options.length ? subSelect.options[0].text : EMPTY_LABEL;
+        subSelect.innerHTML = '';
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = label;
+        subSelect.appendChild(placeholder);
+        subSelect.value = '';
+
+        var mainId = mainSelect.value;
+        if (!mainId) {
+            subSelect.disabled = true;
+            return;
+        }
+        subSelect.disabled = false;
+        fetch(OPTIONS_URL + '?kostenart1_id=' + encodeURIComponent(mainId))
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                (data.kostenarten || []).forEach(function (kostenart) {
+                    var option = document.createElement('option');
+                    option.value = kostenart.id;
+                    option.textContent = kostenart.name;
+                    subSelect.appendChild(option);
+                });
+            })
+            .catch(function (error) {
+                console.error('Kostenart 2 konnte nicht geladen werden:', error);
+            });
+    }
+
+    // Delegated so that dynamically added position rows work as well.
+    document.addEventListener('change', function (event) {
+        var target = event.target;
+        if (target && target.matches && target.matches('[data-cost-type-target]')) {
+            refreshSubOptions(target);
+        }
+    });
+
+    var addButton = document.getElementById('add-line');
+    var linesBody = document.getElementById('lines-body');
+    var lineTemplate = document.getElementById('empty-line-template');
+    var totalForms = document.getElementById('id_{{ formset.prefix }}-TOTAL_FORMS');
+
+    if (addButton && linesBody && lineTemplate && totalForms) {
+        addButton.addEventListener('click', function () {
+            var index = parseInt(totalForms.value, 10) || 0;
+            var markup = lineTemplate.innerHTML.replace(/__prefix__/g, index);
+            var parser = document.createElement('template');
+            parser.innerHTML = markup.trim();
+            var row = parser.content.firstElementChild;
+            if (!row) {
+                return;
+            }
+            linesBody.appendChild(row);
+            totalForms.value = index + 1;
+        });
+    }
+})();
+</script>
 {% endblock %}
