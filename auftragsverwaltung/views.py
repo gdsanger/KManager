@@ -335,6 +335,9 @@ def document_detail(request, doc_key, pk):
         type__in=['FOOTER', 'BOTH']
     ).order_by('sort_order', 'title')
     
+    # Angehängte Dokumente (z. B. gescannter Originalbeleg bei Nacherfassung)
+    dokumente = document.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
+    
     context = {
         'document': document,
         'document_type': document_type,
@@ -351,6 +354,7 @@ def document_detail(request, doc_key, pk):
         'footer_templates': footer_templates,
         'status_choices': SalesDocument.STATUS_CHOICES,  # Add for template consistency
         'copy_document_types': copy_document_types,
+        'dokumente': dokumente,
     }
     
     return render(request, 'auftragsverwaltung/documents/detail.html', context)
@@ -467,6 +471,10 @@ def render_document_form(request, document, document_type, doc_key, company,
             is_active=True,
         ).order_by('name'),
         'number_error': number_error,
+        'dokumente': (
+            document.dokumente.select_related('uploaded_by').order_by('-uploaded_at')
+            if document is not None and document.pk else []
+        ),
     }
     if is_create:
         context['is_create'] = True

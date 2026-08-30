@@ -770,7 +770,8 @@ class DokumentUploadForm(forms.ModelForm):
     """
     Form for uploading documents.
     Allows uploading a file and optional description.
-    The entity (Vertrag, MietObjekt, Adresse, Uebergabeprotokoll, InvoiceIn) is set programmatically.
+    The entity (Vertrag, MietObjekt, Adresse, Uebergabeprotokoll, InvoiceIn,
+    SalesDocument) is set programmatically.
     """
 
     # Mapping of entity types to foreign key field names
@@ -782,6 +783,7 @@ class DokumentUploadForm(forms.ModelForm):
         'uebergabeprotokoll': 'uebergabeprotokoll_id',
         'eingangsrechnung': 'invoice_in_id',  # Updated to use global InvoiceIn
         'invoice_in': 'invoice_in_id',  # Also support direct invoice_in name
+        'salesdocument': 'salesdocument_id',
     }
     
     file = forms.FileField(
@@ -812,7 +814,8 @@ class DokumentUploadForm(forms.ModelForm):
         Initialize form with entity type and ID.
         
         Args:
-            entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll, eingangsrechnung, invoice_in)
+            entity_type: Type of entity (vertrag, mietobjekt, adresse, uebergabeprotokoll,
+                         eingangsrechnung, invoice_in, salesdocument)
             entity_id: ID of the entity
             user: User who is uploading the file
         """
@@ -876,7 +879,7 @@ class DokumentUploadForm(forms.ModelForm):
         # Safety check: Ensure foreign key is set (fallback if is_valid() wasn't called)
         if not any([instance.vertrag_id, instance.mietobjekt_id,
                     instance.adresse_id, instance.uebergabeprotokoll_id,
-                    instance.invoice_in_id]):
+                    instance.invoice_in_id, instance.salesdocument_id]):
             # Fallback mechanism: set FK here if _post_clean() wasn't called
             if self.entity_type and self.entity_id:
                 fk_field = self.ENTITY_TO_FK_MAPPING.get(self.entity_type)
