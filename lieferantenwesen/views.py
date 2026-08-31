@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 
+from core.models import Adresse
 from .forms import ApprovalForm, InvoiceInForm, InvoiceInLineFormSet
 from .models import InvoiceIn
 from .permissions import geschaeftsleitung_required, lieferantenwesen_required
@@ -69,6 +70,11 @@ def invoice_list(request):
     status_filter = request.GET.get("status", "")
     company_filter = request.GET.get("company", "")
     overdue_only = request.GET.get("overdue", "") == "1"
+    supplier_filter = request.GET.get("supplier", "")
+    # Zahlstatus der Verbindlichkeit – Einstieg von der Lieferantenauswertung
+    # aus. Bewusst getrennt vom Schalter „Nur Überfällige", der die noch nicht
+    # freigegebenen Rechnungen im Blick behält.
+    payment_filter = request.GET.get("payment", "")
     today = timezone.now().date()
 
     qs = InvoiceIn.objects.select_related("supplier", "order", "company").order_by(
@@ -89,6 +95,18 @@ def invoice_list(request):
         qs = qs.filter(company_id=int(company_filter))
     else:
         company_filter = ""
+    if supplier_filter.isdigit():
+        qs = qs.filter(supplier_id=int(supplier_filter))
+    else:
+        supplier_filter = ""
+    if payment_filter in ("open", "overdue"):
+        # Offene Verbindlichkeit: freigegeben und ohne erfasstes Zahldatum.
+        # Rechnungen in Prüfung sind noch nicht zur Zahlung freigegeben.
+        qs = qs.filter(status="APPROVED", payment_date__isnull=True)
+        if payment_filter == "overdue":
+            qs = qs.filter(due_date__lt=today)
+    else:
+        payment_filter = ""
     if overdue_only:
         qs = qs.filter(
             due_date__lt=today,
@@ -111,6 +129,12 @@ def invoice_list(request):
             "status_filter": status_filter,
             "company_filter": company_filter,
             "overdue_only": overdue_only,
+            "supplier_filter": supplier_filter,
+            "payment_filter": payment_filter,
+            "supplier": (
+                Adresse.objects.filter(pk=supplier_filter).first()
+                if supplier_filter else None
+            ),
             "today": today,
             "status_choices": INVOICE_IN_STATUS,
             "companies": Mandant.objects.order_by("name"),

@@ -1,0 +1,248 @@
+{% comment %}
+Auswertungs-Tab eines Geschäftspartners (Umsatz beim Kunden, Einkauf beim
+Lieferanten).
+
+Erwartet im Kontext:
+    stats – finanzen.services.partner_stats.PartnerStats
+
+Das Markup ist bis auf die Beschriftungen identisch und existiert deshalb nur
+hier; die Beschriftungen kommen aus `stats.labels`, die Links unterscheiden
+sich über `stats.is_customer`.
+{% endcomment %}
+
+{# ---------------------------------------------------------------- #}
+{# Kennzahlen                                                        #}
+{# ---------------------------------------------------------------- #}
+<div class="row">
+    <div class="col-md-6 col-xl-3 mb-3">
+        <div class="card h-100 bg-dark">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">{{ stats.labels.total }}</p>
+                <h4 class="mb-0">{{ stats.total_net|floatformat:2 }} €</h4>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">Über alle Zeiten</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-xl-3 mb-3">
+        <div class="card h-100 bg-dark">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">{{ stats.labels.last_12_months }}</p>
+                <h4 class="mb-0">{{ stats.last_12_months_net|floatformat:2 }} €</h4>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">
+                    {{ stats.month_labels.0 }} – {{ stats.month_labels|last }}
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-xl-3 mb-3">
+        <div class="card h-100 bg-dark">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">{{ stats.labels.open }}</p>
+                <h4 class="mb-0">{{ stats.open_total_gross|floatformat:2 }} €</h4>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">
+                    {{ stats.open_count }} Posten{% if stats.open_overdue_count %},
+                        <span class="text-danger">davon {{ stats.open_overdue_count }} überfällig</span>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-xl-3 mb-3">
+        <div class="card h-100 bg-dark">
+            <div class="card-body">
+                <p class="text-muted mb-1 small">{{ stats.labels.payment_days }}</p>
+                {# Ohne bezahlten Beleg „–": eine 0 würde eine sofortige #}
+                {# Zahlung behaupten, wo schlicht nichts bekannt ist.     #}
+                <h4 class="mb-0">
+                    {% if stats.average_payment_days is None %}
+                        –
+                    {% else %}
+                        {{ stats.average_payment_days }} Tagen
+                    {% endif %}
+                </h4>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">Bezahlte Belege der letzten 24 Monate</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<p class="text-muted small">
+    <i class="bi bi-info-circle"></i>
+    Volumen <strong>netto</strong>, offene Beträge <strong>brutto</strong> –
+    Quelle: {{ stats.labels.source }}. Stand {{ stats.today|date:"d.m.Y" }}.
+</p>
+
+{# ---------------------------------------------------------------- #}
+{# Zwölf rollierende Monate                                          #}
+{# ---------------------------------------------------------------- #}
+<div class="card bg-dark mb-3">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-bar-chart"></i> {{ stats.labels.chart_title }}</h6>
+    </div>
+    <div class="card-body">
+        <div class="chart-container">
+            <canvas id="partner-stats-chart"
+                    aria-label="Balkendiagramm: {{ stats.labels.chart_title }} je Monat"
+                    role="img"></canvas>
+        </div>
+
+        {# Tabellensicht als barrierefreies Gegenstück zum Diagramm. #}
+        <details class="mt-3">
+            <summary class="text-muted">Werte als Tabelle</summary>
+            <div class="table-responsive mt-2">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Monat</th>
+                            <th class="text-end">Netto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in stats.monthly_rows %}
+                            <tr>
+                                <td>{{ row.label }}</td>
+                                <td class="text-end text-nowrap">{{ row.net|floatformat:2 }} €</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th>Summe</th>
+                            <th class="text-end text-nowrap">{{ stats.last_12_months_net|floatformat:2 }} €</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </details>
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">
+            Rollierend ab dem aktuellen Monat rückwärts – Monate ohne Bewegung
+            erscheinen als 0.
+        </small>
+    </div>
+</div>
+
+{# ---------------------------------------------------------------- #}
+{# Offene Posten                                                     #}
+{# ---------------------------------------------------------------- #}
+<div class="card bg-dark mb-3">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <h6 class="mb-0"><i class="bi bi-hourglass-split"></i> {{ stats.labels.open_items }}</h6>
+            <div class="text-end text-nowrap">
+                <div><strong>{{ stats.open_total_gross|floatformat:2 }} €</strong></div>
+                <small class="text-muted">
+                    {{ stats.open_count }} Posten{% if stats.open_overdue_count %}, davon {{ stats.open_overdue_count }} überfällig{% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if stats.open_items %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>{% if stats.is_customer %}Belegnummer{% else %}Rechnungsnummer{% endif %}</th>
+                            <th class="text-nowrap">{% if stats.is_customer %}Belegdatum{% else %}Rechnungsdatum{% endif %}</th>
+                            <th class="text-nowrap">Fälligkeit</th>
+                            <th>Mandant</th>
+                            <th class="text-end">Brutto</th>
+                            <th class="text-end text-nowrap">Tage überf.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in stats.open_items %}
+                            <tr {% if item.days_overdue %}class="table-row-overdue"{% endif %}>
+                                {% if stats.is_customer %}
+                                    <td class="text-nowrap">
+                                        <a href="{% url 'auftragsverwaltung:document_detail' item.document_type.key item.pk %}">{{ item.number }}</a>
+                                    </td>
+                                    <td class="text-nowrap">{{ item.issue_date|date:"d.m.Y" }}</td>
+                                {% else %}
+                                    <td class="text-nowrap">
+                                        <a href="{% url 'lieferantenwesen:invoice_detail' item.pk %}">{{ item.invoice_no }}</a>
+                                    </td>
+                                    <td class="text-nowrap">{{ item.invoice_date|date:"d.m.Y" }}</td>
+                                {% endif %}
+                                <td class="text-nowrap">{{ item.due_date|date:"d.m.Y"|default:"—" }}</td>
+                                <td>{{ item.company.name|default:"—"|truncatechars:24 }}</td>
+                                <td class="text-end text-nowrap">
+                                    {% if stats.is_customer %}
+                                        {{ item.total_gross|default_if_none:0|floatformat:2 }} €
+                                    {% else %}
+                                        {{ item.gross_amount|default_if_none:0|floatformat:2 }} €
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    {% if item.days_overdue %}
+                                        <span class="text-danger"><i class="bi bi-exclamation-triangle"></i> {{ item.days_overdue }}</span>
+                                    {% else %}
+                                        –
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-check2-circle display-6 d-block mb-2"></i>
+                {{ stats.labels.empty_open_items }}
+            </div>
+        {% endif %}
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">
+            {% if stats.truncated %}
+                Zeigt die {{ stats.open_items|length }} ältesten von {{ stats.open_count }} Posten.
+            {% else %}
+                Älteste Fälligkeit zuerst.
+            {% endif %}
+        </small>
+    </div>
+</div>
+
+{# ---------------------------------------------------------------- #}
+{# Verweise in die Vollansicht, vorgefiltert auf diesen Partner      #}
+{# ---------------------------------------------------------------- #}
+<div class="d-flex flex-wrap gap-2">
+    {% if stats.is_customer %}
+        {% url 'auftragsverwaltung:document_list' 'invoice' as document_list_url %}
+        <a href="{{ document_list_url }}?customer={{ stats.partner.pk }}" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-list-ul"></i> Alle Rechnungen
+        </a>
+        <a href="{{ document_list_url }}?customer={{ stats.partner.pk }}&amp;payment_status=open" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-hourglass"></i> Nur offene
+        </a>
+        <a href="{{ document_list_url }}?customer={{ stats.partner.pk }}&amp;payment_status=overdue" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-exclamation-triangle"></i> Nur überfällige
+        </a>
+    {% else %}
+        {% url 'lieferantenwesen:invoice_list' as invoice_list_url %}
+        <a href="{{ invoice_list_url }}?supplier={{ stats.partner.pk }}" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-list-ul"></i> Alle Rechnungen
+        </a>
+        <a href="{{ invoice_list_url }}?supplier={{ stats.partner.pk }}&amp;payment=open" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-hourglass"></i> Nur offene
+        </a>
+        <a href="{{ invoice_list_url }}?supplier={{ stats.partner.pk }}&amp;payment=overdue" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-exclamation-triangle"></i> Nur überfällige
+        </a>
+    {% endif %}
+</div>
+
+{{ stats.chart_data|json_script:"partner-stats-data" }}

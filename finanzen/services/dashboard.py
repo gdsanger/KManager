@@ -69,7 +69,7 @@ JOURNAL_RELEVANT_DOCUMENTS = Q(document_type__is_invoice=True) | Q(
 )
 
 # Aggregatsfelder mit ausreichend Stellen für Jahressummen.
-_AMOUNT_FIELD = DecimalField(max_digits=14, decimal_places=2)
+AMOUNT_FIELD = DecimalField(max_digits=14, decimal_places=2)
 
 
 def _year_bounds(year):
@@ -116,11 +116,11 @@ def _monthly_series(queryset, date_field, amount_expression, year):
 def _income_amount_expression(value_basis):
     """Aggregat für die Einnahmenseite je Wertebasis."""
     if value_basis == VALUE_BASIS_GROSS:
-        return Sum('gross_amount', output_field=_AMOUNT_FIELD)
+        return Sum('gross_amount', output_field=AMOUNT_FIELD)
     # Netto ist im Journal auf die Steuersätze aufgeteilt gespeichert.
     return Sum(
         F('net_0') + F('net_7') + F('net_19'),
-        output_field=_AMOUNT_FIELD,
+        output_field=AMOUNT_FIELD,
     )
 
 
@@ -133,8 +133,8 @@ def _expense_amount_expression(value_basis):
     """
     field_name = 'gross_amount' if value_basis == VALUE_BASIS_GROSS else 'net_amount'
     return Sum(
-        Coalesce(F(field_name), Value(ZERO), output_field=_AMOUNT_FIELD),
-        output_field=_AMOUNT_FIELD,
+        Coalesce(F(field_name), Value(ZERO), output_field=AMOUNT_FIELD),
+        output_field=AMOUNT_FIELD,
     )
 
 
@@ -193,7 +193,7 @@ def monthly_expenses(company, year, value_basis=VALUE_BASIS_NET,
     )
 
 
-def _days_overdue(due_date, today):
+def days_overdue(due_date, today):
     """Tage seit Fälligkeit (0, wenn nicht überfällig oder ohne Fälligkeit)."""
     if due_date is None or due_date >= today:
         return 0
@@ -233,9 +233,9 @@ def open_receivables(company, today=None, limit=OPEN_ITEM_LIMIT):
     totals = queryset.aggregate(
         count=Count('pk'),
         total=Coalesce(
-            Sum('total_gross', output_field=_AMOUNT_FIELD),
+            Sum('total_gross', output_field=AMOUNT_FIELD),
             Value(ZERO),
-            output_field=_AMOUNT_FIELD,
+            output_field=AMOUNT_FIELD,
         ),
         overdue_count=Count('pk', filter=Q(due_date__lt=today)),
     )
@@ -248,7 +248,7 @@ def open_receivables(company, today=None, limit=OPEN_ITEM_LIMIT):
         .order_by(F('due_date').asc(nulls_last=True), 'issue_date', 'number')[:limit]
     )
     for entry in entries:
-        entry.days_overdue = _days_overdue(entry.due_date, today)
+        entry.days_overdue = days_overdue(entry.due_date, today)
 
     return OpenItems(
         entries=entries,
@@ -278,9 +278,9 @@ def open_payables(company, today=None, limit=OPEN_ITEM_LIMIT):
     totals = queryset.aggregate(
         count=Count('pk'),
         total=Coalesce(
-            Sum('gross_amount', output_field=_AMOUNT_FIELD),
+            Sum('gross_amount', output_field=AMOUNT_FIELD),
             Value(ZERO),
-            output_field=_AMOUNT_FIELD,
+            output_field=AMOUNT_FIELD,
         ),
         overdue_count=Count('pk', filter=Q(due_date__lt=today)),
     )
@@ -291,7 +291,7 @@ def open_payables(company, today=None, limit=OPEN_ITEM_LIMIT):
         .order_by(F('due_date').asc(nulls_last=True), 'invoice_date', 'invoice_no')[:limit]
     )
     for entry in entries:
-        entry.days_overdue = _days_overdue(entry.due_date, today)
+        entry.days_overdue = days_overdue(entry.due_date, today)
 
     return OpenItems(
         entries=entries,
