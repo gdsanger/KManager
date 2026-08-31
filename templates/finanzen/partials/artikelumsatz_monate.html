@@ -1,0 +1,49 @@
+{% comment %}
+    Monatsverlauf eines Artikels – per HTMX in die aufgeklappte Ranglistenzeile
+    nachgeladen (finanzen.views.item_revenue_months).
+
+    Die Diagrammdaten stehen in einem data-Attribut und nicht in einem
+    <script>-Block: Der Ausschnitt wird nachgeladen, und das Attribut ist
+    unabhängig davon, wie HTMX Skripte beim Einfügen behandelt.
+{% endcomment %}
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="chart-container chart-container-sm">
+            <canvas id="verlauf-chart-{{ item_key }}"
+                    class="artikelumsatz-chart"
+                    data-chart="{{ series.chart_data_json }}"
+                    aria-label="Balkendiagramm: Nettoumsatz je Monat des Jahres {{ series.year }} für {{ series.label }}"
+                    role="img"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        {# Tabellensicht als barrierefreies Gegenstück zum Diagramm. #}
+        <table class="table table-sm mb-0">
+            <caption class="small">
+                Nettoumsatz je Monat {{ series.year }} – Monate ohne Umsatz erscheinen als 0.
+            </caption>
+            <thead>
+                <tr>
+                    <th>Monat</th>
+                    <th class="text-end">Nettoumsatz</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for month in series.monthly_rows %}
+                    <tr>
+                        <td>{{ month.label }}</td>
+                        <td class="text-end text-nowrap {% if month.net < 0 %}text-danger{% endif %}">
+                            {{ month.net|floatformat:2 }} €
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th>Summe {{ series.year }}</th>
+                    <th class="text-end text-nowrap">{{ series.total_net|floatformat:2 }} €</th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
