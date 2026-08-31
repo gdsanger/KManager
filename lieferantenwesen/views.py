@@ -201,7 +201,7 @@ def invoice_pdf(request, pk):
 @lieferantenwesen_required
 def invoice_create(request):
     if request.method == "POST":
-        form = InvoiceInForm(request.POST)
+        form = InvoiceInForm(request.POST, request.FILES)
         formset = InvoiceInLineFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
             invoice = form.save(commit=False)
@@ -237,7 +237,7 @@ def invoice_edit(request, pk):
         return redirect("lieferantenwesen:invoice_detail", pk=pk)
 
     if request.method == "POST":
-        form = InvoiceInForm(request.POST, instance=invoice)
+        form = InvoiceInForm(request.POST, request.FILES, instance=invoice)
         formset = InvoiceInLineFormSet(request.POST, instance=invoice)
         if form.is_valid() and formset.is_valid():
             updated = form.save(commit=False)
