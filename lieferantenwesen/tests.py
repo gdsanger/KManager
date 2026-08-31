@@ -1005,6 +1005,365 @@ class LineItemsExtractionTest(TestCase):
         self.assertEqual(line2.net_amount, Decimal("200.00"))
 
 
+class LineNetAmountDerivationTest(TestCase):
+    """
+    Positionen ohne ``net_amount`` dürfen den Import nicht sprengen.
+
+    ``InvoiceInLine.net_amount`` ist Pflichtfeld; die Belegerkennung liefert
+    den Nettobetrag aber nicht immer. Er wird deshalb aus den vorhandenen
+    Werten hergeleitet – und wenn das nicht geht, wird die Position
+    übersprungen statt geraten.
+    """
+
+    def setUp(self):
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Ableitung Lieferant",
+            strasse="Ableitungsstr. 1",
+            plz="66666",
+            ort="Ableitungsstadt",
+            land="DE",
+        )
+
+    def _invoice(self, **kwargs):
+        return InvoiceIn.objects.create(
+            invoice_no=kwargs.pop("invoice_no", "DERIVE-001"),
+            invoice_date=date(2026, 3, 1),
+            supplier=self.supplier,
+            **kwargs,
+        )
+
+    def _create_lines(self, invoice, positionen):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+        from lieferantenwesen.services import InvoiceInService
+
+        dto = InvoiceDataDTO(belegnummer=invoice.invoice_no, positionen=positionen)
+        return InvoiceInService()._create_lines_from_dto(invoice, dto)
+
+    def test_net_amount_derived_from_gross_and_tax_rate(self):
+        """Der Fall aus dem Fehlerbild: nur Brutto und Steuersatz."""
+        invoice = self._invoice()
+
+        created, skipped = self._create_lines(
+            invoice,
+            [
+                {
+                    "position_no": 1,
+                    "description": "IDO-3000 USB-C MULTIP DOCKING STATI",
+                    "quantity": "1.000",
+                    "unit_price": "119.9900",
+                    "tax_rate": "19.00",
+                    "gross_amount": "119.99",
+                }
+            ],
+        )
+
+        self.assertEqual((created, skipped), (1, 0))
+        line = invoice.lines.get()
+        self.assertEqual(line.net_amount, Decimal("100.83"))
+        self.assertEqual(line.tax_amount, Decimal("19.16"))
+        self.assertEqual(line.gross_amount, Decimal("119.99"))
+        # Netto + Steuer müssen exakt den Bruttobetrag ergeben.
+        self.assertEqual(line.net_amount + line.tax_amount, line.gross_amount)
+
+    def test_net_amount_derived_from_gross_and_tax_amount(self):
+        invoice = self._invoice()
+
+        created, skipped = self._create_lines(
+            invoice,
+            [
+                {
+                    "position_no": 1,
+                    "description": "Ohne Steuersatz",
+                    "tax_amount": "19.00",
+                    "gross_amount": "119.00",
+                }
+            ],
+        )
+
+        self.assertEqual((created, skipped), (1, 0))
+        line = invoice.lines.get()
+        self.assertEqual(line.net_amount, Decimal("100.00"))
+        self.assertEqual(line.tax_amount, Decimal("19.00"))
+        self.assertEqual(line.gross_amount, Decimal("119.00"))
+
+    def test_net_amount_derived_from_quantity_and_unit_price(self):
+        """Menge × Einzelpreis ist der letzte Ausweg, nicht der erste."""
+        invoice = self._invoice()
+
+        created, skipped = self._create_lines(
+            invoice,
+            [
+                {
+                    "position_no": 1,
+                    "description": "Nur Menge und Einzelpreis",
+                    "quantity": "3",
+                    "unit_price": "12.3450",
+                    "tax_rate": "19.00",
+                }
+            ],
+        )
+
+        self.assertEqual((created, skipped), (1, 0))
+        line = invoice.lines.get()
+        self.assertEqual(line.net_amount, Decimal("37.04"))
+
+    def test_gross_takes_precedence_over_quantity_times_unit_price(self):
+        """
+        Ist ``unit_price`` brutto gefüllt, darf Menge × Preis nicht gewinnen.
+
+        Genau das passiert im beobachteten Fehlerfall – der Bruttobetrag ist
+        der Wert, der zum Rechnungsbetrag passen muss.
+        """
+        invoice = self._invoice()
+
+        self._create_lines(
+            invoice,
+            [
+                {
+                    "position_no": 1,
+                    "description": "Einzelpreis brutto",
+                    "quantity": "1.000",
+                    "unit_price": "119.9900",
+                    "tax_rate": "19.00",
+                    "gross_amount": "119.99",
+                }
+            ],
+        )
+
+        self.assertEqual(invoice.lines.get().net_amount, Decimal("100.83"))
+
+    def test_explicit_net_amount_is_used_unchanged(self):
+        invoice = self._invoice()
+
+        self._create_lines(
+            invoice,
+            [
+                {
+                    "position_no": 1,
+                    "description": "Netto direkt geliefert",
+                    "net_amount": "100.00",
+                    "tax_rate": "19.00",
+                    "gross_amount": "150.00",
+                }
+            ],
+        )
+
+        line = invoice.lines.get()
+        self.assertEqual(line.net_amount, Decimal("100.00"))
+        self.assertEqual(line.gross_amount, Decimal("150.00"))
+
+    def test_line_without_derivable_net_amount_is_skipped(self):
+        """Nicht mit 0 speichern und nicht raten – überspringen und zählen."""
+        invoice = self._invoice()
+
+        created, skipped = self._create_lines(
+            invoice,
+            [{"position_no": 1, "description": "Sammelposition ohne Betrag"}],
+        )
+
+        self.assertEqual((created, skipped), (0, 1))
+        self.assertEqual(invoice.lines.count(), 0)
+
+    def test_zero_amount_line_is_kept(self):
+        """Eine Gratis-/Rabattzeile mit Betrag 0 behält ihren Wert."""
+        invoice = self._invoice()
+
+        created, skipped = self._create_lines(
+            invoice,
+            [
+                {
+                    "position_no": 1,
+                    "description": "Gratiszugabe",
+                    "quantity": "0",
+                    "unit_price": "0",
+                    "net_amount": "0",
+                    "tax_rate": "0",
+                    "tax_amount": "0",
+                    "gross_amount": "0",
+                }
+            ],
+        )
+
+        self.assertEqual((created, skipped), (1, 0))
+        line = invoice.lines.get()
+        self.assertEqual(line.net_amount, Decimal("0.00"))
+        self.assertEqual(line.quantity, Decimal("0"))
+        self.assertEqual(line.unit_price, Decimal("0"))
+        self.assertEqual(line.tax_rate, Decimal("0.00"))
+        self.assertEqual(line.gross_amount, Decimal("0.00"))
+
+    def test_failing_line_does_not_abort_the_others(self):
+        """Ein Datenbankfehler bei einer Position reißt den Import nicht mit."""
+        from unittest.mock import patch
+
+        from django.db import IntegrityError
+
+        invoice = self._invoice()
+        original_save = InvoiceInLine.save
+
+        def failing_save(line_self, *args, **kwargs):
+            if line_self.position_no == 2:
+                raise IntegrityError("null value in column \"net_amount\"")
+            return original_save(line_self, *args, **kwargs)
+
+        with patch.object(InvoiceInLine, "save", failing_save):
+            created, skipped = self._create_lines(
+                invoice,
+                [
+                    {"position_no": 1, "description": "Gut 1", "net_amount": "10.00"},
+                    {"position_no": 2, "description": "Kaputt", "net_amount": "20.00"},
+                    {"position_no": 3, "description": "Gut 2", "net_amount": "30.00"},
+                ],
+            )
+
+        self.assertEqual((created, skipped), (2, 1))
+        self.assertEqual(
+            sorted(invoice.lines.values_list("position_no", flat=True)), [1, 3]
+        )
+
+    def test_lines_gross_mismatch_is_reported(self):
+        from lieferantenwesen.services import InvoiceInService
+
+        invoice = self._invoice(gross_amount=Decimal("500.00"))
+        self._create_lines(
+            invoice,
+            [{"position_no": 1, "description": "Einzige", "net_amount": "100.00"}],
+        )
+
+        self.assertEqual(
+            InvoiceInService()._lines_gross_mismatch(invoice), Decimal("119.00")
+        )
+
+    def test_matching_lines_gross_is_not_reported(self):
+        from lieferantenwesen.services import InvoiceInService
+
+        invoice = self._invoice(gross_amount=Decimal("119.00"))
+        self._create_lines(
+            invoice,
+            [{"position_no": 1, "description": "Einzige", "net_amount": "100.00"}],
+        )
+
+        self.assertIsNone(InvoiceInService()._lines_gross_mismatch(invoice))
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class InvoiceUploadWithBrokenLinesTest(TestCase):
+    """Der PDF-Upload darf an einer einzelnen Position nicht scheitern."""
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="uploaduser", password="uploadpass", is_staff=True
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Upload Lieferant",
+            strasse="Uploadstr. 1",
+            plz="66666",
+            ort="Uploadstadt",
+            land="DE",
+        )
+
+    def _upload(self, dto):
+        from unittest.mock import MagicMock, patch
+
+        pdf = SimpleUploadedFile(
+            "rechnung.pdf", b"%PDF-1.4 fake", content_type="application/pdf"
+        )
+        self.client.login(username="uploaduser", password="uploadpass")
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = dto
+            return self.client.post(
+                reverse("lieferantenwesen:invoice_upload_pdf"),
+                {"pdf_file": pdf},
+                follow=True,
+            )
+
+    def test_upload_with_position_without_net_amount_reaches_edit_form(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        response = self._upload(
+            InvoiceDataDTO(
+                belegnummer="RE-2026-1206",
+                belegdatum="2026-06-01",
+                lieferant_name="Upload Lieferant",
+                bruttobetrag="119.99",
+                positionen=[
+                    {
+                        "position_no": 1,
+                        "description": "IDO-3000 USB-C MULTIP DOCKING STATI",
+                        "quantity": "1.000",
+                        "unit_price": "119.9900",
+                        "tax_rate": "19.00",
+                        "gross_amount": "119.99",
+                    }
+                ],
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        invoice = InvoiceIn.objects.get(invoice_no="RE-2026-1206")
+        self.assertRedirects(
+            response,
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+        )
+        texts = [str(m) for m in response.context["messages"]]
+        self.assertFalse(
+            any("Fehler beim Verarbeiten" in text for text in texts), texts
+        )
+        self.assertEqual(invoice.lines.get().net_amount, Decimal("100.83"))
+
+    def test_skipped_positions_are_reported_to_the_user(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        response = self._upload(
+            InvoiceDataDTO(
+                belegnummer="RE-2026-1207",
+                belegdatum="2026-06-01",
+                lieferant_name="Upload Lieferant",
+                positionen=[
+                    {"position_no": 1, "description": "Gut", "net_amount": "10.00"},
+                    {"position_no": 2, "description": "Ohne jeden Betrag"},
+                ],
+            )
+        )
+
+        invoice = InvoiceIn.objects.get(invoice_no="RE-2026-1207")
+        self.assertEqual(invoice.lines.count(), 1)
+        texts = [str(m) for m in response.context["messages"]]
+        self.assertTrue(
+            any("1 Position(en) konnten nicht" in text for text in texts), texts
+        )
+
+    def test_gross_mismatch_is_reported_to_the_user(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        response = self._upload(
+            InvoiceDataDTO(
+                belegnummer="RE-2026-1208",
+                belegdatum="2026-06-01",
+                lieferant_name="Upload Lieferant",
+                bruttobetrag="500.00",
+                positionen=[
+                    {"position_no": 1, "description": "Gut", "net_amount": "10.00"},
+                ],
+            )
+        )
+
+        texts = [str(m) for m in response.context["messages"]]
+        self.assertTrue(
+            any("Summe der Positionen" in text for text in texts), texts
+        )
+
+
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class InvoicePdfViewTest(TestCase):
     """Test the authenticated inline PDF delivery view (invoice_pdf)."""
