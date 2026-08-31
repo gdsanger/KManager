@@ -109,7 +109,7 @@ def demo():
         activity_type='ITEM_CREATED',
         title=f'Artikel erstellt: {item.article_no}',
         description=f'{item.short_text_1}',
-        target_url=f'/items/?selected={item.pk}',
+        target_url='/items/',
         actor=user,
         severity='INFO'
     )
@@ -143,7 +143,7 @@ def demo():
         activity_type='ITEM_UPDATED',
         title=f'Artikel aktualisiert: {item.article_no}',
         description=f'{item.short_text_1}',
-        target_url=f'/items/?selected={item.pk}',
+        target_url='/items/',
         actor=user,
         severity='INFO'
     )
@@ -176,7 +176,7 @@ def demo():
         activity_type='ITEM_STATUS_CHANGED',
         title=f'Artikel-Status geändert: {item.article_no}',
         description=f'Status: {status_action} (vorher: {old_status})',
-        target_url=f'/items/?selected={item.pk}',
+        target_url='/items/',
         actor=user,
         severity='INFO'
     )

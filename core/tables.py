@@ -67,12 +67,13 @@ class ItemTable(tables.Table):
         )
     
     def render_article_no(self, value, record):
-        """Render article_no as a link to select the item."""
-        # Link includes the current filters + selected item
+        """Render article_no as a button that opens the edit modal for the item."""
+        # Kein <a>: es gibt keine Zieladresse, sondern eine Aktion auf der Seite.
+        # Der Button ist per Tab erreichbar und mit Enter/Leertaste auslösbar.
         return format_html(
-            '<a href="?selected={}&{}" class="text-decoration-none item-link" data-item-id="{}">{}</a>',
-            record.pk,
-            self.request.GET.urlencode() if hasattr(self, 'request') else '',
+            '<button type="button" class="btn btn-link p-0 align-baseline '
+            'text-decoration-none item-link" data-item-id="{}" '
+            'title="Artikel bearbeiten">{}</button>',
             record.pk,
             value
         )
