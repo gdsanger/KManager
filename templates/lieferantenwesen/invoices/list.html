@@ -44,17 +44,37 @@
                         <option value="NONE" {% if company_filter == "NONE" %}selected{% endif %}>Ohne Mandant</option>
                     </select>
                 </div>
+                <div class="col-md-2">
+                    {# Zahlstatus der Verbindlichkeit – Einstieg aus der #}
+                    {# Einkaufsauswertung eines Lieferanten.             #}
+                    <select name="payment" class="form-select">
+                        <option value="">Alle Zahlstatus</option>
+                        <option value="open" {% if payment_filter == "open" %}selected{% endif %}>Nur offene</option>
+                        <option value="overdue" {% if payment_filter == "overdue" %}selected{% endif %}>Nur überfällige</option>
+                    </select>
+                </div>
                 <div class="col-md-2 form-check ms-2 mb-0">
                     <input class="form-check-input" type="checkbox" name="overdue" value="1" id="overdue_check"
                            {% if overdue_only %}checked{% endif %}>
                     <label class="form-check-label" for="overdue_check">Nur Überfällige</label>
                 </div>
+                {% if supplier_filter %}
+                {# Lieferantenfilter kommt über die URL und bleibt beim #}
+                {# erneuten Filtern erhalten.                           #}
+                <input type="hidden" name="supplier" value="{{ supplier_filter }}">
+                <div class="col-12">
+                    <span class="badge bg-secondary">
+                        <i class="bi bi-truck"></i>
+                        Lieferant: {{ supplier.matchkey|default:supplier.name|default:supplier_filter }}
+                    </span>
+                </div>
+                {% endif %}
                 <div class="col-md-2">
                     <div class="btn-group w-100">
                         <button type="submit" class="btn btn-outline-secondary">
                             <i class="bi bi-funnel"></i> Filtern
                         </button>
-                        {% if q or status_filter or company_filter or overdue_only %}
+                        {% if q or status_filter or company_filter or overdue_only or supplier_filter or payment_filter %}
                         <a href="{% url 'lieferantenwesen:invoice_list' %}" class="btn btn-outline-secondary">
                             <i class="bi bi-x"></i> Reset
                         </a>
@@ -169,7 +189,7 @@
             <ul class="pagination pagination-sm mb-0">
                 {% if page_obj.has_previous %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status_filter }}&company={{ company_filter }}{% if overdue_only %}&overdue=1{% endif %}">«</a>
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status_filter }}&company={{ company_filter }}&supplier={{ supplier_filter }}&payment={{ payment_filter }}{% if overdue_only %}&overdue=1{% endif %}">«</a>
                 </li>
                 {% endif %}
                 <li class="page-item active">
@@ -177,7 +197,7 @@
                 </li>
                 {% if page_obj.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status_filter }}&company={{ company_filter }}{% if overdue_only %}&overdue=1{% endif %}">»</a>
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status_filter }}&company={{ company_filter }}&supplier={{ supplier_filter }}&payment={{ payment_filter }}{% if overdue_only %}&overdue=1{% endif %}">»</a>
                 </li>
                 {% endif %}
             </ul>
