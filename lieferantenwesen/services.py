@@ -17,6 +17,7 @@ from django.utils import timezone
 from core.services.ai.invoice_extraction import (
     InvoiceExtractionService as CoreExtractor,
 )
+from core.services.model_fields import set_truncated, truncate_to_field
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +52,24 @@ class SupplierMatchService:
                 logger.debug("Supplier matched by name similarity: %s", adresse)
                 return adresse, False
 
-        # No match → create
+        # No match → create. Die Werte stammen aus der KI-Belegerkennung und
+        # sind unbegrenzt lang – ohne Kürzung schlägt das INSERT fehl und der
+        # gesamte Upload geht verloren.
+        values = {
+            "name": name,
+            "strasse": street or kwargs.get("strasse", ""),
+            "ort": city or kwargs.get("ort", ""),
+            "plz": kwargs.get("plz", ""),
+            "land": kwargs.get("land", "DE"),
+            "email": kwargs.get("email", ""),
+            "telefon": kwargs.get("telefon", ""),
+        }
         adresse = Adresse.objects.create(
             adressen_type="LIEFERANT",
-            name=name,
-            strasse=street or kwargs.get("strasse", ""),
-            ort=city or kwargs.get("ort", ""),
-            plz=kwargs.get("plz", ""),
-            land=kwargs.get("land", "DE"),
-            email=kwargs.get("email", ""),
-            telefon=kwargs.get("telefon", ""),
+            **{
+                field: truncate_to_field(Adresse, field, value)
+                for field, value in values.items()
+            },
         )
         logger.info("New supplier created: %s (pk=%s)", adresse.name, adresse.pk)
         return adresse, True
@@ -116,14 +125,16 @@ class InvoiceExtractionService:
             invoice_in.status = "DRAFT"
             return invoice_in
 
-        # Apply extracted fields
+        # Apply extracted fields. Alle Freitexte werden auf die Feldlänge
+        # gekürzt – die KI liefert beliebig lange Werte, ein zu langer Text
+        # würde sonst das Speichern der kompletten Rechnung verhindern.
         if dto.belegnummer:
             # Map invoice number to invoice_no field (primary)
             if not invoice_in.invoice_no:
-                invoice_in.invoice_no = dto.belegnummer
+                set_truncated(invoice_in, "invoice_no", dto.belegnummer)
             # Also keep in payment_reference for compatibility
             if not invoice_in.payment_reference:
-                invoice_in.payment_reference = dto.belegnummer
+                set_truncated(invoice_in, "payment_reference", dto.belegnummer)
 
         for dto_field, model_field in self.DATE_FIELD_MAP:
             value = getattr(dto, dto_field, None)
@@ -140,7 +151,9 @@ class InvoiceExtractionService:
 
         # Payment terms
         if dto.zahlungsbedingungen and not invoice_in.payment_terms_text:
-            invoice_in.payment_terms_text = dto.zahlungsbedingungen
+            set_truncated(
+                invoice_in, "payment_terms_text", dto.zahlungsbedingungen
+            )
 
         # Amounts
         for src_field, dest_field in [
@@ -157,7 +170,7 @@ class InvoiceExtractionService:
 
         # Payment reference / IBAN (keep existing behavior for referenznummer)
         if dto.referenznummer and not invoice_in.payment_reference:
-            invoice_in.payment_reference = dto.referenznummer
+            set_truncated(invoice_in, "payment_reference", dto.referenznummer)
 
         invoice_in.status = "EXTRACTED"
 
@@ -215,14 +228,16 @@ class InvoiceInService:
                 line = InvoiceInLine(
                     invoice=invoice,
                     position_no=item.get("position_no", 1),
-                    description=item.get("description", ""),
+                    description=truncate_to_field(
+                        InvoiceInLine, "description", item.get("description", "")
+                    ),
                 )
 
                 # Optional numeric fields
                 if item.get("quantity"):
                     line.quantity = Decimal(str(item["quantity"]))
                 if item.get("unit"):
-                    line.unit = item["unit"]
+                    set_truncated(line, "unit", item["unit"])
                 if item.get("unit_price"):
                     line.unit_price = Decimal(str(item["unit_price"]))
                 if item.get("net_amount"):

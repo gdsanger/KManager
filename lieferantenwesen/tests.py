@@ -1866,3 +1866,144 @@ class InvoiceReceiptUploadTest(TestCase):
         form = InvoiceInForm(data=self._post_data(), files={"pdf_file": upload})
         self.assertFalse(form.is_valid())
         self.assertIn("Die Datei ist zu groß (max. 50 MB).", form.errors["pdf_file"])
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class OverlongExtractionValuesTest(TestCase):
+    """
+    Zu lange KI-Werte dürfen den PDF-Upload nicht sprengen.
+
+    Die Belegerkennung liefert Freitexte in beliebiger Länge. Ohne Kürzung
+    scheitert das INSERT auf PostgreSQL mit ``value too long for type
+    character varying(n)`` und der komplette Upload geht verloren.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="longuser", password="longpass", is_staff=True
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Lang Lieferant",
+            strasse="Langstr. 1",
+            plz="77777",
+            ort="Langstadt",
+            land="DE",
+        )
+
+    @staticmethod
+    def _too_long(model, field_name, extra=50):
+        """Wert, der die ``max_length`` des Feldes sicher überschreitet."""
+        return "L" * (model._meta.get_field(field_name).max_length + extra)
+
+    def _create(self, dto):
+        from unittest.mock import patch, MagicMock
+        from lieferantenwesen.services import InvoiceInService
+
+        pdf = SimpleUploadedFile(
+            "rechnung.pdf", b"%PDF-1.4 fake", content_type="application/pdf"
+        )
+        with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
+            mock_instance = MagicMock()
+            MockExtractor.return_value = mock_instance
+            mock_instance.extract_invoice_data.return_value = dto
+            return InvoiceInService().create_from_pdf(pdf, user=self.user)
+
+    def _assert_fits(self, instance, field_name):
+        max_length = instance._meta.get_field(field_name).max_length
+        self.assertLessEqual(len(getattr(instance, field_name)), max_length)
+
+    def test_overlong_header_fields_are_truncated_and_invoice_is_saved(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        terms = self._too_long(InvoiceIn, "payment_terms_text")
+        invoice = self._create(
+            InvoiceDataDTO(
+                belegnummer="RE-2026-0815",
+                belegdatum="2026-05-04",
+                zahlungsbedingungen=terms,
+                lieferant_name="Lang Lieferant",
+            )
+        )
+
+        invoice.refresh_from_db()
+        self._assert_fits(invoice, "payment_terms_text")
+        self.assertTrue(terms.startswith(invoice.payment_terms_text))
+        # Der Beleg bleibt erhalten – nur der Freitext ist gekürzt.
+        self.assertEqual(invoice.invoice_date, date(2026, 5, 4))
+        self.assertEqual(invoice.invoice_no, "RE-2026-0815")
+
+    def test_overlong_invoice_number_is_truncated_per_field(self):
+        """``belegnummer`` landet in zwei Feldern mit unterschiedlicher Länge."""
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        number = self._too_long(InvoiceIn, "payment_reference")
+        invoice = self._create(
+            InvoiceDataDTO(belegnummer=number, belegdatum="2026-05-04")
+        )
+
+        invoice.refresh_from_db()
+        self._assert_fits(invoice, "invoice_no")
+        self._assert_fits(invoice, "payment_reference")
+        self.assertTrue(number.startswith(invoice.invoice_no))
+        self.assertTrue(number.startswith(invoice.payment_reference))
+
+    def test_overlong_reference_number_is_truncated(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        invoice = self._create(
+            InvoiceDataDTO(
+                belegdatum="2026-05-04",
+                referenznummer=self._too_long(InvoiceIn, "payment_reference"),
+            )
+        )
+
+        invoice.refresh_from_db()
+        self._assert_fits(invoice, "payment_reference")
+
+    def test_overlong_line_item_values_are_truncated(self):
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        description = self._too_long(InvoiceInLine, "description")
+        invoice = self._create(
+            InvoiceDataDTO(
+                belegnummer="RE-POS",
+                belegdatum="2026-05-04",
+                positionen=[
+                    {
+                        "position_no": 1,
+                        "description": description,
+                        "unit": self._too_long(InvoiceInLine, "unit"),
+                        "quantity": "1",
+                        "net_amount": "10.00",
+                    }
+                ],
+            )
+        )
+
+        line = invoice.lines.get()
+        self._assert_fits(line, "description")
+        self._assert_fits(line, "unit")
+        self.assertTrue(description.startswith(line.description))
+
+    def test_overlong_supplier_data_is_truncated_on_creation(self):
+        from lieferantenwesen.services import SupplierMatchService
+
+        name = self._too_long(Adresse, "name")
+        adresse, created = SupplierMatchService().find_or_create(
+            name=name,
+            street=self._too_long(Adresse, "strasse"),
+            city=self._too_long(Adresse, "ort"),
+            plz=self._too_long(Adresse, "plz"),
+            land=self._too_long(Adresse, "land"),
+        )
+
+        self.assertTrue(created)
+        for field in ("name", "strasse", "ort", "plz", "land"):
+            self._assert_fits(adresse, field)
+        self.assertTrue(name.startswith(adresse.name))
