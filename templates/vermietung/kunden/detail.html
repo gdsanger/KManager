@@ -1,4 +1,5 @@
 {% extends "vermietung/layouts/detail_layout.html" %}
+{% load static %}
 
 {% block title %}Kunde: {{ kunde.full_name }} - Domus{% endblock %}
 
@@ -214,8 +215,21 @@
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" 
-                        id="aktivitaeten-tab" 
+                <button class="nav-link"
+                        id="umsatz-tab"
+                        data-bs-toggle="tab"
+                        data-bs-target="#umsatz"
+                        type="button"
+                        role="tab"
+                        aria-controls="umsatz"
+                        aria-selected="false"
+                        data-tab-id="umsatz">
+                    <i class="bi bi-graph-up"></i> Umsatz
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link"
+                        id="aktivitaeten-tab"
                         data-bs-toggle="tab" 
                         data-bs-target="#aktivitaeten" 
                         type="button" 
@@ -279,8 +293,16 @@
                     {% include "vermietung/kontakte/_tab_content.html" %}
                 </div>
             </div>
-            <div class="tab-pane fade" 
-                 id="aktivitaeten" 
+            <div class="tab-pane fade"
+                 id="umsatz"
+                 role="tabpanel"
+                 aria-labelledby="umsatz-tab">
+                <div class="card-body">
+                    {% include "vermietung/partner_stats/_tab_content.html" with stats=partner_stats %}
+                </div>
+            </div>
+            <div class="tab-pane fade"
+                 id="aktivitaeten"
                  role="tabpanel" 
                  aria-labelledby="aktivitaeten-tab">
                 <div class="card-body">
@@ -370,6 +392,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Chart.js – nur auf dieser Seite geladen, nicht im gemeinsamen Head -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/partner_stats_chart.js' %}" defer></script>
 <script>
 // Tab localStorage persistence
 (function() {

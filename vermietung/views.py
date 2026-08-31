@@ -28,6 +28,7 @@ from .forms import (
     VertragsObjektFormSet, ZaehlerForm, ZaehlerstandForm, EingangsrechnungForm, EingangsrechnungAufteilungFormSet, KostenartForm
 )
 from auftragsverwaltung.models import SalesDocument
+from finanzen.services.partner_stats import customer_stats, supplier_stats
 from core.mailing.service import send_mail, MailServiceError
 from .permissions import vermietung_required
 from core.services.ai.invoice_extraction import InvoiceExtractionService
@@ -725,6 +726,9 @@ def kunde_detail(request, pk):
         'aktivitaeten_page_obj': aktivitaeten_page_obj,
         'sales_documents_page_obj': sales_documents_page_obj,
         'aktivitaet_create_url': reverse('vermietung:aktivitaet_create_from_kunde', args=[kunde.pk]),
+        # Umsatzauswertung des Tabs „Umsatz" – aggregiert in der Datenbank,
+        # damit der Tab die Detailseite nicht spürbar verlangsamt.
+        'partner_stats': customer_stats(kunde),
     }
     
     return render(request, 'vermietung/kunden/detail.html', context)
@@ -1032,6 +1036,9 @@ def lieferant_detail(request, pk):
     context = {
         'lieferant': lieferant,
         'dokumente_page_obj': dokumente_page_obj,
+        # Einkaufsauswertung des Tabs „Einkauf" – dieselbe Struktur wie auf der
+        # Kundenseite, damit beide Seiten dasselbe Markup benutzen können.
+        'partner_stats': supplier_stats(lieferant),
     }
     
     return render(request, 'vermietung/lieferanten/detail.html', context)
