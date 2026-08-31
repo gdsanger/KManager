@@ -34,6 +34,7 @@ from .permissions import vermietung_required
 from core.services.ai.invoice_extraction import InvoiceExtractionService
 from core.services.ai.supplier_matching import SupplierMatchingService
 from core.services.activity_stream import ActivityStreamService
+from core.services.model_fields import truncate_to_field
 from .tables import EingangsrechnungTable
 from .filters import EingangsrechnungFilter
 from core.printing import PdfRenderService, get_static_base_url
@@ -4005,14 +4006,14 @@ def eingangsrechnung_create_from_pdf(request):
                 if 'faelligkeit' in validated_data:
                     rechnung_data['faelligkeit'] = parse_iso_date(validated_data['faelligkeit'])
                 
-                if 'belegnummer' in validated_data:
-                    rechnung_data['belegnummer'] = validated_data['belegnummer']
-                
-                if 'betreff' in validated_data:
-                    rechnung_data['betreff'] = validated_data['betreff']
-                
-                if 'referenznummer' in validated_data:
-                    rechnung_data['referenznummer'] = validated_data['referenznummer']
+                # Freitexte aus der KI-Erkennung sind unbegrenzt lang und
+                # werden auf die Feldlänge gekürzt – sonst scheitert das
+                # Speichern und der komplette Upload geht verloren.
+                for field in ('belegnummer', 'betreff', 'referenznummer'):
+                    if field in validated_data:
+                        rechnung_data[field] = truncate_to_field(
+                            Eingangsrechnung, field, validated_data[field]
+                        )
                 
                 if 'leistungszeitraum_von' in validated_data:
                     rechnung_data['leistungszeitraum_von'] = parse_iso_date(
