@@ -291,6 +291,25 @@ def invoice_upload_pdf(request):
                     "und korrigieren Sie es, denn das Rechnungsdatum "
                     "entscheidet über den DATEV-Buchungsstapel.",
                 )
+            skipped_lines = getattr(invoice, "skipped_line_count", 0) or 0
+            if skipped_lines:
+                messages.warning(
+                    request,
+                    f"{skipped_lines} Position(en) konnten nicht aus dem Beleg "
+                    "übernommen werden, weil der Nettobetrag fehlte oder "
+                    "unlesbar war. Bitte ergänzen Sie die fehlenden Positionen "
+                    "im Bearbeitungsformular.",
+                )
+            lines_total = getattr(invoice, "lines_gross_mismatch", None)
+            if lines_total is not None:
+                messages.warning(
+                    request,
+                    f"Die Summe der Positionen ({lines_total} "
+                    f"{invoice.currency}) weicht vom Bruttobetrag der Rechnung "
+                    f"({invoice.gross_amount} {invoice.currency}) ab. Bitte "
+                    "prüfen Sie die Positionen, bevor Sie die Rechnung "
+                    "freigeben.",
+                )
             if invoice.company_id is None:
                 messages.warning(
                     request,

@@ -7,11 +7,15 @@ Services for the Lieferantenwesen module.
 """
 import logging
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from difflib import SequenceMatcher
-from typing import Optional
+from typing import Optional, Tuple
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db import Error as DatabaseError
+from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from core.services.ai.invoice_extraction import (
@@ -20,6 +24,86 @@ from core.services.ai.invoice_extraction import (
 from core.services.model_fields import set_truncated, truncate_to_field
 
 logger = logging.getLogger(__name__)
+
+#: Genauigkeit aller Geldbeträge – Cent, kaufmännisch gerundet.
+CENT = Decimal("0.01")
+
+
+# ---------------------------------------------------------------------------
+# Beträge aus der Belegerkennung
+# ---------------------------------------------------------------------------
+
+def to_decimal(value) -> Optional[Decimal]:
+    """
+    Einen Wert aus der Belegerkennung in ein ``Decimal`` wandeln.
+
+    Liefert ``None``, wenn der Wert fehlt, leer oder unlesbar ist. Die ``0``
+    ist ein gültiger Betrag und wird als ``Decimal("0")`` zurückgegeben –
+    ein Wahrheitswert-Test würde sie fälschlich verwerfen.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def derive_line_net_amount(item: dict) -> Tuple[Optional[Decimal], Optional[Decimal]]:
+    """
+    Nettobetrag einer erkannten Rechnungsposition bestimmen.
+
+    Reihenfolge (der Bruttobetrag ist der Wert, der zum Rechnungsbetrag
+    passen muss, deshalb hat er Vorrang):
+
+    1. ``net_amount`` vorhanden → verwenden.
+    2. ``gross_amount`` + ``tax_rate`` → ``net = gross / (1 + tax_rate/100)``.
+       Die Steuer wird als ``gross - net`` zurückgegeben, damit
+       Netto + Steuer exakt den Bruttobetrag ergeben.
+    3. ``gross_amount`` + ``tax_amount`` → ``net = gross - tax``.
+    4. ``quantity`` + ``unit_price`` → ``net = quantity * unit_price``.
+       Nur der letzte Ausweg: ``unit_price`` ist im Extraktions-Prompt als
+       Nettopreis beschrieben, wird vom Modell aber erkennbar auch brutto
+       gefüllt.
+    5. Sonst nicht herleitbar.
+
+    Returns:
+        ``(net_amount, tax_amount)``. ``tax_amount`` ist nur gesetzt, wenn
+        er zwingend zum hergeleiteten Nettobetrag gehört (Fall 2), sonst
+        ``None``. ``net_amount`` ist ``None``, wenn sich der Nettobetrag aus
+        keiner Kombination ergibt – dann darf die Position **nicht**
+        gespeichert werden, ein geratener Betrag ginge unbemerkt in den
+        DATEV-Buchungsstapel.
+    """
+    net = to_decimal(item.get("net_amount"))
+    if net is not None:
+        return net.quantize(CENT, rounding=ROUND_HALF_UP), None
+
+    gross = to_decimal(item.get("gross_amount"))
+    if gross is not None:
+        gross = gross.quantize(CENT, rounding=ROUND_HALF_UP)
+
+        tax_rate = to_decimal(item.get("tax_rate"))
+        if tax_rate is not None:
+            divisor = Decimal("1") + tax_rate / Decimal("100")
+            if divisor != 0:
+                net = (gross / divisor).quantize(CENT, rounding=ROUND_HALF_UP)
+                return net, gross - net
+
+        tax_amount = to_decimal(item.get("tax_amount"))
+        if tax_amount is not None:
+            return gross - tax_amount.quantize(CENT, rounding=ROUND_HALF_UP), None
+
+    quantity = to_decimal(item.get("quantity"))
+    unit_price = to_decimal(item.get("unit_price"))
+    if quantity is not None and unit_price is not None:
+        return (quantity * unit_price).quantize(CENT, rounding=ROUND_HALF_UP), None
+
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -206,54 +290,142 @@ class InvoiceExtractionService:
 class InvoiceInService:
     """High-level service for creating and managing InvoiceIn records."""
 
-    def _create_lines_from_dto(self, invoice, dto):
+    #: Toleranz beim Abgleich der Positionssummen mit dem Rechnungsbetrag.
+    GROSS_TOLERANCE = Decimal("0.01")
+
+    def _create_lines_from_dto(self, invoice, dto) -> Tuple[int, int]:
         """
         Create InvoiceInLine records from extracted line items.
+
+        Jede Position wird einzeln in einem eigenen ``transaction.atomic()``
+        gespeichert: Ohne eigenen Sicherungspunkt versetzt ein Datenbank-
+        fehler unter PostgreSQL die laufende Transaktion in einen Fehler-
+        zustand, und alle folgenden Positionen scheitern ebenfalls. Eine
+        fehlerhafte Position darf den Import der übrigen nicht mitreißen.
+
+        Positionen ohne herleitbaren Nettobetrag werden übersprungen – nicht
+        mit ``0`` gespeichert und nicht geraten (siehe
+        :func:`derive_line_net_amount`).
 
         Args:
             invoice: The InvoiceIn instance
             dto: InvoiceDataDTO with potential positionen field
+
+        Returns:
+            ``(created, skipped)`` – Anzahl übernommener und übersprungener
+            Positionen, damit die View den Anwender auf die fehlenden
+            Positionen hinweisen kann.
         """
         from lieferantenwesen.models import InvoiceInLine
 
         positionen = getattr(dto, "positionen", None)
         if not positionen or not isinstance(positionen, list):
-            return
+            return 0, 0
 
+        created = 0
+        skipped = 0
         for item in positionen:
             if not isinstance(item, dict):
+                logger.warning("Ignoriere unlesbare Rechnungsposition: %r", item)
+                skipped += 1
                 continue
 
             try:
+                net_amount, derived_tax = derive_line_net_amount(item)
+                if net_amount is None:
+                    logger.warning(
+                        "Position ohne herleitbaren Nettobetrag übersprungen "
+                        "(Rechnung %s): %r",
+                        invoice.pk,
+                        item,
+                    )
+                    skipped += 1
+                    continue
+
                 line = InvoiceInLine(
                     invoice=invoice,
-                    position_no=item.get("position_no", 1),
                     description=truncate_to_field(
-                        InvoiceInLine, "description", item.get("description", "")
+                        InvoiceInLine, "description", item.get("description") or ""
                     ),
+                    net_amount=net_amount,
                 )
 
-                # Optional numeric fields
-                if item.get("quantity"):
-                    line.quantity = Decimal(str(item["quantity"]))
-                if item.get("unit"):
-                    set_truncated(line, "unit", item["unit"])
-                if item.get("unit_price"):
-                    line.unit_price = Decimal(str(item["unit_price"]))
-                if item.get("net_amount"):
-                    line.net_amount = Decimal(str(item["net_amount"]))
-                if item.get("tax_rate"):
-                    line.tax_rate = Decimal(str(item["tax_rate"]))
-                if item.get("tax_amount"):
-                    line.tax_amount = Decimal(str(item["tax_amount"]))
-                if item.get("gross_amount"):
-                    line.gross_amount = Decimal(str(item["gross_amount"]))
+                position_no = to_decimal(item.get("position_no"))
+                if position_no is not None and position_no >= 0:
+                    line.position_no = int(position_no)
 
-                line.save()
-                logger.info(f"Created line item {line.position_no} for invoice {invoice.pk}")
-            except (InvalidOperation, TypeError, ValueError) as exc:
-                logger.warning(f"Failed to create line item from {item}: {exc}")
+                # Optionale Felder: auf „Wert vorhanden“ prüfen, nicht auf
+                # „Wert wahr“ – eine Position mit Betrag 0 (Rabatt-, Gratis-
+                # oder Sammelzeile) behält so ihren Wert.
+                unit = item.get("unit")
+                if unit:
+                    set_truncated(line, "unit", unit)
+
+                for key, field in (
+                    ("quantity", "quantity"),
+                    ("unit_price", "unit_price"),
+                    ("tax_rate", "tax_rate"),
+                    ("tax_amount", "tax_amount"),
+                    ("gross_amount", "gross_amount"),
+                ):
+                    value = to_decimal(item.get(key))
+                    if value is not None:
+                        setattr(line, field, value)
+
+                # Aus dem Bruttobetrag zurückgerechnet: Die Steuer ergibt sich
+                # zwingend als Differenz, sonst passt Netto + Steuer nicht
+                # exakt auf den ausgewiesenen Bruttobetrag.
+                if derived_tax is not None:
+                    line.tax_amount = derived_tax
+
+                with transaction.atomic():
+                    line.save()
+                created += 1
+                logger.info(
+                    "Created line item %s for invoice %s",
+                    line.position_no,
+                    invoice.pk,
+                )
+            except (
+                InvalidOperation,
+                TypeError,
+                ValueError,
+                ValidationError,
+                DatabaseError,
+            ) as exc:
+                logger.warning("Failed to create line item from %r: %s", item, exc)
+                skipped += 1
                 continue
+
+        return created, skipped
+
+    def _lines_gross_mismatch(self, invoice) -> Optional[Decimal]:
+        """
+        Summe der Positions-Bruttobeträge gegen den Rechnungsbetrag prüfen.
+
+        Returns die Positionssumme, wenn sie um mehr als einen Cent vom
+        Bruttobetrag der Rechnung abweicht, sonst ``None``. Es wird bewusst
+        nichts korrigiert und nichts abgebrochen – aber ohne diesen Hinweis
+        ginge ein aus dem Bruttobetrag zurückgerechneter Nettobetrag
+        unbemerkt in den Buchungsstapel.
+        """
+        if invoice.gross_amount is None:
+            return None
+        total = invoice.lines.aggregate(total=Sum("gross_amount"))["total"]
+        if total is None:
+            return None
+        # SQLite liefert die Summe mit Nachkommastellen aus der Fließkomma-
+        # Arithmetik – für Vergleich und Meldung zählt der Cent.
+        total = Decimal(total).quantize(CENT, rounding=ROUND_HALF_UP)
+        if abs(total - invoice.gross_amount) <= self.GROSS_TOLERANCE:
+            return None
+        logger.warning(
+            "Positionssumme %s weicht vom Bruttobetrag %s der Rechnung %s ab.",
+            total,
+            invoice.gross_amount,
+            invoice.pk,
+        )
+        return total
 
     def create_from_pdf(self, pdf_file, user: Optional[User] = None):
         """
@@ -271,6 +443,14 @@ class InvoiceInService:
         der zurückgegebenen Instanz zeigt an, ob das passiert ist, damit die
         View den Anwender zur Prüfung auffordern kann – ein falsches
         Rechnungsdatum landet sonst still im falschen DATEV-Buchungsstapel.
+
+        Analog dazu trägt die zurückgegebene Instanz:
+
+        * ``skipped_line_count`` – Anzahl der Positionen, die nicht
+          übernommen werden konnten (fehlender oder unlesbarer Betrag).
+        * ``lines_gross_mismatch`` – Summe der Positions-Bruttobeträge, wenn
+          sie um mehr als einen Cent vom Bruttobetrag der Rechnung abweicht,
+          sonst ``None``.
         """
         import os
         import tempfile
@@ -347,8 +527,24 @@ class InvoiceInService:
         invoice.updated_by = user
         invoice.save()
 
-        # Create line items if present in DTO
+        # Positionen anlegen. Der Beleg ist an dieser Stelle bereits
+        # gespeichert – ein Fehler beim Anlegen der Positionen darf den
+        # Upload deshalb nicht mehr scheitern lassen, sonst bleibt ein
+        # verwaister Entwurf zurück, von dem der Anwender nichts erfährt.
+        invoice.skipped_line_count = 0
+        invoice.lines_gross_mismatch = None
         if dto:
-            self._create_lines_from_dto(invoice, dto)
+            try:
+                created, invoice.skipped_line_count = self._create_lines_from_dto(
+                    invoice, dto
+                )
+                if created:
+                    invoice.lines_gross_mismatch = self._lines_gross_mismatch(invoice)
+            except Exception as exc:
+                logger.exception(
+                    "Positionen der Rechnung %s konnten nicht angelegt werden: %s",
+                    invoice.pk,
+                    exc,
+                )
 
         return invoice
