@@ -170,6 +170,11 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link nav-sub-item {% if 'personenkonten-export' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:partner_export' %}">
+                                        <i class="bi bi-people"></i> <span class="sidebar-text">Personenkonten-Export</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link nav-sub-item {% if 'einstellungen' in request.path %}active{% endif %}" href="{% url 'auftragsverwaltung:accounting_settings_list' %}">
                                         <i class="bi bi-gear"></i> <span class="sidebar-text">Buchhaltungseinstellungen</span>
                                     </a>

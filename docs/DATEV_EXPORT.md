@@ -166,6 +166,112 @@ Nummernschicht mit eigener Eindeutigkeitsproblematik bedeutet.
 Die **Kunden-Nr. auf der Rechnung** (`templates/printing/orders/invoice.html`)
 zeigt dieselbe Nummer und ändert sich für Bestandskunden entsprechend mit.
 
+## Stammdatenexport der Personenkonten
+
+Der Buchungsstapel bucht gegen Personenkonten, trägt davon aber nur die
+**Kontonummer** in die Datei. Wer die Buchungen einliest, kann sie ohne die
+zugehörigen Stammdaten keinem Namen zuordnen – beim ersten Import existieren
+die Personenkonten im Zielsystem überhaupt noch nicht. Der Stammdatenexport
+liefert die fehlende Gegenseite: je Adresse mit Personenkonto eine Zeile mit
+Name, Anschrift und Kontaktdaten.
+
+`Auftragsverwaltung → Buchhaltung → Personenkonten-Export`
+(`/auftragsverwaltung/buchhaltung/personenkonten-export/`), Service:
+`finanzen/services/partner_export.py`.
+
+### Auswahl
+
+Ein Export für beide Seiten, mit der Auswahl **Debitoren** (`adressen_type='KUNDE'`),
+**Kreditoren** (`adressen_type='LIEFERANT'`) oder **beide** (Vorbelegung). Der
+Satzaufbau ist identisch; unterschieden wird allein über den Kontenbereich –
+zwei getrennte Exporte wären derselbe Code zweimal. Adressen der übrigen Typen
+(`Adresse`, `STANDORT`, `SONSTIGES`) führen kein Personenkonto und erscheinen
+in keiner Auswahl.
+
+**Keine Mandantenauswahl:** `core.Adresse` hat keinen Mandantenbezug,
+Personenkonten sind in GIS mandantenübergreifend.
+
+**Kein Zeitraum- und kein Änderungsfilter:** Exportiert werden immer alle
+Adressen mit Personenkonto. Stammdaten werden einmal vollständig übergeben und
+bei Bedarf erneut; der Download verändert keine Daten und ist beliebig
+wiederholbar. Ein Gegenstück zu `mark_exported()` gibt es hier bewusst nicht.
+
+### Vorschau und Fehlerliste
+
+Die Vorschau zeigt die Anzahl der Datensätze je Kontoart. Nicht exportierbare
+Adressen werden **nicht still weggelassen**, sondern gelistet:
+
+- Adresse **ohne** Personenkonto.
+- Personenkonto **außerhalb** des zum Adresstyp gehörenden Bereichs oder nicht
+  rein numerisch (möglich bei importierten Altdaten). Die Grenzen kommen über
+  `Adresse.personal_account_range()` aus denselben Settings wie die Validierung
+  bei der Neuanlage.
+
+Anders als beim Buchungsstapel blockiert die Fehlerliste den Download **nicht**:
+Ein fehlendes Personenkonto ist ein Pflegehinweis, kein falscher Buchungssatz.
+Die betroffenen Adressen stehen in der Vorschau und fehlen in der Datei. Auf
+doppelte Kontonummern wird nicht geprüft – die UniqueConstraint
+`unique_debitor_number` schließt sie bereits aus.
+
+### Dateiformat
+
+Bewusst **kein EXTF-Kopfsatz** und keine DATEV-Formatkategorie 16
+(„Debitoren/Kreditoren"): Diese schreibt mehrere hundert Spalten in fester
+Reihenfolge vor, die sich ohne die DATEV-Formatbeschreibung nicht korrekt
+nachbilden lässt – eine geratene Feldliste würde bei einem echten DATEV-Import
+abgewiesen. Zielsystem ist Kontolino; dort wird beim Import ohnehin **manuell
+gemappt**, formatseitige Vorgaben gibt es nicht. Die Datei ist deshalb eine CSV
+mit sprechender Überschriftenzeile, technisch aber in derselben Hülle wie der
+Buchungsstapel (`finanzen/services/datev_common.py`), damit Umlaute und
+Trennzeichen sich gleich verhalten:
+
+| Angabe | Wert |
+|---|---|
+| Zeichensatz | Windows-1252 (ANSI) |
+| Trennzeichen | `;` |
+| Textbegrenzer | `"` |
+| Zeilenende | CRLF |
+| Kopfsatz | keiner; 1. Zeile = Spaltennamen |
+
+Die Spaltenliste steht als **eine** Konstante `PARTNER_COLUMNS` – wie
+`BOOKING_COLUMNS` beim Buchungsstapel:
+
+| Spalte | Herkunft |
+|---|---|
+| Konto | `debitor_number` (als Text, führende Nullen bleiben erhalten) |
+| Kontoart | „Debitor" / „Kreditor", aus `adressen_type` |
+| Adressattyp | „Unternehmen" / „natürliche Person", aus `is_business` |
+| Firma | `firma` |
+| Name | `name` |
+| Anrede | `get_anrede_display()` (Klartext) |
+| Straße | `strasse` |
+| PLZ | `plz` |
+| Ort | `ort` |
+| Land | `land` |
+| Ländercode | `country_code` |
+| USt-IdNr. | `vat_id` |
+| EU | „ja" / „nein", aus `is_eu` |
+| E-Mail | `email` |
+| E-Mail Rechnung | `invoice_email` |
+| Telefon | `telefon` |
+| Mobil | `mobil` |
+
+Firma und Name stehen **getrennt**; der zusammengesetzte `matchkey` wird
+bewusst nicht exportiert, damit das Zielsystem die Felder einzeln zuordnen
+kann. Leere Felder bleiben leer – kein Platzhaltertext, keine Ersatzwerte.
+
+Bankverbindung und Zahlungsbedingungen sind **nicht** Bestandteil der Datei:
+`Adresse` führt keine Bankverbindung (eine IBAN gibt es nur am Mandanten und
+an der einzelnen Eingangsrechnung), und `core.PaymentTerm` hängt nicht an der
+Adresse.
+
+### Import im Zielsystem
+
+Die Spaltenzuordnung passiert **beim Import im Zielsystem**. Kontolino fragt
+sie beim Einlesen ab; die sprechende Überschriftenzeile ist genau dafür da.
+Ein Ausbau auf das EXTF-Format der Formatkategorie 16 bleibt möglich, sobald
+die DATEV-Formatbeschreibung vorliegt – Ansatzpunkt ist `PARTNER_COLUMNS`.
+
 ## Buchhaltungseinstellungen
 
 `finanzen.CompanyAccountingSettings` je Mandant, pflegbar im Django-Admin:

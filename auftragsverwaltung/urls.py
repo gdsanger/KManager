@@ -75,6 +75,10 @@ urlpatterns = [
     path('buchhaltung/datev-export/', views.datev_export, name='datev_export'),
     path('buchhaltung/datev-export/download/', views.datev_export_download, name='datev_export_download'),
 
+    # Stammdatenexport der Personenkonten (Debitoren/Kreditoren)
+    path('buchhaltung/personenkonten-export/', views.partner_export, name='partner_export'),
+    path('buchhaltung/personenkonten-export/download/', views.partner_export_download, name='partner_export_download'),
+
     # Buchhaltungseinstellungen je Mandant
     path('buchhaltung/einstellungen/', views.accounting_settings_list, name='accounting_settings_list'),
     path('buchhaltung/einstellungen/<int:mandant_pk>/', views.accounting_settings_edit, name='accounting_settings_edit'),

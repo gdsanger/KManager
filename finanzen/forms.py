@@ -12,6 +12,7 @@ from .services.dashboard import (
     VALUE_BASIS_CHOICES,
     VALUE_BASIS_NET,
 )
+from .services.partner_export import BOTH, KIND_CHOICES
 
 
 PERIOD_CHOICES = [
@@ -164,6 +165,24 @@ class DatevExportForm(forms.Form):
         if period_type == 'QUARTER':
             return f'Q{self.cleaned_data["quarter"]}/{year}'
         return f'{dict(MONTH_CHOICES)[self.cleaned_data["month"]]} {year}'
+
+
+class PartnerExportForm(forms.Form):
+    """
+    Auswahl für den Stammdatenexport der Personenkonten.
+
+    Genau ein Feld – bewusst **ohne** Mandantenauswahl: `core.Adresse` hat
+    keinen Mandantenbezug, Personenkonten sind mandantenübergreifend. Ein
+    Zeitraum entfällt ebenfalls; Stammdaten werden einmal vollständig
+    übergeben und bei Bedarf erneut.
+    """
+
+    kind = forms.ChoiceField(
+        choices=KIND_CHOICES,
+        initial=BOTH,
+        label='Kontoart',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
 
 
 class CompanyAccountingSettingsForm(forms.ModelForm):

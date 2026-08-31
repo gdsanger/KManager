@@ -33,7 +33,11 @@ from .printing import SalesDocumentInvoiceContextBuilder
 from core.models import Mandant, Adresse, Item, PaymentTerm, TaxRate, Kostenart, Unit, Projekt
 from core.services.activity_stream import ActivityStreamService
 from core.printing import PdfRenderService, get_static_base_url
-from finanzen.forms import CompanyAccountingSettingsForm, DatevExportForm
+from finanzen.forms import (
+    CompanyAccountingSettingsForm,
+    DatevExportForm,
+    PartnerExportForm,
+)
 from finanzen.models import CompanyAccountingSettings, OutgoingInvoiceJournalEntry
 from finanzen.services.datev_export import (
     DatevExportError,
@@ -41,6 +45,12 @@ from finanzen.services.datev_export import (
     build_preview,
     mark_exported,
     render_extf,
+)
+from finanzen.services.partner_export import (
+    BOTH,
+    build_partner_filename,
+    build_partner_preview,
+    render_partner_csv,
 )
 
 # Initialize logger
@@ -2770,6 +2780,91 @@ def datev_export_download(request):
 
     response = HttpResponse(content, content_type='text/csv; charset=windows-1252')
     response['Content-Disposition'] = f'attachment; filename="{build_filename(preview)}"'
+    return response
+
+
+# ===============================================================================
+# Stammdatenexport der Personenkonten (Debitoren/Kreditoren)
+#
+# Gegenstück zum Buchungsstapel: Dieser bucht gegen Personenkonten, trägt aber
+# nur deren Nummer in die Datei. Ohne die Stammdaten lässt sich eine Buchung im
+# Zielsystem keinem Namen zuordnen.
+#
+# Bewusst ohne Mandantenauswahl (Adressen sind mandantenübergreifend) und ohne
+# Statuspflege: Ein Gegenstück zu mark_exported() gibt es hier nicht, der
+# Export ist beliebig oft wiederholbar.
+# ===============================================================================
+
+PARTNER_EXPORT_TEMPLATE = 'auftragsverwaltung/buchhaltung/partner_export.html'
+
+
+def _build_partner(request):
+    """
+    Formular und Vorschau des Personenkonten-Exports aufbauen.
+
+    Returns:
+        tuple(PartnerExportForm, PartnerExportPreview): Die Vorschau wird auch
+        ohne Parameter erzeugt – die Auswahl ist vorbelegt („beide"), und eine
+        leere Seite ohne Zahlen wäre hier kein Gewinn.
+    """
+    data = request.POST if request.method == 'POST' else request.GET
+    form = PartnerExportForm(data or None)
+    kind = form.cleaned_data['kind'] if form.is_bound and form.is_valid() else BOTH
+    return form, build_partner_preview(kind)
+
+
+@login_required
+def partner_export(request):
+    """
+    Vorschau des Personenkonten-Exports.
+
+    Zeigt die Anzahl der Datensätze je Kontoart sowie die Adressen ohne bzw.
+    mit unzulässigem Personenkonto. Bewusst per GET, damit der eingestellte
+    Stand über die URL teilbar ist.
+    """
+    form, preview = _build_partner(request)
+    return render(request, PARTNER_EXPORT_TEMPLATE, {
+        'form': form,
+        'preview': preview,
+    })
+
+
+@login_required
+def partner_export_download(request):
+    """
+    Personenkonten als CSV herunterladen.
+
+    Nur per POST – konsistent zum Buchungsstapel. Anders als dort verändert
+    der Download **keine** Daten; die Seite ist beliebig oft aufrufbar und
+    liefert bei unverändertem Bestand dieselbe Datei.
+    """
+    if request.method != 'POST':
+        return redirect('auftragsverwaltung:partner_export')
+
+    form, preview = _build_partner(request)
+
+    if not preview.partners:
+        # Eine Datei mit reiner Überschriftenzeile sähe nach einem geglückten
+        # Export aus und würde im Zielsystem nichts anlegen.
+        messages.warning(
+            request,
+            'Es gibt keine Adressen mit Personenkonto für diese Auswahl.',
+        )
+        return render(request, PARTNER_EXPORT_TEMPLATE, {
+            'form': form,
+            'preview': preview,
+        })
+
+    content = render_partner_csv(preview)
+    logger.info(
+        'Personenkonten-Export erzeugt: %s Datensätze (Auswahl %s)',
+        preview.partner_count, preview.kind,
+    )
+
+    response = HttpResponse(content, content_type='text/csv; charset=windows-1252')
+    response['Content-Disposition'] = (
+        f'attachment; filename="{build_partner_filename(preview)}"'
+    )
     return response
 
 
