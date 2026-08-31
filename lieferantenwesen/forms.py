@@ -1,6 +1,9 @@
 """Forms for the Lieferantenwesen module."""
+import os
+
 from django import forms
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
+from django.core.files.uploadedfile import UploadedFile
 
 from core.models import Adresse, Kostenart, Mandant
 from .models import InvoiceIn, InvoiceInLine
@@ -78,6 +81,9 @@ class ModelErrorFallbackMixin:
 
 
 class InvoiceInForm(ModelErrorFallbackMixin, CostTypeDependencyMixin, forms.ModelForm):
+    #: Obergrenze für den Beleg-Upload – identisch zum Hinweis beim KI-Upload.
+    pdf_max_bytes = 50 * 1024 * 1024
+
     class Meta:
         model = InvoiceIn
         fields = [
@@ -99,7 +105,14 @@ class InvoiceInForm(ModelErrorFallbackMixin, CostTypeDependencyMixin, forms.Mode
             "status",
             "approval_comment",
             "payment_date",
+            "pdf_file",
         ]
+        labels = {
+            "pdf_file": "PDF-Beleg",
+        }
+        help_texts = {
+            "pdf_file": "PDF der Lieferantenrechnung, max. 50 MB.",
+        }
         widgets = {
             "company": forms.Select(attrs={"class": "form-select"}),
             "invoice_no": forms.TextInput(attrs={"class": "form-control"}),
@@ -133,7 +146,36 @@ class InvoiceInForm(ModelErrorFallbackMixin, CostTypeDependencyMixin, forms.Mode
             "payment_date": forms.DateInput(
                 attrs={"class": "form-control", "type": "date"}, format="%Y-%m-%d"
             ),
+            "pdf_file": forms.ClearableFileInput(
+                attrs={"class": "form-control", "accept": ".pdf,application/pdf"}
+            ),
         }
+
+    def clean_pdf_file(self):
+        """Accept only reasonably sized PDFs as receipt.
+
+        Nur ein *neu* hochgeladenes File wird geprüft: Bleibt das Feld leer,
+        liefert ``ClearableFileInput`` das bereits gespeicherte ``FieldFile``
+        (bzw. ``False`` beim Entfernen) zurück – beides muss unverändert
+        durchgereicht werden, damit ein vorhandener Beleg erhalten bleibt.
+        """
+        pdf_file = self.cleaned_data.get("pdf_file")
+        if not isinstance(pdf_file, UploadedFile):
+            return pdf_file
+
+        if pdf_file.size > self.pdf_max_bytes:
+            raise forms.ValidationError("Die Datei ist zu groß (max. 50 MB).")
+
+        extension = os.path.splitext(pdf_file.name)[1].lower()
+        content_type = getattr(pdf_file, "content_type", "") or ""
+        # Der Content-Type ist Browser-Angabe und fehlt manchmal – dann zählt
+        # allein die Endung.
+        if extension != ".pdf" or (
+            content_type and content_type.lower() != "application/pdf"
+        ):
+            raise forms.ValidationError("Es sind nur PDF-Dateien erlaubt.")
+
+        return pdf_file
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

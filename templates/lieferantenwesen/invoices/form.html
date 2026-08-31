@@ -16,7 +16,7 @@
 {% endblock %}
 
 {% block main_content %}
-<form method="post" novalidate>
+<form method="post" enctype="multipart/form-data" novalidate>
     {% csrf_token %}
     <div class="row">
         {# Bearbeiten: schmalere Spalte, damit rechts der Beleg Platz hat. Anlegen: volle Breite, es gibt noch kein PDF. #}
@@ -160,6 +160,24 @@
                             {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.order %}
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Receipt (PDF) -->
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="mb-0">Beleg</h5></div>
+                <div class="card-body">
+                    {% if invoice.pdf_file %}
+                    <p class="mb-2">
+                        <a href="{% url 'lieferantenwesen:invoice_pdf' invoice.pk %}" target="_blank">
+                            <i class="bi bi-file-earmark-pdf"></i> Hinterlegten Beleg ansehen
+                        </a>
+                    </p>
+                    {% endif %}
+                    <label class="form-label" for="{{ form.pdf_file.id_for_label }}">{{ form.pdf_file.label }}</label>
+                    {{ form.pdf_file }}
+                    <div class="form-text">{{ form.pdf_file.help_text }}</div>
+                    {% include "lieferantenwesen/invoices/partials/field_errors.html" with field=form.pdf_file %}
                 </div>
             </div>
 

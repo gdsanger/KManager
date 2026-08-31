@@ -1667,6 +1667,208 @@ class InvoicePdfUploadCompanyTest(TestCase):
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class InvoiceReceiptUploadTest(TestCase):
+    """Der PDF-Beleg lässt sich im Erfassungsformular pflegen."""
+
+    MINIMAL_PDF = b"%PDF-1.4\n%%EOF"
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="beleguser", password="belegpass", is_staff=True
+        )
+        self.client.login(username="beleguser", password="belegpass")
+        self.company = Mandant.objects.create(
+            name="Beleg GmbH", adresse="Belegstr. 1", plz="55555", ort="Belegstadt",
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT",
+            name="Beleg Lieferant",
+            strasse="Belegstr. 2",
+            plz="55555",
+            ort="Belegstadt",
+            land="DE",
+        )
+
+    # --- Helpers ----------------------------------------------------------
+
+    def _post_data(self, **overrides):
+        data = {
+            "company": str(self.company.pk),
+            "invoice_no": "RE-BELEG-001",
+            "invoice_date": "2026-05-04",
+            "supplier": str(self.supplier.pk),
+            "currency": "EUR",
+            "net_amount": "100.00",
+            "tax_amount": "19.00",
+            "gross_amount": "119.00",
+            "payment_terms_text": "",
+            "due_date": "",
+            "payment_reference": "",
+            "iban_from_invoice": "",
+            "cost_type_main": "",
+            "cost_type_sub": "",
+            "order": "",
+            "status": "DRAFT",
+            "approval_comment": "",
+            "payment_date": "",
+            "lines-TOTAL_FORMS": "0",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "0",
+            "lines-MAX_NUM_FORMS": "1000",
+        }
+        data.update(overrides)
+        return data
+
+    def _pdf(self, name="beleg.pdf", content_type="application/pdf"):
+        return SimpleUploadedFile(name, self.MINIMAL_PDF, content_type=content_type)
+
+    def _make_invoice(self, **kwargs):
+        defaults = dict(
+            invoice_no="RE-BELEG-001",
+            invoice_date=date(2026, 5, 4),
+            supplier=self.supplier,
+            company=self.company,
+            status="DRAFT",
+        )
+        defaults.update(kwargs)
+        return InvoiceIn.objects.create(**defaults)
+
+    # --- Template ---------------------------------------------------------
+
+    def test_create_form_accepts_file_uploads(self):
+        response = self.client.get(reverse("lieferantenwesen:invoice_create"))
+        self.assertContains(response, 'enctype="multipart/form-data"')
+        self.assertContains(response, 'name="pdf_file"')
+
+    def test_edit_form_links_to_existing_receipt(self):
+        invoice = self._make_invoice(pdf_file=self._pdf())
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk})
+        )
+        self.assertContains(response, "Hinterlegten Beleg ansehen")
+
+    # --- Saving -----------------------------------------------------------
+
+    def test_create_stores_uploaded_receipt(self):
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"),
+            self._post_data(pdf_file=self._pdf()),
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice = InvoiceIn.objects.get(invoice_no="RE-BELEG-001")
+        self.assertTrue(invoice.pdf_file)
+        self.assertTrue(invoice.pdf_file.name.endswith(".pdf"))
+
+        detail = self.client.get(
+            reverse("lieferantenwesen:invoice_detail", kwargs={"pk": invoice.pk})
+        )
+        self.assertNotContains(detail, "Kein PDF hinterlegt")
+        self.assertContains(
+            detail,
+            reverse("lieferantenwesen:invoice_pdf", kwargs={"pk": invoice.pk}),
+        )
+
+    def test_create_without_receipt_still_works(self):
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"), self._post_data()
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice = InvoiceIn.objects.get(invoice_no="RE-BELEG-001")
+        self.assertFalse(invoice.pdf_file)
+
+    def test_edit_can_add_missing_receipt(self):
+        invoice = self._make_invoice()
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+            self._post_data(pdf_file=self._pdf("nachgereicht.pdf")),
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.pdf_file)
+
+    def test_edit_replaces_existing_receipt(self):
+        invoice = self._make_invoice(pdf_file=self._pdf("alt.pdf"))
+        old_name = invoice.pdf_file.name
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+            self._post_data(pdf_file=self._pdf("neu.pdf")),
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertNotEqual(invoice.pdf_file.name, old_name)
+        self.assertIn("neu", invoice.pdf_file.name)
+
+    def test_edit_without_new_file_keeps_receipt(self):
+        invoice = self._make_invoice(pdf_file=self._pdf("bleibt.pdf"))
+        old_name = invoice.pdf_file.name
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+            self._post_data(invoice_no="RE-BELEG-002"),
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.invoice_no, "RE-BELEG-002")
+        self.assertEqual(invoice.pdf_file.name, old_name)
+
+    def test_edit_can_clear_receipt(self):
+        invoice = self._make_invoice(pdf_file=self._pdf("weg.pdf"))
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+            self._post_data(**{"pdf_file-clear": "on"}),
+        )
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertFalse(invoice.pdf_file)
+
+    # --- Validation -------------------------------------------------------
+
+    def test_non_pdf_upload_is_rejected(self):
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"),
+            self._post_data(
+                invoice_no="RE-BELEG-BAD",
+                pdf_file=SimpleUploadedFile(
+                    "beleg.txt", b"kein pdf", content_type="text/plain"
+                ),
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(InvoiceIn.objects.filter(invoice_no="RE-BELEG-BAD").exists())
+        self.assertContains(response, "Es sind nur PDF-Dateien erlaubt.")
+        # Die übrigen Eingaben bleiben im Formular stehen.
+        self.assertContains(response, 'value="RE-BELEG-BAD"')
+
+    def test_pdf_extension_with_wrong_content_type_is_rejected(self):
+        form = InvoiceInForm(
+            data=self._post_data(),
+            files={"pdf_file": self._pdf("beleg.pdf", content_type="text/plain")},
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("Es sind nur PDF-Dateien erlaubt.", form.errors["pdf_file"])
+
+    def test_missing_content_type_falls_back_to_extension(self):
+        upload = self._pdf()
+        upload.content_type = ""
+        form = InvoiceInForm(data=self._post_data(), files={"pdf_file": upload})
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_oversized_pdf_is_rejected(self):
+        upload = self._pdf("riesig.pdf")
+        # Django's File erlaubt das Setzen der Größe – so bleibt der Test
+        # schnell, ohne 50 MB im Speicher aufzubauen.
+        upload.size = InvoiceInForm.pdf_max_bytes + 1
+        form = InvoiceInForm(data=self._post_data(), files={"pdf_file": upload})
+        self.assertFalse(form.is_valid())
+        self.assertIn("Die Datei ist zu groß (max. 50 MB).", form.errors["pdf_file"])
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class OverlongExtractionValuesTest(TestCase):
     """
     Zu lange KI-Werte dürfen den PDF-Upload nicht sprengen.
