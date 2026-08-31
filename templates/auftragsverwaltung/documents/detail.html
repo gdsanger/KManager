@@ -28,6 +28,21 @@ Neues {{ document_type.name }}
     </button>
     {% endif %}
 
+    {% if document_type.is_invoice or document_type.is_correction %}
+    <!-- Zahlungseingang: nur für finalisierte, nicht stornierte Belege -->
+    {% if document.status != 'DRAFT' and document.status != 'CANCELLED' %}
+    {% if document.is_paid %}
+    <button type="button" class="btn btn-outline-warning" id="unmarkPaidButton" title="Erfasste Zahlung zurücknehmen">
+        <i class="bi bi-arrow-counterclockwise"></i> Zahlung zurücknehmen
+    </button>
+    {% else %}
+    <button type="button" class="btn btn-outline-success" id="markPaidButton" title="Zahlungseingang zu diesem Beleg erfassen">
+        <i class="bi bi-cash-coin"></i> Als bezahlt markieren
+    </button>
+    {% endif %}
+    {% endif %}
+    {% endif %}
+
     {% if document_type.is_invoice %}
     <!-- Invoice-specific actions -->
     <button type="button" class="btn btn-info" id="sendEmailButton" title="Rechnung per E-Mail versenden">
@@ -563,10 +578,30 @@ Neues {{ document_type.name }}
                     <!-- Reference Number -->
                     <div class="col-md-3">
                         <label class="form-label">Referenznummer</label>
-                        <input type="text" class="form-control" name="reference_number" 
-                               value="{% if document %}{{ document.reference_number }}{% endif %}" 
+                        <input type="text" class="form-control" name="reference_number"
+                               value="{% if document %}{{ document.reference_number }}{% endif %}"
                                placeholder="z.B. Bestellnummer">
                     </div>
+
+                    <!-- Zahlstatus (abgeleitet, nicht bearbeitbar) -->
+                    {% if document.pk and document_type.is_invoice or document.pk and document_type.is_correction %}
+                    <div class="col-md-3">
+                        <label class="form-label">Zahlstatus</label>
+                        <div class="form-control-plaintext" id="paymentStatusDisplay">
+                            {% if document.is_paid %}
+                            <span class="badge bg-success">Bezahlt</span>
+                            <span class="ms-1">am {{ document.payment_date|date:'d.m.Y' }}</span>
+                            {% elif document.status == 'DRAFT' or document.status == 'CANCELLED' %}
+                            <span class="badge bg-secondary">Kein offener Posten</span>
+                            {% elif document.is_overdue %}
+                            <span class="badge bg-danger">Überfällig</span>
+                            <span class="ms-1">seit {{ document.due_date|date:'d.m.Y' }}</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">Offen</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             
@@ -1110,6 +1145,38 @@ Neues {{ document_type.name }}
         </div>
     </div>
 </div>
+
+{% if document.pk and document_type.is_invoice or document.pk and document_type.is_correction %}
+<!-- Zahlungseingang erfassen / zurücknehmen -->
+<form id="paymentForm" method="post" action="" style="display: none;">
+    {% csrf_token %}
+    <input type="hidden" name="payment_date" id="paymentFormDate" value="">
+</form>
+
+<div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="markPaidModalLabel">Als bezahlt markieren</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+            </div>
+            <div class="modal-body">
+                <label for="markPaidDate" class="form-label">Zahldatum</label>
+                <input type="date" class="form-control" id="markPaidDate"
+                       value="{% now 'Y-m-d' %}"
+                       min="{{ document.issue_date|date:'Y-m-d' }}">
+                <div class="form-text">Das Zahldatum darf nicht vor dem Belegdatum liegen.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-success" id="markPaidConfirm">
+                    <i class="bi bi-cash-coin"></i> Als bezahlt markieren
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -2717,6 +2784,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 printInternalButton.innerHTML = originalHtml;
                 alert('Rechnung wird heruntergeladen.\nEine Kopie wurde an die interne Buchhaltung gesendet.');
             }, 1000);
+        });
+    }
+    {% endif %}
+
+    {% if document.pk and document_type.is_invoice or document.pk and document_type.is_correction %}
+    // ============================================================================
+    // Zahlungseingang erfassen / zurücknehmen
+    //
+    // Beide Aktionen laufen bewusst als POST (sie verändern Zustand). Der
+    // Journaleintrag des Belegs bleibt davon unberührt.
+    // ============================================================================
+    const paymentForm = document.getElementById('paymentForm');
+    const paymentFormDate = document.getElementById('paymentFormDate');
+    const markPaidButton = document.getElementById('markPaidButton');
+    const markPaidModalEl = document.getElementById('markPaidModal');
+    const markPaidModal = markPaidModalEl ? new bootstrap.Modal(markPaidModalEl) : null;
+    const markPaidDate = document.getElementById('markPaidDate');
+    const markPaidConfirm = document.getElementById('markPaidConfirm');
+    const unmarkPaidButton = document.getElementById('unmarkPaidButton');
+
+    if (markPaidButton && markPaidModal) {
+        markPaidButton.addEventListener('click', function() {
+            markPaidDate.value = new Date().toLocaleDateString('sv-SE');
+            markPaidModal.show();
+        });
+    }
+
+    // Die Zahlungsaktion lädt die Seite neu. Ungespeicherte Kopfdaten gingen
+    // dabei verloren - deshalb einmal ausdrücklich nachfragen, statt den
+    // generischen beforeunload-Dialog auszulösen.
+    function confirmDiscardUnsavedChanges() {
+        if (!isDirty && !hasPendingLineSaves()) {
+            return true;
+        }
+        return confirm('Am Beleg gibt es ungespeicherte Änderungen. Diese gehen beim Erfassen der Zahlung verloren.\n\nTrotzdem fortfahren?');
+    }
+
+    if (markPaidConfirm) {
+        markPaidConfirm.addEventListener('click', function() {
+            if (!confirmDiscardUnsavedChanges()) {
+                return;
+            }
+            markPaidConfirm.disabled = true;
+            isDirty = false;
+            paymentForm.action = '{% url "auftragsverwaltung:invoice_mark_as_paid" document.pk %}';
+            paymentFormDate.value = markPaidDate.value;
+            paymentForm.submit();
+        });
+    }
+
+    if (unmarkPaidButton) {
+        unmarkPaidButton.addEventListener('click', function() {
+            if (!confirm('Erfasste Zahlung zurücknehmen?\n\nZahldatum und Zahlstatus werden zurückgesetzt, der Beleg gilt wieder als offener Posten.')) {
+                return;
+            }
+            if (!confirmDiscardUnsavedChanges()) {
+                return;
+            }
+            unmarkPaidButton.disabled = true;
+            isDirty = false;
+            paymentForm.action = '{% url "auftragsverwaltung:invoice_unmark_as_paid" document.pk %}';
+            paymentFormDate.value = '';
+            paymentForm.submit();
         });
     }
     {% endif %}
