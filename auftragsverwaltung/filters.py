@@ -46,6 +46,20 @@ class SalesDocumentFilter(django_filters.FilterSet):
         })
     )
 
+    payment_status = django_filters.ChoiceFilter(
+        method='payment_status_filter',
+        choices=[
+            ('open', 'Nur offene'),
+            ('overdue', 'Nur überfällige'),
+            ('paid', 'Nur bezahlte'),
+        ],
+        label='Zahlstatus',
+        empty_label='Alle Zahlstatus',
+        widget=django_filters.widgets.forms.Select(attrs={
+            'class': 'form-select'
+        })
+    )
+
     number = django_filters.CharFilter(
         lookup_expr='icontains',
         label='Nummer',
@@ -84,6 +98,23 @@ class SalesDocumentFilter(django_filters.FilterSet):
         })
     )
     
+    def payment_status_filter(self, queryset, name, value):
+        """
+        Nach Zahlstatus filtern.
+
+        Die Bedingungen kommen aus dem Modell, damit Liste, Dashboard und
+        Belegseite dieselbe Definition von "offen" und "überfällig" verwenden.
+        Überfälligkeit wird abgeleitet, nicht gespeichert – deshalb eine
+        Filterbedingung statt eines Status-Vergleichs.
+        """
+        if value == 'open':
+            return queryset.filter(SalesDocument.unpaid_filter())
+        if value == 'overdue':
+            return queryset.filter(SalesDocument.overdue_filter())
+        if value == 'paid':
+            return queryset.filter(paid_at__isnull=False)
+        return queryset
+
     def search_filter(self, queryset, name, value):
         """
         Full-text search across multiple fields using OR.
@@ -115,8 +146,8 @@ class SalesDocumentFilter(django_filters.FilterSet):
 
     class Meta:
         model = SalesDocument
-        fields = ['q', 'customer', 'projekt', 'status', 'number', 'subject',
-                  'issue_date_from', 'issue_date_to']
+        fields = ['q', 'customer', 'projekt', 'status', 'payment_status',
+                  'number', 'subject', 'issue_date_from', 'issue_date_to']
 
 
 class ContractFilter(django_filters.FilterSet):

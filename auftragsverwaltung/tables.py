@@ -71,7 +71,14 @@ class SalesDocumentTable(tables.Table):
         verbose_name='Status',
         attrs={'td': {'class': 'text-nowrap'}}
     )
-    
+
+    payment_status = tables.Column(
+        verbose_name='Zahlung',
+        accessor='paid_at',
+        empty_values=(),
+        attrs={'td': {'class': 'text-nowrap'}}
+    )
+
     aktionen = tables.Column(
         verbose_name='Aktionen',
         empty_values=(),
@@ -116,20 +123,79 @@ class SalesDocumentTable(tables.Table):
         display_value = record.get_status_display()
         return format_html('<span class="badge {}">{}</span>', badge_class, display_value)
     
+    def render_payment_status(self, record):
+        """
+        Zahlstatus als Badge: bezahlt (mit Datum), überfällig oder offen.
+
+        Für Belege, die gar nicht im Rechnungsausgangsjournal geführt werden
+        (Angebote, Aufträge, Lieferscheine), gibt es keinen Zahlstatus.
+        """
+        if not self._is_payable(record):
+            return '—'
+        if record.is_paid:
+            return format_html(
+                '<span class="badge bg-success">bezahlt {}</span>',
+                record.payment_date.strftime('%d.%m.%Y'),
+            )
+        if record.is_overdue:
+            return format_html('<span class="badge bg-danger">überfällig</span>')
+        return format_html('<span class="badge bg-warning text-dark">offen</span>')
+
+    @staticmethod
+    def _is_payable(record):
+        """
+        True für Belegarten, die im Rechnungsausgangsjournal geführt werden.
+
+        Gleiche Bedingung wie ``finanzen.services.journal.get_document_kind``;
+        hier bewusst ohne Import, weil die Tabelle nur die Anzeige steuert -
+        die verbindliche Prüfung findet in der View statt.
+        """
+        document_type = record.document_type
+        return bool(document_type.is_invoice or document_type.is_correction)
+
     def render_aktionen(self, record):
         """Render action buttons."""
         detail_url = reverse('auftragsverwaltung:document_detail', kwargs={
             'doc_key': record.document_type.key,
             'pk': record.pk
         })
-        return format_html(
-            '<div class="btn-group btn-group-sm" role="group">'
+        detail_button = format_html(
             '<a href="{}" class="btn btn-outline-info" title="Details">'
-            '<i class="bi bi-eye"></i></a>'
-            '</div>',
+            '<i class="bi bi-eye"></i></a>',
             detail_url
         )
-    
+
+        # Zahlungsaktion direkt aus der Liste, damit sich mehrere
+        # Zahlungseingänge nacheinander erfassen lassen, ohne jeden Beleg zu
+        # öffnen. Der eigentliche POST läuft über das Formular im Listen-
+        # Template (CSRF-Token), hier stehen nur die Daten dafür.
+        payment_button = ''
+        if self._is_payable(record) and record.status not in SalesDocument.NON_PAYABLE_STATUSES:
+            if record.is_paid:
+                payment_button = format_html(
+                    '<button type="button" class="btn btn-outline-warning js-unmark-paid" '
+                    'data-url="{}" data-number="{}" title="Zahlung zurücknehmen">'
+                    '<i class="bi bi-arrow-counterclockwise"></i></button>',
+                    reverse('auftragsverwaltung:invoice_unmark_as_paid', kwargs={'pk': record.pk}),
+                    record.number or '',
+                )
+            else:
+                payment_button = format_html(
+                    '<button type="button" class="btn btn-outline-success js-mark-paid" '
+                    'data-url="{}" data-number="{}" data-issue-date="{}" '
+                    'title="Als bezahlt markieren">'
+                    '<i class="bi bi-cash-coin"></i></button>',
+                    reverse('auftragsverwaltung:invoice_mark_as_paid', kwargs={'pk': record.pk}),
+                    record.number or '',
+                    record.issue_date.strftime('%Y-%m-%d') if record.issue_date else '',
+                )
+
+        return format_html(
+            '<div class="btn-group btn-group-sm" role="group">{}{}</div>',
+            detail_button,
+            payment_button,
+        )
+
     class Meta:
         model = SalesDocument
         template_name = 'django_tables2/bootstrap5-dark.html'
@@ -144,6 +210,7 @@ class SalesDocumentTable(tables.Table):
             'due_date',
             'total_gross',
             'status',
+            'payment_status',
             'aktionen'
         )
         attrs = {
