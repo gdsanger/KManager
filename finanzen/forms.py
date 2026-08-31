@@ -3,7 +3,7 @@ from datetime import date
 
 from django import forms
 
-from core.models import Mandant
+from core.models import ItemGroup, Mandant
 
 from .models import CompanyAccountingSettings
 from .services.dashboard import (
@@ -277,4 +277,65 @@ class DashboardFilterForm(forms.Form):
             'year': data.get('year') or self.default_year,
             'value_basis': data.get('value_basis') or VALUE_BASIS_NET,
             'date_basis': data.get('date_basis') or DATE_BASIS_DOCUMENT,
+        }
+
+
+class ItemRevenueFilterForm(forms.Form):
+    """
+    Filterleiste der Auswertung „Artikelumsatz".
+
+    Wie beim Dashboard ein GET-Formular: Der eingestellte Stand steht damit in
+    der URL und lässt sich als Link weitergeben.
+
+    Alle Felder sind `required=False` und werden über :meth:`selection` mit
+    Vorbelegungen aufgefüllt – ein Aufruf ohne Parameter oder über einen
+    veralteten Link zeigt eine sinnvolle Auswertung statt einer Fehlerliste.
+    """
+
+    company = forms.ModelChoiceField(
+        queryset=Mandant.objects.all().order_by('name'),
+        required=False,
+        empty_label=None,
+        label='Mandant',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    year = forms.TypedChoiceField(
+        choices=_dashboard_year_choices,
+        coerce=int,
+        required=False,
+        label='Jahr',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    group = forms.ModelChoiceField(
+        # Haupt- und Untergruppen zur Auswahl: bei einer Hauptgruppe zählen die
+        # Artikel ihrer Untergruppen mit.
+        queryset=ItemGroup.objects.filter(is_active=True).order_by('code'),
+        required=False,
+        empty_label='Alle Warengruppen',
+        label='Warengruppe',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Vorbelegung wie beim DATEV-Export: erster Mandant nach Name.
+        self.default_company = Mandant.objects.order_by('name').first()
+        self.default_year = date.today().year
+        self.fields['company'].initial = (
+            self.default_company.pk if self.default_company else None
+        )
+        self.fields['year'].initial = self.default_year
+
+    def selection(self):
+        """
+        Gewählte Einstellungen mit Vorbelegungen als Dict liefern.
+
+        Returns:
+            dict: company, year, group
+        """
+        data = self.cleaned_data if self.is_bound and self.is_valid() else {}
+        return {
+            'company': data.get('company') or self.default_company,
+            'year': data.get('year') or self.default_year,
+            'group': data.get('group'),
         }

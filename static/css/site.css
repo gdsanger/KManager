@@ -695,3 +695,54 @@ a:hover {
 .table-row-overdue > td {
     background-color: rgba(239, 68, 68, 0.12);
 }
+
+
+/* --------------------------------------------------------------------
+   Auswertung Artikelumsatz
+   -------------------------------------------------------------------- */
+
+/* Der Monatsverlauf sitzt in einer aufgeklappten Tabellenzeile und braucht
+   deshalb weniger Höhe als ein Diagramm auf einer eigenen Seite. */
+.chart-container-sm {
+    height: 220px;
+}
+
+/* Schmale Spalte für den Aufklapp-Button. */
+.artikelumsatz-toggle-col {
+    width: 2.75rem;
+}
+
+/* Chevron dreht sich beim Aufklappen mit – Bootstrap setzt `.collapsed`
+   automatisch auf dem auslösenden Element. */
+.artikelumsatz-toggle > i {
+    transition: transform 0.2s ease-in-out;
+}
+
+.artikelumsatz-toggle.collapsed > i {
+    transform: rotate(-90deg);
+}
+
+/* Zeilen mit negativem Jahresumsatz. Die Farbe ist nur ein Zusatz: in der
+   Zeile stehen ohnehin Minuszeichen und Symbol. */
+.artikelumsatz-row-negative > td {
+    background-color: rgba(239, 68, 68, 0.12);
+}
+
+/* Die aufgeklappte Detailzeile soll den Zeilenwechsel der Tabelle nicht
+   mitmachen und keinen eigenen Hover-Effekt zeigen. */
+.artikelumsatz-detail-row > td {
+    background-color: rgba(148, 163, 184, 0.08);
+}
+
+/* Sortierbare Spaltenköpfe: Link, aber optisch Teil der Kopfzeile. */
+.artikelumsatz-sort {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.artikelumsatz-sort:hover,
+.artikelumsatz-sort:focus {
+    color: inherit;
+    text-decoration: underline;
+}

@@ -1,0 +1,252 @@
+{% extends "finanzen/base.html" %}
+{% load static %}
+
+{% block title %}Artikelumsatz - Domus{% endblock %}
+{% block page_title %}<i class="bi bi-bar-chart-steps"></i> Artikelumsatz{% endblock %}
+
+{% block page_actions %}
+    <a href="{% url 'finanzen:home' %}" class="btn btn-outline-light btn-sm">
+        <i class="bi bi-arrow-left"></i> Zurück zu Finanzen
+    </a>
+    <a href="{% url 'item_management' %}" class="btn btn-outline-light btn-sm">
+        <i class="bi bi-box-seam"></i> Artikelverwaltung
+    </a>
+{% endblock %}
+
+{% block main_content %}
+{# ------------------------------------------------------------------ #}
+{# Filterleiste – GET, damit der Stand in der URL steht und teilbar ist #}
+{# ------------------------------------------------------------------ #}
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="{{ form.company.id_for_label }}" class="form-label">{{ form.company.label }}</label>
+                {{ form.company }}
+            </div>
+            <div class="col-md-3">
+                <label for="{{ form.year.id_for_label }}" class="form-label">{{ form.year.label }}</label>
+                {{ form.year }}
+            </div>
+            <div class="col-md-3">
+                <label for="{{ form.group.id_for_label }}" class="form-label">{{ form.group.label }}</label>
+                {{ form.group }}
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel"></i> Anwenden
+                </button>
+            </div>
+            {# Sortierung beim Filterwechsel beibehalten – sonst springt die #}
+            {# Tabelle bei jedem Filtern zurück auf die Standardsortierung.  #}
+            <input type="hidden" name="sort" value="{{ report.sort }}">
+            <input type="hidden" name="dir" value="{% if report.descending %}desc{% else %}asc{% endif %}">
+        </form>
+    </div>
+</div>
+
+{% if not report.company %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        Es ist kein Mandant angelegt. Ohne Mandant lässt sich kein Artikelumsatz auswerten.
+    </div>
+{% endif %}
+
+{# ------------------------------------------------------------------ #}
+{# Hinweis auf die Datengrundlage                                      #}
+{# ------------------------------------------------------------------ #}
+<div class="alert alert-secondary">
+    <h6 class="alert-heading"><i class="bi bi-info-circle"></i> Datengrundlage</h6>
+    <p class="mb-1">
+        Nettoumsatz aus den Positionen der finalisierten Rechnungen und Gutschriften
+        des Jahres {{ report.year }}
+        {% if report.company %}für den Mandanten <strong>{{ report.company.name }}</strong>{% endif %}{% if report.group %},
+        eingeschränkt auf die Warengruppe <strong>{{ report.group.name }}</strong>{% endif %}.
+        <strong>Gutschriften mindern den Umsatz.</strong>
+        Entwürfe, stornierte Belege, Angebote, Aufträge und Lieferscheine bleiben
+        außen vor, ebenso nicht ausgewählte optionale und alternative Positionen.
+    </p>
+    <p class="mb-0 small">
+        Artikelumsätze sind eine <strong>Steuerungsgröße, keine Buchungsgröße</strong>:
+        Sie stammen aus den Belegpositionen, weil das Rechnungsausgangsjournal nur
+        Nettobeträge je Steuersatz und keine Positionen kennt. Weil Positionen eines
+        finalisierten Belegs nachträglich geändert werden können, kann die Summe
+        hier geringfügig von den Journalzahlen abweichen.
+    </p>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Rangliste                                                           #}
+{# ------------------------------------------------------------------ #}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-trophy"></i> Rangliste {{ report.year }}</h5>
+        <span class="text-muted small">
+            {{ report.rows|length }} Artikelzeile{{ report.rows|length|pluralize:"n" }}
+        </span>
+    </div>
+    <div class="card-body">
+        {% if report.has_data %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="artikelumsatz-toggle-col">
+                                <span class="visually-hidden">Monatsverlauf</span>
+                            </th>
+                            <th>Artikelnummer</th>
+                            <th>Kurztext</th>
+                            <th>Warengruppe</th>
+                            <th class="text-end">
+                                <a href="{{ sort_links.quantity.url }}" class="artikelumsatz-sort">
+                                    Menge
+                                    {% if sort_links.quantity.is_active %}
+                                        <i class="bi bi-caret-{% if sort_links.quantity.descending %}down{% else %}up{% endif %}-fill"></i>
+                                    {% else %}
+                                        <i class="bi bi-arrow-down-up text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th class="text-end">
+                                <a href="{{ sort_links.net.url }}" class="artikelumsatz-sort">
+                                    Nettoumsatz
+                                    {% if sort_links.net.is_active %}
+                                        <i class="bi bi-caret-{% if sort_links.net.descending %}down{% else %}up{% endif %}-fill"></i>
+                                    {% else %}
+                                        <i class="bi bi-arrow-down-up text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th class="text-end">Anteil</th>
+                            <th class="text-end">
+                                <a href="{{ sort_links.documents.url }}" class="artikelumsatz-sort">
+                                    Belege
+                                    {% if sort_links.documents.is_active %}
+                                        <i class="bi bi-caret-{% if sort_links.documents.descending %}down{% else %}up{% endif %}-fill"></i>
+                                    {% else %}
+                                        <i class="bi bi-arrow-down-up text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in report.rows %}
+                            <tr {% if row.is_negative %}class="artikelumsatz-row-negative"{% endif %}>
+                                <td class="artikelumsatz-toggle-col">
+                                    {# Monatsverlauf erst beim Aufklappen laden: `once` sorgt #}
+                                    {# dafür, dass der Endpunkt nur ein einziges Mal je Zeile #}
+                                    {# aufgerufen wird.                                       #}
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary artikelumsatz-toggle collapsed"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#verlauf-{{ row.key }}"
+                                            aria-expanded="false"
+                                            aria-controls="verlauf-{{ row.key }}"
+                                            aria-label="Monatsverlauf für {{ row.label }} anzeigen"
+                                            hx-get="{% url 'finanzen:item_revenue_months' row.key %}?{{ detail_query }}"
+                                            hx-target="#verlauf-{{ row.key }}-body"
+                                            hx-swap="innerHTML"
+                                            hx-trigger="click once">
+                                        <i class="bi bi-chevron-down"></i>
+                                    </button>
+                                </td>
+                                <td class="text-nowrap">
+                                    {% if row.has_item %}
+                                        {# Führt in der Artikelverwaltung zu genau diesem Artikel. #}
+                                        <a href="{% url 'item_management' %}?q={{ row.article_no|urlencode }}">
+                                            {{ row.article_no|default:"—" }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if row.has_item %}
+                                        {{ row.label|truncatechars:60 }}
+                                    {% else %}
+                                        <em class="text-muted">{{ row.label }}</em>
+                                    {% endif %}
+                                </td>
+                                <td>{{ row.group_name|default:"—" }}</td>
+                                <td class="text-end text-nowrap">
+                                    {% if row.quantity_is_mixed %}
+                                        <span class="text-warning" title="Die Positionen tragen unterschiedliche Einheiten – eine Summe wäre keine Menge.">
+                                            <i class="bi bi-exclamation-triangle"></i> uneinheitlich
+                                        </span>
+                                    {% else %}
+                                        {{ row.quantity|floatformat:2 }}{% if row.unit_label %} {{ row.unit_label }}{% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    {# Vorzeichen zusätzlich zur Farbe: ein Minusumsatz darf #}
+                                    {# nicht allein über Rot erkennbar sein.                #}
+                                    {% if row.is_negative %}
+                                        <span class="text-danger">
+                                            <i class="bi bi-dash-circle" title="Negativer Jahresumsatz (überwiegende Gutschriften)"></i>
+                                            {{ row.net|floatformat:2 }} €
+                                        </span>
+                                    {% else %}
+                                        {{ row.net|floatformat:2 }} €
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    {% if row.share_percent is None %}—{% else %}{{ row.share_percent|floatformat:2 }} %{% endif %}
+                                </td>
+                                <td class="text-end">{{ row.document_count }}</td>
+                            </tr>
+                            <tr class="artikelumsatz-detail-row">
+                                <td colspan="8" class="p-0 border-0">
+                                    <div class="collapse" id="verlauf-{{ row.key }}">
+                                        <div id="verlauf-{{ row.key }}-body" class="p-3">
+                                            <span class="text-muted">
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                Monatsverlauf wird geladen …
+                                            </span>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="4">Summe</th>
+                            <th class="text-end">—</th>
+                            <th class="text-end text-nowrap">{{ report.total_net|floatformat:2 }} €</th>
+                            <th class="text-end">{% if report.total_net %}100,00 %{% else %}—{% endif %}</th>
+                            <th class="text-end">{{ report.total_document_count }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox display-5 d-block mb-3"></i>
+                <p class="mb-1">
+                    Für {{ report.year }}
+                    {% if report.company %}bei {{ report.company.name }}{% endif %}
+                    {% if report.group %}in der Warengruppe „{{ report.group.name }}"{% endif %}
+                    gibt es keine Rechnungen oder Gutschriften mit Positionen.
+                </p>
+                <p class="mb-0 small">
+                    Sobald der erste Beleg finalisiert ist, erscheinen die verkauften
+                    Artikel hier. Artikel ohne Umsatz im Zeitraum werden nicht gelistet.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">
+            Standardsortierung nach Umsatz absteigend. Ein Klick auf das Chevron
+            zeigt den Monatsverlauf des Artikels im Jahr {{ report.year }}.
+        </small>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js – nur auf dieser Seite geladen, nicht im gemeinsamen Head -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/artikelumsatz_chart.js' %}" defer></script>
+{% endblock %}
