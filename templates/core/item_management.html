@@ -78,6 +78,21 @@
     padding: 2px 6px;
     font-size: 0.8em;
 }
+
+/* Quill editor for the item long text (modal) */
+#longTextEditor {
+    height: 200px;
+    background-color: var(--bs-body-bg);
+}
+
+#itemModalBody .ql-toolbar {
+    background-color: var(--bs-secondary-bg);
+    border-color: var(--bs-border-color);
+}
+
+#itemModalBody .ql-container {
+    border-color: var(--bs-border-color);
+}
 </style>
 {% endblock %}
 
@@ -308,7 +323,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let formDirty = false;
     let currentItemId = null;
-    
+    // Quill instance of the long text field in the modal. The modal body is
+    // re-rendered on every open, so the reference is dropped together with its
+    // container - applying Quill twice to one container would stack toolbars.
+    let longTextQuill = null;
+
+    const modalLoadingHtml = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Laden...</span>
+            </div>
+        </div>
+    `;
+
+    // Reset modal body to the loading state and drop the old editor instance
+    function resetItemModalBody() {
+        longTextQuill = null;
+        document.getElementById('itemModalBody').innerHTML = modalLoadingHtml;
+    }
+
     // Handle edit item clicks (pencil in the actions column and article number)
     document.querySelectorAll('.edit-item-btn, .item-link').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -329,15 +362,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update modal title
         document.getElementById('itemEditModalLabel').innerHTML = '<i class="bi bi-pencil"></i> Artikel bearbeiten';
-        
+
         // Show modal with loading state
-        document.getElementById('itemModalBody').innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Laden...</span>
-                </div>
-            </div>
-        `;
+        resetItemModalBody();
         itemEditModal.show();
         
         // Load item form via AJAX
@@ -363,15 +390,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update modal title
         document.getElementById('itemEditModalLabel').innerHTML = '<i class="bi bi-plus-circle"></i> Neuer Artikel';
-        
+
         // Show modal with loading state
-        document.getElementById('itemModalBody').innerHTML = `
-            <div class="text-center">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Laden...</span>
-                </div>
-            </div>
-        `;
+        resetItemModalBody();
         itemEditModal.show();
         
         // Get current group filter from URL if present
@@ -400,19 +421,60 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
+    // Initialize the Quill editor for the long text field of the loaded form.
+    // Same configuration as the long text of a document line.
+    function initLongTextEditor() {
+        const container = document.getElementById('longTextEditor');
+        const hiddenField = document.querySelector('#itemEditForm [name="long_text"]');
+        if (!container || !hiddenField || typeof Quill === 'undefined') return;
+
+        // Never initialize twice on the same container (stacked toolbars,
+        // lost content)
+        if (container.classList.contains('ql-container')) return;
+
+        longTextQuill = new Quill(container, {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['clean']
+                ]
+            },
+            placeholder: 'Langtext eingeben...'
+        });
+
+        // Load existing content (HTML, not plain text) from the hidden field
+        if (hiddenField.value) {
+            longTextQuill.root.innerHTML = hiddenField.value;
+        }
+
+        // Keep the hidden field in sync - it is what gets submitted
+        longTextQuill.on('text-change', function() {
+            const plainText = longTextQuill.getText().trim();
+            hiddenField.value = plainText ? longTextQuill.root.innerHTML : '';
+            formDirty = true;
+        });
+    }
+
     // Attach form change handlers
     function attachFormHandlers() {
         const form = document.getElementById('itemEditForm');
         if (!form) return;
-        
-        const formInputs = form.querySelectorAll('input, select, textarea');
-        formInputs.forEach(input => {
-            input.addEventListener('change', () => { formDirty = true; });
-            if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
-                input.addEventListener('input', () => { formDirty = true; });
-            }
-        });
-        
+
+        // The form was inserted via innerHTML, so HTMX does not know about it
+        // yet - without this the hx-attributes of Kostenart 1 stay inert.
+        if (window.htmx) {
+            htmx.process(document.getElementById('itemModalBody'));
+        }
+
+        initLongTextEditor();
+
+        // Delegated, so fields that HTMX swaps in later (Kostenart 2) are
+        // covered as well
+        form.addEventListener('change', () => { formDirty = true; });
+        form.addEventListener('input', () => { formDirty = true; });
+
         // Handle form submission
         form.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -494,7 +556,13 @@ document.addEventListener('DOMContentLoaded', function() {
         unsavedChangesModal.hide();
         itemEditModal.hide();
     });
-    
+
+    // Clean up the modal content once it is closed, so the next open starts
+    // with a fresh form and a fresh editor
+    document.getElementById('itemEditModal').addEventListener('hidden.bs.modal', function() {
+        resetItemModalBody();
+    });
+
     // Item Group Management
     const itemGroupForm = document.getElementById('itemGroupForm');
     

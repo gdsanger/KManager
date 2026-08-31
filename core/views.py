@@ -770,37 +770,13 @@ def cost_type_2_options(request):
     HTMX endpoint to get filtered cost_type_2 options based on selected cost_type_1.
     Returns HTML partial with updated select options.
     """
-    from core.models import Kostenart
-    
     cost_type_1_id = request.GET.get('cost_type_1', '')
-    
-    # Create a temporary form to render the cost_type_2 field
+
+    # A fresh form renders the field without a selection, so a previously chosen
+    # Unterkostenart of the old Hauptkostenart cannot survive the swap.
     form = ItemForm()
-    
-    # Flag to track if we should disable the field
-    should_disable = False
-    
-    # Filter cost_type_2 options based on cost_type_1
-    if cost_type_1_id:
-        try:
-            # Try to convert to int and filter
-            cost_type_1_id_int = int(cost_type_1_id)
-            form.fields['cost_type_2'].queryset = Kostenart.objects.filter(
-                parent_id=cost_type_1_id_int
-            )
-        except (ValueError, TypeError):
-            # Invalid ID - disable and set empty queryset
-            form.fields['cost_type_2'].queryset = Kostenart.objects.none()
-            should_disable = True
-    else:
-        # No cost_type_1 selected - disable
-        form.fields['cost_type_2'].queryset = Kostenart.objects.none()
-        should_disable = True
-    
-    # Disable the field if needed
-    if should_disable:
-        form.fields['cost_type_2'].widget.attrs['disabled'] = 'disabled'
-    
+    form.set_cost_type_2_choices(cost_type_1_id)
+
     return render(request, 'core/partials/cost_type_2_select.html', {'form': form})
 
 
