@@ -9,7 +9,9 @@ from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
+from django.urls import reverse
 from core.models import SmtpSettings, MailTemplate, Mandant, Item, ItemGroup, TaxRate, Kostenart, Unit, Projekt, Adresse
+from core.printing.sanitizer import sanitize_html
 
 
 class SmtpSettingsForm(forms.ModelForm):
@@ -255,9 +257,19 @@ class ItemForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         # Filter cost_type_1 to only show Hauptkostenarten (parent=None)
         self.fields['cost_type_1'].queryset = Kostenart.objects.filter(parent__isnull=True)
+
+        # The HTMX wiring lives here and not in the template: the target URL has
+        # to be resolved via reverse(), and the template should only render the
+        # widget. The response replaces the whole wrapper, therefore outerHTML.
+        self.fields['cost_type_1'].widget.attrs.update({
+            'hx-get': reverse('cost_type_2_options'),
+            'hx-target': '#cost-type-2-wrapper',
+            'hx-swap': 'outerHTML',
+            'hx-trigger': 'change',
+        })
 
         # Only active units are offered. An already assigned unit stays selectable
         # even if it was deactivated later, otherwise saving an untouched form
@@ -268,27 +280,43 @@ class ItemForm(forms.ModelForm):
         self.fields['unit'].queryset = Unit.objects.filter(unit_filter).order_by('code')
         
         # Filter cost_type_2 based on selected cost_type_1
-        if self.instance and self.instance.pk and self.instance.cost_type_1:
+        if self.instance and self.instance.pk and self.instance.cost_type_1_id:
             # Edit mode: filter by the saved cost_type_1
-            self.fields['cost_type_2'].queryset = Kostenart.objects.filter(
-                parent=self.instance.cost_type_1
-            )
-        elif self.data.get('cost_type_1'):
-            # Form submission with data: filter by submitted cost_type_1
-            try:
-                cost_type_1_id = self.data.get('cost_type_1')
-                self.fields['cost_type_2'].queryset = Kostenart.objects.filter(
-                    parent_id=cost_type_1_id
-                )
-            except (ValueError, TypeError):
-                self.fields['cost_type_2'].queryset = Kostenart.objects.none()
+            self.set_cost_type_2_choices(self.instance.cost_type_1_id)
         else:
-            # New item or no cost_type_1 selected: empty queryset
-            self.fields['cost_type_2'].queryset = Kostenart.objects.none()
-        
+            # Bound form: filter by the submitted cost_type_1.
+            # New item without selection: empty and not selectable.
+            self.set_cost_type_2_choices(self.data.get('cost_type_1'))
+
         # Make cost_type_2 not required
         self.fields['cost_type_2'].required = False
-    
+
+    def set_cost_type_2_choices(self, cost_type_1_id):
+        """
+        Restrict cost_type_2 to the Unterkostenarten of the given Hauptkostenart.
+
+        Without a (valid) cost_type_1 the field stays empty and is rendered
+        disabled, so no combination can be picked that clean() would reject.
+        Used both when rendering the form and by the HTMX options endpoint.
+        """
+        try:
+            parent_id = int(cost_type_1_id) if cost_type_1_id else None
+        except (ValueError, TypeError):
+            parent_id = None
+
+        field = self.fields['cost_type_2']
+        if parent_id is None:
+            field.queryset = Kostenart.objects.none()
+            field.widget.attrs['disabled'] = 'disabled'
+        else:
+            field.queryset = Kostenart.objects.filter(parent_id=parent_id)
+            field.widget.attrs.pop('disabled', None)
+
+    def clean_long_text(self):
+        """Long text is entered via Quill, so the HTML is sanitized before saving."""
+        long_text = self.cleaned_data.get('long_text', '')
+        return sanitize_html(long_text) if long_text else ''
+
     def clean(self):
         """Validate cost type selections"""
         cleaned_data = super().clean()
