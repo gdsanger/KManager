@@ -8,16 +8,25 @@ from django.core.paginator import Paginator
 from django.db.models import Q, Sum
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
+from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 
 from core.models import Adresse
+from core.services.ai.invoice_extraction import InvoiceExtractionError
+from core.services.base import ServiceNotConfigured
 from .forms import ApprovalForm, InvoiceInForm, InvoiceInLineFormSet
 from .models import InvoiceIn
 from .permissions import geschaeftsleitung_required, lieferantenwesen_required
 
 logger = logging.getLogger(__name__)
+
+#: Maximale Länge des technischen Details in einer Meldung an den Anwender.
+#: Die vollständige Meldung steht im AIJobsHistory-Eintrag.
+AI_ERROR_DETAIL_MAX_LENGTH = 300
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +273,83 @@ def invoice_edit(request, pk):
     )
 
 
+def _ai_job_admin_url(request, ai_job_id):
+    """
+    Admin-Link auf den KI-Job zum Fehlschlag – oder ``None``.
+
+    Der Eintrag enthält die vollständige technische Fehlermeldung. Er ist nur
+    für Staff erreichbar, deshalb bekommen alle anderen keinen toten Link
+    angeboten.
+    """
+    if not ai_job_id or not request.user.is_staff:
+        return None
+    try:
+        return reverse("admin:core_aijobshistory_change", args=[ai_job_id])
+    except NoReverseMatch:
+        return None
+
+
+def _ai_failure_message(request, lead, exc, detail=None):
+    """
+    Meldung zu einem Fehlschlag der Belegerkennung zusammensetzen.
+
+    Aufbau (durch Zeilenumbrüche getrennt, damit die Meldung lesbar bleibt):
+    Sachverhalt samt Ursache, das gekürzte technische Detail und – nur für
+    Staff – der Link auf den zugehörigen ``AIJobsHistory``-Eintrag.
+    """
+    parts = [lead]
+
+    if detail is None:
+        detail = getattr(exc, "detail", "")
+    detail = (detail or "").strip()
+    if detail:
+        if len(detail) > AI_ERROR_DETAIL_MAX_LENGTH:
+            detail = detail[:AI_ERROR_DETAIL_MAX_LENGTH].rstrip() + " …"
+        parts.append(format_html("Technische Meldung: {}", detail))
+
+    job_url = _ai_job_admin_url(request, getattr(exc, "ai_job_id", None))
+    if job_url:
+        parts.append(
+            format_html(
+                '<a href="{}" target="_blank" rel="noopener">Technische Details</a>',
+                job_url,
+            )
+        )
+
+    return format_html_join(mark_safe("<br>"), "{}", ((part,) for part in parts))
+
+
+def _warn_about_missing_company(request, invoice):
+    """
+    Hinweis auf den fehlenden Mandanten – unabhängig davon, ob die
+    Belegerkennung funktioniert hat. Ohne Mandant fehlt die Rechnung im
+    DATEV-Buchungsstapel.
+    """
+    if invoice is not None and invoice.company_id is None:
+        messages.warning(
+            request,
+            "Der Rechnung konnte kein Mandant zugeordnet werden. Bitte "
+            "wählen Sie den Mandanten aus, bevor Sie die Rechnung "
+            "freigeben – sonst fehlt sie im DATEV-Buchungsstapel.",
+        )
+
+
+def _redirect_to_failed_invoice(request, exc):
+    """
+    Nach einem Fehlschlag der Erkennung auf den trotzdem angelegten Beleg
+    führen. Die hochgeladene Datei bleibt so erhalten – der Anwender kann die
+    Daten direkt manuell nachtragen.
+
+    Ohne angelegten Beleg (Fehler vor dem Speichern) bleibt es beim
+    Upload-Formular.
+    """
+    invoice = getattr(exc, "invoice", None)
+    if invoice is None or invoice.pk is None:
+        return render(request, "lieferantenwesen/invoices/pdf_upload.html")
+    _warn_about_missing_company(request, invoice)
+    return redirect("lieferantenwesen:invoice_edit", pk=invoice.pk)
+
+
 @login_required
 @lieferantenwesen_required
 def invoice_upload_pdf(request):
@@ -279,6 +365,56 @@ def invoice_upload_pdf(request):
         service = InvoiceInService()
         try:
             invoice = service.create_from_pdf(pdf_file, user=request.user)
+        except ServiceNotConfigured as exc:
+            # Kein technischer Fehler, sondern eine fehlende Einstellung –
+            # entsprechend benannt, damit niemand vergeblich neu hochlädt.
+            logger.exception("KI-Belegerkennung ist nicht konfiguriert: %s", exc)
+            messages.warning(
+                request,
+                _ai_failure_message(
+                    request,
+                    "Das PDF wurde gespeichert, aber es ist kein aktives "
+                    "KI-Modell konfiguriert – der Beleg konnte deshalb nicht "
+                    "analysiert werden. Bitte hinterlegen Sie in der "
+                    "Administration unter „KI-Konfiguration“ ein aktives "
+                    "Modell. Bis dahin sind die Rechnungsdaten manuell zu "
+                    "erfassen; eingetragen ist vorerst das heutige "
+                    "Rechnungsdatum.",
+                    exc,
+                    detail=str(exc),
+                ),
+            )
+            return _redirect_to_failed_invoice(request, exc)
+        except InvoiceExtractionError as exc:
+            logger.exception("KI-Analyse der Eingangsrechnung fehlgeschlagen: %s", exc)
+            messages.warning(
+                request,
+                _ai_failure_message(
+                    request,
+                    format_html(
+                        "Das PDF wurde gespeichert, die KI-Analyse ist "
+                        "jedoch fehlgeschlagen: {} Bitte erfassen Sie die "
+                        "Rechnungsdaten manuell; eingetragen ist vorerst "
+                        "das heutige Rechnungsdatum.",
+                        exc.reason,
+                    ),
+                    exc,
+                ),
+            )
+            return _redirect_to_failed_invoice(request, exc)
+        except Exception as exc:
+            # Fehler vor dem Speichern (Datei unlesbar, Storage o. ä.): Der
+            # Anwender erfährt die konkrete Ursache – ein Pauschaltext würde
+            # ihn nur zu einem aussichtslosen zweiten Versuch einladen.
+            logger.exception("PDF upload failed: %s", exc)
+            messages.error(
+                request,
+                format_html(
+                    "Die PDF-Datei konnte nicht verarbeitet werden: {}",
+                    str(exc) or exc.__class__.__name__,
+                ),
+            )
+        else:
             messages.success(
                 request,
                 "PDF wurde hochgeladen und analysiert. Bitte prüfen und ergänzen Sie die Daten.",
@@ -310,20 +446,8 @@ def invoice_upload_pdf(request):
                     "prüfen Sie die Positionen, bevor Sie die Rechnung "
                     "freigeben.",
                 )
-            if invoice.company_id is None:
-                messages.warning(
-                    request,
-                    "Der Rechnung konnte kein Mandant zugeordnet werden. Bitte "
-                    "wählen Sie den Mandanten aus, bevor Sie die Rechnung "
-                    "freigeben – sonst fehlt sie im DATEV-Buchungsstapel.",
-                )
+            _warn_about_missing_company(request, invoice)
             return redirect("lieferantenwesen:invoice_edit", pk=invoice.pk)
-        except Exception as exc:
-            logger.exception("PDF upload failed: %s", exc)
-            messages.error(
-                request,
-                "Fehler beim Verarbeiten der PDF-Datei. Bitte versuchen Sie es erneut.",
-            )
     return render(request, "lieferantenwesen/invoices/pdf_upload.html")
 
 

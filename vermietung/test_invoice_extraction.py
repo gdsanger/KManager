@@ -7,8 +7,15 @@ from django.core.exceptions import ValidationError
 from unittest.mock import Mock, patch, MagicMock
 from decimal import Decimal
 import json
+import tempfile
 
-from core.services.ai.invoice_extraction import InvoiceDataDTO, InvoiceExtractionService
+from core.services.ai.invoice_extraction import (
+    InvoiceDataDTO,
+    InvoiceExtractionError,
+    InvoiceExtractionService,
+)
+from core.services.ai.schemas import AIResponse
+from core.services.base import ServiceNotConfigured
 from core.services.ai.supplier_matching import SupplierMatchingService
 from core.models import Adresse, AIProvider, AIModel
 from vermietung.models import Eingangsrechnung, MietObjekt, Dokument
@@ -300,27 +307,87 @@ class InvoiceExtractionIntegrationTestCase(TestCase):
 class InvoiceExtractionErrorHandlingTestCase(TestCase):
     """Test error handling in invoice extraction"""
     
-    def test_invalid_json_response(self):
-        """Test handling of invalid JSON from AI"""
+    def _extract_with_answer(self, answer):
+        """Extraktion mit *answer* als Modellantwort ausführen."""
         service = InvoiceExtractionService()
-        
-        # Invalid JSON should not crash, but return None
-        invalid_json = "This is not JSON at all"
-        
-        try:
-            json.loads(invalid_json)
-            self.fail("Should have raised JSONDecodeError")
-        except json.JSONDecodeError:
-            # Expected - service should catch this and return None
-            pass
-    
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+            tmp.write(b"%PDF-1.4 fake")
+            tmp.flush()
+            with patch.object(
+                service.router,
+                "process_pdf_with_responses_api",
+                return_value=AIResponse(text=answer, raw={}),
+            ):
+                return service.extract_invoice_data(tmp.name)
+
+    def test_invalid_json_response_raises_with_reason(self):
+        """Unbrauchbare Antwort: benannter Fehler statt None."""
+        with self.assertRaises(InvoiceExtractionError) as cm:
+            self._extract_with_answer("This is not JSON at all")
+
+        self.assertIn("keine auswertbaren Daten", cm.exception.reason)
+        # Der Anfang der Modellantwort bleibt als technisches Detail erhalten.
+        self.assertIn("This is not JSON at all", cm.exception.detail)
+
+    def test_empty_response_raises_with_reason(self):
+        """Leere Antwort: ebenfalls mit benannter Ursache."""
+        with self.assertRaises(InvoiceExtractionError) as cm:
+            self._extract_with_answer("   ")
+
+        self.assertIn("keine Antwort", cm.exception.reason)
+
+    def test_provider_error_is_wrapped_with_detail(self):
+        """Anbieterfehler behält seinen Text und die Job-id."""
+        service = InvoiceExtractionService()
+        provider_error = RuntimeError("Request timed out")
+        provider_error.ai_job_id = 4711
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+            tmp.write(b"%PDF-1.4 fake")
+            tmp.flush()
+            with patch.object(
+                service.router,
+                "process_pdf_with_responses_api",
+                side_effect=provider_error,
+            ):
+                with self.assertRaises(InvoiceExtractionError) as cm:
+                    service.extract_invoice_data(tmp.name)
+
+        self.assertEqual(cm.exception.detail, "Request timed out")
+        self.assertEqual(cm.exception.ai_job_id, 4711)
+
+    def test_detail_is_truncated(self):
+        """Eine seitenlange Antwort sprengt die Meldung nicht."""
+        with self.assertRaises(InvoiceExtractionError) as cm:
+            self._extract_with_answer("x" * 5000)
+
+        self.assertEqual(
+            len(cm.exception.detail), InvoiceExtractionError.DETAIL_MAX_LENGTH
+        )
+
     def test_file_not_found(self):
         """Test handling when PDF file doesn't exist"""
         service = InvoiceExtractionService()
-        
+
         with self.assertRaises(FileNotFoundError):
-            service._pdf_to_base64("/nonexistent/path/to/invoice.pdf")
-    
+            service.extract_invoice_data("/nonexistent/path/to/invoice.pdf")
+
+    def test_missing_configuration_is_passed_through(self):
+        """Fehlt ein aktives Modell, bleibt es bei ServiceNotConfigured."""
+        service = InvoiceExtractionService()
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+            tmp.write(b"%PDF-1.4 fake")
+            tmp.flush()
+            with patch.object(
+                service.router,
+                "process_pdf_with_responses_api",
+                side_effect=ServiceNotConfigured("No active AI model configured"),
+            ):
+                with self.assertRaises(ServiceNotConfigured):
+                    service.extract_invoice_data(tmp.name)
+
+
     def test_missing_required_fields_in_dto(self):
         """Test DTO with missing required invoice fields"""
         # All fields in DTO are optional, so this should work
