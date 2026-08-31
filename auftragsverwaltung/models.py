@@ -2,8 +2,9 @@ from django.db import models, transaction
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.auth.models import User
+from django.utils import timezone
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from dateutil.relativedelta import relativedelta
 from core.models import Unit, TaxRate, Kostenart
 
@@ -291,6 +292,11 @@ class SalesDocument(models.Model):
     """
     
     # Status choices (MVP - code-based, lightweight)
+    #
+    # 'OVERDUE' bleibt aus Kompatibilitätsgründen für Bestandsdaten erhalten,
+    # wird aber nicht mehr vergeben: Überfälligkeit ist kein gepflegter Zustand,
+    # sondern wird über `is_overdue` aus Fälligkeitsdatum und Zahlstatus
+    # abgeleitet (ein gespeicherter Status wäre ab dem Folgetag falsch).
     STATUS_CHOICES = [
         ('DRAFT', 'Entwurf'),
         ('SENT', 'Versendet'),
@@ -301,7 +307,15 @@ class SalesDocument(models.Model):
         ('PAID', 'Bezahlt'),
         ('OVERDUE', 'Überfällig'),
     ]
-    
+
+    # Belege in diesen Status sind fachlich kein offener Posten: ein Entwurf ist
+    # nicht herausgegeben, ein stornierter Beleg ist erledigt.
+    NON_PAYABLE_STATUSES = ('DRAFT', 'CANCELLED')
+
+    # Status nach Rücknahme einer Zahlung. Als bezahlt markierbar sind nur
+    # finalisierte Belege, und die sind über den Echtdruck auf 'SENT' gelaufen.
+    UNPAID_STATUS = 'SENT'
+
     # Mandatory Foreign Keys (DB: NOT NULL)
     company = models.ForeignKey(
         'core.Mandant',
@@ -582,6 +596,141 @@ class SalesDocument(models.Model):
     def total_net_before_discount(self):
         """Zwischensumme netto vor Abzug der Positionsrabatte."""
         return (self.total_net or Decimal('0.00')) + (self.total_discount or Decimal('0.00'))
+
+    # ------------------------------------------------------------------
+    # Zahlungseingang (offene Posten auf der Ausgangsseite)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def unpaid_filter():
+        """
+        Filterbedingung für offene Posten (für Datenbankabfragen).
+
+        Gegenstück zu :attr:`is_paid` in Python – Querysets dürfen die
+        Property nicht verwenden, weil sie sich nicht in SQL übersetzen lässt.
+        """
+        return models.Q(paid_at__isnull=True) & ~models.Q(
+            status__in=SalesDocument.NON_PAYABLE_STATUSES
+        )
+
+    @staticmethod
+    def overdue_filter(today=None):
+        """
+        Filterbedingung für überfällige Belege (für Datenbankabfragen).
+
+        Gegenstück zu :attr:`is_overdue`.
+        """
+        if today is None:
+            today = timezone.localdate()
+        return SalesDocument.unpaid_filter() & models.Q(
+            due_date__isnull=False,
+            due_date__lt=today,
+        )
+
+    @property
+    def is_paid(self):
+        """True, wenn zu diesem Beleg ein Zahlungseingang erfasst wurde."""
+        return self.paid_at is not None
+
+    @property
+    def payment_date(self):
+        """Erfasstes Zahldatum als lokales Datum (oder None)."""
+        if self.paid_at is None:
+            return None
+        return timezone.localtime(self.paid_at).date() if timezone.is_aware(self.paid_at) else self.paid_at.date()
+
+    @property
+    def is_overdue(self):
+        """
+        Überfälligkeit aus Fälligkeitsdatum und Zahlstatus ableiten.
+
+        Überfällig ist ein Beleg mit gesetztem Fälligkeitsdatum vor dem heutigen
+        Tag, für den keine Zahlung erfasst ist und der weder Entwurf noch
+        storniert ist. Der Wert wird bewusst nicht gespeichert – ein Beleg wird
+        ohne weiteres Zutun überfällig, sobald sein Fälligkeitsdatum verstreicht.
+        """
+        if self.due_date is None or self.is_paid:
+            return False
+        if self.status in self.NON_PAYABLE_STATUSES:
+            return False
+        return self.due_date < timezone.localdate()
+
+    @property
+    def payment_state(self):
+        """Zahlstatus als Kürzel für die Anzeige: 'PAID', 'OVERDUE' oder 'OPEN'."""
+        if self.is_paid:
+            return 'PAID'
+        if self.is_overdue:
+            return 'OVERDUE'
+        return 'OPEN'
+
+    def mark_as_paid(self, payment_date=None, save=True):
+        """
+        Zahlungseingang zu diesem Beleg erfassen.
+
+        Setzt `paid_at` auf den angegebenen Tag und den Status auf 'PAID'.
+        Bewusst kein Zahlungsmodell mit Teilzahlungen: ein Beleg ist bezahlt
+        oder nicht.
+
+        Args:
+            payment_date: Zahldatum (date); ohne Angabe der heutige Tag.
+            save: Beleg direkt speichern (Standard).
+
+        Raises:
+            ValueError: Beleg ist nicht als bezahlt markierbar oder das
+                Zahldatum liegt vor dem Belegdatum.
+        """
+        if self.status in self.NON_PAYABLE_STATUSES:
+            label = dict(self.STATUS_CHOICES).get(self.status, self.status)
+            raise ValueError(
+                f'Beleg im Status "{label}" kann nicht als bezahlt markiert werden. '
+                'Bitte den Beleg zuerst finalisieren (Echtdruck) bzw. einen '
+                'stornierten Beleg unverändert lassen.'
+            )
+        if self.is_paid:
+            raise ValueError(
+                f'Für diesen Beleg ist bereits eine Zahlung zum '
+                f'{self.payment_date.strftime("%d.%m.%Y")} erfasst.'
+            )
+
+        payment_date = payment_date or timezone.localdate()
+        if self.issue_date and payment_date < self.issue_date:
+            raise ValueError(
+                f'Das Zahldatum ({payment_date.strftime("%d.%m.%Y")}) liegt vor dem '
+                f'Belegdatum ({self.issue_date.strftime("%d.%m.%Y")}). '
+                'Bitte ein Zahldatum ab dem Belegdatum wählen.'
+            )
+
+        # paid_at ist ein DateTimeField; erfasst wird fachlich nur ein Tag.
+        # Tagesbeginn in der lokalen Zeitzone hält das Datum beim Zurücklesen
+        # stabil (auch über Zeitzonen-Konvertierung hinweg).
+        self.paid_at = timezone.make_aware(
+            datetime.combine(payment_date, time.min),
+            timezone.get_current_timezone(),
+        )
+        self.status = 'PAID'
+        if save:
+            self.save(update_fields=['paid_at', 'status'])
+        return self
+
+    def unmark_as_paid(self, save=True):
+        """
+        Erfassten Zahlungseingang zurücknehmen.
+
+        Setzt `paid_at` zurück und den Status auf 'SENT' – der Beleg gilt
+        wieder als offener Posten.
+
+        Raises:
+            ValueError: Für den Beleg ist gar keine Zahlung erfasst.
+        """
+        if not self.is_paid:
+            raise ValueError('Für diesen Beleg ist keine Zahlung erfasst.')
+
+        self.paid_at = None
+        self.status = self.UNPAID_STATUS
+        if save:
+            self.save(update_fields=['paid_at', 'status'])
+        return self
 
     def clone_as(self, target_document_type):
         """

@@ -42,6 +42,8 @@ urlpatterns = [
     path('invoices/<int:pk>/finalize/', views.invoice_finalize, name='invoice_finalize'),
     path('invoices/<int:pk>/send-email/', views.invoice_send_email, name='invoice_send_email'),
     path('invoices/<int:pk>/print-internal/', views.invoice_print_internal, name='invoice_print_internal'),
+    path('invoices/<int:pk>/mark-as-paid/', views.invoice_mark_as_paid, name='invoice_mark_as_paid'),
+    path('invoices/<int:pk>/unmark-as-paid/', views.invoice_unmark_as_paid, name='invoice_unmark_as_paid'),
     
     # AJAX endpoints
     path('ajax/calculate-payment-term/', views.ajax_calculate_payment_term, name='ajax_calculate_payment_term'),

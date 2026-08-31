@@ -23,7 +23,7 @@
         <form method="get" action="">
             <div class="row g-2">
                 <!-- Search Field -->
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="input-group">
                         <span class="input-group-text">
                             <i class="bi bi-search"></i>
@@ -47,6 +47,11 @@
                     {{ filter.form.status }}
                 </div>
 
+                <!-- Zahlstatus Filter (offen / überfällig / bezahlt) -->
+                <div class="col-md-2">
+                    {{ filter.form.payment_status }}
+                </div>
+
                 <!-- Filter Actions -->
                 <div class="col-md-1">
                     <div class="btn-group w-100" role="group">
@@ -62,9 +67,9 @@
                 </div>
 
                 <!-- Advanced Filters Toggle -->
-                <div class="col-md-2">
-                    <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false" aria-controls="advancedFilters">
-                        <i class="bi bi-funnel-fill"></i> Erweitert
+                <div class="col-md-1">
+                    <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false" aria-controls="advancedFilters" title="Erweiterte Filter">
+                        <i class="bi bi-funnel-fill"></i>
                     </button>
                 </div>
             </div>
@@ -122,6 +127,35 @@
 <form id="bulk-print-form" method="post" action="{% url 'auftragsverwaltung:documents_bulk_print' doc_key %}" style="display: none;">
     {% csrf_token %}
 </form>
+
+<!-- Zahlungseingang direkt aus der Liste erfassen bzw. zurücknehmen -->
+<form id="payment-form" method="post" action="" style="display: none;">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <input type="hidden" name="payment_date" id="payment-form-date" value="">
+</form>
+
+<div class="modal fade" id="markPaidModal" tabindex="-1" aria-labelledby="markPaidModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="markPaidModalLabel">Als bezahlt markieren</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Beleg <strong id="markPaidNumber"></strong></p>
+                <label for="markPaidDate" class="form-label">Zahldatum</label>
+                <input type="date" class="form-control" id="markPaidDate" value="{% now 'Y-m-d' %}">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-success" id="markPaidConfirm">
+                    <i class="bi bi-cash-coin"></i> Als bezahlt markieren
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -201,6 +235,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial state
     updateBulkPrintButton();
+
+    // ------------------------------------------------------------------
+    // Zahlungseingang aus der Liste heraus erfassen / zurücknehmen
+    // ------------------------------------------------------------------
+    const paymentForm = document.getElementById('payment-form');
+    const paymentDateInput = document.getElementById('payment-form-date');
+    const markPaidModalEl = document.getElementById('markPaidModal');
+    const markPaidDate = document.getElementById('markPaidDate');
+    const markPaidNumber = document.getElementById('markPaidNumber');
+    const markPaidConfirm = document.getElementById('markPaidConfirm');
+    const markPaidModal = markPaidModalEl ? new bootstrap.Modal(markPaidModalEl) : null;
+    let pendingPaymentUrl = '';
+
+    document.querySelectorAll('.js-mark-paid').forEach(button => {
+        button.addEventListener('click', function() {
+            pendingPaymentUrl = this.dataset.url;
+            markPaidNumber.textContent = this.dataset.number || '(ohne Nummer)';
+            // Zahldatum mit heute vorbelegen, aber nicht vor dem Belegdatum
+            // zulassen - die Prüfung wiederholt die View serverseitig.
+            markPaidDate.value = new Date().toLocaleDateString('sv-SE');
+            markPaidDate.min = this.dataset.issueDate || '';
+            markPaidModal.show();
+        });
+    });
+
+    if (markPaidConfirm) {
+        markPaidConfirm.addEventListener('click', function() {
+            paymentForm.action = pendingPaymentUrl;
+            paymentDateInput.value = markPaidDate.value;
+            paymentForm.submit();
+        });
+    }
+
+    document.querySelectorAll('.js-unmark-paid').forEach(button => {
+        button.addEventListener('click', function() {
+            const number = this.dataset.number || 'diesem Beleg';
+            if (!confirm('Erfasste Zahlung zu ' + number + ' zurücknehmen?')) {
+                return;
+            }
+            paymentForm.action = this.dataset.url;
+            paymentDateInput.value = '';
+            paymentForm.submit();
+        });
+    });
 });
 </script>
 {% endblock %}

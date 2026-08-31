@@ -15,6 +15,7 @@ import logging
 import uuid
 from django.utils import timezone
 from django.utils.html import strip_tags
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import SalesDocument, DocumentType, SalesDocumentLine, Contract, ContractLine, ContractRun, TextTemplate, TimeEntry
 from .tables import SalesDocumentTable, ContractTable, TextTemplateTable, OutgoingInvoiceJournalTable, TimeEntryTable
@@ -183,26 +184,24 @@ def auftragsverwaltung_home(request):
         status__in=['DRAFT', 'SENT', 'APPROVED']
     ).count()
     
-    # KPI 2: Count of unpaid invoices (documents marked as invoice, not paid, not cancelled)
-    kpi_unpaid_invoices = SalesDocument.objects.filter(
+    # KPI 2: Offene Posten auf der Ausgangsseite (Rechnungen ohne erfasste
+    # Zahlung, weder Entwurf noch storniert). Die Bedingung kommt vom Modell,
+    # damit Liste, Dashboard und Filter dieselbe Definition verwenden.
+    unpaid_invoices = SalesDocument.objects.filter(
+        SalesDocument.unpaid_filter(),
         document_type__is_invoice=True,
-        paid_at__isnull=True,
-        status__in=['SENT', 'APPROVED', 'OVERDUE']
-    ).exclude(status='CANCELLED').count()
-    
+    )
+    kpi_unpaid_invoices = unpaid_invoices.count()
+
     # KPI 3: New documents in the last 30 days
     thirty_days_ago = datetime.now() - timedelta(days=30)
     kpi_new_documents_30d = SalesDocument.objects.filter(
         issue_date__gte=thirty_days_ago.date()
     ).count()
     
-    # KPI 4: Total open amount (sum of unpaid invoices)
-    open_amount_aggregate = SalesDocument.objects.filter(
-        document_type__is_invoice=True,
-        paid_at__isnull=True,
-        status__in=['SENT', 'APPROVED', 'OVERDUE']
-    ).exclude(status='CANCELLED').aggregate(total=Sum('total_gross'))
-    
+    # KPI 4: Offener Betrag – dieselbe Menge wie KPI 2, nur summiert
+    open_amount_aggregate = unpaid_invoices.aggregate(total=Sum('total_gross'))
+
     kpi_open_amount = open_amount_aggregate['total'] or Decimal('0.00')
     
     # Get open sales documents (DRAFT, SENT, APPROVED) - across all companies
@@ -3099,6 +3098,154 @@ def invoice_finalize(request, pk):
             'success': False,
             'error': f'Fehler beim Finalisieren: {str(e)}'
         }, status=500)
+
+
+def _payment_redirect(request, document):
+    """
+    Rückziel nach einer Zahlungsaktion bestimmen.
+
+    Die Aktion ist sowohl von der Belegseite als auch aus der Belegliste
+    auslösbar; aus der Liste heraus soll die Liste (inkl. Filter) erhalten
+    bleiben. Das Ziel wird gegen fremde Hosts geprüft, damit der Parameter
+    nicht als Open Redirect missbraucht werden kann.
+    """
+    next_url = request.POST.get('next', '')
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(next_url)
+    return redirect(
+        'auftragsverwaltung:document_detail',
+        doc_key=document.document_type.key,
+        pk=document.pk,
+    )
+
+
+def _parse_payment_date(request):
+    """
+    Zahldatum aus dem POST lesen; ohne Angabe der heutige Tag.
+
+    Raises:
+        ValueError: unlesbares Datum (verständliche Meldung für den Anwender).
+    """
+    raw = (request.POST.get('payment_date') or '').strip()
+    if not raw:
+        return timezone.localdate()
+    try:
+        return datetime.strptime(raw, '%Y-%m-%d').date()
+    except ValueError:
+        raise ValueError(f'"{raw}" ist kein gültiges Zahldatum (erwartet: TT.MM.JJJJ).')
+
+
+@login_required
+@require_POST
+def invoice_mark_as_paid(request, pk):
+    """
+    Zahlungseingang zu einer Ausgangsrechnung oder Gutschrift erfassen.
+
+    Setzt Zahldatum und Status 'PAID'. Zulässig nur für Belege, die im
+    Rechnungsausgangsjournal geführt werden (Rechnungen und Gutschriften) und
+    die weder Entwurf noch storniert sind.
+
+    Der Journaleintrag bleibt dabei bewusst unberührt: Er ist ein Snapshot des
+    Belegs zum Zeitpunkt der Finalisierung. Zahlungsbuchungen entstehen im
+    Fibu-System aus dessen Bankanbindung, nicht in GIS.
+    """
+    from finanzen.services.journal import get_document_kind
+
+    document = get_object_or_404(
+        SalesDocument.objects.select_related('company', 'customer', 'document_type'),
+        pk=pk,
+    )
+
+    if get_document_kind(document) is None:
+        messages.error(
+            request,
+            f'Belegart "{document.document_type.name}" ist weder Rechnung noch Gutschrift – '
+            'ein Zahlungseingang kann dazu nicht erfasst werden.'
+        )
+        return _payment_redirect(request, document)
+
+    try:
+        payment_date = _parse_payment_date(request)
+        document.mark_as_paid(payment_date=payment_date)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return _payment_redirect(request, document)
+
+    ActivityStreamService.add(
+        company=document.company,
+        domain='ORDER',
+        activity_type='INVOICE_PAID',
+        title=f'Zahlung erfasst: {document.number or document.document_type.name}',
+        description=f'Zahldatum: {payment_date.strftime("%d.%m.%Y")}',
+        target_url=reverse('auftragsverwaltung:document_detail', kwargs={
+            'doc_key': document.document_type.key,
+            'pk': document.pk,
+        }),
+        actor=request.user,
+        severity='INFO',
+    )
+    logger.info(
+        f"Document {document.number or document.pk} marked as paid "
+        f"({payment_date}) by {request.user.username}"
+    )
+
+    messages.success(
+        request,
+        f'{document.document_type.name} {document.number} wurde als bezahlt markiert '
+        f'(Zahldatum: {payment_date.strftime("%d.%m.%Y")}).'
+    )
+    return _payment_redirect(request, document)
+
+
+@login_required
+@require_POST
+def invoice_unmark_as_paid(request, pk):
+    """
+    Erfassten Zahlungseingang zurücknehmen (Korrektur einer Fehleingabe).
+
+    Setzt `paid_at` zurück und den Status auf 'SENT'. Ohne diese Aktion wäre
+    ein versehentlich gesetztes Zahldatum nur über das Admin-Backend
+    korrigierbar.
+    """
+    document = get_object_or_404(
+        SalesDocument.objects.select_related('company', 'customer', 'document_type'),
+        pk=pk,
+    )
+
+    try:
+        document.unmark_as_paid()
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return _payment_redirect(request, document)
+
+    ActivityStreamService.add(
+        company=document.company,
+        domain='ORDER',
+        activity_type='INVOICE_PAYMENT_REVERTED',
+        title=f'Zahlung zurückgenommen: {document.number or document.document_type.name}',
+        description='Der Beleg gilt wieder als offener Posten.',
+        target_url=reverse('auftragsverwaltung:document_detail', kwargs={
+            'doc_key': document.document_type.key,
+            'pk': document.pk,
+        }),
+        actor=request.user,
+        severity='INFO',
+    )
+    logger.info(
+        f"Payment reverted for document {document.number or document.pk} "
+        f"by {request.user.username}"
+    )
+
+    messages.success(
+        request,
+        f'Die erfasste Zahlung zu {document.document_type.name} {document.number} '
+        'wurde zurückgenommen.'
+    )
+    return _payment_redirect(request, document)
 
 
 @login_required
