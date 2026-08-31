@@ -23,6 +23,41 @@ from core.services.base import ServiceNotConfigured
 logger = logging.getLogger(__name__)
 
 
+class InvoiceExtractionError(Exception):
+    """
+    Die Belegerkennung ist fehlgeschlagen – mit benennbarer Ursache.
+
+    Die Klasse liegt bewusst in ``core``: ``lieferantenwesen`` setzt auf
+    ``core`` auf, nicht umgekehrt.
+
+    Attribute:
+        reason: Kurzer, für den Anwender verständlicher Satz (deutsch).
+        detail: Technischer Text – Originalfehler bzw. Anfang der
+            Modellantwort. Auf ``DETAIL_MAX_LENGTH`` Zeichen gekürzt, damit
+            eine seitenlange Anbieterantwort keine Meldung sprengt.
+        ai_job_id: id des zugehörigen :class:`core.models.AIJobsHistory`-
+            Eintrags, sofern bekannt – damit der technische Fehler
+            nachschlagbar ist, ohne raten zu müssen.
+    """
+
+    #: Maximale Länge des technischen Details.
+    DETAIL_MAX_LENGTH = 500
+
+    def __init__(
+        self,
+        reason: str,
+        detail: str = "",
+        ai_job_id: Optional[int] = None,
+    ):
+        self.reason = reason
+        self.detail = (detail or "")[: self.DETAIL_MAX_LENGTH]
+        self.ai_job_id = ai_job_id
+        super().__init__(reason)
+
+    def __str__(self) -> str:
+        return self.reason
+
+
 @dataclass
 class InvoiceDataDTO:
     """
@@ -176,24 +211,31 @@ Extract the data now:"""
         pdf_path: str,
         user: Optional[User] = None,
         client_ip: Optional[str] = None
-    ) -> Optional[InvoiceDataDTO]:
+    ) -> InvoiceDataDTO:
         """
         Extract invoice data from a PDF file using AI.
-        
+
+        Die Methode liefert entweder ein ``InvoiceDataDTO`` oder wirft – ein
+        ``None`` als Rückgabewert würde die Ursache des Fehlschlags
+        einebnen, und der Anwender bekäme keine Auskunft darüber, warum die
+        Erkennung nicht funktioniert hat.
+
         Args:
             pdf_path: Path to the invoice PDF file
             user: Optional user making the request
             client_ip: Optional client IP address
-            
+
         Returns:
-            InvoiceDataDTO with extracted data, or None if extraction failed
-            
+            InvoiceDataDTO with extracted data
+
         Raises:
             ServiceNotConfigured: If AI service is not configured
             FileNotFoundError: If PDF file doesn't exist
+            InvoiceExtractionError: If the provider call failed or the model
+                answer could not be evaluated
         """
         logger.info(f"Starting invoice extraction for PDF: {pdf_path}")
-        
+
         try:
             # Validate PDF exists
             path = Path(pdf_path)
@@ -212,12 +254,19 @@ Extract the data now:"""
                 max_tokens=1000
             )
             
-            logger.info(f"AI extraction completed. Response length: {len(response.text)}")
-            
+            raw_text = response.text or ""
+            logger.info(f"AI extraction completed. Response length: {len(raw_text)}")
+
+            if not raw_text.strip():
+                logger.error("AI returned an empty response for %s", pdf_path)
+                raise InvoiceExtractionError(
+                    reason="Die KI hat keine Antwort zum Beleg zurückgeliefert.",
+                )
+
             # Parse JSON response
             try:
                 # Remove potential markdown code blocks
-                response_text = response.text.strip()
+                response_text = raw_text.strip()
                 if response_text.startswith('```'):
                     # Remove markdown code blocks
                     lines = response_text.split('\n')
@@ -231,26 +280,46 @@ Extract the data now:"""
                 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response: {e}")
-                logger.error(f"Response text: {response.text[:500]}")
-                return None
-            
+                logger.error(f"Response text: {raw_text[:500]}")
+                raise InvoiceExtractionError(
+                    reason="Die KI hat keine auswertbaren Daten zurückgeliefert.",
+                    detail=raw_text[:500],
+                ) from e
+
+            if not isinstance(data, dict):
+                logger.error("AI returned a non-object JSON response: %r", data)
+                raise InvoiceExtractionError(
+                    reason="Die KI hat keine auswertbaren Daten zurückgeliefert.",
+                    detail=raw_text[:500],
+                )
+
             # Create DTO from extracted data
             dto = InvoiceDataDTO(**{
-                k: v for k, v in data.items() 
+                k: v for k, v in data.items()
                 if k in InvoiceDataDTO.__annotations__
             })
-            
+
             logger.info(f"Created InvoiceDataDTO: {asdict(dto)}")
             return dto
-            
+
         except ServiceNotConfigured as e:
             logger.error(f"AI service not configured: {e}")
             raise
-        
+
         except FileNotFoundError as e:
             logger.error(f"PDF file not found: {e}")
             raise
-        
+
+        except InvoiceExtractionError:
+            # Ursache bereits benannt – nicht ein zweites Mal einpacken.
+            raise
+
         except Exception as e:
             logger.error(f"Unexpected error during invoice extraction: {e}", exc_info=True)
-            return None
+            raise InvoiceExtractionError(
+                reason="Die KI-Auswertung ist fehlgeschlagen.",
+                detail=str(e),
+                # Der Router hängt die id des fehlgeschlagenen Jobs an die
+                # Exception – so bleibt der technische Fehler auffindbar.
+                ai_job_id=getattr(e, "ai_job_id", None),
+            ) from e

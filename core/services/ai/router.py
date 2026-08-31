@@ -403,6 +403,17 @@ class AIRouter:
             job.duration_ms = duration_ms
             job.error_message = str(e)
             job.save()
-            
+
+            # Die id des gerade geschriebenen Fehler-Jobs an die Exception
+            # hängen: Nur so kann die aufrufende Schicht den technischen
+            # Fehler später gezielt nachschlagen, statt raten zu müssen,
+            # welcher Job gemeint war.
+            try:
+                e.ai_job_id = job.id
+            except AttributeError:
+                # Exceptions mit __slots__ lassen kein Attribut zu – der
+                # ursprüngliche Fehler wiegt schwerer als die Job-id.
+                pass
+
             # Re-raise the exception
             raise

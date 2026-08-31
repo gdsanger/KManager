@@ -19,8 +19,10 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from core.services.ai.invoice_extraction import (
+    InvoiceExtractionError,
     InvoiceExtractionService as CoreExtractor,
 )
+from core.services.base import ServiceNotConfigured
 from core.services.model_fields import set_truncated, truncate_to_field
 
 logger = logging.getLogger(__name__)
@@ -168,7 +170,9 @@ class InvoiceExtractionService:
     Extract invoice data from a PDF using the core AI extraction service and
     populate an InvoiceIn instance.
 
-    Falls back gracefully if the AI provider is not configured.
+    Fehler der Belegerkennung werden **nicht** geschluckt: Sie laufen bis in
+    die View, damit der Anwender die Ursache erfährt. Ein stiller Fehlschlag
+    sieht andernfalls aus, als hätte die KI im Beleg nichts gefunden.
     """
 
     #: DTO-Feld → Modellfeld für alle Datumsangaben aus der Belegerkennung.
@@ -183,14 +187,14 @@ class InvoiceExtractionService:
         """
         Run the core AI extraction on *pdf_path*.
 
-        Returns the InvoiceDataDTO, or None if the AI provider is not
-        configured, the call failed, or nothing could be parsed.
+        Returns the InvoiceDataDTO.
+
+        Raises:
+            ServiceNotConfigured: Kein aktives KI-Modell konfiguriert.
+            InvoiceExtractionError: Anbieterfehler oder unbrauchbare Antwort –
+                mit benennbarer Ursache (``reason``/``detail``).
         """
-        try:
-            return CoreExtractor().extract_invoice_data(pdf_path, user=user)
-        except Exception as exc:
-            logger.warning("AI extraction unavailable or failed: %s", exc)
-            return None
+        return CoreExtractor().extract_invoice_data(pdf_path, user=user)
 
     def populate(self, invoice_in, dto):
         """
@@ -202,6 +206,10 @@ class InvoiceExtractionService:
         The invoice status is advanced:
           DRAFT → EXTRACTED (AI ran)  or stays DRAFT (no usable DTO)
           Then → IN_REVIEW after supplier matching.
+
+        Der ``dto is None``-Zweig ist nur noch eine Absicherung: Fehlschläge
+        der Erkennung werden inzwischen als Exception gemeldet, nicht als
+        fehlender DTO.
 
         Returns the updated invoice_in (unsaved – caller must call .save()).
         """
@@ -451,6 +459,17 @@ class InvoiceInService:
         * ``lines_gross_mismatch`` – Summe der Positions-Bruttobeträge, wenn
           sie um mehr als einen Cent vom Bruttobetrag der Rechnung abweicht,
           sonst ``None``.
+
+        Scheitert die Belegerkennung, wird der Fehler **weitergereicht** –
+        nur so kann die View die Ursache benennen. Die hochgeladene Datei
+        und der Rechnungsentwurf bleiben trotzdem erhalten (Status
+        ``DRAFT``); die Exception trägt die angelegte Rechnung im Attribut
+        ``invoice``, damit die View auf den Beleg weiterleiten kann, statt
+        die Arbeit des Anwenders zu verwerfen.
+
+        Raises:
+            ServiceNotConfigured: Kein aktives KI-Modell konfiguriert.
+            InvoiceExtractionError: Die Belegerkennung ist fehlgeschlagen.
         """
         import os
         import tempfile
@@ -489,6 +508,7 @@ class InvoiceInService:
 
         # Run AI extraction on a temp copy of the file
         dto = None
+        extraction_error = None
         tmp_path = None
         try:
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -501,8 +521,11 @@ class InvoiceInService:
             # auch für die Positionen gebraucht.
             dto = extractor.extract(tmp_path, user=user)
             invoice = extractor.populate(invoice, dto)
-        except Exception as exc:
-            logger.warning("PDF extraction failed for uploaded invoice: %s", exc)
+        except (InvoiceExtractionError, ServiceNotConfigured) as exc:
+            # Gemerkt, nicht geschluckt: Der Beleg wird unten trotzdem
+            # gespeichert, danach wird der Fehler weitergereicht.
+            logger.exception("PDF extraction failed for uploaded invoice: %s", exc)
+            extraction_error = exc
         finally:
             if tmp_path:
                 try:
@@ -526,6 +549,13 @@ class InvoiceInService:
         invoice.pdf_file = pdf_file
         invoice.updated_by = user
         invoice.save()
+
+        if extraction_error is not None:
+            # Der Beleg ist gesichert – jetzt darf der Fehler nach oben, samt
+            # Rechnung, damit die View auf das Bearbeitungsformular führen
+            # kann statt den Upload zu verwerfen.
+            extraction_error.invoice = invoice
+            raise extraction_error
 
         # Positionen anlegen. Der Beleg ist an dieser Stelle bereits
         # gespeichert – ein Fehler beim Anlegen der Positionen darf den

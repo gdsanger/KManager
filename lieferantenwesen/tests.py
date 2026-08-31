@@ -548,8 +548,8 @@ class InvoiceExtractionServiceTest(TestCase):
             self.assertEqual(result.payment_terms_text, "30 Tage netto")
             self.assertEqual(result.due_date, date(2026, 4, 1))
 
-    def test_extraction_service_handles_unavailable_service(self):
-        """Test graceful fallback when AI service is not configured."""
+    def test_extraction_service_reports_unavailable_service(self):
+        """Fehlende KI-Konfiguration wird gemeldet, nicht stillschweigend geschluckt."""
         from unittest.mock import patch
         from lieferantenwesen.services import InvoiceExtractionService
         from core.services.base import ServiceNotConfigured
@@ -560,26 +560,28 @@ class InvoiceExtractionServiceTest(TestCase):
             )
 
             service = InvoiceExtractionService()
-            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+            with self.assertRaises(ServiceNotConfigured):
+                service.extract_and_populate(self.invoice, "/tmp/test.pdf")
 
-            # Should stay in DRAFT status
-            self.assertEqual(result.status, "DRAFT")
-
-    def test_extraction_service_handles_general_exception(self):
-        """Test graceful handling of unexpected exceptions."""
+    def test_extraction_service_reports_general_exception(self):
+        """Auch unerwartete Fehler laufen nach oben – sonst fehlt die Ursache."""
         from unittest.mock import patch
         from lieferantenwesen.services import InvoiceExtractionService
+        from core.services.ai.invoice_extraction import InvoiceExtractionError
 
         with patch("lieferantenwesen.services.CoreExtractor") as MockExtractor:
-            MockExtractor.return_value.extract_invoice_data.side_effect = Exception(
-                "Unexpected error"
+            MockExtractor.return_value.extract_invoice_data.side_effect = (
+                InvoiceExtractionError(
+                    reason="Die KI-Auswertung ist fehlgeschlagen.",
+                    detail="Request timed out",
+                )
             )
 
             service = InvoiceExtractionService()
-            result = service.extract_and_populate(self.invoice, "/tmp/test.pdf")
+            with self.assertRaises(InvoiceExtractionError) as cm:
+                service.extract_and_populate(self.invoice, "/tmp/test.pdf")
 
-            # Should stay in DRAFT status
-            self.assertEqual(result.status, "DRAFT")
+            self.assertEqual(cm.exception.detail, "Request timed out")
 
     def test_extraction_sets_invoice_date_from_belegdatum(self):
         """Das erkannte Belegdatum landet im Rechnungsdatum."""
@@ -718,6 +720,12 @@ class InvoiceCreateFromPdfTest(TestCase):
                 mock_instance.extract_invoice_data.return_value = dto
             return InvoiceInService().create_from_pdf(self._pdf(), user=self.user)
 
+    def _create_expecting_error(self, error):
+        """create_from_pdf() mit fehlschlagender KI – die Exception zurückgeben."""
+        with self.assertRaises(type(error)) as cm:
+            self._create(error)
+        return cm.exception
+
     def test_recognized_invoice_date_is_used(self):
         """Das im Beleg ausgewiesene Datum ersetzt das Erfassungsdatum."""
         from core.services.ai.invoice_extraction import InvoiceDataDTO
@@ -747,15 +755,37 @@ class InvoiceCreateFromPdfTest(TestCase):
         self.assertTrue(invoice.invoice_date_fallback)
 
     def test_unavailable_ai_creates_draft_with_flagged_fallback_date(self):
-        """Ist die KI nicht verfügbar, entsteht ein Entwurf mit Hinweis."""
+        """Ist die KI nicht verfügbar, bleibt der Entwurf erhalten – mit Fehler."""
         from core.services.base import ServiceNotConfigured
 
-        invoice = self._create(ServiceNotConfigured("AI provider not configured"))
+        exc = self._create_expecting_error(
+            ServiceNotConfigured("AI provider not configured")
+        )
+        invoice = exc.invoice
 
         self.assertEqual(invoice.status, "DRAFT")
         self.assertEqual(invoice.invoice_date, timezone.localdate())
         self.assertTrue(invoice.invoice_date_fallback)
         self.assertIsNotNone(invoice.pk)
+        self.assertTrue(invoice.pdf_file)
+
+    def test_failed_extraction_keeps_uploaded_pdf_as_draft(self):
+        """Scheitert die Erkennung, bleibt der Beleg als Entwurf erhalten."""
+        from core.services.ai.invoice_extraction import InvoiceExtractionError
+
+        exc = self._create_expecting_error(
+            InvoiceExtractionError(
+                reason="Die KI hat keine auswertbaren Daten zurückgeliefert.",
+                detail="Kein JSON",
+            )
+        )
+        invoice = exc.invoice
+
+        self.assertIsNotNone(invoice.pk)
+        self.assertEqual(invoice.status, "DRAFT")
+        self.assertTrue(invoice.pdf_file)
+        self.assertEqual(invoice.invoice_date, timezone.localdate())
+        self.assertTrue(invoice.invoice_date_fallback)
 
     def test_recognized_date_is_not_flagged_as_fallback(self):
         from core.services.ai.invoice_extraction import InvoiceDataDTO
@@ -861,6 +891,200 @@ class InvoiceCreateFromPdfTest(TestCase):
 
         august = datev_export.build_preview(company, date(2026, 8, 1), date(2026, 8, 31))
         self.assertNotIn(invoice.pk, [i.pk for i in august.incoming_invoices])
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class InvoiceUploadExtractionFailureTest(TestCase):
+    """
+    Scheitert die KI-Analyse, muss die Oberfläche die **Ursache** nennen.
+
+    Der KI-Aufruf wird auf Anbieter-Ebene ersetzt, damit Router, Job-Historie
+    und Belegerkennung real durchlaufen – nur der Netzaufruf entfällt.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        from core.models import AIModel, AIProvider
+
+        self.user = User.objects.create_user(
+            username="aiuser", password="aipass", is_staff=True
+        )
+        self.provider = AIProvider.objects.create(
+            name="Test OpenAI", provider_type="OpenAI", api_key="sk-test"
+        )
+        self.model = AIModel.objects.create(
+            provider=self.provider, name="Test Model", model_id="gpt-test"
+        )
+        self.url = reverse("lieferantenwesen:invoice_upload_pdf")
+        self.client.force_login(self.user)
+
+    def _pdf(self):
+        return SimpleUploadedFile(
+            "rechnung.pdf", b"%PDF-1.4 fake", content_type="application/pdf"
+        )
+
+    def _upload(self, provider_behaviour):
+        """
+        PDF hochladen; *provider_behaviour* ersetzt den Anbieteraufruf.
+
+        Ist es eine Exception, wird sie geworfen, sonst als Antworttext des
+        Modells zurückgegeben.
+        """
+        from unittest.mock import MagicMock, patch
+
+        from core.services.ai.schemas import AIResponse
+
+        provider = MagicMock()
+        if isinstance(provider_behaviour, Exception):
+            provider.process_pdf_with_responses_api.side_effect = provider_behaviour
+        else:
+            provider.process_pdf_with_responses_api.return_value = AIResponse(
+                text=provider_behaviour,
+                raw={},
+                input_tokens=10,
+                output_tokens=20,
+                model=self.model.model_id,
+                provider=self.provider.provider_type,
+            )
+
+        with patch(
+            "core.services.ai.router.AIRouter._get_provider_instance",
+            return_value=provider,
+        ):
+            return self.client.post(
+                self.url, {"pdf_file": self._pdf()}, follow=True
+            )
+
+    @staticmethod
+    def _messages(response):
+        return [str(m) for m in response.context["messages"]]
+
+    def test_unparsable_answer_names_the_cause(self):
+        """Kein gültiges JSON: Die Meldung sagt genau das."""
+        response = self._upload("Ich kann diese Rechnung leider nicht lesen.")
+
+        texts = self._messages(response)
+        self.assertTrue(
+            any("keine auswertbaren Daten" in t for t in texts),
+            f"Ursache fehlt in {texts}",
+        )
+        self.assertFalse(any("hochgeladen und analysiert" in t for t in texts))
+        # Der Anfang der Modellantwort steht als technisches Detail dabei.
+        self.assertTrue(any("Ich kann diese Rechnung" in t for t in texts))
+
+    def test_failed_upload_lands_on_the_created_draft(self):
+        """Der Beleg ist angelegt, der Anwender landet im Bearbeitungsformular."""
+        response = self._upload("kein json")
+
+        invoice = InvoiceIn.objects.latest("pk")
+        self.assertEqual(invoice.status, "DRAFT")
+        self.assertTrue(invoice.pdf_file)
+        self.assertEqual(
+            response.redirect_chain[-1][0],
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+        )
+
+    def test_provider_error_is_shown_and_logged_as_job(self):
+        """Anbieterfehler: Meldung nennt ihn, der KI-Job steht auf Error."""
+        from core.models import AIJobsHistory
+
+        response = self._upload(RuntimeError("Request timed out after 60s"))
+
+        texts = self._messages(response)
+        self.assertTrue(
+            any("Request timed out after 60s" in t for t in texts),
+            f"Anbieterfehler fehlt in {texts}",
+        )
+        self.assertFalse(any("hochgeladen und analysiert" in t for t in texts))
+
+        job = AIJobsHistory.objects.latest("pk")
+        self.assertEqual(job.status, "Error")
+        self.assertIn("Request timed out after 60s", job.error_message)
+        # Staff bekommt den Job aus der Meldung heraus verlinkt.
+        self.assertTrue(
+            any(
+                reverse("admin:core_aijobshistory_change", args=[job.pk]) in t
+                for t in texts
+            ),
+            f"Kein Link auf den KI-Job in {texts}",
+        )
+
+    def test_job_link_only_for_staff(self):
+        """Ohne Staff-Rechte kein Link auf die Administration."""
+        from core.models import AIJobsHistory
+
+        group = Group.objects.create(name="Lieferantenwesen")
+        member = User.objects.create_user(username="member", password="memberpass")
+        member.groups.add(group)
+        self.client.force_login(member)
+
+        response = self._upload(RuntimeError("Request timed out after 60s"))
+
+        texts = self._messages(response)
+        job = AIJobsHistory.objects.latest("pk")
+        self.assertFalse(
+            any(
+                reverse("admin:core_aijobshistory_change", args=[job.pk]) in t
+                for t in texts
+            )
+        )
+        # Ursache und technische Meldung bleiben trotzdem sichtbar.
+        self.assertTrue(any("Request timed out after 60s" in t for t in texts))
+
+    def test_missing_ai_configuration_points_to_administration(self):
+        """Ohne aktives Modell: eigene Meldung statt technischem Fehler."""
+        from core.models import AIModel
+
+        AIModel.objects.update(is_active=False)
+
+        response = self._upload("{}")
+
+        texts = self._messages(response)
+        self.assertTrue(
+            any("kein aktives KI-Modell konfiguriert" in t for t in texts),
+            f"Hinweis auf die KI-Konfiguration fehlt in {texts}",
+        )
+        self.assertTrue(any("Administration" in t for t in texts))
+        self.assertFalse(any("hochgeladen und analysiert" in t for t in texts))
+
+        invoice = InvoiceIn.objects.latest("pk")
+        self.assertEqual(invoice.status, "DRAFT")
+        self.assertEqual(
+            response.redirect_chain[-1][0],
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+        )
+
+    def test_successful_extraction_still_reports_success(self):
+        """Der erfolgreiche Durchlauf verhält sich unverändert."""
+        import json
+
+        answer = json.dumps(
+            {
+                "lieferant_name": "KI Lieferant GmbH",
+                "belegnummer": "RE-2026-77",
+                "belegdatum": "2026-07-12",
+                "nettobetrag": "100.00",
+            }
+        )
+        response = self._upload(answer)
+
+        texts = self._messages(response)
+        self.assertTrue(any("hochgeladen und analysiert" in t for t in texts))
+        self.assertFalse(any("fehlgeschlagen" in t for t in texts))
+
+        invoice = InvoiceIn.objects.latest("pk")
+        self.assertEqual(invoice.status, "IN_REVIEW")
+        self.assertEqual(invoice.invoice_no, "RE-2026-77")
+        self.assertEqual(invoice.invoice_date, date(2026, 7, 12))
+        self.assertEqual(invoice.supplier.name, "KI Lieferant GmbH")
+        self.assertEqual(
+            response.redirect_chain[-1][0],
+            reverse("lieferantenwesen:invoice_edit", kwargs={"pk": invoice.pk}),
+        )
 
 
 class InvoiceDeleteTest(TestCase):
