@@ -6,6 +6,12 @@ from django import forms
 from core.models import Mandant
 
 from .models import CompanyAccountingSettings
+from .services.dashboard import (
+    DATE_BASIS_CHOICES,
+    DATE_BASIS_DOCUMENT,
+    VALUE_BASIS_CHOICES,
+    VALUE_BASIS_NET,
+)
 
 
 PERIOD_CHOICES = [
@@ -35,6 +41,22 @@ def _year_choices():
     """Auswahlliste der Jahre bis einschließlich des laufenden Jahres."""
     current = date.today().year
     return [(y, str(y)) for y in range(current + 1, FIRST_EXPORT_YEAR - 1, -1)]
+
+
+def _dashboard_year_choices():
+    """
+    Auswahlliste des Dashboards: laufendes Jahr und Vorjahr.
+
+    Bewusst nur zwei Jahre: Das Dashboard beantwortet „wie läuft es gerade"
+    und den Vergleich zum abgeschlossenen Vorjahr. Der Wert ist die Jahreszahl
+    selbst, damit ein geteilter Link auch im nächsten Jahr noch dasselbe
+    Jahr zeigt.
+    """
+    current = date.today().year
+    return [
+        (current, f'{current} (aktuelles Jahr)'),
+        (current - 1, f'{current - 1} (Vorjahr)'),
+    ]
 
 
 class DatevExportForm(forms.Form):
@@ -187,4 +209,72 @@ class CompanyAccountingSettingsForm(forms.ModelForm):
             'bank_account': forms.TextInput(attrs={'class': 'form-control'}),
             'cash_account': forms.TextInput(attrs={'class': 'form-control'}),
             'clearing_account': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+class DashboardFilterForm(forms.Form):
+    """
+    Filterleiste des Finanzen-Dashboards.
+
+    Bewusst ein GET-Formular: Der eingestellte Stand steht damit in der URL und
+    lässt sich als Link weitergeben und wiederherstellen.
+
+    Alle Felder sind `required=False` und werden über :meth:`selection` mit
+    Vorbelegungen aufgefüllt. Ein Aufruf ohne Parameter – oder mit einem
+    unvollständigen bzw. veralteten Link – zeigt so ein sinnvolles Dashboard
+    statt einer Fehlerliste.
+    """
+
+    company = forms.ModelChoiceField(
+        queryset=Mandant.objects.all().order_by('name'),
+        required=False,
+        empty_label=None,
+        label='Mandant',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    year = forms.TypedChoiceField(
+        choices=_dashboard_year_choices,
+        coerce=int,
+        required=False,
+        label='Jahr',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    value_basis = forms.ChoiceField(
+        choices=VALUE_BASIS_CHOICES,
+        required=False,
+        initial=VALUE_BASIS_NET,
+        label='Wertebasis',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    date_basis = forms.ChoiceField(
+        choices=DATE_BASIS_CHOICES,
+        required=False,
+        initial=DATE_BASIS_DOCUMENT,
+        label='Datumsbezug',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Vorbelegung wie beim DATEV-Export: erster Mandant nach Name.
+        self.default_company = Mandant.objects.order_by('name').first()
+        self.default_year = date.today().year
+        self.fields['company'].initial = (
+            self.default_company.pk if self.default_company else None
+        )
+        self.fields['year'].initial = self.default_year
+
+    def selection(self):
+        """
+        Gewählte Einstellungen mit Vorbelegungen als Dict liefern.
+
+        Returns:
+            dict: company, year, value_basis, date_basis
+        """
+        data = self.cleaned_data if self.is_bound and self.is_valid() else {}
+        return {
+            'company': data.get('company') or self.default_company,
+            'year': data.get('year') or self.default_year,
+            'value_basis': data.get('value_basis') or VALUE_BASIS_NET,
+            'date_basis': data.get('date_basis') or DATE_BASIS_DOCUMENT,
         }

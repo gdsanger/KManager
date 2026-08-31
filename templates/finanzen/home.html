@@ -1,16 +1,338 @@
 {% extends "finanzen/base.html" %}
+{% load static %}
 
 {% block title %}Finanzen - Domus{% endblock %}
 {% block page_title %}Finanzen{% endblock %}
 
 {% block main_content %}
-<div class="card bg-dark mb-4">
+{# ------------------------------------------------------------------ #}
+{# Filterleiste – GET, damit der Stand in der URL steht und teilbar ist #}
+{# ------------------------------------------------------------------ #}
+<div class="card mb-4">
     <div class="card-body">
-        <h5 class="mb-2"><i class="bi bi-graph-up-arrow"></i> Finanzplanung &amp; Auswertung</h5>
-        <p class="mb-0">
-            Dieser Bereich wird zum Cockpit für Finanzplanung und Auswertungen
-            ausgebaut. Inhalte folgen.
-        </p>
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="{{ form.company.id_for_label }}" class="form-label">{{ form.company.label }}</label>
+                {{ form.company }}
+            </div>
+            <div class="col-md-3">
+                <label for="{{ form.year.id_for_label }}" class="form-label">{{ form.year.label }}</label>
+                {{ form.year }}
+            </div>
+            <div class="col-md-2">
+                <label for="{{ form.value_basis.id_for_label }}" class="form-label">{{ form.value_basis.label }}</label>
+                {{ form.value_basis }}
+            </div>
+            <div class="col-md-2">
+                <label for="{{ form.date_basis.id_for_label }}" class="form-label">{{ form.date_basis.label }}</label>
+                {{ form.date_basis }}
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel"></i> Anwenden
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if not dashboard.company %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        Es ist kein Mandant angelegt. Ohne Mandant lässt sich keine Ergebnisrechnung erstellen.
+    </div>
+{% endif %}
+
+{# ------------------------------------------------------------------ #}
+{# Kennzahlen                                                          #}
+{# ------------------------------------------------------------------ #}
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Einnahmen {{ dashboard.year }}</p>
+                        <h3 class="mb-0">{{ dashboard.total_income|floatformat:2 }} €</h3>
+                    </div>
+                    <div class="display-6 text-info">
+                        <i class="bi bi-arrow-down-left-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">Rechnungsausgangsjournal</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Ausgaben {{ dashboard.year }}</p>
+                        <h3 class="mb-0">{{ dashboard.total_expenses|floatformat:2 }} €</h3>
+                    </div>
+                    <div class="display-6 text-warning">
+                        <i class="bi bi-arrow-up-right-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">Freigegebene und bezahlte Eingangsrechnungen</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <p class="text-muted mb-1">Ergebnis {{ dashboard.year }}</p>
+                        {# Vorzeichen zusätzlich zur Farbe: das Ergebnis darf nicht #}
+                        {# allein über Rot/Grün lesbar sein.                        #}
+                        <h3 class="mb-0 {% if dashboard.result < 0 %}text-danger{% else %}text-success{% endif %}">
+                            {% if dashboard.result >= 0 %}+{% endif %}{{ dashboard.result|floatformat:2 }} €
+                        </h3>
+                    </div>
+                    <div class="display-6 {% if dashboard.result < 0 %}text-danger{% else %}text-success{% endif %}">
+                        {% if dashboard.result < 0 %}
+                            <i class="bi bi-graph-down-arrow"></i>
+                        {% else %}
+                            <i class="bi bi-graph-up-arrow"></i>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">Einnahmen minus Ausgaben</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<p class="text-muted mb-4">
+    <i class="bi bi-info-circle"></i>
+    Grundlage: <strong>{{ dashboard.basis_label }}</strong>
+    {% if dashboard.date_basis == 'PAYMENT' %}
+        – gezeigt werden nur Belege mit erfasstem Zahldatum (Überschussrechnung).
+    {% else %}
+        – periodengerechte Betrachtung, unabhängig vom Zahlungszeitpunkt.
+    {% endif %}
+    {% if dashboard.is_gross %}
+        Die Beträge enthalten die Umsatzsteuer; das Ergebnis ist damit keine
+        Ertragsgröße, sondern bildet die Zahlungsseite ab.
+    {% endif %}
+</p>
+
+{# ------------------------------------------------------------------ #}
+{# Jahresverlauf                                                       #}
+{# ------------------------------------------------------------------ #}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Einnahmen und Ausgaben {{ dashboard.year }}</h5>
+    </div>
+    <div class="card-body">
+        <div class="chart-container">
+            <canvas id="finance-year-chart"
+                    aria-label="Liniendiagramm: Einnahmen und Ausgaben je Monat des Jahres {{ dashboard.year }}"
+                    role="img"></canvas>
+        </div>
+
+        {# Tabellensicht als barrierefreies Gegenstück zum Diagramm. #}
+        <details class="mt-3">
+            <summary class="text-muted">Werte als Tabelle</summary>
+            <div class="table-responsive mt-2">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Monat</th>
+                            <th class="text-end">Einnahmen</th>
+                            <th class="text-end">Ausgaben</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in dashboard.monthly_rows %}
+                            <tr>
+                                <td>{{ row.label }}</td>
+                                <td class="text-end text-nowrap">{{ row.income|floatformat:2 }} €</td>
+                                <td class="text-end text-nowrap">{{ row.expenses|floatformat:2 }} €</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th>Summe</th>
+                            <th class="text-end text-nowrap">{{ dashboard.total_income|floatformat:2 }} €</th>
+                            <th class="text-end text-nowrap">{{ dashboard.total_expenses|floatformat:2 }} €</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </details>
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">{{ dashboard.basis_label }} – Monate ohne Bewegung erscheinen als 0.</small>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{# Offene Posten – Stichtagsbild, unabhängig vom Jahresfilter          #}
+{# ------------------------------------------------------------------ #}
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                        <h5 class="mb-1"><i class="bi bi-inbox"></i> Offene Posten Rechnungsausgang</h5>
+                        <small class="text-muted">
+                            Stand {{ dashboard.today|date:"d.m.Y" }} – unabhängig vom Jahresfilter
+                        </small>
+                    </div>
+                    <div class="text-end text-nowrap">
+                        <div><strong>{{ dashboard.receivables.total|floatformat:2 }} €</strong></div>
+                        <small class="text-muted">
+                            {{ dashboard.receivables.count }} Beleg{{ dashboard.receivables.count|pluralize:"e" }}{% if dashboard.receivables.overdue_count %}, davon {{ dashboard.receivables.overdue_count }} überfällig{% endif %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if dashboard.receivables.entries %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Beleg</th>
+                                    <th>Kunde</th>
+                                    <th class="text-nowrap">Belegdatum</th>
+                                    <th class="text-nowrap">Fälligkeit</th>
+                                    <th class="text-end">Brutto</th>
+                                    <th class="text-end text-nowrap">Tage überf.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in dashboard.receivables.entries %}
+                                    <tr {% if doc.days_overdue %}class="table-row-overdue"{% endif %}>
+                                        <td class="text-nowrap">
+                                            <a href="{% url 'auftragsverwaltung:document_detail' doc.document_type.key doc.pk %}">{{ doc.number }}</a>
+                                        </td>
+                                        <td>{{ doc.customer.matchkey|default:doc.customer.name|default:"—"|truncatechars:28 }}</td>
+                                        <td class="text-nowrap">{{ doc.issue_date|date:"d.m.Y" }}</td>
+                                        <td class="text-nowrap">{{ doc.due_date|date:"d.m.Y"|default:"—" }}</td>
+                                        <td class="text-end text-nowrap">{{ doc.total_gross|floatformat:2 }} €</td>
+                                        <td class="text-end text-nowrap">
+                                            {% if doc.days_overdue %}
+                                                <span class="text-danger"><i class="bi bi-exclamation-triangle"></i> {{ doc.days_overdue }}</span>
+                                            {% else %}
+                                                –
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check2-circle display-6 d-block mb-2"></i>
+                        Keine offenen Posten im Rechnungsausgang.
+                    </div>
+                {% endif %}
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                    {% if dashboard.receivables.truncated %}
+                        Zeigt die {{ dashboard.receivables.entries|length }} ältesten von {{ dashboard.receivables.count }} Posten.
+                    {% else %}
+                        Älteste Fälligkeit zuerst.
+                    {% endif %}
+                </small>
+                <a href="{% url 'auftragsverwaltung:invoices' %}?payment_status=open" class="btn btn-outline-light btn-sm">
+                    Alle offenen Rechnungen
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                        <h5 class="mb-1"><i class="bi bi-send"></i> Offene Posten Rechnungseingang</h5>
+                        <small class="text-muted">
+                            Stand {{ dashboard.today|date:"d.m.Y" }} – unabhängig vom Jahresfilter
+                        </small>
+                    </div>
+                    <div class="text-end text-nowrap">
+                        <div><strong>{{ dashboard.payables.total|floatformat:2 }} €</strong></div>
+                        <small class="text-muted">
+                            {{ dashboard.payables.count }} Rechnung{{ dashboard.payables.count|pluralize:"en" }}{% if dashboard.payables.overdue_count %}, davon {{ dashboard.payables.overdue_count }} überfällig{% endif %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if dashboard.payables.entries %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Rechnung</th>
+                                    <th>Lieferant</th>
+                                    <th class="text-nowrap">Rechn.-Datum</th>
+                                    <th class="text-nowrap">Fälligkeit</th>
+                                    <th class="text-end">Brutto</th>
+                                    <th class="text-end text-nowrap">Tage überf.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in dashboard.payables.entries %}
+                                    <tr {% if invoice.days_overdue %}class="table-row-overdue"{% endif %}>
+                                        <td class="text-nowrap">
+                                            <a href="{% url 'lieferantenwesen:invoice_detail' invoice.pk %}">{{ invoice.invoice_no }}</a>
+                                        </td>
+                                        <td>{{ invoice.supplier.name|truncatechars:28 }}</td>
+                                        <td class="text-nowrap">{{ invoice.invoice_date|date:"d.m.Y" }}</td>
+                                        <td class="text-nowrap">{{ invoice.due_date|date:"d.m.Y"|default:"—" }}</td>
+                                        <td class="text-end text-nowrap">{{ invoice.gross_amount|default_if_none:0|floatformat:2 }} €</td>
+                                        <td class="text-end text-nowrap">
+                                            {% if invoice.days_overdue %}
+                                                <span class="text-danger"><i class="bi bi-exclamation-triangle"></i> {{ invoice.days_overdue }}</span>
+                                            {% else %}
+                                                –
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check2-circle display-6 d-block mb-2"></i>
+                        Keine offenen Posten im Rechnungseingang.
+                    </div>
+                {% endif %}
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                    {% if dashboard.payables.truncated %}
+                        Zeigt die {{ dashboard.payables.entries|length }} ältesten von {{ dashboard.payables.count }} Posten.
+                    {% else %}
+                        Älteste Fälligkeit zuerst.
+                    {% endif %}
+                </small>
+                <a href="{% url 'lieferantenwesen:invoice_list' %}?status=APPROVED{% if dashboard.company %}&amp;company={{ dashboard.company.pk }}{% endif %}"
+                   class="btn btn-outline-light btn-sm">
+                    Alle freigegebenen Rechnungen
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -26,4 +348,11 @@
         </a>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ chart_data|json_script:"finance-chart-data" }}
+<!-- Chart.js – nur auf dieser Seite geladen, nicht im gemeinsamen Head -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/finanzen_dashboard.js' %}" defer></script>
 {% endblock %}

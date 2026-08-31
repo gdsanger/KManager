@@ -672,3 +672,26 @@ a:hover {
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
 }
 
+
+/* --------------------------------------------------------------------
+   Finanzen-Dashboard
+   -------------------------------------------------------------------- */
+
+/* Feste Höhe für das Liniendiagramm: Chart.js braucht einen Container mit
+   Höhe, sonst wächst das Canvas bei `maintainAspectRatio: false` endlos. */
+.chart-container {
+    position: relative;
+    height: 340px;
+}
+
+@media (max-width: 767.98px) {
+    .chart-container {
+        height: 260px;
+    }
+}
+
+/* Überfällige offene Posten hervorheben – dezenter Rotton wie bei
+   .alert-danger, damit die Zeile auf dem dunklen Untergrund lesbar bleibt. */
+.table-row-overdue > td {
+    background-color: rgba(239, 68, 68, 0.12);
+}
