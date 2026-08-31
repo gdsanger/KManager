@@ -309,8 +309,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let formDirty = false;
     let currentItemId = null;
     
-    // Handle edit item button clicks
-    document.querySelectorAll('.edit-item-btn').forEach(btn => {
+    // Handle edit item clicks (pencil in the actions column and article number)
+    document.querySelectorAll('.edit-item-btn, .item-link').forEach(btn => {
         btn.addEventListener('click', function() {
             const itemId = this.getAttribute('data-item-id');
             loadItemInModal(itemId);

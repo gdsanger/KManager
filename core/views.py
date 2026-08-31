@@ -393,12 +393,15 @@ def support_portal(request):
 @login_required
 def item_management(request):
     """
-    Combined view for item management with tree, list, and detail view.
-    
+    Combined view for item management with tree and list.
+
     This is a single-page view that shows:
     - Left: Item group tree (Hauptgruppe/Untergruppe)
-    - Right top: Filtered item list (django-tables2 + django-filter)
-    - Right bottom: Detail form for selected item
+    - Right: Filtered item list (django-tables2 + django-filter)
+
+    There is no detail section below the list: items are edited in a modal,
+    which is loaded via AJAX (item_edit_ajax / item_new_ajax) when the
+    article number or the pencil button in a row is activated.
     """
     try:
         # Get all item groups for tree
@@ -434,42 +437,10 @@ def item_management(request):
         # Configure pagination
         RequestConfig(request, paginate={'per_page': 20}).configure(table)
         
-        # Get selected item for detail view
-        selected_item = None
-        selected_id = request.GET.get('selected', '')
-        if selected_id:
-            try:
-                selected_item = Item.objects.select_related(
-                    'item_group', 'cost_type_1', 'cost_type_2', 'unit'
-                ).get(pk=selected_id)
-            except (Item.DoesNotExist, ValueError):
-                pass
-            except Exception as e:
-                # Handle database errors (e.g., corrupted decimal fields in test data)
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Error loading item {selected_id}: {e}")
-                messages.warning(request, f'Fehler beim Laden des Artikels. Bitte überprüfen Sie die Stammdaten.')
-        
-        # Create form for selected item or new item
-        form = None
-        if selected_item:
-            try:
-                form = ItemForm(instance=selected_item)
-            except Exception as e:
-                # Handle form creation errors
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Error creating form for item {selected_item.pk}: {e}")
-                messages.warning(request, f'Formular kann nicht geladen werden. Bitte kontaktieren Sie den Administrator.')
-                selected_item = None  # Don't show broken form
-        
         context = {
             'main_groups': main_groups,
             'table': table,
             'filter': filter_set,
-            'form': form,
-            'selected_item': selected_item,
             'selected_group_id': group_id,
         }
         
@@ -517,19 +488,15 @@ def item_save(request):
         if next_url:
             return redirect(next_url)
         
-        # Otherwise redirect back to management view with saved item selected
-        return redirect(f'/items/?selected={saved_item.pk}')
+        # Otherwise redirect back to management view
+        return redirect('item_management')
     else:
         # Form has errors - redirect back with errors
         for field, errors in form.errors.items():
             for error in errors:
                 messages.error(request, f'{field}: {error}')
-        
-        # Redirect back to the item or new form
-        if item:
-            return redirect(f'/items/?selected={item.pk}')
-        else:
-            return redirect('item_management')
+
+        return redirect('item_management')
 
 
 @login_required
@@ -660,7 +627,7 @@ def item_save_ajax(request):
                     activity_type='ITEM_CREATED',
                     title=f'Artikel erstellt: {saved_item.article_no}',
                     description=f'{saved_item.short_text_1}',
-                    target_url=f'/items/?selected={saved_item.pk}',
+                    target_url='/items/',
                     actor=request.user,
                     severity='INFO'
                 )
@@ -679,7 +646,7 @@ def item_save_ajax(request):
                         activity_type='ITEM_STATUS_CHANGED',
                         title=f'Artikel-Status geändert: {saved_item.article_no}',
                         description=f'Status: {status_action} (vorher: {old_status})',
-                        target_url=f'/items/?selected={saved_item.pk}',
+                        target_url='/items/',
                         actor=request.user,
                         severity='INFO'
                     )
@@ -693,7 +660,7 @@ def item_save_ajax(request):
                             activity_type='ITEM_UPDATED',
                             title=f'Artikel aktualisiert: {saved_item.article_no}',
                             description=f'{saved_item.short_text_1}',
-                            target_url=f'/items/?selected={saved_item.pk}',
+                            target_url='/items/',
                             actor=request.user,
                             severity='INFO'
                         )
