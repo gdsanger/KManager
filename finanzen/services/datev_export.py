@@ -57,6 +57,17 @@ from finanzen.services.accounts import (
     AccountResolutionError,
     require_account,
 )
+# Zeichensatz, Trennzeichen, Zeilenende und Feldaufbereitung sind mit dem
+# Stammdatenexport der Personenkonten geteilt und stehen deshalb in
+# finanzen/services/datev_common.py. Hier bewusst re-exportiert, damit der
+# Buchungsstapel weiterhin über dieses Modul ansprechbar bleibt.
+from finanzen.services.datev_common import (  # noqa: F401
+    DELIMITER,
+    ENCODING,
+    LINE_ENDING,
+    _clean,
+    _quote,
+)
 from lieferantenwesen.models import EXPORTABLE_STATUSES, InvoiceIn
 
 ZERO = Decimal('0.00')
@@ -81,13 +92,6 @@ CURRENCY = 'EUR'
 # ein Fehlimport im Zielsystem korrigierbar bleibt.
 FESTSCHREIBUNG = 0
 ORIGIN = 'RE'                 # Herkunftskennzeichen (2 Zeichen)
-
-# DATEV-Zeichensatz: ANSI/Windows-1252. Umlaute werden damit korrekt
-# transportiert; nicht abbildbare Zeichen werden ersetzt statt den Export
-# abzubrechen.
-ENCODING = 'cp1252'
-DELIMITER = ';'
-LINE_ENDING = '\r\n'
 
 # Feldlängen laut Formatbeschreibung
 MAX_BELEGFELD1 = 36
@@ -233,23 +237,6 @@ class ExportPreview:
 def _german_amount(value):
     """Betrag im deutschen Zahlenformat, immer positiv, zwei Nachkommastellen."""
     return f'{abs(Decimal(value)).quantize(CENT):.2f}'.replace('.', ',')
-
-
-def _clean(value, max_length):
-    """
-    Text für ein DATEV-Feld aufbereiten.
-
-    Trennzeichen und Textbegrenzer werden entfernt, damit sie die
-    Feldstruktur nicht zerstören; anschließend wird auf die Feldlänge gekürzt.
-    """
-    text = (value or '').replace(DELIMITER, ' ').replace('"', "'")
-    text = ' '.join(text.split())
-    return text[:max_length]
-
-
-def _quote(value):
-    """Textfeld mit Textbegrenzer versehen."""
-    return f'"{value}"'
 
 
 def _get_settings(company):

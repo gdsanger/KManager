@@ -1,0 +1,158 @@
+{% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
+
+{% block title %}Personenkonten-Export - Buchhaltung - Domus{% endblock %}
+{% block page_title %}Personenkonten-Export{% endblock %}
+
+{% block page_actions %}
+    <a href="{% url 'auftragsverwaltung:datev_export' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Zurück
+    </a>
+{% endblock %}
+
+{% block content %}
+<div class="card bg-dark mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-people"></i> Auswahl</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{% url 'auftragsverwaltung:partner_export' %}">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="{{ form.kind.id_for_label }}" class="form-label">{{ form.kind.label }}</label>
+                    {{ form.kind }}
+                    {% if form.kind.errors %}<div class="text-danger small">{{ form.kind.errors }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="form-text mt-2">
+                Exportiert werden alle Adressen mit Personenkonto – ohne Zeitraum
+                und ohne Mandantenauswahl: Personenkonten sind mandantenübergreifend.
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">
+                <i class="bi bi-search"></i> Vorschau erzeugen
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if preview.problems %}
+<div class="card border-warning mb-4">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">
+            <i class="bi bi-exclamation-triangle"></i>
+            {{ preview.problems|length }} Adresse(n) ohne verwendbares Personenkonto
+        </h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-3">
+            Diese Adressen fehlen in der Datei. Der Download bleibt möglich – ein
+            fehlendes Personenkonto ist ein Pflegehinweis, kein falscher
+            Buchungssatz.
+        </p>
+        <div class="table-responsive">
+            <table class="table table-dark table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Kontoart</th>
+                        <th>Konto</th>
+                        <th>Name</th>
+                        <th>Problem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for problem in preview.problems %}
+                    <tr>
+                        <td>
+                            {% if problem.account_kind == 'Debitor' %}
+                                <span class="badge bg-info">Debitor</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Kreditor</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ problem.account|default_if_none:"" }}</td>
+                        <td>{{ problem.name }}</td>
+                        <td>{{ problem.message }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card bg-dark">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-list-check"></i> Vorschau {{ preview.kind_label }}</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <div class="text-muted small">Datensätze</div>
+                    <div class="fs-4">{{ preview.partner_count }}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <div class="text-muted small">Debitoren</div>
+                    <div class="fs-4">{{ preview.debtor_count }}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <div class="text-muted small">Kreditoren</div>
+                    <div class="fs-4">{{ preview.creditor_count }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive mb-3">
+            <table class="table table-dark table-striped table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Konto</th>
+                        <th>Kontoart</th>
+                        <th>Firma</th>
+                        <th>Name</th>
+                        <th>PLZ</th>
+                        <th>Ort</th>
+                        <th>Land</th>
+                        <th>USt-IdNr.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for partner in preview.partners %}
+                    <tr>
+                        <td>{{ partner.account }}</td>
+                        <td>{{ partner.account_kind }}</td>
+                        <td>{{ partner.address.firma|default_if_none:"" }}</td>
+                        <td>{{ partner.address.name }}</td>
+                        <td>{{ partner.address.plz }}</td>
+                        <td>{{ partner.address.ort }}</td>
+                        <td>{{ partner.address.land }}</td>
+                        <td>{{ partner.address.vat_id|default_if_none:"" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            Keine Adressen mit Personenkonto für diese Auswahl.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <form method="post" action="{% url 'auftragsverwaltung:partner_export_download' %}">
+            {% csrf_token %}
+            <input type="hidden" name="kind" value="{{ preview.kind }}">
+            <button type="submit" class="btn btn-success" {% if not preview.partners %}disabled{% endif %}>
+                <i class="bi bi-download"></i> CSV herunterladen
+            </button>
+            <span class="form-text ms-2">
+                Der Download verändert keine Daten und ist beliebig wiederholbar.
+            </span>
+        </form>
+    </div>
+</div>
+{% endblock %}

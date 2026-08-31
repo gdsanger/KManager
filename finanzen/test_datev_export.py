@@ -660,3 +660,37 @@ class ManagementCommandTestCase(DatevExportTestBase):
         with self.assertRaises(CommandError):
             self._call('--company', str(self.company.pk),
                        '--from', '2026-01-01', '--to', '2026-01-31', '--mark-exported')
+
+
+class SharedFormatHelpersTestCase(TestCase):
+    """
+    Regression nach dem Verschieben der Feldaufbereitung.
+
+    Zeichensatz, Trennzeichen, Zeilenende sowie `_clean()` und `_quote()`
+    liegen seit dem Stammdatenexport der Personenkonten in
+    `finanzen.services.datev_common` und werden von beiden Exporten genutzt.
+    Der Buchungsstapel muss sie unverändert über sein eigenes Modul anbieten –
+    sonst ändert sich sein Verhalten still mit.
+    """
+
+    def test_helpers_come_from_the_shared_module(self):
+        from finanzen.services import datev_common
+
+        self.assertIs(service._clean, datev_common._clean)
+        self.assertIs(service._quote, datev_common._quote)
+        self.assertEqual(service.ENCODING, datev_common.ENCODING)
+        self.assertEqual(service.DELIMITER, datev_common.DELIMITER)
+        self.assertEqual(service.LINE_ENDING, datev_common.LINE_ENDING)
+
+    def test_format_constants_unchanged(self):
+        self.assertEqual(service.ENCODING, 'cp1252')
+        self.assertEqual(service.DELIMITER, ';')
+        self.assertEqual(service.LINE_ENDING, '\r\n')
+
+    def test_clean_still_strips_delimiter_quotes_and_length(self):
+        self.assertEqual(service._clean('A;B "C"  D', 60), "A B 'C' D")
+        self.assertEqual(service._clean(None, 60), '')
+        self.assertEqual(service._clean('abcdef', 3), 'abc')
+
+    def test_quote_still_wraps_in_text_delimiters(self):
+        self.assertEqual(service._quote('Text'), '"Text"')
