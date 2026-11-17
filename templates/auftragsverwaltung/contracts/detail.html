@@ -1,5 +1,5 @@
 {% extends "auftragsverwaltung/auftragsverwaltung_base.html" %}
-{% load static %}
+{% load static l10n %}
 
 {% block title %}
 {% if is_create %}Neuer Vertrag{% else %}{{ contract.name }}{% endif %} - Domus
@@ -445,8 +445,8 @@ Vertrag: {{ contract.name }}
                                         <label class="form-label-sm">Steuersatz</label>
                                         <select class="form-select form-select-sm line-tax-rate">
                                             {% for tr in tax_rates %}
-                                            <option value="{{ tr.pk }}" data-rate="{{ tr.rate }}" {% if line.tax_rate.pk == tr.pk %}selected{% endif %}>
-                                                {{ tr.code }} ({{ tr.rate }}%)
+                                            <option value="{{ tr.pk }}" data-rate="{{ tr.rate|unlocalize }}" {% if line.tax_rate.pk == tr.pk %}selected{% endif %}>
+                                                {{ tr.code }} ({% widthratio tr.rate 1 100 %}%)
                                             </option>
                                             {% endfor %}
                                         </select>
@@ -600,7 +600,7 @@ Vertrag: {{ contract.name }}
                         <label class="form-label">Steuersatz <span class="text-danger">*</span></label>
                         <select class="form-select" id="newLineTaxRate" required>
                             {% for tr in tax_rates %}
-                            <option value="{{ tr.pk }}" data-rate="{{ tr.rate }}">{{ tr.code }} ({{ tr.rate }}%)</option>
+                            <option value="{{ tr.pk }}" data-rate="{{ tr.rate|unlocalize }}">{{ tr.code }} ({% widthratio tr.rate 1 100 %}%)</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -750,21 +750,34 @@ $(document).ready(function() {
     {% if not is_create %}
     // Live calculation
     function calculatePreview() {
+        // Werte werden lokalisiert (Komma) ausgegeben -> deutsch parsen.
+        function parseDe(v) {
+            v = String(v == null ? '' : v).trim();
+            if (v.indexOf(',') !== -1) {
+                v = v.replace(/\./g, '').replace(',', '.');
+            }
+            return parseFloat(v) || 0;
+        }
+        const netsByRate = {};
         let totalNet = 0;
         let totalTax = 0;
-        
+
         $('.line-item').each(function() {
-            const quantity = parseFloat($(this).find('.line-quantity').val()) || 0;
-            const unitPrice = parseFloat($(this).find('.line-unit-price').val()) || 0;
-            const taxRatePercent = parseFloat($(this).find('.line-tax-rate option:selected').data('rate')) || 0;
-            
-            const lineNet = quantity * unitPrice;
-            const lineTax = lineNet * (taxRatePercent / 100);
-            
+            const quantity = parseDe($(this).find('.line-quantity').val());
+            const unitPrice = parseDe($(this).find('.line-unit-price').val());
+            // Steuersatz ist ein Dezimalfaktor (0.19 = 19 %)
+            const rate = parseFloat($(this).find('.line-tax-rate option:selected').attr('data-rate')) || 0;
+
+            const lineNet = Math.round(quantity * unitPrice * 100) / 100;
             totalNet += lineNet;
-            totalTax += lineTax;
+            netsByRate[rate] = (netsByRate[rate] || 0) + lineNet;
         });
-        
+
+        // Steuer je Steuersatz auf die Netto-Summe (wie DocumentCalculationService)
+        Object.keys(netsByRate).forEach(function(rate) {
+            totalTax += Math.round(netsByRate[rate] * parseFloat(rate) * 100) / 100;
+        });
+
         const totalGross = totalNet + totalTax;
         
         $('#previewTotalNet').text(totalNet.toFixed(2).replace('.', ',') + ' €');
