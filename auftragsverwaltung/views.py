@@ -313,9 +313,9 @@ def document_detail(request, doc_key, pk):
     if document.document_type != document_type:
         return redirect('auftragsverwaltung:document_list', doc_key=doc_key)
     
-    # Get company (for now, first available)
-    company = Mandant.objects.first()
-    
+    # Mandant des Belegs verwenden (nicht den ersten verfügbaren)
+    company = document.company
+
     # Get all available customers, payment terms, and tax rates
     customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
     payment_terms = PaymentTerm.objects.all().order_by('name')
@@ -1679,9 +1679,9 @@ def contract_detail(request, pk):
     """
     contract = get_object_or_404(Contract, pk=pk)
     
-    # Get company (for now, first available)
-    company = Mandant.objects.first()
-    
+    # Mandant des Vertrags verwenden (nicht den ersten verfügbaren)
+    company = contract.company
+
     # Get all available customers, payment terms, tax rates, and document types
     customers = Adresse.objects.filter(adressen_type='KUNDE').order_by('name')
     payment_terms = PaymentTerm.objects.all().order_by('name')
