@@ -206,3 +206,25 @@ class SalesDocumentCopyTestCase(TestCase):
                 role="COPIED_FROM",
             ).exists()
         )
+
+    def test_copy_to_other_company_uses_target_number_range(self):
+        other = Mandant.objects.create(
+            name="Zweite GmbH", adresse="Weg 2", plz="80331", ort="München", land="Deutschland",
+        )
+        # Nummernkreis des Ziel-Mandanten weiterzählen lassen
+        get_next_number(other, self.doc_type_invoice, date.today())
+
+        copied = self.document.clone_as(self.doc_type_invoice, target_company=other)
+
+        self.assertEqual(copied.company, other)
+        self.assertTrue(copied.number.endswith("-00002"))
+
+    def test_copy_to_credit_sets_source_document(self):
+        credit, _ = DocumentType.objects.get_or_create(
+            key="credit",
+            defaults={"name": "Gutschrift", "prefix": "GS", "is_invoice": False,
+                      "is_correction": True, "requires_due_date": False, "is_active": True},
+        )
+        copied = self.document.clone_as(credit)
+        self.assertEqual(copied.source_document, self.document)
+        copied.full_clean()

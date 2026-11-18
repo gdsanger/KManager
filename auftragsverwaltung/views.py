@@ -324,7 +324,7 @@ def document_detail(request, doc_key, pk):
     kostenarten1 = Kostenart.objects.filter(parent__isnull=True).order_by('name')  # Main cost types only
     units = Unit.objects.all().order_by('name')  # All available units
     copy_document_types = DocumentType.objects.filter(
-        key__in=['quote', 'order', 'delivery', 'invoice'],
+        key__in=['quote', 'order', 'delivery', 'invoice', 'credit'],
         is_active=True
     ).order_by('name')
     
@@ -363,6 +363,7 @@ def document_detail(request, doc_key, pk):
         'footer_templates': footer_templates,
         'status_choices': SalesDocument.STATUS_CHOICES,  # Add for template consistency
         'copy_document_types': copy_document_types,
+        'copy_companies': Mandant.objects.all().order_by('name'),
         'projekte': get_selectable_projekte(document.customer),
         'dokumente': dokumente,
     }
@@ -520,8 +521,9 @@ def render_document_form(request, document, document_type, doc_key, company,
             type__in=['FOOTER', 'BOTH'],
         ).order_by('sort_order', 'title'),
         'status_choices': SalesDocument.STATUS_CHOICES,
+        'copy_companies': Mandant.objects.all().order_by('name'),
         'copy_document_types': DocumentType.objects.filter(
-            key__in=['quote', 'order', 'delivery', 'invoice'],
+            key__in=['quote', 'order', 'delivery', 'invoice', 'credit'],
             is_active=True,
         ).order_by('name'),
         'number_error': number_error,
@@ -835,6 +837,7 @@ def document_copy(request, doc_key, pk):
     
     Expects POST parameter:
         - target_document_type: key of the target DocumentType
+        - target_company: ID of the target Mandant (defaults to the source company)
     
     Returns:
         JSON containing redirect_url to the new document detail page.
@@ -854,8 +857,17 @@ def document_copy(request, doc_key, pk):
     except DocumentType.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Ungültiger Dokumenttyp.'}, status=400)
     
+    target_company_id = request.POST.get('target_company')
+    if target_company_id:
+        try:
+            target_company = Mandant.objects.get(pk=target_company_id)
+        except (Mandant.DoesNotExist, ValueError):
+            return JsonResponse({'success': False, 'error': 'Ungültiger Mandant.'}, status=400)
+    else:
+        target_company = document.company
+    
     try:
-        new_document = document.clone_as(target_document_type)
+        new_document = document.clone_as(target_document_type, target_company=target_company)
     except ValueError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except Exception as e:
