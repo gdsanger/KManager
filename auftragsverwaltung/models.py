@@ -732,12 +732,14 @@ class SalesDocument(models.Model):
             self.save(update_fields=['paid_at', 'status'])
         return self
 
-    def clone_as(self, target_document_type):
+    def clone_as(self, target_document_type, target_company=None):
         """
         Create a copy of this SalesDocument using the provided target document type.
         
         Header fields are copied 1:1 except:
-        - number: generated via number range service
+        - number: generated via number range service of the target company
+        - company: target_company (defaults to the source company)
+        - source_document: set to this document for correction types (e.g. credit note)
         - issue_date: set to today
         - status: always DRAFT
         Lines are duplicated with all persisted fields.
@@ -750,13 +752,16 @@ class SalesDocument(models.Model):
         from auftragsverwaltung.services import get_next_number
         from auftragsverwaltung.services.document_calculation import DocumentCalculationService
         
+        company = target_company or self.company
+        
         with transaction.atomic():
             new_issue_date = date.today()
             new_document = SalesDocument.objects.create(
-                company=self.company,
+                company=company,
+                source_document=self if target_document_type.is_correction else None,
                 document_type=target_document_type,
                 customer=self.customer,
-                number=get_next_number(self.company, target_document_type, new_issue_date),
+                number=get_next_number(company, target_document_type, new_issue_date),
                 status='DRAFT',
                 issue_date=new_issue_date,
                 due_date=self.due_date,

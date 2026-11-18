@@ -997,6 +997,15 @@ Neues {{ document_type.name }}
             </div>
             <div class="modal-body">
                 <div class="mb-3">
+                    <label for="copyCompanySelect" class="form-label">Ziel-Mandant</label>
+                    <select class="form-select" id="copyCompanySelect">
+                        {% for c in copy_companies %}
+                        <option value="{{ c.pk }}" {% if document.company_id == c.pk %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Die Nummer stammt aus dem Nummernkreis des gewählten Mandanten.</div>
+                </div>
+                <div class="mb-3">
                     <label for="copyDocumentTypeSelect" class="form-label">Ziel-Dokumenttyp</label>
                     <select class="form-select" id="copyDocumentTypeSelect">
                         <option value="">Bitte wählen</option>
@@ -1538,6 +1547,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const copyModalEl = document.getElementById('copyDocumentModal');
     const copyDocumentTypeSelect = document.getElementById('copyDocumentTypeSelect');
     const confirmCopyDocumentButton = document.getElementById('confirmCopyDocumentButton');
+    const copyCompanySelect = document.getElementById('copyCompanySelect');
 
     if (copyButton && copyModalEl) {
         const copyModal = new bootstrap.Modal(copyModalEl);
@@ -1566,7 +1576,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'X-CSRFToken': '{{ csrf_token }}'
                 },
-                body: `target_document_type=${encodeURIComponent(targetType)}`
+                body: `target_document_type=${encodeURIComponent(targetType)}&target_company=${encodeURIComponent(copyCompanySelect ? copyCompanySelect.value : '')}`
             })
             .then(response => response.json())
             .then(data => {
