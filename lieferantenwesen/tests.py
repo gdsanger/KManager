@@ -8,6 +8,7 @@ Tests cover:
 - Approval workflow
 - Supplier (Adresse with LIEFERANT type) matching
 """
+import os
 import re
 import shutil
 import tempfile
@@ -2590,3 +2591,226 @@ class OverlongExtractionValuesTest(TestCase):
         for field in ("name", "strasse", "ort", "plz", "land"):
             self._assert_fits(adresse, field)
         self.assertTrue(name.startswith(adresse.name))
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class InvoiceDuplicateCheckTest(TestCase):
+    """Dublettenprüfung: Datei sperren, Rechnungsnummer warnen."""
+
+    PDF_A = b"%PDF-1.4\n%A-content%%EOF"
+    PDF_B = b"%PDF-1.4\n%B-content%%EOF"
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username="dupuser", password="duppass", is_staff=True
+        )
+        self.client.login(username="dupuser", password="duppass")
+        self.company = Mandant.objects.create(
+            name="Dup GmbH", adresse="Dupstr. 1", plz="11111", ort="Dupstadt",
+        )
+        self.supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT", name="Dup Lieferant",
+            strasse="Str. 1", plz="11111", ort="Stadt", land="DE",
+        )
+        self.other_supplier = Adresse.objects.create(
+            adressen_type="LIEFERANT", name="Anderer Lieferant",
+            strasse="Str. 2", plz="11111", ort="Stadt", land="DE",
+        )
+
+    def _make(self, no="RE-2026/001", supplier=None, **kw):
+        defaults = dict(
+            invoice_no=no, invoice_date=date(2026, 5, 4),
+            supplier=supplier or self.supplier, company=self.company,
+            status="DRAFT",
+        )
+        defaults.update(kw)
+        return InvoiceIn.objects.create(**defaults)
+
+    def _upload(self, content, name="a.pdf", dto=None):
+        from unittest.mock import MagicMock, patch
+        from core.services.ai.invoice_extraction import InvoiceDataDTO
+
+        dto = dto or InvoiceDataDTO(
+            belegnummer="RE-2026/001", belegdatum="2026-03-01",
+            lieferant_name="Dup Lieferant",
+        )
+        with patch("lieferantenwesen.services.CoreExtractor") as Mock:
+            inst = MagicMock()
+            Mock.return_value = inst
+            inst.extract_invoice_data.return_value = dto
+            response = self.client.post(
+                reverse("lieferantenwesen:invoice_upload_pdf"),
+                {"pdf_file": SimpleUploadedFile(
+                    name, content, content_type="application/pdf")},
+                follow=True,
+            )
+            return response, inst
+
+    def _msgs(self, response):
+        return [str(m) for m in response.context["messages"]]
+
+    # --- Datei-Dublette ---------------------------------------------------
+
+    def test_same_file_is_rejected_without_ai_call(self):
+        from core.models import AIJobsHistory
+
+        self._upload(self.PDF_A)
+        self.assertEqual(InvoiceIn.objects.count(), 1)
+        jobs = AIJobsHistory.objects.count()
+
+        response, extractor = self._upload(self.PDF_A, name="zweite.pdf")
+
+        self.assertEqual(InvoiceIn.objects.count(), 1)
+        extractor.extract_invoice_data.assert_not_called()
+        self.assertEqual(AIJobsHistory.objects.count(), jobs)
+        existing = InvoiceIn.objects.get()
+        self.assertTrue(any(
+            "bereits als Eingangsrechnung erfasst" in m
+            and reverse("lieferantenwesen:invoice_detail", args=[existing.pk]) in m
+            for m in self._msgs(response)
+        ))
+
+    def test_stored_file_is_intact_and_hash_saved(self):
+        self._upload(self.PDF_A)
+        invoice = InvoiceIn.objects.get()
+        self.assertEqual(invoice.pdf_file.size, len(self.PDF_A))
+        with invoice.pdf_file.open("rb") as fh:
+            self.assertEqual(fh.read(), self.PDF_A)
+        import hashlib
+        self.assertEqual(invoice.pdf_sha256, hashlib.sha256(self.PDF_A).hexdigest())
+
+    def test_find_duplicate_by_file_returns_oldest_and_rewinds(self):
+        from lieferantenwesen.services import compute_pdf_sha256, find_duplicate_by_file
+
+        sha = compute_pdf_sha256(SimpleUploadedFile("x.pdf", self.PDF_A))
+        first = self._make(no="A", pdf_sha256=sha)
+        self._make(no="B", pdf_sha256=sha)
+        upload = SimpleUploadedFile("x.pdf", self.PDF_A)
+        self.assertEqual(find_duplicate_by_file(upload), first)
+        self.assertEqual(upload.read(), self.PDF_A)
+
+    def test_invoice_without_pdf_creates_no_hash_match(self):
+        self._make(no="A")
+        invoice = self._make(no="B")
+        self.assertEqual(invoice.pdf_sha256, "")
+        from lieferantenwesen.services import _find_by_hash
+        self.assertIsNone(_find_by_hash(""))
+
+    # --- Rechnungsnummer --------------------------------------------------
+
+    def test_other_file_same_number_warns_but_creates(self):
+        existing = self._make(no="RE-2026/001")
+        response, _ = self._upload(self.PDF_B)
+        self.assertEqual(InvoiceIn.objects.count(), 2)
+        self.assertTrue(any(
+            "Mögliche Dublette" in m
+            and reverse("lieferantenwesen:invoice_detail", args=[existing.pk]) in m
+            for m in self._msgs(response)
+        ))
+
+    def test_same_number_other_supplier_no_match(self):
+        from lieferantenwesen.services import find_invoice_no_duplicates
+
+        self._make(no="RE-1", supplier=self.other_supplier)
+        invoice = self._make(no="RE-1")
+        self.assertFalse(find_invoice_no_duplicates(invoice).exists())
+
+    def test_empty_number_is_no_duplicate(self):
+        from lieferantenwesen.services import find_invoice_no_duplicates
+
+        self._make(no="")
+        invoice = self._make(no="  ")
+        self.assertFalse(find_invoice_no_duplicates(invoice).exists())
+
+    def test_case_and_whitespace_ignored_and_self_excluded(self):
+        from lieferantenwesen.services import find_invoice_no_duplicates
+
+        a = self._make(no="RE-2026/001", status="REJECTED")
+        b = self._make(no="re-2026/001 ")
+        self.assertEqual(list(find_invoice_no_duplicates(b)), [a])
+        self.assertEqual(list(find_invoice_no_duplicates(a)), [b])
+
+    def test_cross_company_found(self):
+        from lieferantenwesen.services import find_invoice_no_duplicates
+
+        other = Mandant.objects.create(
+            name="Zweite GmbH", adresse="Z 1", plz="22222", ort="Z",
+        )
+        a = self._make(no="X-1", company=other)
+        b = self._make(no="X-1")
+        self.assertEqual(list(find_invoice_no_duplicates(b)), [a])
+
+    def test_detail_page_shows_permanent_warning(self):
+        a = self._make(no="X-1")
+        b = self._make(no="x-1")
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_detail", args=[b.pk]))
+        self.assertContains(response, "Mögliche Dublette")
+        self.assertContains(
+            response, reverse("lieferantenwesen:invoice_detail", args=[a.pk]))
+        clean = self._make(no="Y-1")
+        response = self.client.get(
+            reverse("lieferantenwesen:invoice_detail", args=[clean.pk]))
+        self.assertNotContains(response, "Mögliche Dublette")
+
+    def test_manual_create_and_edit_warn(self):
+        self._make(no="M-1")
+        data = {
+            "company": str(self.company.pk), "invoice_no": "M-1",
+            "invoice_date": "2026-05-04", "supplier": str(self.supplier.pk),
+            "currency": "EUR", "net_amount": "100.00", "tax_amount": "19.00",
+            "gross_amount": "119.00", "status": "DRAFT",
+            "lines-TOTAL_FORMS": "0", "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "1000",
+        }
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_create"), data, follow=True)
+        self.assertTrue(any("Mögliche Dublette" in m for m in self._msgs(response)))
+        new = InvoiceIn.objects.latest("pk")
+        response = self.client.post(
+            reverse("lieferantenwesen:invoice_edit", args=[new.pk]),
+            data, follow=True)
+        self.assertTrue(any("Mögliche Dublette" in m for m in self._msgs(response)))
+
+    # --- Backfill ---------------------------------------------------------
+
+    def test_backfill_command(self):
+        from io import StringIO
+        from django.core.files.base import ContentFile
+        from django.core.management import call_command
+        import hashlib
+
+        a = self._make(no="A")
+        a.pdf_file.save("a.pdf", ContentFile(self.PDF_A))
+        b = self._make(no="B")
+        b.pdf_file.save("b.pdf", ContentFile(self.PDF_A))
+        gone = self._make(no="C")
+        gone.pdf_file.save("c.pdf", ContentFile(self.PDF_B))
+        os.remove(gone.pdf_file.path)
+        InvoiceIn.objects.filter(pk__in=[a.pk, b.pk, gone.pk]).update(pdf_sha256="")
+        self._make(no="D")  # ohne PDF
+
+        out = StringIO()
+        call_command("backfill_invoice_pdf_hashes", "--dry-run", stdout=out,
+                     stderr=StringIO())
+        self.assertIn("Datei-Dublette", out.getvalue())
+        self.assertEqual(InvoiceIn.objects.exclude(pdf_sha256="").count(), 0)
+
+        call_command("backfill_invoice_pdf_hashes", stdout=StringIO(),
+                     stderr=StringIO())
+        sha = hashlib.sha256(self.PDF_A).hexdigest()
+        a.refresh_from_db(), b.refresh_from_db(), gone.refresh_from_db()
+        self.assertEqual(a.pdf_sha256, sha)
+        self.assertEqual(b.pdf_sha256, sha)
+        self.assertEqual(gone.pdf_sha256, "")
+        # idempotent
+        call_command("backfill_invoice_pdf_hashes", stdout=StringIO(),
+                     stderr=StringIO())
+        a.refresh_from_db()
+        self.assertEqual(a.pdf_sha256, sha)

@@ -26,6 +26,15 @@
 {% endblock %}
 
 {% block main_content %}
+{% if duplicates %}
+<div class="alert alert-warning" role="alert">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Mögliche Dublette:</strong>
+    Von {{ invoice.supplier.name }} {% if duplicates|length == 1 %}ist bereits eine weitere Rechnung{% else %}sind bereits {{ duplicates|length }} weitere Rechnungen{% endif %}
+    mit der Rechnungsnummer „{{ invoice.invoice_no }}“ erfasst:
+    {% for dup in duplicates %}<a href="{% url 'lieferantenwesen:invoice_detail' dup.pk %}" class="alert-link">{{ dup.invoice_no }} ({{ dup.invoice_date|date:"d.m.Y" }}, {{ dup.get_status_display }})</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
+</div>
+{% endif %}
 <div class="row">
     <!-- Left column: invoice data -->
     <div class="col-lg-7">

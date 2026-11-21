@@ -5,6 +5,7 @@ Services for the Lieferantenwesen module.
 - SupplierMatchService: Matches extracted supplier data to existing Adresse (LIEFERANT) records.
 - InvoiceExtractionService: Thin wrapper around core AI extraction service.
 """
+import hashlib
 import logging
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -16,6 +17,7 @@ from django.core.exceptions import ValidationError
 from django.db import Error as DatabaseError
 from django.db import transaction
 from django.db.models import Sum
+from django.db.models.functions import Trim
 from django.utils import timezone
 
 from core.services.ai.invoice_extraction import (
@@ -292,6 +294,78 @@ class InvoiceExtractionService:
 
 
 # ---------------------------------------------------------------------------
+# Dublettenprüfung
+# ---------------------------------------------------------------------------
+
+class DuplicateInvoiceError(Exception):
+    """Dieselbe PDF-Datei ist bereits als Eingangsrechnung erfasst."""
+
+    def __init__(self, invoice):
+        self.invoice = invoice
+        super().__init__(
+            f"Die Datei ist bereits als Eingangsrechnung {invoice.invoice_no!r} erfasst."
+        )
+
+
+def compute_pdf_sha256(uploaded_file) -> str:
+    """
+    SHA-256 (Hex) einer hochgeladenen Datei, blockweise gelesen.
+
+    Der Lesezeiger wird vor und nach dem Lesen auf den Anfang gesetzt – sonst
+    würde die Datei danach leer im Storage landen.
+    """
+    digest = hashlib.sha256()
+    uploaded_file.seek(0)
+    if hasattr(uploaded_file, "chunks"):
+        for chunk in uploaded_file.chunks():
+            digest.update(chunk)
+    else:
+        digest.update(uploaded_file.read())
+    uploaded_file.seek(0)
+    return digest.hexdigest()
+
+
+def _find_by_hash(sha256: str):
+    from lieferantenwesen.models import InvoiceIn
+
+    if not sha256:
+        return None
+    return (
+        InvoiceIn.objects.filter(pdf_sha256=sha256)
+        .select_related("supplier")
+        .order_by("created_at", "pk")
+        .first()
+    )
+
+
+def find_duplicate_by_file(uploaded_file):
+    """Älteste Rechnung mit demselben Datei-Fingerabdruck – oder ``None``."""
+    return _find_by_hash(compute_pdf_sha256(uploaded_file))
+
+
+def find_invoice_no_duplicates(invoice):
+    """
+    Rechnungen desselben Lieferanten mit gleicher Rechnungsnummer.
+
+    Verglichen wird getrimmt und ohne Beachtung der Groß-/Kleinschreibung,
+    über alle Status und Mandanten. Ohne Rechnungsnummer gibt es keinen
+    Verdacht (leeres Ergebnis). Der Beleg selbst ist ausgenommen.
+    """
+    from lieferantenwesen.models import InvoiceIn
+
+    invoice_no = (invoice.invoice_no or "").strip()
+    if not invoice_no or not invoice.supplier_id:
+        return InvoiceIn.objects.none()
+    # Auch gespeicherte Nummern mit Leerzeichen am Rand müssen treffen.
+    qs = InvoiceIn.objects.annotate(invoice_no_trimmed=Trim("invoice_no")).filter(
+        supplier_id=invoice.supplier_id, invoice_no_trimmed__iexact=invoice_no
+    )
+    if invoice.pk:
+        qs = qs.exclude(pk=invoice.pk)
+    return qs.select_related("supplier").order_by("created_at", "pk")
+
+
+# ---------------------------------------------------------------------------
 # InvoiceInService
 # ---------------------------------------------------------------------------
 
@@ -470,12 +544,20 @@ class InvoiceInService:
         Raises:
             ServiceNotConfigured: Kein aktives KI-Modell konfiguriert.
             InvoiceExtractionError: Die Belegerkennung ist fehlgeschlagen.
+            DuplicateInvoiceError: Dieselbe Datei ist bereits erfasst; es
+                wird weder ein Beleg angelegt noch die KI aufgerufen.
         """
         import os
         import tempfile
 
         from core.models import Adresse, Mandant
         from lieferantenwesen.models import InvoiceIn
+
+        # Als Erstes: Datei-Dublette abweisen, bevor ein KI-Aufruf bezahlt wird.
+        pdf_sha256 = compute_pdf_sha256(pdf_file)
+        existing = _find_by_hash(pdf_sha256)
+        if existing is not None:
+            raise DuplicateInvoiceError(existing)
 
         # We need a placeholder supplier for the initial save – the extraction
         # service will replace it if AI succeeds.
@@ -515,6 +597,9 @@ class InvoiceInService:
                 for chunk in pdf_file.chunks() if hasattr(pdf_file, "chunks") else [pdf_file.read()]:
                     tmp.write(chunk)
                 tmp_path = tmp.name
+            # Lesezeiger zurück: das FileField speichert ab der aktuellen Position.
+            if hasattr(pdf_file, "seek"):
+                pdf_file.seek(0)
 
             extractor = InvoiceExtractionService()
             # Einmal extrahieren – der DTO wird sowohl für die Kopfdaten als
@@ -547,6 +632,7 @@ class InvoiceInService:
             )
 
         invoice.pdf_file = pdf_file
+        invoice.pdf_sha256 = pdf_sha256
         invoice.updated_by = user
         invoice.save()
 
