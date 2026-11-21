@@ -209,6 +209,14 @@ class InvoiceIn(models.Model):
         blank=True,
         verbose_name="PDF-Datei",
     )
+    pdf_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="PDF-Fingerabdruck",
+        help_text="SHA-256 der hochgeladenen Datei; dient der Dublettenerkennung beim Import.",
+    )
 
     # --- Workflow ---
     status = models.CharField(

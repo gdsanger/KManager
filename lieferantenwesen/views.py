@@ -165,6 +165,9 @@ def invoice_detail(request, pk):
     )
     lines = invoice.lines.all()
     from .permissions import user_can_approve_invoices
+    from .services import find_invoice_no_duplicates
+
+    duplicates = list(find_invoice_no_duplicates(invoice))
 
     can_approve = user_can_approve_invoices(request.user)
     approval_form = (
@@ -176,6 +179,7 @@ def invoice_detail(request, pk):
         {
             "invoice": invoice,
             "lines": lines,
+            "duplicates": duplicates,
             "can_approve": can_approve,
             "approval_form": approval_form,
             "today": timezone.now().date(),
@@ -223,6 +227,7 @@ def invoice_create(request):
                 request,
                 f'Eingangsrechnung "{invoice.invoice_no}" wurde erfolgreich angelegt.',
             )
+            _warn_about_invoice_no_duplicates(request, invoice)
             return redirect("lieferantenwesen:invoice_detail", pk=invoice.pk)
     else:
         form = InvoiceInForm()
@@ -257,6 +262,7 @@ def invoice_edit(request, pk):
                 request,
                 f'Eingangsrechnung "{invoice.invoice_no}" wurde gespeichert.',
             )
+            _warn_about_invoice_no_duplicates(request, updated)
             return redirect("lieferantenwesen:invoice_detail", pk=pk)
     else:
         form = InvoiceInForm(instance=invoice)
@@ -270,6 +276,30 @@ def invoice_edit(request, pk):
             "invoice": invoice,
             "title": "Eingangsrechnung bearbeiten",
         },
+    )
+
+
+def _warn_about_invoice_no_duplicates(request, invoice):
+    """Warnung, wenn Lieferant + Rechnungsnummer schon erfasst sind."""
+    from .services import find_invoice_no_duplicates
+
+    duplicates = list(find_invoice_no_duplicates(invoice))
+    if not duplicates:
+        return
+    oldest = duplicates[0]
+    messages.warning(
+        request,
+        format_html(
+            "Mögliche Dublette: Es gibt bereits {} Rechnung(en) von {} mit der "
+            "Rechnungsnummer „{}“ – zuerst erfasst: "
+            '<a href="{}">{}</a>. Der Beleg wurde trotzdem gespeichert; '
+            "bitte prüfen Sie, ob es sich um eine Doppelerfassung handelt.",
+            len(duplicates),
+            invoice.supplier.name,
+            invoice.invoice_no,
+            reverse("lieferantenwesen:invoice_detail", args=[oldest.pk]),
+            oldest.invoice_no,
+        ),
     )
 
 
@@ -360,7 +390,7 @@ def invoice_upload_pdf(request):
             messages.error(request, "Bitte wählen Sie eine PDF-Datei aus.")
             return redirect("lieferantenwesen:invoice_upload_pdf")
 
-        from .services import InvoiceInService
+        from .services import DuplicateInvoiceError, InvoiceInService
 
         service = InvoiceInService()
         try:
@@ -402,6 +432,21 @@ def invoice_upload_pdf(request):
                 ),
             )
             return _redirect_to_failed_invoice(request, exc)
+        except DuplicateInvoiceError as exc:
+            existing = exc.invoice
+            messages.error(
+                request,
+                format_html(
+                    "Diese Datei ist bereits als Eingangsrechnung erfasst: "
+                    '<a href="{}">{}</a> (Lieferant: {}, Rechnungsdatum: {}, '
+                    "Status: {}). Es wurde kein neuer Beleg angelegt.",
+                    reverse("lieferantenwesen:invoice_detail", args=[existing.pk]),
+                    existing.invoice_no or f"Beleg {existing.pk}",
+                    existing.supplier.name,
+                    existing.invoice_date.strftime("%d.%m.%Y"),
+                    existing.get_status_display(),
+                ),
+            )
         except Exception as exc:
             # Fehler vor dem Speichern (Datei unlesbar, Storage o. ä.): Der
             # Anwender erfährt die konkrete Ursache – ein Pauschaltext würde
@@ -447,6 +492,7 @@ def invoice_upload_pdf(request):
                     "freigeben.",
                 )
             _warn_about_missing_company(request, invoice)
+            _warn_about_invoice_no_duplicates(request, invoice)
             return redirect("lieferantenwesen:invoice_edit", pk=invoice.pk)
     return render(request, "lieferantenwesen/invoices/pdf_upload.html")
 
